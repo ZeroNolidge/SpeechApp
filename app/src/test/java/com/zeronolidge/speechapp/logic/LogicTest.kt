@@ -1,0 +1,140 @@
+package com.zeronolidge.speechapp.logic
+
+import com.zeronolidge.speechapp.data.LetterContent
+import com.zeronolidge.speechapp.data.ReadingContent
+import com.zeronolidge.speechapp.data.SpeechContent
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import kotlin.random.Random
+
+class RobotTest {
+    @Test
+    fun forwardAndTurnsFollowTheRobotsHeading() {
+        val lvl = RobotLevel(3, 3, Cell(2, 0), Dir.UP, Cell(0, 2), relative = true)
+        val program = listOf(Cmd.FORWARD, Cmd.FORWARD, Cmd.TURN_RIGHT, Cmd.FORWARD, Cmd.FORWARD)
+        val (_, won) = RobotSim.run(lvl, program)
+        assertTrue(won)
+    }
+
+    @Test
+    fun bumpingAWallStopsTheProgram() {
+        val lvl = RobotLevel(3, 3, Cell(0, 0), Dir.UP, Cell(2, 2))
+        val (steps, won) = RobotSim.run(lvl, listOf(Cmd.UP, Cmd.RIGHT))
+        assertFalse(won)
+        assertEquals(1, steps.size)
+        assertTrue(steps[0] is StepResult.Bumped)
+    }
+
+    @Test
+    fun treesBlockTheWay() {
+        val lvl = RobotLevel(3, 3, Cell(0, 0), Dir.RIGHT, Cell(0, 2), setOf(Cell(0, 1)))
+        val (steps, _) = RobotSim.run(lvl, listOf(Cmd.RIGHT))
+        assertTrue(steps.single() is StepResult.Bumped)
+    }
+
+    @Test
+    fun turnsWrapAround() {
+        assertEquals(Dir.LEFT, Dir.UP.turnLeft())
+        assertEquals(Dir.UP, Dir.LEFT.turnRight())
+    }
+
+    @Test
+    fun everyLevelIsSolvable() {
+        (RobotLevels.easy + RobotLevels.robot).forEach { assertNotNull(RobotSim.shortestArrowPath(it)) }
+        repeat(50) {
+            val lvl = RobotLevels.random(it % 2 == 0, Random(it))
+            assertNotNull(RobotSim.shortestArrowPath(lvl))
+            assertFalse(lvl.start in lvl.blocks || lvl.goal in lvl.blocks)
+        }
+    }
+}
+
+class GamesTest {
+    @Test
+    fun patternAnswerContinuesTheSequence() {
+        repeat(200) { i ->
+            val r = Patterns.make(i % (Patterns.maxLevel() + 1), Random(i))
+            val expected = r.unit[r.shown.size % r.unit.size]
+            assertEquals(expected, r.choice.answer)
+            assertEquals(3, r.choice.options.size)
+            assertEquals(3, r.choice.options.toSet().size)
+            assertTrue(r.choice.answer in r.choice.options)
+        }
+    }
+
+    @Test
+    fun mathStaysInRange() {
+        repeat(300) { i ->
+            val rnd = Random(i)
+            val m = Numbers.math(i % 2 == 0, 10, rnd)
+            val result = if (m.plus) m.a + m.b else m.a - m.b
+            assertEquals(result, m.answer)
+            assertTrue(result in 0..10)
+            assertEquals(3, m.choice.options.toSet().size)
+            assertTrue(m.choice.options.all { it >= 0 })
+        }
+    }
+
+    @Test
+    fun countingChoicesAreDistinctAndIncludeAnswer() {
+        repeat(200) { i ->
+            val c = Numbers.count(10, Random(i))
+            assertTrue(c.count in 1..10)
+            assertEquals(c.count, c.choice.answer)
+            assertEquals(3, c.choice.options.toSet().size)
+        }
+    }
+
+    @Test
+    fun oddOneOutHasExactlyOneOdd() {
+        repeat(100) { i ->
+            val r = OddOneOut.make(i % 2, Random(i))
+            assertEquals(4, r.items.size)
+            assertEquals(1, r.items.count { it == r.odd })
+        }
+    }
+
+    @Test
+    fun letterRoundsAreWellFormed() {
+        repeat(100) { i ->
+            val r = Letters.make(LetterMode.entries[i % 3], Random(i), tricky = i % 2 == 0)
+            assertEquals(3, r.choice.options.toSet().size)
+            assertEquals(r.target, r.choice.answer)
+        }
+    }
+
+    @Test
+    fun readingWordsCanBeSoundedOut() {
+        assertEquals(listOf("kuh", "ah", "tuh"), Reading.sounds("cat"))
+        ReadingContent.cvcWords.forEach { assertEquals(3, Reading.sounds(it.text).size) }
+        assertEquals(26, LetterContent.letters.size)
+    }
+
+    @Test
+    fun speechContentHasWords() {
+        SpeechContent.sounds.forEach { assertTrue(it.words.size >= 4) }
+    }
+}
+
+class SpeechMatchTest {
+    @Test
+    fun exactWordInPhraseMatches() {
+        assertTrue(SpeechMatch.isGood("cat", listOf("a cat")))
+        assertTrue(SpeechMatch.isGood("Banana", listOf("banana!")))
+    }
+
+    @Test
+    fun closeAttemptsAreAccepted() {
+        assertTrue(SpeechMatch.isGood("rabbit", listOf("wabbit")))
+        assertTrue(SpeechMatch.isGood("spoon", listOf("poon")))
+    }
+
+    @Test
+    fun unrelatedWordsAreNot() {
+        assertFalse(SpeechMatch.isGood("rabbit", listOf("dog")))
+        assertFalse(SpeechMatch.isGood("cat", emptyList()))
+    }
+}
