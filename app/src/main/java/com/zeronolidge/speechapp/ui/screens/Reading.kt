@@ -1,6 +1,5 @@
 package com.zeronolidge.speechapp.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -129,7 +128,7 @@ fun SoundItOutScreen(back: () -> Unit) {
                 ) { blend() }
             }
             Box(Modifier.height(190.dp), contentAlignment = Alignment.Center) {
-                AnimatedVisibility(blended) {
+                if (blended) {
                     AnswerRow(
                         options = round.choice.options,
                         answer = round.choice.answer,
@@ -139,8 +138,7 @@ fun SoundItOutScreen(back: () -> Unit) {
                         onSolved = { roundNo++ },
                         describe = { it.text },
                     ) { w -> Text(w.emoji, fontSize = 84.sp) }
-                }
-                if (!blended) {
+                } else {
                     Text("Tap 🐢 to blend!", fontSize = 26.sp, color = Kid.ink.copy(alpha = 0.6f))
                 }
             }
