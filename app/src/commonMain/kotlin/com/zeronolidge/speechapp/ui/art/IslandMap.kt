@@ -132,7 +132,7 @@ fun IslandMap(
                 color = if (isOpen) Color(0xFF3A2E5C) else Color(0xFF607D8B),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .offset(x = x - node * 0.6f, y = y + node * 0.42f)
+                    .offset(x = x - node * 0.6f, y = y + node * 0.58f)
                     .width(node * 1.2f)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xBBFFFFFF))
@@ -141,9 +141,10 @@ fun IslandMap(
         }
         val sx = w * suggested.mapX
         val sy = h * suggested.mapY
+        val heroX = if (suggested.mapX < 0.25f) sx + node * 0.55f else sx - node * 1.25f
         hero(
             Modifier
-                .offset(x = sx - node * 1.25f, y = sy - node * 0.35f)
+                .offset(x = heroX, y = sy - node * 0.35f)
                 .size(width = node * 0.7f, height = node * 0.85f)
                 .zIndex(2f),
         )
@@ -261,7 +262,7 @@ private fun DrawScope.fish(mid: Float) {
         Lane(0.02f, 0.13f, 0.14f, 0xFFFF8A65, 1f, 0f),
         Lane(0.01f, 0.08f, 0.32f, 0xFFFFD54F, 1.4f, 0.4f),
         Lane(0.14f, 0.3f, 0.97f, 0xFFFF7043, 1.2f, 0.7f),
-        Lane(0.86f, 0.98f, 0.12f, 0xFFFFB74D, 0.9f, 0.2f),
+        Lane(0.88f, 0.98f, 0.44f, 0xFFFFB74D, 0.9f, 0.2f),
         Lane(0.82f, 0.97f, 0.92f, 0xFFF06292, 1.1f, 0.55f),
         Lane(0.55f, 0.72f, 0.985f, 0xFFFFD54F, 1.3f, 0.1f),
     )
@@ -299,7 +300,7 @@ private fun DrawScope.island() {
     blob(p(0.55f, 0.70f), u * 0.14f, u * 0.08f, Color(0xFFAED581), 2)
     blob(p(0.48f, 0.25f), u * 0.12f, u * 0.07f, Color(0xFFAED581), 3)
     // A few bushes dotted around.
-    listOf(0.24f to 0.75f, 0.62f to 0.24f, 0.36f to 0.18f, 0.58f to 0.82f, 0.20f to 0.40f).forEach { (x, y) ->
+    listOf(0.22f to 0.36f, 0.48f to 0.18f, 0.62f to 0.86f, 0.42f to 0.68f, 0.82f to 0.48f).forEach { (x, y) ->
         paperCircle(Color(0xFF7CB342), u * 0.018f, p(x, y))
         paperCircle(Color(0xFF8BC34A), u * 0.013f, p(x + 0.012f, y - 0.01f))
     }
@@ -309,8 +310,8 @@ private fun DrawScope.river(fast: Float) {
     val path = Path().apply {
         val a = p(Land.PEAKS.mapX - 0.02f, Land.PEAKS.mapY + 0.05f)
         moveTo(a.x, a.y)
-        val c1 = p(0.60f, 0.78f)
-        val c2 = p(0.50f, 0.62f)
+        val c1 = p(0.76f, 0.52f)
+        val c2 = p(0.44f, 0.68f)
         val b = p(Land.LAGOON.mapX + 0.04f, Land.LAGOON.mapY - 0.02f)
         cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
     }
@@ -499,6 +500,13 @@ private fun DrawScope.castle(land: Land, mid: Float) {
     val c = at(land)
     val s = u * 0.065f
     val float = sin(mid * 2 * PI).toFloat() * s * 0.12f
+    // Its shadow on the sea far below shows the castle is up in the sky.
+    val shadowW = s * (2.6f - float / s)
+    drawOval(
+        Color(0x22003050),
+        Offset(c.x - shadowW / 2, c.y + s * 3.4f),
+        Size(shadowW, s * 0.55f),
+    )
     withTransform({ translate(0f, float) }) {
         // A fluffy cloud island.
         listOf(-1.0f to 0.55f, -0.4f to 0.75f, 0.3f to 0.75f, 0.95f to 0.55f, 0f to 0.45f).forEach { (dx, dy) ->

@@ -137,13 +137,13 @@ enum class Land(
     val mapX: Float,
     val mapY: Float,
 ) {
-    FOREST("Talking Forest", "🌳", listOf(Subject.SPEECH), null, 0xFFB3E5FC, 0xFF9CCC65, listOf("🌳", "🌲", "🍄", "🌼"), 0.14f, 0.6f),
-    MEADOW("Number Meadow", "🌻", listOf(Subject.NUMBERS), null, 0xFFFFF9C4, 0xFFAED581, listOf("🌻", "🌷", "🦋", "🐝"), 0.29f, 0.31f),
-    LAGOON("Letter Lagoon", "🏝️", listOf(Subject.LETTERS), Power.SWIM, 0xFFB2EBF2, 0xFFFFE0B2, listOf("🌴", "🐚", "🦀", "⛵"), 0.4f, 0.8f),
-    FACTORY("Robot Factory", "🏭", listOf(Subject.ROBOT), Power.JUMP, 0xFFCFD8DC, 0xFFB0BEC5, listOf("⚙️", "🔩", "🔋", "💡"), 0.53f, 0.43f),
-    PEAKS("Puzzle Peaks", "⛰️", listOf(Subject.PATTERNS), Power.CLIMB, 0xFFE1BEE7, 0xFFBCAAA4, listOf("⛰️", "🏔️", "🌲", "🦅"), 0.68f, 0.63f),
-    CAVES("Word Caves", "🕯️", listOf(Subject.READING), Power.LANTERN, 0xFF5C6BC0, 0xFF8D6E63, listOf("💎", "🕯️", "🦇", "🪨"), 0.72f, 0.27f),
-    CLOUDS("Cloud Castle", "🏰", Subject.entries.toList(), Power.FLY, 0xFFE3F2FD, 0xFFFFFFFF, listOf("☁️", "🌈", "⭐", "🏰"), 0.92f, 0.58f);
+    FOREST("Talking Forest", "🌳", listOf(Subject.SPEECH), null, 0xFFB3E5FC, 0xFF9CCC65, listOf("🌳", "🌲", "🍄", "🌼"), 0.13f, 0.55f),
+    MEADOW("Number Meadow", "🌻", listOf(Subject.NUMBERS), null, 0xFFFFF9C4, 0xFFAED581, listOf("🌻", "🌷", "🦋", "🐝"), 0.36f, 0.25f),
+    LAGOON("Letter Lagoon", "🏝️", listOf(Subject.LETTERS), Power.SWIM, 0xFFB2EBF2, 0xFFFFE0B2, listOf("🌴", "🐚", "🦀", "⛵"), 0.3f, 0.82f),
+    FACTORY("Robot Factory", "🏭", listOf(Subject.ROBOT), Power.JUMP, 0xFFCFD8DC, 0xFFB0BEC5, listOf("⚙️", "🔩", "🔋", "💡"), 0.52f, 0.52f),
+    PEAKS("Puzzle Peaks", "⛰️", listOf(Subject.PATTERNS), Power.CLIMB, 0xFFE1BEE7, 0xFFBCAAA4, listOf("⛰️", "🏔️", "🌲", "🦅"), 0.66f, 0.3f),
+    CAVES("Word Caves", "🕯️", listOf(Subject.READING), Power.LANTERN, 0xFF5C6BC0, 0xFF8D6E63, listOf("💎", "🕯️", "🦇", "🪨"), 0.74f, 0.7f),
+    CLOUDS("Cloud Castle", "🏰", Subject.entries.toList(), Power.FLY, 0xFFE3F2FD, 0xFFFFFFFF, listOf("☁️", "🌈", "⭐", "🏰"), 0.9f, 0.17f);
 
     fun unlocked(level: Int, openAll: Boolean = false) = openAll || needs == null || level >= needs.level
 
