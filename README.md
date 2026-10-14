@@ -64,17 +64,27 @@ Each word has these buttons:
 
 The recognizer finds young voices hard, so it also gives a star for effort after three tries.
 
-## Installing on a phone or tablet
+## Getting the app
 
-1. On the phone, open **https://github.com/ZeroNolidge/SpeechApp/releases/latest** and tap
-   **TalkAndLearn.apk** under Assets.
-2. Open the downloaded file. If Android asks, allow your browser (or My Files) to
-   **install unknown apps**.
-3. If **Google Play Protect** says it's from an unknown developer, tap **More details →
-   Install anyway**. It warns about every app that doesn't come from the Play Store.
-4. If it says **"App not installed"** or **"conflicts with an existing package"**, uninstall the
-   old Talk & Learn first, then install again. Once the signing key below is set up, this only
-   happens one time; after that, new versions install over the old one and keep progress.
+**The web app is the main version.** It always has the latest changes:
+
+**https://zeronolidge.github.io/SpeechApp/**
+
+1. Open the link in **Chrome** on the tablet. Wait for the green ▶ and tap it.
+2. Chrome menu (⋮) → **Add to Home screen** (or **Install app**). It then opens full-screen
+   like a normal app, works offline after the first visit, and updates itself whenever a new
+   version is published.
+3. The first time it listens, Chrome asks to use the microphone: tap **Allow**.
+
+Progress is saved in the browser on that device. The web and Android versions keep separate
+progress.
+
+### Android APK (optional)
+
+GitHub also builds an APK on every push (Actions → latest **Build** run → **SpeechApp-apk**,
+or the `latest-build` release). If Android says **"App not installed"**, uninstall the old
+copy first. Builds are signed with a permanent key, so normally a new APK installs over the
+old one and keeps progress.
 
 ### Signing key
 
@@ -83,23 +93,31 @@ CI signs builds with a permanent key stored in two repository secrets, `SIGNING_
 them, builds use a throwaway debug key, and each new build has to be uninstalled and
 reinstalled.
 
-Requirements: Android 8.0 or newer. Talking uses the device's text-to-speech voice. If it's
-silent, install or update **Speech Services by Google** from the Play Store. Speech
-recognition also uses Google's service, and the offline English pack makes it faster.
+Requirements: a recent Chrome (web app) or Android 8.0+ (APK). Talking uses the device's
+text-to-speech voice; if it's silent, install or update **Speech Services by Google** from the
+Play Store. In the browser, speech recognition works best in Chrome and usually needs internet.
 
-## Building it yourself
+## How it's built
 
-Open the project in Android Studio and press Run, or from a terminal:
+One Kotlin codebase (Compose Multiplatform) makes both apps:
+
+- `app/src/commonMain`: almost everything (game logic, stories, art, screens).
+- `app/src/androidMain`: Android speech, microphone, recorder, storage, paper edges.
+- `app/src/wasmJsMain`: the same for the browser (Web Speech, MediaRecorder, localStorage),
+  plus the PWA files (`resources/index.html`, `manifest.webmanifest`, `sw.js`, icons).
 
 ```
-./gradlew assembleDebug      # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest  # logic tests (stories, levels, robot, patterns, math, speech matching)
+./gradlew :app:testDebugUnitTest            # logic tests (stories, levels, robot, patterns, math, speech)
+./gradlew :app:assembleDebug                # Android APK
+./gradlew :app:wasmJsBrowserDistribution    # web app -> app/build/dist/wasmJs/productionExecutable
 ```
+
+GitHub Actions builds both on every push and publishes the web app to GitHub Pages.
 
 ## Changing the content
 
 All words, sounds, tips and pictures (emoji) are in
-`app/src/main/java/com/zeronolidge/speechapp/data/Content.kt`. Story plots and scenes are in `logic/Plots.kt`, and friends and challenge lines
+`app/src/commonMain/kotlin/com/zeronolidge/speechapp/data/Content.kt`. Story plots and scenes are in `logic/Plots.kt`, and friends and challenge lines
 are in `logic/Story.kt`. The scene pictures are drawn in `ui/art/SetPieces.kt`. Heroes, outfits, powers, lands and the level curve are in `logic/Rpg.kt`.
 The cartoon drawing code is in `ui/art/Critter.kt`. For example, to practice
 more words for a sound your child's speech therapist is working on, add a `Word("...", "emoji")`
