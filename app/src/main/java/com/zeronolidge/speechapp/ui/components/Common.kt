@@ -68,6 +68,11 @@ class AppServices(
 
     fun reward(area: String, message: String = Praise.great.random(), onDone: (() -> Unit)? = null) {
         progress.addStar(area)
+        celebrate(message, onDone)
+    }
+
+    /** Confetti and a cheer, without earning a star. */
+    fun celebrate(message: String, onDone: (() -> Unit)? = null) {
         celebrations++
         speaker.say(message, onDone = onDone)
     }
@@ -231,6 +236,10 @@ fun <T> AnswerRow(
     onSolved: () -> Unit,
     /** Optional words for an option, said back to the child when they tap it. */
     describe: ((T) -> String)? = null,
+    /** Called on each wrong tap, so stories can tell whether it was right first time. */
+    onMiss: () -> Unit = {},
+    /** Each time this goes up, the magic wand makes one wrong answer vanish. */
+    wandTick: Int = 0,
     content: @Composable (T) -> Unit,
 ) {
     val app = LocalApp.current
@@ -241,6 +250,12 @@ fun <T> AnswerRow(
         if (!advanced) {
             advanced = true
             onSolved()
+        }
+    }
+    LaunchedEffect(roundKey, wandTick) {
+        if (wandTick > 0 && !solved) {
+            val wrong = options.filter { it != answer && it !in faded }
+            if (wrong.isNotEmpty()) faded = faded + wrong.random()
         }
     }
     // Normally the next round starts when the praise finishes; this is a backstop.
@@ -263,6 +278,7 @@ fun <T> AnswerRow(
                             app.reward(area, said + Praise.great.random(), onDone = advance)
                         } else {
                             faded = faded + opt
+                            onMiss()
                             app.tryAgain(said + Praise.tryAgain.random())
                         }
                     }

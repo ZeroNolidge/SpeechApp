@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -24,25 +23,16 @@ import com.zeronolidge.speechapp.ui.components.AppServices
 import com.zeronolidge.speechapp.ui.components.CelebrationOverlay
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.screens.AlphabetScreen
-import com.zeronolidge.speechapp.ui.screens.CountingScreen
 import com.zeronolidge.speechapp.ui.screens.GrownUpsScreen
-import com.zeronolidge.speechapp.ui.screens.HomeScreen
-import com.zeronolidge.speechapp.ui.screens.LetterGameScreen
-import com.zeronolidge.speechapp.ui.screens.LettersMenu
-import com.zeronolidge.speechapp.ui.screens.MathScreen
-import com.zeronolidge.speechapp.ui.screens.MoreOrLessScreen
+import com.zeronolidge.speechapp.ui.screens.HeroPickScreen
+import com.zeronolidge.speechapp.ui.screens.MapScreen
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
-import com.zeronolidge.speechapp.ui.screens.NumbersMenu
-import com.zeronolidge.speechapp.ui.screens.OddOneOutScreen
-import com.zeronolidge.speechapp.ui.screens.PatternsMenu
-import com.zeronolidge.speechapp.ui.screens.ReadMenu
-import com.zeronolidge.speechapp.ui.screens.RobotGameScreen
-import com.zeronolidge.speechapp.ui.screens.RobotMenu
-import com.zeronolidge.speechapp.ui.screens.SoundItOutScreen
+import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
+import com.zeronolidge.speechapp.ui.screens.PracticeMenu
+import com.zeronolidge.speechapp.ui.screens.QuestScreen
 import com.zeronolidge.speechapp.ui.screens.TalkMenu
 import com.zeronolidge.speechapp.ui.screens.TalkPracticeScreen
-import com.zeronolidge.speechapp.ui.screens.WhatsNextScreen
-import com.zeronolidge.speechapp.ui.screens.WhichWordScreen
+import com.zeronolidge.speechapp.ui.screens.WardrobeScreen
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -87,13 +77,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App() {
-    val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
+    val app = LocalApp.current
+    val stack = remember { mutableStateListOf<Screen>(Screen.Map) }
     val go: (Screen) -> Unit = { stack.add(it) }
     val back: () -> Unit = { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
     BackHandler(enabled = stack.size > 1) { back() }
 
-    val app = LocalApp.current
-    LaunchedEffect(Unit) { app.speaker.say("Hi friend! What do you want to play?") }
+    // First launch: pick a hero before anything else.
+    if (app.progress.hero == null) {
+        HeroPickScreen(onPicked = { stack.clear(); stack.add(Screen.Map) })
+        return
+    }
 
     // A fresh key per back-stack entry, so every visit to a game starts clean.
     val s = stack.last()
@@ -103,25 +97,15 @@ private fun App() {
 @Composable
 private fun ShowScreen(s: Screen, go: (Screen) -> Unit, back: () -> Unit) {
     when (s) {
-        Screen.Home -> HomeScreen(go)
+        Screen.Map -> MapScreen(go)
+        is Screen.Quest -> QuestScreen(s.land, s.mixed, back, go)
+        Screen.Wardrobe -> WardrobeScreen(back)
         Screen.GrownUps -> GrownUpsScreen(back)
+        Screen.Practice -> PracticeMenu(go, back)
+        is Screen.PracticeGame -> PracticeGameScreen(s.kind, back)
         Screen.TalkMenu -> TalkMenu(go, back)
         is Screen.TalkPractice -> TalkPracticeScreen(s.sound, back)
-        Screen.LettersMenu -> LettersMenu(go, back)
         Screen.Alphabet -> AlphabetScreen(back)
-        is Screen.LetterGame -> LetterGameScreen(s.mode, back)
-        Screen.ReadMenu -> ReadMenu(go, back)
-        Screen.SoundItOut -> SoundItOutScreen(back)
-        Screen.WhichWord -> WhichWordScreen(back)
-        Screen.NumbersMenu -> NumbersMenu(go, back)
         Screen.NumberLine -> NumberLineScreen(back)
-        Screen.Counting -> CountingScreen(back)
-        is Screen.MathGame -> MathScreen(s.plus, back)
-        Screen.MoreOrLess -> MoreOrLessScreen(back)
-        Screen.PatternsMenu -> PatternsMenu(go, back)
-        Screen.WhatsNext -> WhatsNextScreen(back)
-        Screen.OddOneOutGame -> OddOneOutScreen(back)
-        Screen.RobotMenu -> RobotMenu(go, back)
-        is Screen.RobotGame -> RobotGameScreen(s.relative, back)
     }
 }

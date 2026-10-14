@@ -83,6 +83,62 @@ object RobotSim {
         return out to (s.pos == level.goal)
     }
 
+    /** The commands a child can use on this level. */
+    fun palette(level: RobotLevel) = if (level.relative) listOf(Cmd.FORWARD, Cmd.TURN_LEFT, Cmd.TURN_RIGHT)
+    else listOf(Cmd.UP, Cmd.DOWN, Cmd.LEFT, Cmd.RIGHT)
+
+    /** Where the robot ends up after [program], or null if it bumps into something on the way. */
+    fun stateAfter(level: RobotLevel, program: List<Cmd>): RobotState? {
+        var s = RobotState(level.start, level.startFacing)
+        for (c in program) {
+            s = when (val r = step(level, s, c)) {
+                is StepResult.Moved -> r.state
+                is StepResult.Turned -> r.state
+                is StepResult.Bumped -> return null
+            }
+        }
+        return s
+    }
+
+    /** A shortest list of commands from [from] to the goal (breadth first search), or null. */
+    fun solve(level: RobotLevel, from: RobotState = RobotState(level.start, level.startFacing)): List<Cmd>? {
+        val cmds = palette(level)
+        // Facing doesn't matter for arrows, so ignore it to keep the search small.
+        fun key(s: RobotState) = if (level.relative) s else s.copy(facing = Dir.UP)
+        val prev = HashMap<RobotState, Pair<RobotState, Cmd>?>()
+        prev[key(from)] = null
+        var frontier = listOf(from)
+        while (frontier.isNotEmpty()) {
+            val next = mutableListOf<RobotState>()
+            for (s in frontier) {
+                if (s.pos == level.goal) {
+                    val path = mutableListOf<Cmd>()
+                    var k = key(s)
+                    while (true) {
+                        val p = prev[k] ?: break
+                        path += p.second
+                        k = key(p.first)
+                    }
+                    return path.reversed()
+                }
+                for (c in cmds) {
+                    val r = step(level, s, c)
+                    val ns = when (r) {
+                        is StepResult.Moved -> r.state
+                        is StepResult.Turned -> r.state
+                        is StepResult.Bumped -> continue
+                    }
+                    if (key(ns) !in prev) {
+                        prev[key(ns)] = s to c
+                        next += ns
+                    }
+                }
+            }
+            frontier = next
+        }
+        return null
+    }
+
     /** Shortest number of moves using screen arrows (breadth first search), or null if unreachable. */
     fun shortestArrowPath(level: RobotLevel): Int? {
         val seen = mutableSetOf(level.start)

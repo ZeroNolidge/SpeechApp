@@ -138,3 +138,83 @@ class SpeechMatchTest {
         assertFalse(SpeechMatch.isGood("cat", emptyList()))
     }
 }
+
+class RpgTest {
+    @Test
+    fun levelCurveIsIncreasing() {
+        assertEquals(1, Leveling.levelFor(0))
+        assertEquals(2, Leveling.levelFor(Leveling.xpFor(2)))
+        assertEquals(1, Leveling.levelFor(Leveling.xpFor(2) - 1))
+        (1..20).forEach { assertTrue(Leveling.xpFor(it + 1) > Leveling.xpFor(it)) }
+        assertTrue(Leveling.progress(Leveling.xpFor(3) + 1) in 0f..1f)
+    }
+
+    @Test
+    fun everyLockedLandHasAReachablePower() {
+        Land.entries.forEach { land ->
+            assertTrue(land.unlocked(10))
+            land.needs?.let { assertFalse(it.helper) }
+        }
+        assertTrue(Land.FOREST.unlocked(1))
+        assertFalse(Land.CLOUDS.unlocked(1))
+        assertTrue(Land.CLOUDS.unlocked(1, openAll = true))
+    }
+
+    @Test
+    fun catalogIdsAreUnique() {
+        assertEquals(Catalog.items.size, Catalog.items.map { it.id }.toSet().size)
+        Catalog.inSlot(Slot.PET).forEach { assertNotNull(it.pet) }
+    }
+
+    @Test
+    fun robotSolverFindsWorkingPrograms() {
+        (RobotLevels.easy + RobotLevels.robot).forEach { lvl ->
+            val program = RobotSim.solve(lvl)
+            assertNotNull(program)
+            assertTrue(RobotSim.run(lvl, program!!).second)
+        }
+        repeat(30) {
+            val lvl = RobotLevels.random(it % 2 == 0, Random(it))
+            assertTrue(RobotSim.run(lvl, RobotSim.solve(lvl)!!).second)
+        }
+    }
+}
+
+class StoryTest {
+    @Test
+    fun questsAreWellFormedForEveryLand() {
+        repeat(40) { i ->
+            val rnd = Random(i)
+            Land.entries.forEach { land ->
+                val p = StoryParams("Sam", heroLevel = 1 + i % 8, robotSolved = i, unlockedLands = Land.entries.toList())
+                val q = StoryGen.make(land, p, rnd, mixed = i % 5 == 0)
+                assertTrue(q.beats.size in 3..5)
+                assertFalse(q.intro.contains("{"))
+                assertFalse(q.ending.contains("{"))
+                q.beats.forEach { b ->
+                    assertFalse(b.narration.contains("{"))
+                    assertFalse(b.travel?.contains("{") ?: false)
+                }
+                if (land == Land.FOREST && i % 5 != 0) assertTrue(q.beats.all { it.challenge is Challenge.Say })
+            }
+        }
+    }
+
+    @Test
+    fun focusSoundsAreRespected() {
+        val p = StoryParams("Sam", 1, focusSounds = setOf("s", "r"))
+        repeat(20) {
+            val q = StoryGen.make(Land.FOREST, p, Random(it))
+            q.beats.forEach { b -> assertTrue((b.challenge as Challenge.Say).sound.id in setOf("s", "r")) }
+        }
+    }
+
+    @Test
+    fun speechWordsDontRepeatWithinAQuest() {
+        repeat(20) {
+            val q = StoryGen.make(Land.FOREST, StoryParams("Sam", 1), Random(it))
+            val words = q.beats.map { (it.challenge as Challenge.Say).word.text }
+            assertEquals(words.size, words.toSet().size)
+        }
+    }
+}

@@ -205,6 +205,10 @@ object ReadingContent {
 object Things {
     val countables = listOf("🍎", "⭐", "🐟", "🚗", "🎈", "🐞", "🍪", "🌸", "🐥", "⚽")
     val countableNames = mapOf(
+        "🥕" to "carrots", "🌰" to "acorns", "🐚" to "shells", "💎" to "gems", "🧁" to "cupcakes",
+        "🍌" to "bananas", "🦋" to "butterflies", "🐝" to "bees", "🍄" to "mushrooms", "🔩" to "bolts",
+        "🔋" to "batteries", "🦀" to "crabs", "🍓" to "strawberries", "🕯️" to "candles",
+        "🌼" to "daisies", "☁️" to "clouds", "🍩" to "donuts", "🐠" to "fish", "🎁" to "presents",
         "🍎" to "apples", "⭐" to "stars", "🐟" to "fish", "🚗" to "cars", "🎈" to "balloons",
         "🐞" to "ladybugs", "🍪" to "cookies", "🌸" to "flowers", "🐥" to "chicks", "⚽" to "balls",
     )

@@ -1,6 +1,9 @@
 package com.zeronolidge.speechapp.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -32,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
@@ -58,6 +63,24 @@ fun GrownUpsScreen(back: () -> Unit) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Card(Modifier.weight(1f)) {
                 Heading("Settings")
+                OutlinedTextField(
+                    value = p.childName,
+                    onValueChange = { p.updateChildName(it.take(20)) },
+                    label = { Text("Child's name (used in the stories)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Open every land (skip level locks)", fontSize = 18.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = p.openAllLands, onCheckedChange = { p.updateOpenAllLands(it) })
+                }
+                Text("Speech sounds to focus on", fontSize = 18.sp)
+                Text(
+                    if (p.focusSounds.isEmpty()) "None picked, so stories use every sound." else "Stories only use the sounds you picked.",
+                    fontSize = 14.sp,
+                    color = Kid.ink.copy(alpha = 0.7f),
+                )
+                SoundChips(p.focusSounds) { p.toggleFocusSound(it) }
                 Text("Voice speed: ${"%.2f".format(p.speechRate)}", fontSize = 18.sp)
                 Slider(
                     value = p.speechRate,
@@ -76,10 +99,15 @@ fun GrownUpsScreen(back: () -> Unit) {
                     color = Kid.ink.copy(alpha = 0.7f),
                 )
                 Spacer(Modifier.padding(6.dp))
-                OutlinedButton(onClick = { confirmReset = true }) { Text("Reset stars and levels") }
+                OutlinedButton(onClick = { confirmReset = true }) { Text("Reset all progress") }
             }
             Card(Modifier.weight(1f)) {
-                Heading("Progress — $total ⭐")
+                Heading("Progress")
+                Text(
+                    "${p.heroName} the ${p.hero?.label ?: "hero"}: level ${p.heroLevel}, ${p.xp} XP, ${p.gems} 💎, ${p.questsDone} quests",
+                    fontSize = 18.sp,
+                )
+                Text("Correct answers by area — $total ⭐ in total", fontSize = 16.sp, color = Kid.ink.copy(alpha = 0.7f))
                 Progress.areas.forEach { area ->
                     Row(Modifier.fillMaxWidth()) {
                         Text(areaNames.getValue(area), fontSize = 18.sp, modifier = Modifier.weight(1f))
@@ -91,6 +119,7 @@ fun GrownUpsScreen(back: () -> Unit) {
                 Tip("Sit with your child for the Talk games. The speech recognizer can struggle with young voices, so use 👍 “Said it!” whenever a try is good.")
                 Tip("🦜 “Copy me” records three seconds and plays it back. Hearing themselves helps children notice how they sound.")
                 Tip("👄 “How?” explains where the lips and tongue go. Make the sound together, facing each other, so they can watch your mouth.")
+                Tip("Each quest is a short story with 3–5 challenges and takes about 5 minutes. Every quest includes some talking practice. Use “Speech sounds to focus on” to match what the speech therapist is working on.")
                 Tip("Keep sessions short: 5–10 minutes a day works better than one long session.")
                 Tip("This app is for practice and fun. It doesn't replace a speech-language pathologist. Ask them which sounds to focus on.")
             }
@@ -101,7 +130,7 @@ fun GrownUpsScreen(back: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
             title = { Text("Reset progress?") },
-            text = { Text("This clears all stars and puzzle levels. Settings are kept.") },
+            text = { Text("This clears the hero, levels, gems, items and stars. Settings are kept.") },
             confirmButton = {
                 Button(onClick = { p.reset(); confirmReset = false }) { Text("Reset") }
             },
@@ -109,6 +138,27 @@ fun GrownUpsScreen(back: () -> Unit) {
                 TextButton(onClick = { confirmReset = false }) { Text("Cancel") }
             },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SoundChips(selected: Set<String>, onToggle: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SpeechContent.sounds.forEach { s ->
+            val on = s.id in selected
+            Text(
+                "${s.emoji} ${s.label}",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (on) Color.White else Kid.ink,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (on) Color(0xFF7C4DFF) else Color(0xFFEDE7F6))
+                    .clickable { onToggle(s.id) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
     }
 }
 

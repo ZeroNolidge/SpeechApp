@@ -92,14 +92,13 @@ object Numbers {
         return choiceOf(n, pool + n, 3, rnd)
     }
 
-    fun count(max: Int, rnd: Random): CountRound {
+    fun count(max: Int, rnd: Random, emoji: String = Things.countables.random(rnd)): CountRound {
         val n = rnd.nextInt(1, max + 1)
-        return CountRound(Things.countables.random(rnd), n, nearby(n, 1, max.coerceAtLeast(4), rnd))
+        return CountRound(emoji, n, nearby(n, 1, max.coerceAtLeast(4), rnd))
     }
 
     /** Addition and subtraction that stay within [max] and never go below zero. */
-    fun math(plus: Boolean, max: Int, rnd: Random): MathRound {
-        val emoji = Things.countables.random(rnd)
+    fun math(plus: Boolean, max: Int, rnd: Random, emoji: String = Things.countables.random(rnd)): MathRound {
         return if (plus) {
             val total = rnd.nextInt(2, max + 1)
             val a = rnd.nextInt(1, total)
@@ -111,11 +110,11 @@ object Numbers {
         }
     }
 
-    fun compare(max: Int, rnd: Random): CompareRound {
+    fun compare(max: Int, rnd: Random, emoji: String = Things.countables.random(rnd)): CompareRound {
         val l = rnd.nextInt(1, max + 1)
         var r = rnd.nextInt(1, max + 1)
         while (r == l) r = rnd.nextInt(1, max + 1)
-        return CompareRound(Things.countables.random(rnd), l, r)
+        return CompareRound(emoji, l, r)
     }
 
     private val ones = listOf(
