@@ -218,3 +218,16 @@ class StoryTest {
         }
     }
 }
+
+class MapSuggestionTest {
+    @Test
+    fun suggestsUnvisitedLandsFirstThenRotates() {
+        val open = listOf(Land.FOREST, Land.MEADOW, Land.LAGOON)
+        assertEquals(Land.FOREST, Land.suggest(open, emptySet(), null))
+        assertEquals(Land.MEADOW, Land.suggest(open, setOf(Land.FOREST), Land.FOREST))
+        assertEquals(Land.LAGOON, Land.suggest(open, setOf(Land.FOREST, Land.MEADOW), Land.MEADOW))
+        val all = open.toSet()
+        assertEquals(Land.MEADOW, Land.suggest(open, all, Land.FOREST))
+        assertEquals(Land.FOREST, Land.suggest(open, all, Land.LAGOON))
+    }
+}

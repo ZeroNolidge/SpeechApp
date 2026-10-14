@@ -146,6 +146,30 @@ enum class Land(
     CLOUDS("Cloud Castle", "🏰", Subject.entries.toList(), Power.FLY, 0xFFE3F2FD, 0xFFFFFFFF, listOf("☁️", "🌈", "⭐", "🏰"), 0.92f, 0.72f);
 
     fun unlocked(level: Int, openAll: Boolean = false) = openAll || needs == null || level >= needs.level
+
+    /** How to point at this land for a child who can't read: by its picture, not its name. */
+    val hint: String get() = when (this) {
+        FOREST -> "the big trees"
+        MEADOW -> "the sunflower"
+        LAGOON -> "the palm tree island"
+        FACTORY -> "the factory"
+        PEAKS -> "the mountain"
+        CAVES -> "the candle cave"
+        CLOUDS -> "the castle in the clouds"
+    }
+
+    companion object {
+        /**
+         * Which land the map should point at: the first open land not visited yet,
+         * otherwise the next open land after the last one played.
+         */
+        fun suggest(open: List<Land>, visited: Set<Land>, last: Land?): Land {
+            if (open.isEmpty()) return FOREST
+            open.firstOrNull { it !in visited }?.let { return it }
+            val i = open.indexOf(last)
+            return open[(i + 1) % open.size]
+        }
+    }
 }
 
 object Leveling {

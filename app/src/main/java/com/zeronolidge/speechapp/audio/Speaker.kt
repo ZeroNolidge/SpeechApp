@@ -21,6 +21,9 @@ class Speaker(context: Context) {
     private var failed = false
     private val pending = mutableListOf<() -> Unit>()
 
+    /** True while something is being said. */
+    val speaking: Boolean get() = ready && tts.isSpeaking
+
     /** 1.0 is normal speed. Grown-ups can change this in settings. */
     var rate: Float = 0.85f
 

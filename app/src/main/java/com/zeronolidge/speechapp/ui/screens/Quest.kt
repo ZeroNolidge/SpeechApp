@@ -55,6 +55,8 @@ import com.zeronolidge.speechapp.ui.challenge.ChallengeView
 import com.zeronolidge.speechapp.ui.challenge.PowerTicks
 import com.zeronolidge.speechapp.ui.challenge.promptFor
 import com.zeronolidge.speechapp.ui.components.AfterDelay
+import com.zeronolidge.speechapp.ui.components.GoButton
+import com.zeronolidge.speechapp.ui.components.Nudge
 import com.zeronolidge.speechapp.ui.components.LevelPill
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.RoundIcon
@@ -117,7 +119,7 @@ fun QuestScreen(land: Land, mixed: Boolean, back: () -> Unit, go: (Screen) -> Un
             when (val ph = phase) {
                 Phase.Intro -> StoryScene(
                     quest, quest.intro, species, Mood.HAPPY, Mood.THINK,
-                    button = "Let's go! ▶️", onNext = ::next,
+                    onNext = ::next,
                 )
                 is Phase.Beat -> BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft -> solved(c, ft) }, onNext = ::next)
                 Phase.Ending -> {
@@ -128,7 +130,7 @@ fun QuestScreen(land: Land, mixed: Boolean, back: () -> Unit, go: (Screen) -> Un
                     }
                     StoryScene(
                         quest, quest.ending, species, Mood.CHEER, Mood.CHEER,
-                        showGoal = true, button = "Yay! ▶️", onNext = ::next,
+                        showGoal = true, onNext = ::next,
                     )
                 }
                 Phase.Rewards -> Rewards(
@@ -204,12 +206,16 @@ private fun StoryScene(
     heroMood: Mood,
     friendMood: Mood,
     showGoal: Boolean = false,
-    button: String,
     onNext: () -> Unit,
 ) {
     val app = LocalApp.current
     val p = app.progress
-    LaunchedEffect(text) { app.speaker.say(text) }
+    val goLine = "Tap the big green arrow!"
+    LaunchedEffect(text) {
+        app.speaker.say(text)
+        app.speaker.then(goLine)
+    }
+    Nudge(text, goLine)
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         SpeechBubble(text, Modifier.fillMaxWidth(0.8f), fontSize = 22) { app.speaker.say(text) }
         Row(
@@ -223,16 +229,8 @@ private fun StoryScene(
                 Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), friendMood, mirrored = true)
                 NameTag(quest.friend.name)
             }
-        }
-        Box(
-            Modifier
-                .shadow(6.dp, RoundedCornerShape(50))
-                .clip(RoundedCornerShape(50))
-                .background(Kid.good)
-                .clickable(onClick = onNext)
-                .padding(horizontal = 36.dp, vertical = 10.dp),
-        ) {
-            Text(button, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+            // The only way forward, so make it impossible to miss.
+            GoButton(Modifier.align(Alignment.CenterVertically), size = 104.dp, onClick = onNext)
         }
     }
 }
@@ -369,6 +367,7 @@ private fun Rewards(xpGained: Int, gems: Int, startLevel: Int, onMap: () -> Unit
             newGifts.forEach { app.speaker.then("You got a present: ${it.name}!") }
             if (newShop.isNotEmpty()) app.speaker.then("And there are new things in the dress up shop!")
         }
+        app.speaker.then("Tap the green arrow to go back to the map, or the pink backpack to dress up!")
     }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Row(
@@ -404,9 +403,9 @@ private fun Rewards(xpGained: Int, gems: Int, startLevel: Int, onMap: () -> Unit
                         newGifts.forEach { Unlock("🎁", it.name) }
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BigButton("🗺️ Map", Kid.good, onMap)
-                    if (levelled || gems > 0) BigButton("🎒 Dress up", Color(0xFFF06292), onDressUp)
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RoundIcon("🎒", Color(0xFFF8BBD0), size = 76.dp, onClick = onDressUp)
+                    GoButton(size = 84.dp, onClick = onMap)
                 }
             }
         }
@@ -425,19 +424,5 @@ private fun Unlock(emoji: String, label: String) {
     ) {
         Text(emoji, fontSize = 32.sp)
         Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Kid.ink, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun BigButton(text: String, color: Color, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .shadow(6.dp, RoundedCornerShape(50))
-            .clip(RoundedCornerShape(50))
-            .background(color)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 26.dp, vertical = 10.dp),
-    ) {
-        Text(text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
     }
 }

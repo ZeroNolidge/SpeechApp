@@ -149,6 +149,20 @@ class Progress(context: Context) {
 
     fun landOpen(land: Land) = land.unlocked(heroLevel, openAllLands)
 
+    private var visited by mutableStateOf(
+        prefs.getStringSet("visited", emptySet())!!.mapNotNull { runCatching { Land.valueOf(it) }.getOrNull() }.toSet(),
+    )
+    private var lastLand by mutableStateOf(prefs.getString("lastLand", null)?.let { runCatching { Land.valueOf(it) }.getOrNull() })
+
+    fun visit(land: Land) {
+        visited = visited + land
+        lastLand = land
+        prefs.edit().putStringSet("visited", visited.map { it.name }.toSet()).putString("lastLand", land.name).apply()
+    }
+
+    /** The land the map points at next. */
+    fun suggestedLand(): Land = Land.suggest(Land.entries.filter { landOpen(it) }, visited, lastLand)
+
     fun storyParams() = StoryParams(
         heroName = heroName,
         heroLevel = heroLevel,
@@ -174,6 +188,8 @@ class Progress(context: Context) {
         hero = null
         owned = emptySet()
         equipped = readEquipped()
+        visited = emptySet()
+        lastLand = null
     }
 
     companion object {

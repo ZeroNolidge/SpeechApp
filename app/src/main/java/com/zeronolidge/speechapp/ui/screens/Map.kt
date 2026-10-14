@@ -1,5 +1,15 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.zIndex
+import com.zeronolidge.speechapp.ui.components.GoButton
+import com.zeronolidge.speechapp.ui.components.Nudge
+import com.zeronolidge.speechapp.ui.components.PointingHand
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,8 +78,8 @@ fun HeroPickScreen(onPicked: () -> Unit) {
             Modifier.fillMaxSize().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Choose your hero!", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink)
-            Spacer(Modifier.height(8.dp))
+            Text("Choose your hero!", fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink)
+            Spacer(Modifier.height(6.dp))
             Row(
                 Modifier.weight(1f).fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -85,7 +95,7 @@ fun HeroPickScreen(onPicked: () -> Unit) {
                             .then(if (selected) Modifier.border(4.dp, Color(0xFFFFB300), RoundedCornerShape(24.dp)) else Modifier)
                             .clickable {
                                 picked = sp
-                                app.speaker.say("${sp.label}!")
+                                app.speaker.say("${sp.label}! Tap the big green arrow to start!")
                             }
                             .padding(6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -100,25 +110,22 @@ fun HeroPickScreen(onPicked: () -> Unit) {
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Box(
-                Modifier
-                    .alpha(if (picked != null) 1f else 0.4f)
-                    .shadow(6.dp, RoundedCornerShape(50))
-                    .clip(RoundedCornerShape(50))
-                    .background(Kid.good)
-                    .clickable(enabled = picked != null) {
-                        val sp = picked ?: return@clickable
+            Box(Modifier.height(130.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (picked != null) {
+                    GoButton(size = 84.dp) {
+                        val sp = picked ?: return@GoButton
                         app.progress.chooseHero(sp)
                         app.speaker.say("Hooray! Let's go on an adventure!")
                         onPicked()
                     }
-                    .padding(horizontal = 40.dp, vertical = 12.dp),
-            ) {
-                Text("Let's go! ▶️", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                } else {
+                    PointingHand(size = 56.dp)
+                }
             }
         }
     }
+    if (picked == null) Nudge("pick", "Tap a friend to be your hero!")
+    else Nudge(picked!!, "Tap the big green arrow to start!")
 }
 
 /** The world map: lands to visit, the hero's level, and buttons for dress-up and practice. */
@@ -126,12 +133,15 @@ fun HeroPickScreen(onPicked: () -> Unit) {
 fun MapScreen(go: (Screen) -> Unit) {
     val app = LocalApp.current
     val p = app.progress
+    val suggested = p.suggestedLand()
+    val hintLine = "Tap ${suggested.hint}, where the hand is pointing!"
     LaunchedEffect(Unit) {
         app.speaker.say(
-            if (p.questsDone == 0) "This is the map! Tap the Talking Forest to start your first adventure."
-            else "Where shall we go, ${p.heroName}?",
+            if (p.questsDone == 0) "This is the map! Let's start the adventure. $hintLine"
+            else "Where shall we go, ${p.heroName}? $hintLine",
         )
     }
+    Nudge("map", hintLine, everyMs = 10000)
     val species = p.hero ?: Species.KID
     Box(
         Modifier
@@ -162,27 +172,41 @@ fun MapScreen(go: (Screen) -> Unit) {
                 )
             }
             val node = minOf(w / 7.5f, h / 3.2f, 120.dp)
+            val bounce = rememberInfiniteTransition(label = "suggest")
+            val pulse by bounce.animateFloat(1f, 1.15f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "pulse")
             Land.entries.forEach { land ->
                 val open = p.landOpen(land)
+                val isSuggested = land == suggested
                 Column(
                     Modifier
                         .offset(x = w * land.mapX - node / 2, y = h * land.mapY - node / 2)
-                        .width(node),
+                        .width(node)
+                        .zIndex(if (isSuggested) 1f else 0f),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
                         Modifier
                             .size(node)
+                            .scale(if (isSuggested) pulse else 1f)
                             .shadow(8.dp, CircleShape)
                             .clip(CircleShape)
-                            .border(4.dp, if (open) Color.White else Color(0xFF90A4AE), CircleShape)
+                            .border(
+                                if (isSuggested) 7.dp else 4.dp,
+                                when {
+                                    isSuggested -> Color(0xFFFFD600)
+                                    open -> Color.White
+                                    else -> Color(0xFF90A4AE)
+                                },
+                                CircleShape,
+                            )
                             .clickable {
                                 if (open) {
                                     app.speaker.say("${land.title}!")
+                                    p.visit(land)
                                     go(Screen.Quest(land))
                                 } else {
                                     val need = land.needs!!
-                                    app.speaker.say("To go to the ${land.title}, you need ${need.label}. Keep playing to reach level ${need.level}!")
+                                    app.speaker.say("That place is locked! You need ${need.label}. Keep playing to get it! $hintLine")
                                 }
                             },
                         contentAlignment = Alignment.Center,
@@ -212,6 +236,15 @@ fun MapScreen(go: (Screen) -> Unit) {
                     )
                 }
             }
+            // A big hand points down at the land to try next.
+            val hand = node * 0.6f
+            PointingHand(
+                Modifier
+                    .offset(x = w * suggested.mapX - hand / 2, y = h * suggested.mapY - node / 2 - hand * 1.25f)
+                    .zIndex(2f),
+                size = hand,
+                pointDown = true,
+            )
             // The hero waves from the bottom corner.
             HeroWithPet(
                 species, p.heroColor(species), p.outfit, p.pet,
