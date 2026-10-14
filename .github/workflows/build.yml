@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +22,21 @@ jobs:
         run: ./gradlew --no-daemon testDebugUnitTest
       - name: Build APK
         run: ./gradlew --no-daemon assembleRelease
+      - name: Name the APK
+        run: cp app/build/outputs/apk/release/app-release.apk TalkAndLearn.apk
       - uses: actions/upload-artifact@v4
         with:
           name: SpeechApp-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: TalkAndLearn.apk
+      # A release page gives a plain .apk link that can be opened straight from a phone.
+      - name: Publish to the Releases page
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-build
+          name: Talk & Learn (latest build)
+          body: |
+            Open this page on the Android phone or tablet and tap **TalkAndLearn.apk** to download and install it.
+            Built from ${{ github.sha }}.
+          files: TalkAndLearn.apk
+          make_latest: true

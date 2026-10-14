@@ -58,12 +58,14 @@ The recognizer finds young voices hard, so it also gives a star for effort after
 
 ## Installing on a phone or tablet
 
-GitHub builds the app automatically on every push.
-
-1. On GitHub, open the repo's **Actions** tab and click the latest green **Build APK** run.
-2. Under **Artifacts**, download **SpeechApp-apk**. Unzip it to get `app-release.apk`.
-3. Copy the APK to the Android device and open it. Android will ask you to allow installing
-   from that source. Say yes, then install.
+1. On the phone, open **https://github.com/ZeroNolidge/SpeechApp/releases/latest** and tap
+   **TalkAndLearn.apk** under Assets.
+2. Open the downloaded file. If Android asks, allow your browser (or My Files) to
+   **install unknown apps**.
+3. If **Google Play Protect** says it's from an unknown developer, tap **More details →
+   Install anyway**. It warns about every app that doesn't come from the Play Store.
+4. If it says **"App not installed"** or **"conflicts with an existing package"**, uninstall the
+   old Talk & Learn first, then install again.
 
 Requirements: Android 8.0 or newer. Talking uses the device's text-to-speech voice. If it's
 silent, install or update **Speech Services by Google** from the Play Store. Speech
