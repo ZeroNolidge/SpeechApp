@@ -28,7 +28,7 @@ with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
     listing = f.name
 
 subprocess.run(
-    ["pyftsubset", src, f"--unicodes-file={listing}", f"--output-file={out}", "--layout-features=*", "--no-hinting"],
+    ["pyftsubset", src, f"--unicodes-file={listing}", f"--output-file={out}", "--layout-features=*", "--no-hinting", "--drop-tables+=SVG"],
     check=True,
 )
 print(f"{len(codepoints)} codepoints -> {out}")

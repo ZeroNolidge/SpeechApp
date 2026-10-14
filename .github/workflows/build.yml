@@ -76,7 +76,7 @@ jobs:
         continue-on-error: true
         run: |
           set -x
-          python -m pip install --quiet fonttools
+          python -m pip install --quiet fonttools lxml
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/NotoColorEmoji.ttf" https://raw.githubusercontent.com/google/fonts/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf
           ls -la "$RUNNER_TEMP/NotoColorEmoji.ttf"
           python tools/make_emoji_font.py "$RUNNER_TEMP/NotoColorEmoji.ttf" "$RUNNER_TEMP/emoji.ttf"
