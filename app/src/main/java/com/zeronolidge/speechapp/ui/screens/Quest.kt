@@ -326,7 +326,8 @@ private fun BeatScene(
 private fun PowerBar(challenge: Challenge, used: Set<Power>, onUse: (Power) -> Unit) {
     val level = LocalApp.current.progress.heroLevel
     val useful = buildList {
-        add(Power.OWL)
+        // Talking has its own "hear it" buttons, and the owl would talk over the microphone.
+        if (challenge !is Challenge.Say) add(Power.OWL)
         if (challenge !is Challenge.Say && challenge !is Challenge.Robot) add(Power.WAND)
         if (challenge is Challenge.Robot) add(Power.MAP)
     }.filter { it.level <= level }

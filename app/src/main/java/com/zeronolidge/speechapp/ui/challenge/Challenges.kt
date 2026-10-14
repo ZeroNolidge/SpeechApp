@@ -126,8 +126,11 @@ fun ChallengeView(
     val app = LocalApp.current
     var misses by remember(challenge) { mutableIntStateOf(0) }
     LaunchedEffect(challenge) {
-        if (intro != null) app.speaker.say(intro)
-        app.speaker.then(promptFor(challenge))
+        // The speaking challenge says its own intro, then turns the microphone on.
+        if (challenge !is Challenge.Say) {
+            if (intro != null) app.speaker.say(intro)
+            app.speaker.then(promptFor(challenge))
+        }
     }
     val miss: () -> Unit = { misses++ }
     val done: () -> Unit = { onDone(misses == 0) }
@@ -135,7 +138,7 @@ fun ChallengeView(
     Box(modifier) {
         when (challenge) {
             is Challenge.Say -> {
-                SayPanel(challenge.sound, challenge.word, Modifier.fillMaxSize(), onSaid = { onDone(true) })
+                SayPanel(challenge.sound, challenge.word, Modifier.fillMaxSize(), intro = intro, onSaid = { onDone(true) })
             }
             is Challenge.Count -> CountView(challenge, area, powers.wand, miss, done)
             is Challenge.Math -> MathView(challenge, area, powers.wand, miss, done)

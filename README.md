@@ -51,7 +51,7 @@ Each word has these buttons:
 - **🔊 Hear it**
 - **🐢 Slowly**: syllable by syllable
 - **👄 How?**: where the lips and tongue go
-- **🎤 My turn**: speech recognition, scored generously
+- **🎤 Microphone**: switches on by itself after "Your turn!" (with a big pulsing mic so the child knows to talk), and scores generously. Tap it to stop or start listening again
 - **👍 Said it!**: a grown-up gives the star
 
 The recognizer finds young voices hard, so it also gives a star for effort after three tries.
