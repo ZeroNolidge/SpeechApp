@@ -20,7 +20,7 @@ Everything is spoken, so they don't need to read. Mistakes just fade away with a
    | 🏭 Robot Factory | Cubetto-style "plan, then Go" robot puzzles | 🦘 Super jump (level 3) |
    | ⛰️ Puzzle Peaks | Patterns and odd one out | 🧗 Climb (level 4) |
    | 🕯️ Word Caves | Sounding out and reading words | 🏮 Lantern (level 5) |
-   | 🏰 Cloud Castle | A bit of everything | 🪽 Fly (level 6) |
+   | 🏰 Cloud Castle | A bit of everything | 🦸 Fly (level 6) |
 
    **⭐ Adventure!** on the map starts a surprise quest that mixes subjects.
 3. **Go on quests.** Every quest is a new, randomly built story: a cartoon friend (Benny Bunny,

@@ -119,7 +119,7 @@ enum class Power(val emoji: String, val label: String, val level: Int, val helpe
     CLIMB("🧗", "Climb", 4, false, "Now you can climb Puzzle Peaks!"),
     LANTERN("🏮", "Lantern", 5, false, "Your lantern lights up the Word Caves!"),
     MAP("🗺️", "Treasure map", 5, true, "The map shows the robot's next move."),
-    FLY("🪽", "Fly", 6, false, "You can fly! Let's visit the Cloud Castle!"),
+    FLY("🦸", "Fly", 6, false, "You can fly! Let's visit the Cloud Castle!"),
 }
 
 /** The kinds of learning challenges a story can contain. */
