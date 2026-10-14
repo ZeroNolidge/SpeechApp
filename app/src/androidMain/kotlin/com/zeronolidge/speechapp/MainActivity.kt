@@ -1,0 +1,45 @@
+package com.zeronolidge.speechapp
+
+import android.os.Bundle
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.zeronolidge.speechapp.audio.AndroidListener
+import com.zeronolidge.speechapp.audio.AndroidParrot
+import com.zeronolidge.speechapp.audio.AndroidSpeaker
+import com.zeronolidge.speechapp.state.AndroidPrefs
+import com.zeronolidge.speechapp.state.Progress
+import com.zeronolidge.speechapp.ui.TalkAndLearnApp
+import com.zeronolidge.speechapp.ui.components.AppServices
+
+class MainActivity : ComponentActivity() {
+    private lateinit var services: AppServices
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val progress = Progress(AndroidPrefs(this))
+        services = AppServices(
+            speaker = AndroidSpeaker(this).also { it.rate = progress.speechRate },
+            listener = AndroidListener(this),
+            parrot = AndroidParrot(this),
+            progress = progress,
+        )
+        setContent { TalkAndLearnApp(services) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        services.speaker.stop()
+        services.listener.cancel()
+        services.parrot.stop()
+    }
+
+    override fun onDestroy() {
+        services.speaker.shutdown()
+        services.listener.cancel()
+        services.parrot.stop()
+        super.onDestroy()
+    }
+}
+

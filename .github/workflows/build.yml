@@ -1,4 +1,4 @@
-name: Build APK
+name: Build
 
 on:
   push:
@@ -8,8 +8,13 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  android:
+    name: Android APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +24,7 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Set up the signing key
         env:
           SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
@@ -34,14 +39,13 @@ jobs:
       - name: Build APK
         env:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon :app:assembleRelease
       - name: Name the APK
         run: cp app/build/outputs/apk/release/app-release.apk TalkAndLearn.apk
       - uses: actions/upload-artifact@v4
         with:
           name: SpeechApp-apk
           path: TalkAndLearn.apk
-      # A release page gives a plain .apk link that can be opened straight from a phone.
       - name: Publish to the Releases page
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -49,7 +53,52 @@ jobs:
           tag_name: latest-build
           name: Talk & Learn (latest build)
           body: |
-            Open this page on the Android phone or tablet and tap **TalkAndLearn.apk** to download and install it.
-            Built from ${{ github.sha }}.
+            The main version is the web app: https://zeronolidge.github.io/SpeechApp/
+            This APK is the Android version. Built from ${{ github.sha }}.
           files: TalkAndLearn.apk
           make_latest: true
+
+  web:
+    name: Web app (PWA)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the emoji font (only the emoji the app uses)
+        run: |
+          pip install fonttools
+          curl -sSL -o "$RUNNER_TEMP/NotoColorEmoji.ttf" https://raw.githubusercontent.com/google/fonts/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf
+          python tools/make_emoji_font.py "$RUNNER_TEMP/NotoColorEmoji.ttf" app/src/wasmJsMain/composeResources/font/noto_color_emoji.ttf
+      - name: Build the web app
+        run: ./gradlew --no-daemon :app:wasmJsBrowserDistribution
+      - name: Stamp the service worker with this build
+        run: sed -i "s/BUILD_ID/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" app/build/dist/wasmJs/productionExecutable/sw.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/build/dist/wasmJs/productionExecutable
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: web
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        continue-on-error: true
+        with:
+          enablement: true
+      - id: deployment
+        uses: actions/deploy-pages@v4
