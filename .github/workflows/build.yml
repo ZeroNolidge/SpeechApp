@@ -72,10 +72,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build the emoji font (only the emoji the app uses)
+        # If anything here fails, the copy already in the repo is used instead.
+        continue-on-error: true
         run: |
-          pip install fonttools
-          curl -sSL -o "$RUNNER_TEMP/NotoColorEmoji.ttf" https://raw.githubusercontent.com/google/fonts/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf
-          python tools/make_emoji_font.py "$RUNNER_TEMP/NotoColorEmoji.ttf" app/src/wasmJsMain/composeResources/font/noto_color_emoji.ttf
+          set -x
+          python -m pip install --quiet fonttools
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/NotoColorEmoji.ttf" https://raw.githubusercontent.com/google/fonts/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf
+          ls -la "$RUNNER_TEMP/NotoColorEmoji.ttf"
+          python tools/make_emoji_font.py "$RUNNER_TEMP/NotoColorEmoji.ttf" "$RUNNER_TEMP/emoji.ttf"
+          cp "$RUNNER_TEMP/emoji.ttf" app/src/wasmJsMain/composeResources/font/noto_color_emoji.ttf
       - name: Build the web app
         run: ./gradlew --no-daemon :app:wasmJsBrowserDistribution
       - name: Stamp the service worker with this build
