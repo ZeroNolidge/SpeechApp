@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
@@ -357,9 +358,8 @@ private fun BeatScene(
             Modifier
                 .weight(0.66f)
                 .fillMaxHeight()
-                .shadow(8.dp, RoundedCornerShape(28.dp))
+                .paperCard(Color(0xEEFFFFFF), 28.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xEEFFFFFF))
                 .padding(12.dp),
         ) {
             ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers) { firstTry ->
@@ -389,9 +389,8 @@ private fun PowerBar(challenge: Challenge, used: Set<Power>, onUse: (Power) -> U
                 Modifier
                     .size(52.dp)
                     .alpha(if (spent) 0.35f else 1f)
-                    .shadow(4.dp, CircleShape)
+                    .paperCard(Color(0xFFFFF8E1), circle = true)
                     .clip(CircleShape)
-                    .background(Color(0xFFFFF8E1))
                     .border(3.dp, Color(0xFFFFB300), CircleShape)
                     .clickable(enabled = !spent) { onUse(power) },
                 contentAlignment = Alignment.Center,
@@ -426,9 +425,8 @@ private fun Rewards(xpGained: Int, gems: Int, startLevel: Int, onMap: () -> Unit
             Modifier
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight()
-                .shadow(10.dp, RoundedCornerShape(32.dp))
+                .paperCard(Color(0xF5FFFFFF), 32.dp)
                 .clip(RoundedCornerShape(32.dp))
-                .background(Color(0xF5FFFFFF))
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {

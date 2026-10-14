@@ -201,13 +201,15 @@ private fun DrawScope.blob(c: Offset, rx: Float, ry: Float, color: Color, seed: 
         val f = 0.85f + 0.3f * (((i * 7 + seed * 13) % 10) / 10f)
         Offset(c.x + (rx * f * cos(a)).toFloat(), c.y + (ry * f * sin(a)).toFloat())
     }
-    drawPath(smooth(pts), color)
+    paperPath(smooth(pts), color)
 }
 
 // ---------------------------------------------------------------- sea
 
 private fun DrawScope.ocean(mid: Float, fast: Float) {
-    drawRect(Brush.verticalGradient(listOf(Color(0xFF4FC3F7), Color(0xFF0288D1))))
+    // Flat paper sea, with a slightly darker band of deep water around the edges.
+    drawRect(Color(0xFF3FA9E0))
+    paperPath(coast(1.32f), Color(0xFF58BCEB))
     // Shimmering wave marks drifting slowly.
     for (i in 0 until 26) {
         val fx = ((i * 0.137f + mid * (0.04f + (i % 3) * 0.02f)) % 1f)
@@ -233,7 +235,7 @@ private fun DrawScope.boat(fast: Float) {
             lineTo(c.x - s * 0.7f, c.y + s * 0.4f)
             close()
         }
-        drawPath(hull, Color(0xFF8D6E63))
+        paperPath(hull, Color(0xFF8D6E63))
         drawLine(Color(0xFF5D4037), Offset(c.x, c.y), Offset(c.x, c.y - s * 1.4f), u * 0.005f)
         val sail = Path().apply {
             moveTo(c.x + s * 0.05f, c.y - s * 1.35f)
@@ -241,14 +243,14 @@ private fun DrawScope.boat(fast: Float) {
             lineTo(c.x + s * 0.05f, c.y - s * 0.15f)
             close()
         }
-        drawPath(sail, Color.White)
+        paperPath(sail, Color.White)
         val flag = Path().apply {
             moveTo(c.x, c.y - s * 1.4f)
             lineTo(c.x - s * 0.35f, c.y - s * 1.28f)
             lineTo(c.x, c.y - s * 1.16f)
             close()
         }
-        drawPath(flag, Color(0xFFE53935))
+        paperPath(flag, Color(0xFFE53935))
     }
 }
 
@@ -273,15 +275,15 @@ private fun DrawScope.fish(mid: Float) {
         val s = u * 0.016f
         val dir = if (goingRight) 1f else -1f
         val col = Color(l.color)
-        drawOval(col, Offset(c.x - s, c.y - s * 0.55f), Size(s * 2, s * 1.1f))
+        paperOval(col, Offset(c.x - s, c.y - s * 0.55f), Size(s * 2, s * 1.1f))
         val tail = Path().apply {
             moveTo(c.x - dir * s * 0.8f, c.y)
             lineTo(c.x - dir * s * 1.6f, c.y - s * 0.6f)
             lineTo(c.x - dir * s * 1.6f, c.y + s * 0.6f)
             close()
         }
-        drawPath(tail, col)
-        drawCircle(Color(0xFF263238), s * 0.18f, Offset(c.x + dir * s * 0.5f, c.y - s * 0.1f))
+        paperPath(tail, col)
+        paperCircle(Color(0xFF263238), s * 0.18f, Offset(c.x + dir * s * 0.5f, c.y - s * 0.1f))
     }
 }
 
@@ -289,17 +291,17 @@ private fun DrawScope.fish(mid: Float) {
 
 private fun DrawScope.island() {
     // Shallow water, then the beach, then the grass.
-    drawPath(coast(1.07f), Color(0xFF81D4FA))
-    drawPath(coast(1.0f), Color(0xFFFFE0B2))
-    drawPath(coast(0.93f), Color(0xFF9CCC65))
+    paperPath(coast(1.07f), Color(0xFF81D4FA))
+    paperPath(coast(1.0f), Color(0xFFFFE0B2))
+    paperPath(coast(0.93f), Color(0xFF9CCC65))
     // Soft lighter patches so the grass isn't flat.
     blob(p(0.30f, 0.50f), u * 0.16f, u * 0.10f, Color(0xFFAED581), 1)
     blob(p(0.55f, 0.70f), u * 0.14f, u * 0.08f, Color(0xFFAED581), 2)
     blob(p(0.48f, 0.25f), u * 0.12f, u * 0.07f, Color(0xFFAED581), 3)
     // A few bushes dotted around.
     listOf(0.24f to 0.75f, 0.62f to 0.24f, 0.36f to 0.18f, 0.58f to 0.82f, 0.20f to 0.40f).forEach { (x, y) ->
-        drawCircle(Color(0xFF7CB342), u * 0.018f, p(x, y))
-        drawCircle(Color(0xFF8BC34A), u * 0.013f, p(x + 0.012f, y - 0.01f))
+        paperCircle(Color(0xFF7CB342), u * 0.018f, p(x, y))
+        paperCircle(Color(0xFF8BC34A), u * 0.013f, p(x + 0.012f, y - 0.01f))
     }
 }
 
@@ -339,13 +341,13 @@ private fun DrawScope.trail() {
 }
 
 private fun DrawScope.tree(c: Offset, s: Float, dark: Boolean) {
-    drawRect(Color(0xFF6D4C41), Offset(c.x - s * 0.12f, c.y), Size(s * 0.24f, s * 0.5f))
-    drawCircle(if (dark) Color(0xFF388E3C) else Color(0xFF43A047), s * 0.5f, Offset(c.x, c.y - s * 0.15f))
-    drawCircle(if (dark) Color(0xFF43A047) else Color(0xFF66BB6A), s * 0.28f, Offset(c.x - s * 0.15f, c.y - s * 0.3f))
+    paperRect(Color(0xFF6D4C41), Offset(c.x - s * 0.12f, c.y), Size(s * 0.24f, s * 0.5f))
+    paperCircle(if (dark) Color(0xFF388E3C) else Color(0xFF43A047), s * 0.5f, Offset(c.x, c.y - s * 0.15f))
+    paperCircle(if (dark) Color(0xFF43A047) else Color(0xFF66BB6A), s * 0.28f, Offset(c.x - s * 0.15f, c.y - s * 0.3f))
 }
 
 private fun DrawScope.pine(c: Offset, s: Float) {
-    drawRect(Color(0xFF6D4C41), Offset(c.x - s * 0.08f, c.y + s * 0.2f), Size(s * 0.16f, s * 0.3f))
+    paperRect(Color(0xFF6D4C41), Offset(c.x - s * 0.08f, c.y + s * 0.2f), Size(s * 0.16f, s * 0.3f))
     for (k in 0..2) {
         val top = c.y - s * 0.6f + k * s * 0.25f
         val half = s * (0.25f + k * 0.1f)
@@ -355,7 +357,7 @@ private fun DrawScope.pine(c: Offset, s: Float) {
             lineTo(c.x - half, top + s * 0.4f)
             close()
         }
-        drawPath(tri, Color(0xFF2E7D32))
+        paperPath(tri, Color(0xFF2E7D32))
     }
 }
 
@@ -366,8 +368,8 @@ private fun DrawScope.forest(land: Land) {
         val q = Offset(c.x + dx * s, c.y + dy * s)
         if (i % 3 == 2) pine(q, s * 0.9f) else tree(q, s, i % 2 == 0)
     }
-    drawCircle(Color(0xFFE53935), s * 0.12f, Offset(c.x + s * 0.3f, c.y + s * 0.9f))
-    drawCircle(Color.White, s * 0.04f, Offset(c.x + s * 0.28f, c.y + s * 0.86f))
+    paperCircle(Color(0xFFE53935), s * 0.12f, Offset(c.x + s * 0.3f, c.y + s * 0.9f))
+    paperCircle(Color.White, s * 0.04f, Offset(c.x + s * 0.28f, c.y + s * 0.86f))
 }
 
 private fun DrawScope.meadow(land: Land) {
@@ -379,16 +381,16 @@ private fun DrawScope.meadow(land: Land) {
         val a = i * 2.4
         val r = s * (0.3f + 0.08f * (i % 7))
         val q = Offset(c.x + (r * cos(a)).toFloat() * 1.6f, c.y + (r * sin(a)).toFloat())
-        drawCircle(Color(petals[i % petals.size]), s * 0.08f, q)
+        paperCircle(Color(petals[i % petals.size]), s * 0.08f, q)
     }
     // A big sunflower in the middle.
     drawLine(Color(0xFF558B2F), c, Offset(c.x, c.y - s * 0.9f), s * 0.08f)
     val head = Offset(c.x, c.y - s * 0.9f)
     for (k in 0 until 10) {
         val a = k * 2 * PI / 10
-        drawCircle(Color(0xFFFFCA28), s * 0.16f, Offset(head.x + (s * 0.28f * cos(a)).toFloat(), head.y + (s * 0.28f * sin(a)).toFloat()))
+        paperCircle(Color(0xFFFFCA28), s * 0.16f, Offset(head.x + (s * 0.28f * cos(a)).toFloat(), head.y + (s * 0.28f * sin(a)).toFloat()))
     }
-    drawCircle(Color(0xFF6D4C41), s * 0.2f, head)
+    paperCircle(Color(0xFF6D4C41), s * 0.2f, head)
 }
 
 private fun DrawScope.palm(c: Offset, s: Float, lean: Float) {
@@ -407,7 +409,7 @@ private fun DrawScope.palm(c: Offset, s: Float, lean: Float) {
         }
         drawPath(leaf, Color(0xFF43A047), style = Stroke(s * 0.1f, cap = StrokeCap.Round))
     }
-    drawCircle(Color(0xFF6D4C41), s * 0.07f, Offset(top.x + s * 0.05f, top.y + s * 0.06f))
+    paperCircle(Color(0xFF6D4C41), s * 0.07f, Offset(top.x + s * 0.05f, top.y + s * 0.06f))
 }
 
 private fun DrawScope.lagoon(land: Land, fast: Float) {
@@ -429,14 +431,14 @@ private fun DrawScope.factory(land: Land, fast: Float) {
     // Puffs of smoke drifting up from the chimney.
     for (k in 0..2) {
         val t = (fast + k / 3f) % 1f
-        drawCircle(
+        paperCircle(
             Color.White.copy(alpha = 0.7f * (1 - t)), s * (0.15f + 0.2f * t),
             Offset(c.x + s * 0.55f + t * s * 0.4f, c.y - s * 1.0f - t * s * 0.9f),
         )
     }
-    drawRect(Color(0xFF78909C), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.7f))
-    drawRect(Color(0xFFE53935), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.1f))
-    drawRect(Color(0xFF90A4AE), Offset(c.x - s * 0.9f, c.y - s * 0.4f), Size(s * 1.8f, s * 0.8f))
+    paperRect(Color(0xFF78909C), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.7f))
+    paperRect(Color(0xFFE53935), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.1f))
+    paperRect(Color(0xFF90A4AE), Offset(c.x - s * 0.9f, c.y - s * 0.4f), Size(s * 1.8f, s * 0.8f))
     // Saw-tooth roof.
     for (k in 0..2) {
         val x0 = c.x - s * 0.9f + k * s * 0.6f
@@ -446,11 +448,11 @@ private fun DrawScope.factory(land: Land, fast: Float) {
             lineTo(x0 + s * 0.6f, c.y - s * 0.75f)
             close()
         }
-        drawPath(roof, Color(0xFF607D8B))
+        paperPath(roof, Color(0xFF607D8B))
     }
-    for (k in 0..2) drawRect(Color(0xFFFFF59D), Offset(c.x - s * 0.7f + k * s * 0.55f, c.y - s * 0.15f), Size(s * 0.3f, s * 0.25f))
-    drawCircle(Color(0xFFFFB300), s * 0.2f, Offset(c.x - s * 0.95f, c.y + s * 0.4f))
-    drawCircle(Color(0xFF90A4AE), s * 0.08f, Offset(c.x - s * 0.95f, c.y + s * 0.4f))
+    for (k in 0..2) paperRect(Color(0xFFFFF59D), Offset(c.x - s * 0.7f + k * s * 0.55f, c.y - s * 0.15f), Size(s * 0.3f, s * 0.25f))
+    paperCircle(Color(0xFFFFB300), s * 0.2f, Offset(c.x - s * 0.95f, c.y + s * 0.4f))
+    paperCircle(Color(0xFF90A4AE), s * 0.08f, Offset(c.x - s * 0.95f, c.y + s * 0.4f))
 }
 
 private fun DrawScope.mountain(base: Offset, wide: Float, tall: Float, color: Color) {
@@ -460,7 +462,7 @@ private fun DrawScope.mountain(base: Offset, wide: Float, tall: Float, color: Co
         lineTo(base.x + wide, base.y)
         close()
     }
-    drawPath(m, color)
+    paperPath(m, color)
     val cap = Path().apply {
         moveTo(base.x, base.y - tall)
         lineTo(base.x + wide * 0.32f, base.y - tall * 0.68f)
@@ -469,7 +471,7 @@ private fun DrawScope.mountain(base: Offset, wide: Float, tall: Float, color: Co
         lineTo(base.x - wide * 0.32f, base.y - tall * 0.68f)
         close()
     }
-    drawPath(cap, Color.White)
+    paperPath(cap, Color.White)
 }
 
 private fun DrawScope.peaks(land: Land) {
@@ -485,8 +487,8 @@ private fun DrawScope.caves(land: Land, fast: Float) {
     val s = u * 0.07f
     blob(Offset(c.x, c.y), s * 1.4f, s * 1.0f, Color(0xFF8D8D8D), 11)
     blob(Offset(c.x - s * 0.2f, c.y - s * 0.2f), s * 0.9f, s * 0.6f, Color(0xFFA1A1A1), 12)
-    drawArc(Color(0xFF263238), 180f, 180f, true, Offset(c.x - s * 0.5f, c.y - s * 0.2f), Size(s, s * 0.9f))
-    drawRect(Color(0xFF263238), Offset(c.x - s * 0.5f, c.y + s * 0.25f), Size(s, s * 0.3f))
+    paperArc(Color(0xFF263238), 180f, 180f, true, Offset(c.x - s * 0.5f, c.y - s * 0.2f), Size(s, s * 0.9f))
+    paperRect(Color(0xFF263238), Offset(c.x - s * 0.5f, c.y + s * 0.25f), Size(s, s * 0.3f))
     listOf(-0.9f to -0.4f, 0.8f to -0.5f, 0.95f to 0.3f).forEachIndexed { i, (dx, dy) ->
         val a = ((sin((fast + i * 0.3f) * 2 * PI) + 1) / 2).toFloat()
         star(Offset(c.x + dx * s, c.y + dy * s), s * 0.18f, Color(0xFF80DEEA).copy(alpha = 0.5f + 0.5f * a))
@@ -500,21 +502,21 @@ private fun DrawScope.castle(land: Land, mid: Float) {
     withTransform({ translate(0f, float) }) {
         // A fluffy cloud island.
         listOf(-1.0f to 0.55f, -0.4f to 0.75f, 0.3f to 0.75f, 0.95f to 0.55f, 0f to 0.45f).forEach { (dx, dy) ->
-            drawCircle(Color.White, s * 0.55f, Offset(c.x + dx * s, c.y + dy * s))
+            paperCircle(Color.White, s * 0.55f, Offset(c.x + dx * s, c.y + dy * s))
         }
         // Towers with pointy roofs and flags.
-        drawRect(Color(0xFFF8BBD0), Offset(c.x - s * 0.6f, c.y - s * 0.5f), Size(s * 1.2f, s * 0.9f))
+        paperRect(Color(0xFFF8BBD0), Offset(c.x - s * 0.6f, c.y - s * 0.5f), Size(s * 1.2f, s * 0.9f))
         listOf(-0.75f, 0.75f, 0f).forEachIndexed { i, dx ->
             val tall = if (i == 2) 1.3f else 1.0f
             val x = c.x + dx * s
-            drawRect(Color(0xFFF48FB1), Offset(x - s * 0.22f, c.y - s * tall), Size(s * 0.44f, s * tall + s * 0.4f))
+            paperRect(Color(0xFFF48FB1), Offset(x - s * 0.22f, c.y - s * tall), Size(s * 0.44f, s * tall + s * 0.4f))
             val roof = Path().apply {
                 moveTo(x - s * 0.3f, c.y - s * tall)
                 lineTo(x, c.y - s * tall - s * 0.5f)
                 lineTo(x + s * 0.3f, c.y - s * tall)
                 close()
             }
-            drawPath(roof, Color(0xFF7E57C2))
+            paperPath(roof, Color(0xFF7E57C2))
             drawLine(Color(0xFF5D4037), Offset(x, c.y - s * tall - s * 0.5f), Offset(x, c.y - s * tall - s * 0.8f), s * 0.05f)
             val wave = sin(mid * 2 * PI * 6 + i).toFloat() * s * 0.04f
             val flag = Path().apply {
@@ -523,10 +525,10 @@ private fun DrawScope.castle(land: Land, mid: Float) {
                 lineTo(x, c.y - s * tall - s * 0.62f)
                 close()
             }
-            drawPath(flag, Color(0xFFFFD54F))
+            paperPath(flag, Color(0xFFFFD54F))
         }
-        drawArc(Color(0xFF7E57C2), 180f, 180f, true, Offset(c.x - s * 0.2f, c.y - s * 0.1f), Size(s * 0.4f, s * 0.4f))
-        drawRect(Color(0xFF7E57C2), Offset(c.x - s * 0.2f, c.y + s * 0.1f), Size(s * 0.4f, s * 0.3f))
+        paperArc(Color(0xFF7E57C2), 180f, 180f, true, Offset(c.x - s * 0.2f, c.y - s * 0.1f), Size(s * 0.4f, s * 0.4f))
+        paperRect(Color(0xFF7E57C2), Offset(c.x - s * 0.2f, c.y + s * 0.1f), Size(s * 0.4f, s * 0.3f))
         // A little rainbow behind.
         listOf(0xFFFF8A80, 0xFFFFE082, 0xFFA5D6A7, 0xFF90CAF9).forEachIndexed { i, col ->
             drawArc(
@@ -545,7 +547,7 @@ private fun DrawScope.mist(land: Land, slow: Float) {
     val drift = sin(slow * 2 * PI + land.ordinal).toFloat() * s * 0.25f
     listOf(-1.0f to 0.1f, -0.3f to -0.4f, 0.5f to -0.2f, 1.0f to 0.25f, 0f to 0.45f, -0.6f to 0.6f, 0.6f to 0.7f, 0f to -0.9f).forEachIndexed { i, (dx, dy) ->
         val r = s * (0.75f + 0.15f * (i % 3))
-        drawCircle(Color(0xFFECEFF1).copy(alpha = 0.62f), r, Offset(c.x + dx * s + drift * (if (i % 2 == 0) 1 else -1), c.y + dy * s))
+        paperCircle(Color(0xFFECEFF1).copy(alpha = 0.62f), r, Offset(c.x + dx * s + drift * (if (i % 2 == 0) 1 else -1), c.y + dy * s))
     }
 }
 

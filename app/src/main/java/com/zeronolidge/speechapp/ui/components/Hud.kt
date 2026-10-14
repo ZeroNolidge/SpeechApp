@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -42,9 +43,8 @@ fun HeroBadge(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val species = p.hero ?: Species.KID
     Row(
         modifier
-            .shadow(4.dp, RoundedCornerShape(50))
+            .paperCard(Kid.card, 999.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color.White)
             .clickable(onClick = onClick)
             .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -112,9 +112,8 @@ fun SpeechBubble(text: String, modifier: Modifier = Modifier, fontSize: Int = 20
     Column(modifier) {
         Row(
             Modifier
-                .shadow(4.dp, RoundedCornerShape(22.dp))
+                .paperCard(Kid.card, 22.dp)
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color.White)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,

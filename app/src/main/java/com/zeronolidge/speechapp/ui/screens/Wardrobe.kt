@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -148,9 +149,8 @@ fun WardrobeScreen(back: () -> Unit) {
                 Modifier
                     .weight(0.62f)
                     .fillMaxHeight()
-                    .shadow(8.dp, RoundedCornerShape(28.dp))
+                    .paperCard(Color(0xF2FFFFFF), 28.dp)
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xF2FFFFFF))
                     .padding(10.dp),
             ) {
                 Row(

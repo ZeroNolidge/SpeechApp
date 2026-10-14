@@ -123,7 +123,7 @@ private fun DrawScope.poly(color: Color, vararg pts: Pair<Float, Float>) {
         if (i == 0) p.moveTo(q.x, q.y) else p.lineTo(q.x, q.y)
     }
     p.close()
-    drawPath(p, color)
+    paperPath(p, color)
 }
 
 private fun DrawScope.windy(loop: Float) {
@@ -151,16 +151,16 @@ private fun DrawScope.forkPath(done: Float) {
     // The right path glows once the puzzle is solved.
     if (done > 0f) poly(Color(0xFFFFF59D).copy(alpha = 0.8f * done), 0.46f to 1f, 0.54f to 1f, 0.52f to 0.5f, 0.48f to 0.5f)
     // Signpost.
-    drawRect(DarkBrown, px(0.485f, 0.18f), sz(0.03f, 0.42f))
+    paperRect(DarkBrown, px(0.485f, 0.18f), sz(0.03f, 0.42f))
     poly(Brown, 0.5f to 0.2f, 0.66f to 0.2f, 0.7f to 0.25f, 0.66f to 0.3f, 0.5f to 0.3f)
     poly(Brown, 0.5f to 0.32f, 0.34f to 0.32f, 0.3f to 0.37f, 0.34f to 0.42f, 0.5f to 0.42f)
-    drawCircle(Color.White, m * 0.012f, px(0.6f, 0.25f))
-    drawCircle(Color.White, m * 0.012f, px(0.4f, 0.37f))
+    paperCircle(Color.White, m * 0.012f, px(0.6f, 0.25f))
+    paperCircle(Color.White, m * 0.012f, px(0.4f, 0.37f))
 }
 
 private fun DrawScope.river(loop: Float, done: Float) {
-    drawRect(Color(0xFF4FC3F7), px(0f, 0.42f), sz(1f, 0.24f))
-    drawRect(Color(0xFF81D4FA), px(0f, 0.42f), sz(1f, 0.03f))
+    paperRect(Color(0xFF4FC3F7), px(0f, 0.42f), sz(1f, 0.24f))
+    paperRect(Color(0xFF81D4FA), px(0f, 0.42f), sz(1f, 0.03f))
     // Little moving waves.
     for (row in 0..2) {
         val y = 0.48f + row * 0.06f
@@ -173,15 +173,15 @@ private fun DrawScope.river(loop: Float, done: Float) {
     listOf(0.15f, 0.35f, 0.55f, 0.75f).forEachIndexed { i, x ->
         val a = if (i == 0) 1f else done
         if (a > 0f) {
-            drawOval(Color(0xFF9E9E9E).copy(alpha = a), px(x, 0.53f), sz(0.13f, 0.08f))
-            drawOval(Color(0xFFBDBDBD).copy(alpha = a), px(x + 0.015f, 0.535f), sz(0.09f, 0.04f))
+            paperOval(Color(0xFF9E9E9E).copy(alpha = a), px(x, 0.53f), sz(0.13f, 0.08f))
+            paperOval(Color(0xFFBDBDBD).copy(alpha = a), px(x + 0.015f, 0.535f), sz(0.09f, 0.04f))
         }
     }
 }
 
 private fun DrawScope.bridge(done: Float) {
     // A deep gap between two cliffs.
-    drawRect(Color(0xFF90A4AE), px(0.25f, 0.45f), sz(0.5f, 0.55f))
+    paperRect(Color(0xFF90A4AE), px(0.25f, 0.45f), sz(0.5f, 0.55f))
     poly(Color(0xFFA1887F), 0f to 0.42f, 0.3f to 0.42f, 0.26f to 1f, 0f to 1f)
     poly(Color(0xFFA1887F), 1f to 0.42f, 0.7f to 0.42f, 0.74f to 1f, 1f to 1f)
     drawLine(DarkBrown, px(0.3f, 0.36f), px(0.7f, 0.36f), m * 0.012f)
@@ -192,50 +192,50 @@ private fun DrawScope.bridge(done: Float) {
         val a = if (i in missing) done else 1f
         if (a > 0f) {
             val x = 0.3f + i * 0.05f
-            drawRect(Brown.copy(alpha = a), px(x + 0.004f, 0.42f), sz(0.042f, 0.035f))
+            paperRect(Brown.copy(alpha = a), px(x + 0.004f, 0.42f), sz(0.042f, 0.035f))
         }
     }
 }
 
 private fun DrawScope.door(done: Float) {
     // A little house wall with a big arched door.
-    drawRect(Color(0xFFFFE0B2), px(0.25f, 0.1f), sz(0.5f, 0.6f))
+    paperRect(Color(0xFFFFE0B2), px(0.25f, 0.1f), sz(0.5f, 0.6f))
     poly(Color(0xFFE57373), 0.2f to 0.12f, 0.5f to -0.08f, 0.8f to 0.12f)
     val doorTop = 0.24f
     // Warm light inside once open.
-    drawRect(Color(0xFFFFF176), px(0.38f, doorTop), sz(0.24f, 0.46f))
+    paperRect(Color(0xFFFFF176), px(0.38f, doorTop), sz(0.24f, 0.46f))
     val openW = 0.24f * (1f - 0.7f * done)
-    drawRoundRect(Brown, px(0.38f, doorTop), sz(openW, 0.46f), CornerRadius(m * 0.03f))
+    paperRoundRect(Brown, px(0.38f, doorTop), sz(openW, 0.46f), CornerRadius(m * 0.03f))
     for (k in 1..2) {
         val x = 0.38f + openW * k / 3f
         drawLine(DarkBrown, px(x, doorTop + 0.02f), px(x, doorTop + 0.44f), m * 0.006f)
     }
-    drawCircle(Gold, m * 0.018f, px(0.38f + openW * 0.85f, 0.48f))
+    paperCircle(Gold, m * 0.018f, px(0.38f + openW * 0.85f, 0.48f))
     // The padlock disappears when solved.
     if (done < 1f) {
         val a = 1f - done
         drawArc(Color(0xFF9E9E9E).copy(alpha = a), 180f, 180f, false, px(0.505f, 0.38f), sz(0.07f, 0.09f), style = Stroke(m * 0.018f))
-        drawRoundRect(Gold.copy(alpha = a), px(0.5f, 0.42f), sz(0.08f, 0.08f), CornerRadius(m * 0.012f))
-        drawCircle(DarkBrown.copy(alpha = a), m * 0.01f, px(0.54f, 0.455f))
+        paperRoundRect(Gold.copy(alpha = a), px(0.5f, 0.42f), sz(0.08f, 0.08f), CornerRadius(m * 0.012f))
+        paperCircle(DarkBrown.copy(alpha = a), m * 0.01f, px(0.54f, 0.455f))
     }
 }
 
 private fun DrawScope.tree() {
-    drawRect(Brown, px(0.47f, 0.22f), sz(0.08f, 0.5f))
+    paperRect(Brown, px(0.47f, 0.22f), sz(0.08f, 0.5f))
     drawLine(Brown, px(0.51f, 0.4f), px(0.66f, 0.3f), m * 0.03f, cap = StrokeCap.Round)
     listOf(0.51f to 0.12f, 0.38f to 0.2f, 0.64f to 0.2f, 0.45f to 0.05f, 0.58f to 0.04f, 0.51f to 0.25f).forEachIndexed { i, (x, y) ->
-        drawCircle(if (i % 2 == 0) Leaf else DarkLeaf, m * 0.13f, px(x, y))
+        paperCircle(if (i % 2 == 0) Leaf else DarkLeaf, m * 0.13f, px(x, y))
     }
-    drawCircle(Color(0xFFE53935), m * 0.015f, px(0.4f, 0.22f))
-    drawCircle(Color(0xFFE53935), m * 0.015f, px(0.62f, 0.15f))
+    paperCircle(Color(0xFFE53935), m * 0.015f, px(0.4f, 0.22f))
+    paperCircle(Color(0xFFE53935), m * 0.015f, px(0.62f, 0.15f))
 }
 
 private fun DrawScope.cave(done: Float, loop: Float) {
-    drawOval(Color(0xFF8D8D8D), px(0.12f, 0.1f), sz(0.76f, 0.8f))
-    drawOval(Color(0xFF757575), px(0.2f, 0.18f), sz(0.6f, 0.64f))
+    paperOval(Color(0xFF8D8D8D), px(0.12f, 0.1f), sz(0.76f, 0.8f))
+    paperOval(Color(0xFF757575), px(0.2f, 0.18f), sz(0.6f, 0.64f))
     // The dark opening glows warm once solved.
-    drawArc(lerp(Color(0xFF1A1A2E), Color(0xFFFFB74D), done * 0.7f), 180f, 180f, true, px(0.34f, 0.34f), sz(0.32f, 0.36f))
-    drawRect(lerp(Color(0xFF1A1A2E), Color(0xFFFFB74D), done * 0.7f), px(0.34f, 0.52f), sz(0.32f, 0.2f))
+    paperArc(lerp(Color(0xFF1A1A2E), Color(0xFFFFB74D), done * 0.7f), 180f, 180f, true, px(0.34f, 0.34f), sz(0.32f, 0.36f))
+    paperRect(lerp(Color(0xFF1A1A2E), Color(0xFFFFB74D), done * 0.7f), px(0.34f, 0.52f), sz(0.32f, 0.2f))
     listOf(0.38f, 0.45f, 0.52f, 0.59f).forEach { x ->
         poly(Color(0xFF616161), x to 0.4f, (x + 0.04f) to 0.4f, (x + 0.02f) to 0.47f)
     }
@@ -246,7 +246,7 @@ private fun DrawScope.cave(done: Float, loop: Float) {
 }
 
 private fun DrawScope.hill(loop: Float) {
-    drawOval(Color(0xFF7CB342), px(-0.1f, 0.25f), sz(1.2f, 1.2f))
+    paperOval(Color(0xFF7CB342), px(-0.1f, 0.25f), sz(1.2f, 1.2f))
     // A winding path up to the top.
     val p = Path().apply {
         val a = px(0.45f, 1f)
@@ -264,10 +264,10 @@ private fun DrawScope.hill(loop: Float) {
 
 private fun DrawScope.party(done: Float, bob: Float) {
     // Table.
-    drawRect(Color(0xFFFF8A80), px(0.3f, 0.48f), sz(0.4f, 0.04f))
-    drawRect(Color(0xFFFFCDD2), px(0.3f, 0.52f), sz(0.4f, 0.08f))
-    drawRect(DarkBrown, px(0.33f, 0.6f), sz(0.02f, 0.14f))
-    drawRect(DarkBrown, px(0.65f, 0.6f), sz(0.02f, 0.14f))
+    paperRect(Color(0xFFFF8A80), px(0.3f, 0.48f), sz(0.4f, 0.04f))
+    paperRect(Color(0xFFFFCDD2), px(0.3f, 0.52f), sz(0.4f, 0.08f))
+    paperRect(DarkBrown, px(0.33f, 0.6f), sz(0.02f, 0.14f))
+    paperRect(DarkBrown, px(0.65f, 0.6f), sz(0.02f, 0.14f))
     // Bunting and balloons arrive once the party is ready.
     if (done > 0f) {
         val colors = listOf(0xFFE53935, 0xFFFFEB3B, 0xFF43A047, 0xFF1E88E5, 0xFFAB47BC)
@@ -279,29 +279,29 @@ private fun DrawScope.party(done: Float, bob: Float) {
         listOf(0.12f to 0xFFE53935, 0.2f to 0xFF1E88E5, 0.8f to 0xFFFFEB3B, 0.88f to 0xFF43A047).forEachIndexed { i, (x, c) ->
             val y = 0.16f + (if (i % 2 == 0) bob else 1 - bob) * 0.03f
             drawLine(Color.Gray.copy(alpha = done), px(x, y + 0.12f), px(x, 0.6f), m * 0.004f)
-            drawOval(Color(c).copy(alpha = done), px(x - 0.04f, y), sz(0.08f, 0.13f))
+            paperOval(Color(c).copy(alpha = done), px(x - 0.04f, y), sz(0.08f, 0.13f))
         }
     }
 }
 
 private fun DrawScope.chest(done: Float) {
     val wood = Color(0xFFA1662F)
-    drawRoundRect(wood, px(0.36f, 0.46f), sz(0.28f, 0.2f), CornerRadius(m * 0.02f))
-    drawRect(Gold, px(0.36f, 0.52f), sz(0.28f, 0.025f))
-    drawRect(Gold, px(0.48f, 0.46f), sz(0.04f, 0.2f))
+    paperRoundRect(wood, px(0.36f, 0.46f), sz(0.28f, 0.2f), CornerRadius(m * 0.02f))
+    paperRect(Gold, px(0.36f, 0.52f), sz(0.28f, 0.025f))
+    paperRect(Gold, px(0.48f, 0.46f), sz(0.04f, 0.2f))
     // The lid lifts open; gold glows from inside.
-    if (done > 0f) drawOval(Gold.copy(alpha = 0.7f * done), px(0.38f, 0.4f), sz(0.24f, 0.1f))
+    if (done > 0f) paperOval(Gold.copy(alpha = 0.7f * done), px(0.38f, 0.4f), sz(0.24f, 0.1f))
     val lidY = 0.38f - 0.12f * done
-    drawRoundRect(lerp(wood, Color(0xFF8D5524), done), px(0.36f, lidY), sz(0.28f, 0.09f), CornerRadius(m * 0.03f))
-    drawRect(Gold, px(0.48f, lidY), sz(0.04f, 0.09f))
-    if (done < 0.5f) drawCircle(Color(0xFF424242), m * 0.012f, px(0.5f, 0.5f))
+    paperRoundRect(lerp(wood, Color(0xFF8D5524), done), px(0.36f, lidY), sz(0.28f, 0.09f), CornerRadius(m * 0.03f))
+    paperRect(Gold, px(0.48f, lidY), sz(0.04f, 0.09f))
+    if (done < 0.5f) paperCircle(Color(0xFF424242), m * 0.012f, px(0.5f, 0.5f))
 }
 
 private fun DrawScope.night(loop: Float) {
     drawRect(Brush.verticalGradient(listOf(Color(0xE61A237E), Color(0x003949AB)), startY = 0f, endY = size.height * 0.75f))
     // Crescent moon.
-    drawCircle(Color(0xFFFFF59D), m * 0.09f, px(0.82f, 0.14f))
-    drawCircle(Color(0xFF283593), m * 0.08f, px(0.86f, 0.12f))
+    paperCircle(Color(0xFFFFF59D), m * 0.09f, px(0.82f, 0.14f))
+    paperCircle(Color(0xFF283593), m * 0.08f, px(0.86f, 0.12f))
     listOf(0.1f to 0.1f, 0.25f to 0.22f, 0.4f to 0.08f, 0.58f to 0.2f, 0.68f to 0.06f, 0.15f to 0.34f, 0.92f to 0.34f).forEachIndexed { i, (x, y) ->
         val a = ((sin((loop * 2 + i * 0.37f) * 2 * PI) + 1) / 2).toFloat()
         star(px(x, y), m * (0.018f + 0.012f * a), Color.White.copy(alpha = 0.5f + 0.5f * a))
@@ -333,8 +333,8 @@ private fun DrawScope.picnic() {
 
 private fun DrawScope.garden() {
     // A white picket fence and rows of flowers.
-    drawRect(Color.White, px(0f, 0.36f), sz(1f, 0.02f))
-    drawRect(Color.White, px(0f, 0.46f), sz(1f, 0.02f))
+    paperRect(Color.White, px(0f, 0.36f), sz(1f, 0.02f))
+    paperRect(Color.White, px(0f, 0.46f), sz(1f, 0.02f))
     for (i in 0..11) {
         val x = i / 11f - 0.02f
         poly(Color.White, x to 0.52f, (x + 0.04f) to 0.52f, (x + 0.04f) to 0.32f, (x + 0.02f) to 0.28f, x to 0.32f)
@@ -346,8 +346,8 @@ private fun DrawScope.garden() {
         drawLine(DarkLeaf, px(x, y), px(x, y + 0.1f), m * 0.01f)
         val c = Color(petals[i % petals.size])
         listOf(-1f to 0f, 1f to 0f, 0f to -1f, 0f to 1f).forEach { (dx, dy) ->
-            drawCircle(c, m * 0.022f, Offset(size.width * x + dx * m * 0.025f, size.height * y + dy * m * 0.025f))
+            paperCircle(c, m * 0.022f, Offset(size.width * x + dx * m * 0.025f, size.height * y + dy * m * 0.025f))
         }
-        drawCircle(Gold, m * 0.016f, px(x, y))
+        paperCircle(Gold, m * 0.016f, px(x, y))
     }
 }

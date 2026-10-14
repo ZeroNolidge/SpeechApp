@@ -46,12 +46,14 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
         val w = maxWidth
         val h = maxHeight
         Canvas(Modifier.fillMaxSize()) {
-            drawRect(Brush.verticalGradient(listOf(lerp(sky, Color.White, 0.1f), lerp(sky, Color.White, 0.6f))))
+            // Flat paper sky, with a lighter paper band near the horizon.
+            drawRect(lerp(sky, Color.White, 0.15f))
+            paperRect(lerp(sky, Color.White, 0.5f), Offset(-20f, size.height * 0.38f), Size(size.width + 40f, size.height * 0.4f))
             when (land) {
                 Land.CAVES -> caveTop(this)
                 else -> {
-                    drawCircle(Color(0xFFFFEE58), size.minDimension * 0.09f, Offset(size.width * 0.85f, size.height * 0.16f))
-                    drawCircle(Color(0x55FFEE58), size.minDimension * 0.14f, Offset(size.width * 0.85f, size.height * 0.16f))
+                    paperCircle(Color(0xFFFFEE58), size.minDimension * 0.09f, Offset(size.width * 0.85f, size.height * 0.16f))
+                    paperCircle(Color(0x55FFEE58), size.minDimension * 0.14f, Offset(size.width * 0.85f, size.height * 0.16f))
                     listOf(0.15f to 0.12f, 0.5f to 0.2f, 0.8f to 0.33f).forEachIndexed { i, (x, y) ->
                         val cx = ((x + drift * (0.3f + i * 0.1f)) % 1.2f - 0.1f) * size.width
                         cloud(this, Offset(cx, size.height * y), size.minDimension * 0.06f)
@@ -60,17 +62,17 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
             }
             // Rolling hills.
             val back = lerp(ground, Color.White, 0.25f)
-            drawOval(back, Offset(-size.width * 0.2f, size.height * 0.55f), Size(size.width * 0.8f, size.height * 0.6f))
-            drawOval(back, Offset(size.width * 0.45f, size.height * 0.5f), Size(size.width * 0.9f, size.height * 0.7f))
-            drawRect(ground, Offset(0f, size.height * 0.72f), Size(size.width, size.height * 0.28f))
+            paperOval(back, Offset(-size.width * 0.2f, size.height * 0.55f), Size(size.width * 0.8f, size.height * 0.6f))
+            paperOval(back, Offset(size.width * 0.45f, size.height * 0.5f), Size(size.width * 0.9f, size.height * 0.7f))
+            paperRect(ground, Offset(0f, size.height * 0.72f), Size(size.width, size.height * 0.28f))
             if (land == Land.LAGOON) {
-                drawRect(Color(0xFF4FC3F7), Offset(0f, size.height * 0.62f), Size(size.width, size.height * 0.1f))
+                paperRect(Color(0xFF4FC3F7), Offset(0f, size.height * 0.62f), Size(size.width, size.height * 0.1f))
             }
             if (land == Land.CLOUDS) {
                 (0..6).forEach { i -> cloud(this, Offset(size.width * i / 6f, size.height * 0.78f), size.minDimension * 0.1f) }
             }
             // A little path for the hero to walk along.
-            drawOval(lerp(ground, Color(0xFFFFF3E0), 0.5f), Offset(-size.width * 0.1f, size.height * 0.84f), Size(size.width * 1.2f, size.height * 0.12f))
+            paperOval(lerp(ground, Color(0xFFFFF3E0), 0.5f), Offset(-size.width * 0.1f, size.height * 0.84f), Size(size.width * 1.2f, size.height * 0.12f))
         }
         val fs = (h.value * 0.12f).coerceIn(18f, 44f)
         decor.forEach { (emoji, x, y) ->
@@ -86,10 +88,10 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
 
 private fun cloud(d: DrawScope, c: Offset, r: Float) = with(d) {
     val white = Color.White.copy(alpha = 0.9f)
-    drawCircle(white, r, c)
-    drawCircle(white, r * 0.8f, Offset(c.x - r * 1.0f, c.y + r * 0.25f))
-    drawCircle(white, r * 0.85f, Offset(c.x + r * 1.0f, c.y + r * 0.2f))
-    drawCircle(white, r * 0.7f, Offset(c.x + r * 0.4f, c.y - r * 0.5f))
+    paperCircle(white, r, c)
+    paperCircle(white, r * 0.8f, Offset(c.x - r * 1.0f, c.y + r * 0.25f))
+    paperCircle(white, r * 0.85f, Offset(c.x + r * 1.0f, c.y + r * 0.2f))
+    paperCircle(white, r * 0.7f, Offset(c.x + r * 0.4f, c.y - r * 0.5f))
 }
 
 private fun caveTop(d: DrawScope) = with(d) {
@@ -104,7 +106,7 @@ private fun caveTop(d: DrawScope) = with(d) {
         }
         close()
     }
-    drawPath(p, rock)
+    paperPath(p, rock)
     // Twinkling crystals.
     listOf(0.2f to 0.35f, 0.6f to 0.28f, 0.75f to 0.45f).forEach { (x, y) ->
         star(Offset(size.width * x, size.height * y), size.minDimension * 0.025f, Color(0xFFB3E5FC))

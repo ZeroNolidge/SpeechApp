@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -45,9 +46,8 @@ fun GoButton(modifier: Modifier = Modifier, size: Dp = 96.dp, enabled: Boolean =
                 .size(size)
                 .scale(if (enabled) pulse else 1f)
                 .alpha(if (enabled) 1f else 0.35f)
-                .shadow(10.dp, CircleShape)
+                .paperCard(Color(0xFF43A047), circle = true)
                 .clip(CircleShape)
-                .background(Color(0xFF43A047))
                 .border(5.dp, Color.White, CircleShape)
                 .clickable(enabled = enabled, onClick = onClick),
             contentAlignment = Alignment.Center,

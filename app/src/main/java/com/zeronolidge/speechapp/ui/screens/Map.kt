@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -147,7 +148,7 @@ fun MapScreen(go: (Screen) -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF4FC3F7)),
+            .background(Color(0xFF3FA9E0)),
     ) {
         IslandMap(
             open = { p.landOpen(it) },
@@ -210,9 +211,8 @@ fun MapScreen(go: (Screen) -> Unit) {
 private fun MapButton(emoji: String, label: String, color: Color, onClick: () -> Unit) {
     Row(
         Modifier
-            .shadow(4.dp, RoundedCornerShape(50))
+            .paperCard(color, 999.dp)
             .clip(RoundedCornerShape(50))
-            .background(color)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

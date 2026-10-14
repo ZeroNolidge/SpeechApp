@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -146,9 +147,8 @@ fun RoundIcon(
         Modifier
             .size(size)
             .alpha(if (enabled) 1f else 0.4f)
-            .shadow(4.dp, CircleShape)
+            .paperCard(color, circle = true)
             .clip(CircleShape)
-            .background(color)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -171,9 +171,8 @@ fun BigTile(
     Column(
         modifier
             .alpha(if (enabled) 1f else 0.35f)
-            .shadow(6.dp, RoundedCornerShape(28.dp))
+            .paperCard(color, 28.dp)
             .clip(RoundedCornerShape(28.dp))
-            .background(color)
             .then(if (selected) Modifier.border(6.dp, Kid.highlight, RoundedCornerShape(28.dp)) else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(12.dp),
@@ -212,9 +211,8 @@ fun AnswerCard(
         modifier
             .scale(if (correct) s else 1f)
             .alpha(if (faded) 0.3f else 1f)
-            .shadow(6.dp, RoundedCornerShape(24.dp))
+            .paperCard(if (correct) Kid.good else Kid.card, 24.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(if (correct) Kid.good else Kid.card)
             .clickable(enabled = !faded && !correct, onClick = onClick)
             .padding(12.dp),
         contentAlignment = Alignment.Center,

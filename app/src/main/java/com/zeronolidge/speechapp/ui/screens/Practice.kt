@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -183,9 +184,8 @@ fun AlphabetScreen(back: () -> Unit) {
                 Modifier
                     .weight(0.9f)
                     .fillMaxHeight()
-                    .shadow(8.dp, RoundedCornerShape(32.dp))
+                    .paperCard(Kid.card, 32.dp)
                     .clip(RoundedCornerShape(32.dp))
-                    .background(Color.White)
                     .clickable { app.speaker.say(letterIntro(current)) }
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -236,9 +236,8 @@ fun NumberLineScreen(back: () -> Unit) {
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .shadow(8.dp, RoundedCornerShape(32.dp))
+                    .paperCard(Kid.card, 32.dp)
                     .clip(RoundedCornerShape(32.dp))
-                    .background(Color.White)
                     .clickable { app.speaker.say(Numbers.word(current)) }
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

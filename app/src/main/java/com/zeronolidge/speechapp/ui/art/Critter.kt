@@ -134,13 +134,13 @@ private fun DrawScope.drawCritter(
 ) {
     fun o(x: Float, y: Float) = Offset(x * u, (y + OY + lift) * u)
     fun oval(cx: Float, cy: Float, w: Float, h: Float, c: Color) =
-        drawOval(c, o(cx - w / 2, cy - h / 2), Size(w * u, h * u))
-    fun circle(cx: Float, cy: Float, r: Float, c: Color) = drawCircle(c, r * u, o(cx, cy))
+        paperOval(c, o(cx - w / 2, cy - h / 2), Size(w * u, h * u))
+    fun circle(cx: Float, cy: Float, r: Float, c: Color) = paperCircle(c, r * u, o(cx, cy))
     fun poly(c: Color, vararg pts: Pair<Float, Float>) {
         val p = Path()
         pts.forEachIndexed { i, (x, y) -> val q = o(x, y); if (i == 0) p.moveTo(q.x, q.y) else p.lineTo(q.x, q.y) }
         p.close()
-        drawPath(p, c)
+        paperPath(p, c)
     }
 
     val kid = sp == Species.KID
@@ -150,7 +150,7 @@ private fun DrawScope.drawCritter(
     val dark = darker(body)
 
     // Ground shadow does not bob.
-    drawOval(Color(0x22000000), Offset(25 * u, (H - 8) * u), Size(50 * u, 7 * u))
+    paperOval(Color(0x22000000), Offset(25 * u, (H - 8) * u), Size(50 * u, 7 * u))
 
     // ---- Behind the body ----
     outfit.cape?.let { cape ->
@@ -220,10 +220,10 @@ private fun DrawScope.drawCritter(
 
     // ---- Body, feet and arms ----
     if (sp.boxy) {
-        drawRoundRect(body, o(28f, 76f), Size(44f * u, 40f * u), CornerRadius(8f * u))
-        drawRoundRect(belly, o(36f, 84f), Size(28f * u, 22f * u), CornerRadius(4f * u))
+        paperRoundRect(body, o(28f, 76f), Size(44f * u, 40f * u), CornerRadius(8f * u))
+        paperRoundRect(belly, o(36f, 84f), Size(28f * u, 22f * u), CornerRadius(4f * u))
         circle(44f, 92f, 3f, Color(0xFFFF5252)); circle(56f, 92f, 3f, Color(0xFFFFEB3B))
-        drawRoundRect(dark, o(42f, 99f), Size(16f * u, 3f * u), CornerRadius(2f * u))
+        paperRoundRect(dark, o(42f, 99f), Size(16f * u, 3f * u), CornerRadius(2f * u))
     } else {
         oval(50f, 97f, 46f, 44f, body)
         oval(50f, 100f, 28f, 28f, belly)
@@ -243,8 +243,8 @@ private fun DrawScope.drawCritter(
 
     // ---- Head ----
     if (sp.boxy) {
-        drawRoundRect(body, o(22f, 34f), Size(56f * u, 54f * u), CornerRadius(14f * u))
-        drawRoundRect(Color(0xFF263238), o(28f, 42f), Size(44f * u, 36f * u), CornerRadius(9f * u))
+        paperRoundRect(body, o(22f, 34f), Size(56f * u, 54f * u), CornerRadius(14f * u))
+        paperRoundRect(Color(0xFF263238), o(28f, 42f), Size(44f * u, 36f * u), CornerRadius(9f * u))
     } else {
         circle(50f, 63f, 30f, skin)
     }
@@ -264,7 +264,7 @@ private fun DrawScope.drawCritter(
     }
     if (sp.hair) {
         val hair = Color(0xFF6D4C41)
-        drawArc(hair, 180f, 180f, true, o(20f, 33f), Size(60f * u, 50f * u))
+        paperArc(hair, 180f, 180f, true, o(20f, 33f), Size(60f * u, 50f * u))
         circle(37f, 44f, 9f, hair); circle(50f, 41f, 9f, hair); circle(63f, 44f, 9f, hair)
     }
     if (sp.ears == Ears.FLOPPY) {
@@ -314,12 +314,12 @@ private fun DrawScope.drawCritter(
                 lineTo(l.x, l.y)
                 close()
             }
-            drawPath(tear, Color(0xFF64B5F6))
-            drawCircle(Color(0xFF64B5F6), 2.6f * u, o(33f, eyeY + 12.5f))
+            paperPath(tear, Color(0xFF64B5F6))
+            paperCircle(Color(0xFF64B5F6), 2.6f * u, o(33f, eyeY + 12.5f))
         }
         // Cheeks.
-        drawCircle(Blush.copy(alpha = 0.55f), 5f * u, o(30f, 72f))
-        drawCircle(Blush.copy(alpha = 0.55f), 5f * u, o(70f, 72f))
+        paperCircle(Blush.copy(alpha = 0.55f), 5f * u, o(30f, 72f))
+        paperCircle(Blush.copy(alpha = 0.55f), 5f * u, o(70f, 72f))
         when (sp.mouth) {
             Mouth.SMILE -> mouth(o(50f, 73f), 7f * u, Ink, mood)
             Mouth.SNOUT -> {
@@ -346,8 +346,8 @@ private fun DrawScope.drawCritter(
         val ly = if (sp.boxy) 56f else eyeY
         when (g.id) {
             "glasses_sun" -> {
-                drawRoundRect(c, o(29f, ly - 7f), Size(19f * u, 13f * u), CornerRadius(5f * u))
-                drawRoundRect(c, o(52f, ly - 7f), Size(19f * u, 13f * u), CornerRadius(5f * u))
+                paperRoundRect(c, o(29f, ly - 7f), Size(19f * u, 13f * u), CornerRadius(5f * u))
+                paperRoundRect(c, o(52f, ly - 7f), Size(19f * u, 13f * u), CornerRadius(5f * u))
                 drawLine(c, o(47f, ly - 3f), o(53f, ly - 3f), 2.5f * u)
                 drawLine(Color.White.copy(alpha = 0.6f), o(32f, ly - 4f), o(37f, ly - 4f), 1.5f * u)
             }
@@ -373,7 +373,7 @@ private fun DrawScope.drawCritter(
         val top = if (sp.boxy) 34f else 36f
         when (hat.id) {
             "hat_cap" -> {
-                drawArc(c, 180f, 180f, true, o(30f, top - 4f), Size(40f * u, 26f * u))
+                paperArc(c, 180f, 180f, true, o(30f, top - 4f), Size(40f * u, 26f * u))
                 oval(64f, top + 9f, 26f, 6f, darker(c))
                 circle(50f, top - 4f, 2.5f, darker(c))
             }
@@ -393,8 +393,8 @@ private fun DrawScope.drawCritter(
                 circle(50f, top - 3f, 3f, Color(0xFFE53935)); circle(41f, top - 1f, 2.2f, Color(0xFF1E88E5)); circle(59f, top - 1f, 2.2f, Color(0xFF43A047))
             }
             "hat_pirate" -> {
-                drawArc(c, 180f, 180f, true, o(24f, top - 16f), Size(52f * u, 36f * u))
-                drawRoundRect(c, o(22f, top), Size(56f * u, 5f * u), CornerRadius(2f * u))
+                paperArc(c, 180f, 180f, true, o(24f, top - 16f), Size(52f * u, 36f * u))
+                paperRoundRect(c, o(22f, top), Size(56f * u, 5f * u), CornerRadius(2f * u))
                 circle(50f, top - 7f, 4f, Color.White)
                 circle(48.5f, top - 7.5f, 1f, c); circle(51.5f, top - 7.5f, 1f, c)
             }
@@ -410,8 +410,8 @@ private fun DrawScope.drawCritter(
                 }
             }
             "hat_top" -> {
-                drawRoundRect(c, o(37f, top - 24f), Size(26f * u, 26f * u), CornerRadius(2f * u))
-                drawRoundRect(Color(0xFFE53935), o(37f, top - 6f), Size(26f * u, 5f * u))
+                paperRoundRect(c, o(37f, top - 24f), Size(26f * u, 26f * u), CornerRadius(2f * u))
+                paperRoundRect(Color(0xFFE53935), o(37f, top - 6f), Size(26f * u, 5f * u))
                 oval(50f, top + 2f, 44f, 7f, c)
             }
         }
@@ -433,8 +433,8 @@ private fun DrawScope.mouth(center: Offset, r: Float, color: Color, mood: Mood) 
 
 private fun DrawScope.smile(center: Offset, r: Float, color: Color, open: Boolean) {
     if (open) {
-        drawArc(Color(0xFFC62828), 0f, 180f, true, Offset(center.x - r, center.y - r), Size(2 * r, 2 * r))
-        drawArc(Color(0xFFFF8A80), 20f, 140f, true, Offset(center.x - r * 0.6f, center.y), Size(1.2f * r, r))
+        paperArc(Color(0xFFC62828), 0f, 180f, true, Offset(center.x - r, center.y - r), Size(2 * r, 2 * r))
+        paperArc(Color(0xFFFF8A80), 20f, 140f, true, Offset(center.x - r * 0.6f, center.y), Size(1.2f * r, r))
     } else {
         drawArc(color, 20f, 140f, false, Offset(center.x - r, center.y - r), Size(2 * r, 2 * r), style = Stroke(r * 0.32f, cap = StrokeCap.Round))
     }
@@ -450,7 +450,7 @@ fun DrawScope.star(center: Offset, r: Float, color: Color) {
         if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
     }
     p.close()
-    drawPath(p, color)
+    paperPath(p, color)
 }
 
 private fun DrawScope.heart(center: Offset, r: Float, color: Color) {
@@ -460,5 +460,5 @@ private fun DrawScope.heart(center: Offset, r: Float, color: Color) {
         cubicTo(center.x + r * 0.6f, center.y - r * 1.2f, center.x + r * 1.4f, center.y - r * 0.2f, center.x, center.y + r * 0.8f)
         close()
     }
-    drawPath(p, color)
+    paperPath(p, color)
 }

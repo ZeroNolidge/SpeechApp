@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -245,9 +246,8 @@ fun SayPanel(
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .shadow(8.dp, RoundedCornerShape(28.dp))
+                    .paperCard(Kid.card, 28.dp)
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color.White)
                     .clickable(enabled = !done) { speakAndMaybeListen(word.text to false) }
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -379,9 +379,8 @@ private fun ActionButton(
     Column(
         modifier
             .fillMaxHeight()
-            .shadow(6.dp, RoundedCornerShape(22.dp))
+            .paperCard(if (enabled) color else color.copy(alpha = 0.4f), 22.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(if (enabled) color else color.copy(alpha = 0.4f))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

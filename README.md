@@ -6,6 +6,10 @@ and helps friends in randomly generated story quests, levelling up for new power
 Everything is spoken, so they don't need to read. Mistakes just fade away with a gentle
 "try again".
 
+**Look:** a paper cut-out style. Every shape is drawn as coloured construction paper with
+rough edges and soft shadows (`ui/art/Paper.kt`), there's paper grain over the whole app, and
+text uses the rounded Sniglet font (SIL Open Font License, see `FONT_LICENSE_Sniglet_OFL.txt`).
+
 ## How it plays
 
 1. **Pick a hero.** Kid, puppy, kitty, dino, unicorn, robot or bunny. They're all cartoon

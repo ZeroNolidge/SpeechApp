@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.challenge
 
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -298,9 +299,8 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
                     .weight(1f)
                     .fillMaxHeight()
                     .alpha(if (isLeft in faded) 0.35f else 1f)
-                    .shadow(6.dp, RoundedCornerShape(24.dp))
+                    .paperCard(if (solved && right) Kid.good else Color.White, 24.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(if (solved && right) Kid.good else Color.White)
                     .clickable(enabled = !solved && isLeft !in faded) {
                         if (right) {
                             solved = true
@@ -624,9 +624,8 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                         Modifier
                             .weight(1f)
                             .height(64.dp)
-                            .shadow(4.dp, RoundedCornerShape(16.dp))
+                            .paperCard(if (cmd == hint) Kid.highlight else Color.White, 16.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(if (cmd == hint) Kid.highlight else Color.White)
                             .clickable(enabled = !running && !won) {
                                 hint = null
                                 if (program.size < MAX_PROGRAM) {

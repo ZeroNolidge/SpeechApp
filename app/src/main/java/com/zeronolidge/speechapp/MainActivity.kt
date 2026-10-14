@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -34,6 +35,8 @@ import com.zeronolidge.speechapp.ui.screens.TalkMenu
 import com.zeronolidge.speechapp.ui.screens.TalkPracticeScreen
 import com.zeronolidge.speechapp.ui.screens.WardrobeScreen
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
+import com.zeronolidge.speechapp.ui.theme.Kid
+import com.zeronolidge.speechapp.ui.art.PaperGrain
 
 class MainActivity : ComponentActivity() {
     private lateinit var services: AppServices
@@ -51,8 +54,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             SpeechAppTheme {
                 CompositionLocalProvider(LocalApp provides services) {
-                    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
                         App()
+                        // Paper grain over everything, so the whole app feels like paper.
+                        PaperGrain()
                         CelebrationOverlay()
                     }
                 }
