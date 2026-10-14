@@ -16,11 +16,29 @@ android {
         versionName = "1.0"
     }
 
+    // CI signs every build with the same permanent key (kept in GitHub secrets), so a new
+    // version installs over the old one and keeps the child's progress. Without the key,
+    // e.g. on a contributor's machine, builds fall back to the debug key.
+    val keystorePath = System.getenv("SIGNING_KEYSTORE_PATH")
+    val keystorePassword = System.getenv("SIGNING_PASSWORD")
+    val hasReleaseKey = !keystorePath.isNullOrBlank() && !keystorePassword.isNullOrBlank() && file(keystorePath).exists()
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKey) {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = "talkandlearn"
+                keyPassword = keystorePassword
+                storeType = "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so the release APK can be sideloaded without extra setup.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 

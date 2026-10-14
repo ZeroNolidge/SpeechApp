@@ -65,7 +65,15 @@ The recognizer finds young voices hard, so it also gives a star for effort after
 3. If **Google Play Protect** says it's from an unknown developer, tap **More details →
    Install anyway**. It warns about every app that doesn't come from the Play Store.
 4. If it says **"App not installed"** or **"conflicts with an existing package"**, uninstall the
-   old Talk & Learn first, then install again.
+   old Talk & Learn first, then install again. Once the signing key below is set up, this only
+   happens one time; after that, new versions install over the old one and keep progress.
+
+### Signing key
+
+CI signs builds with a permanent key stored in two repository secrets, `SIGNING_KEYSTORE`
+(the base64-encoded PKCS12 keystore, alias `talkandlearn`) and `SIGNING_PASSWORD`. Without
+them, builds use a throwaway debug key, and each new build has to be uninstalled and
+reinstalled.
 
 Requirements: Android 8.0 or newer. Talking uses the device's text-to-speech voice. If it's
 silent, install or update **Speech Services by Google** from the Play Store. Speech

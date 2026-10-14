@@ -20,7 +20,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Set up the signing key
+        env:
+          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE" ]; then
+            echo "$SIGNING_KEYSTORE" | base64 -d > "$RUNNER_TEMP/talkandlearn.p12"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/talkandlearn.p12" >> "$GITHUB_ENV"
+            echo "Signing with the permanent key."
+          else
+            echo "::warning::SIGNING_KEYSTORE secret is not set, so this build uses a temporary key and won't install over an older version."
+          fi
       - name: Build APK
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: ./gradlew --no-daemon assembleRelease
       - name: Name the APK
         run: cp app/build/outputs/apk/release/app-release.apk TalkAndLearn.apk
