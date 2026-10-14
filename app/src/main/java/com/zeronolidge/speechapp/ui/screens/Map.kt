@@ -61,6 +61,7 @@ import com.zeronolidge.speechapp.logic.heroSpecies
 import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.HeroWithPet
+import com.zeronolidge.speechapp.ui.art.IslandMap
 import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.ui.art.Scenery
 import com.zeronolidge.speechapp.ui.components.HeroBadge
@@ -146,115 +147,25 @@ fun MapScreen(go: (Screen) -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF81D4FA), Color(0xFFB3E5FC)))),
+            .background(Color(0xFF4FC3F7)),
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 70.dp, bottom = 8.dp, start = 8.dp, end = 8.dp)) {
-            val w = maxWidth
-            val h = maxHeight
-            // The island and the dotted trail between lands.
-            Canvas(Modifier.fillMaxSize()) {
-                drawOval(Color(0xFFC5E1A5), Offset(-size.width * 0.04f, size.height * 0.05f), androidx.compose.ui.geometry.Size(size.width * 1.08f, size.height * 0.98f))
-                drawOval(Color(0xFFAED581), Offset(size.width * 0.02f, size.height * 0.12f), androidx.compose.ui.geometry.Size(size.width * 0.96f, size.height * 0.82f))
-                val path = Path()
-                Land.entries.forEachIndexed { i, land ->
-                    val x = land.mapX * size.width
-                    val y = land.mapY * size.height
-                    if (i == 0) path.moveTo(x, y) else {
-                        val prev = Land.entries[i - 1]
-                        val px = prev.mapX * size.width
-                        val py = prev.mapY * size.height
-                        path.quadraticTo((px + x) / 2, (py + y) / 2 - size.height * 0.15f, x, y)
-                    }
+        IslandMap(
+            open = { p.landOpen(it) },
+            suggested = suggested,
+            onTap = { land ->
+                if (p.landOpen(land)) {
+                    app.speaker.say("${land.title}!")
+                    p.visit(land)
+                    go(Screen.Quest(land))
+                } else {
+                    val need = land.needs!!
+                    app.speaker.say("That place is hidden in the mist! You need ${need.label}. Keep playing to get it! $hintLine")
                 }
-                drawPath(
-                    path, Color(0xFFFFF3E0),
-                    style = Stroke(10.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 22f))),
-                )
-            }
-            val node = minOf(w / 7.5f, h / 3.2f, 120.dp)
-            val bounce = rememberInfiniteTransition(label = "suggest")
-            val pulse by bounce.animateFloat(1f, 1.15f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "pulse")
-            Land.entries.forEach { land ->
-                val open = p.landOpen(land)
-                val isSuggested = land == suggested
-                Column(
-                    Modifier
-                        .offset(x = w * land.mapX - node / 2, y = h * land.mapY - node / 2)
-                        .width(node)
-                        .zIndex(if (isSuggested) 1f else 0f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        Modifier
-                            .size(node)
-                            .scale(if (isSuggested) pulse else 1f)
-                            .shadow(8.dp, CircleShape)
-                            .clip(CircleShape)
-                            .border(
-                                if (isSuggested) 7.dp else 4.dp,
-                                when {
-                                    isSuggested -> Color(0xFFFFD600)
-                                    open -> Color.White
-                                    else -> Color(0xFF90A4AE)
-                                },
-                                CircleShape,
-                            )
-                            .clickable {
-                                if (open) {
-                                    app.speaker.say("${land.title}!")
-                                    p.visit(land)
-                                    go(Screen.Quest(land))
-                                } else {
-                                    val need = land.needs!!
-                                    app.speaker.say("That place is locked! You need ${need.label}. Keep playing to get it! $hintLine")
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Scenery(land, Modifier.fillMaxSize(), seed = 1)
-                        Text(land.emoji, fontSize = (node.value * 0.4f).sp)
-                        if (!open) {
-                            Box(Modifier.fillMaxSize().background(Color(0x99455A64)), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("🔒", fontSize = (node.value * 0.25f).sp)
-                                    Text("${land.needs?.emoji} Lv ${land.needs?.level}", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                    Text(
-                        land.title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Kid.ink,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .padding(top = 2.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xCCFFFFFF))
-                            .padding(horizontal = 6.dp),
-                    )
-                }
-            }
-            // A big hand points down at the land to try next.
-            val hand = node * 0.6f
-            PointingHand(
-                Modifier
-                    .offset(x = w * suggested.mapX - hand / 2, y = h * suggested.mapY - node / 2 - hand * 1.25f)
-                    .zIndex(2f),
-                size = hand,
-                pointDown = true,
-            )
-            // The hero waves from the bottom corner.
-            HeroWithPet(
-                species, p.heroColor(species), p.outfit, p.pet,
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .height(h * 0.34f)
-                    .width(h * 0.36f)
-                    .offset(x = w * 0.49f),
-            )
-        }
+            },
+            modifier = Modifier.fillMaxSize().padding(top = 56.dp),
+            hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
+            pointer = { m, size -> PointingHand(m, size = size, pointDown = true) },
+        )
 
         // Top bar.
         Row(
