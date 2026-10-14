@@ -64,34 +64,10 @@ object Friends {
     )
 }
 
-/** What the story is about: the friend's problem, and how it ends. */
-data class Goal(val emoji: String, val intro: String, val ending: String)
-
-object Goals {
-    val all = listOf(
-        Goal("🪁", "Oh no! The wind blew {f}'s kite away! Let's go find it!",
-            "There's the kite, stuck in a tree! You got it down. {f} is so happy!"),
-        Goal("🎂", "{f} is having a birthday party, but the party things are all over {land}! Let's help get ready!",
-            "Everything is ready. Happy birthday, {f}! Let's sing and dance!"),
-        Goal("💰", "{f} found an old treasure map! Let's follow it and find the treasure!",
-            "We found the treasure chest! It's full of shiny gems!"),
-        Goal("🧸", "{f} can't find Teddy anywhere! Let's look for Teddy together!",
-            "Teddy was hiding behind a rock! Big hugs for Teddy!"),
-        Goal("⭐", "A little star fell down from the sky! Let's help {f} take it home!",
-            "Whoosh! The star is back in the sky. It twinkles to say thank you!"),
-        Goal("🔑", "{f} is locked out of the clubhouse! We need to find the golden key!",
-            "Click! The door opens. Welcome to the clubhouse!"),
-        Goal("🧺", "{f} wants to have a picnic. Let's go and collect yummy food!",
-            "Picnic time! Everyone shares the yummy food. Thank you, {hero}!"),
-        Goal("🎈", "{f}'s balloon floated away! Let's follow it!",
-            "Got it! The balloon is back, and {f} is giggling with joy!"),
-    )
-}
-
 data class Beat(
-    /** Something that happens on the way, said before the challenge. */
-    val travel: String?,
-    /** A sentence that sets up the challenge; the challenge then asks its own question. */
+    /** The picture for this step of the story; its text is already filled in. */
+    val scene: Scene,
+    /** Everything said before the challenge asks its own question. */
     val narration: String,
     val challenge: Challenge,
 )
@@ -99,11 +75,18 @@ data class Beat(
 data class Quest(
     val land: Land,
     val friend: Friend,
-    val goal: Goal,
-    val intro: String,
+    /** Who turns up in the twist. */
+    val visitor: Friend,
+    val plot: Plot,
+    val intro: Scene,
     val beats: List<Beat>,
-    val ending: String,
-)
+    val twist: Scene,
+    /** The twist is shown just before this beat. */
+    val twistBefore: Int,
+    val ending: Scene,
+) {
+    val goal: String get() = plot.goal
+}
 
 /** Everything the story generator needs to pitch the difficulty right. */
 data class StoryParams(
@@ -133,7 +116,9 @@ object StoryGen {
 
     fun make(land: Land, p: StoryParams, rnd: Random, mixed: Boolean = false): Quest {
         val friend = Friends.all.random(rnd)
-        val goal = Goals.all.random(rnd)
+        val plot = Plots.all.random(rnd)
+        val visitor = plot.visitor?.let { sp -> Friends.all.firstOrNull { it.species == sp } }
+            ?: Friends.all.filter { it.species != friend.species }.random(rnd)
         val subjects = when {
             mixed || land == Land.CLOUDS -> mixedSubjects(p, rnd)
             land == Land.FOREST -> List(4) { Subject.SPEECH }
@@ -141,17 +126,42 @@ object StoryGen {
             // Every land also squeezes in a little speech practice.
             else -> (List(3) { land.subjects.first() } + Subject.SPEECH).shuffled(rnd)
         }
+        val scenes = obstaclesFor(plot, subjects.size)
         val used = mutableSetOf<String>()
         val counters = Counters(p)
+        fun fillScene(sc: Scene) = sc.copy(text = fill(sc.text, p, friend, land, visitor))
         val beats = subjects.mapIndexed { i, subject ->
-            val c = challenge(subject, land, goal, p, counters, used, rnd)
+            val c = challenge(subject, land, plot.goal, p, counters, used, rnd)
+            val scene = fillScene(scenes[i])
+            val power = powerLine(scene.piece, p)?.let { fill(it, p, friend, land, visitor) }
             Beat(
-                travel = if (i == 0) null else fill(travel(land, p, rnd), p, friend, land),
-                narration = fill(narrate(c, rnd), p, friend, land),
+                scene = scene,
+                narration = listOfNotNull(scene.text, power, fill(hook(c, rnd), p, friend, land, visitor)).joinToString(" "),
                 challenge = c,
             )
         }
-        return Quest(land, friend, goal, fill(goal.intro, p, friend, land), beats, fill(goal.ending, p, friend, land))
+        return Quest(
+            land = land,
+            friend = friend,
+            visitor = visitor,
+            plot = plot,
+            intro = fillScene(plot.intro),
+            beats = beats,
+            twist = fillScene(plot.twist),
+            twistBefore = (beats.size - 1).coerceAtLeast(1),
+            ending = fillScene(plot.ending),
+        )
+    }
+
+    /** The plot's obstacles, always keeping its big finish last. */
+    fun obstaclesFor(plot: Plot, count: Int): List<Scene> {
+        val obs = plot.obstacles
+        if (count <= 1) return listOf(obs.last())
+        return when {
+            count == obs.size -> obs
+            count < obs.size -> obs.take(count - 1) + obs.last()
+            else -> obs.dropLast(1) + List(count - obs.size) { Plots.extraObstacle } + obs.last()
+        }
     }
 
     /** A mix of subjects from the lands the hero can reach, always including speech. */
@@ -169,7 +179,7 @@ object StoryGen {
     private fun challenge(
         subject: Subject,
         land: Land,
-        goal: Goal,
+        goalEmoji: String,
         p: StoryParams,
         counters: Counters,
         used: MutableSet<String>,
@@ -212,7 +222,7 @@ object StoryGen {
                 else Challenge.Pattern(Patterns.make(p.patternLevel, rnd))
             Subject.ROBOT -> {
                 val n = counters.robot++
-                Challenge.Robot(robotLevel(n, rnd), goal.emoji)
+                Challenge.Robot(robotLevel(n, rnd), goalEmoji)
             }
         }
     }
@@ -228,60 +238,44 @@ object StoryGen {
         }
     }
 
-    private fun narrate(c: Challenge, rnd: Random): String = when (c) {
+    /** Ties a challenge into the story, after the scene has set things up. */
+    private fun hook(c: Challenge, rnd: Random): String = when (c) {
         is Challenge.Say -> listOf(
-            "A magic door! It only opens when you say the magic word.",
-            "{f} wants to learn a new word. Can you teach it?",
-            "Look what we found! Let's say what it is.",
-            "A talking tree says: say my word, and I'll let you pass!",
+            "A magic word will help us. Say it loud and clear!",
+            "{f} says: let's use the magic word!",
+            "Say the magic word, and it will work!",
         ).random(rnd)
-        is Challenge.Count -> listOf(
-            "{f} found lots of ${Things.nameOf(c.round.emoji)}!",
-            "Look at all these ${Things.nameOf(c.round.emoji)} on the path!",
-            "We need ${Things.nameOf(c.round.emoji)} for the adventure. Let's count them.",
-        ).random(rnd)
+        is Challenge.Count -> "We found some ${Things.nameOf(c.round.emoji)} that can help. Let's count them!"
         is Challenge.Math -> if (c.round.plus) {
-            "{f} is collecting ${Things.nameOf(c.round.emoji)}. Here come some more!"
+            "We need ${Things.nameOf(c.round.emoji)}. We have some, and we find more!"
         } else {
-            "Uh oh! Some of {f}'s ${Things.nameOf(c.round.emoji)} rolled away!"
+            "Uh oh, some of our ${Things.nameOf(c.round.emoji)} rolled away!"
         }
-        is Challenge.More -> "{f} has two baskets of ${Things.nameOf(c.round.emoji)}. We should take the bigger one!"
-        is Challenge.Letter -> listOf(
-            "The bridge is missing a stepping stone, and each stone has a letter!",
-            "A sleepy crab is guarding the path. It wants to play a letter game!",
-            "There's a message in a bottle! It has letters on it.",
-        ).random(rnd)
-        is Challenge.SoundOut -> "There's a sign on the wall! Let's sound out the word."
-        is Challenge.WhichWord -> "Three signs point different ways. Only one has the right word!"
-        is Challenge.Pattern -> listOf(
-            "Magic beads light up the way, but one is missing!",
-            "The stepping stones go in a pattern. Which stone comes next?",
-        ).random(rnd)
-        is Challenge.OddOne -> "One of these things got mixed up and doesn't belong!"
-        is Challenge.Robot -> listOf(
-            "A friendly robot cart can carry us! Tell it how to drive.",
-            "The robot wants to help. Make a plan to get to the prize!",
-        ).random(rnd)
+        is Challenge.More -> "There are two piles of ${Things.nameOf(c.round.emoji)}. We'll take the bigger pile!"
+        is Challenge.Letter -> "Magic letters will help. Let's solve the letter puzzle!"
+        is Challenge.SoundOut -> "There's a word written here. Let's sound it out!"
+        is Challenge.WhichWord -> "Three signs point the way. Only one has the right word!"
+        is Challenge.Pattern -> "Magic stones light up in a pattern. Finish the pattern to get through!"
+        is Challenge.OddOne -> "Something here doesn't belong. Find it!"
+        is Challenge.Robot -> "A little robot helper can get us there. Let's give it directions!"
     }
 
-    private fun travel(land: Land, p: StoryParams, rnd: Random): String {
-        val powers = Leveling.powersAt(p.heroLevel).filter { !it.helper }
-        val lines = mutableListOf(
-            "Let's keep going! {hero} skips down the path.",
-            "Tip toe, tip toe... what's next?",
-            "Onward, brave {hero}!",
-            "{f} follows {hero} along the trail.",
-        )
-        if (Power.JUMP in powers) lines += "{hero} uses Super Jump to leap over a big log!"
-        if (Power.SWIM in powers && land in listOf(Land.LAGOON, Land.FOREST, Land.MEADOW)) lines += "{hero} swims across a sparkly stream. Splash!"
-        if (Power.CLIMB in powers && land == Land.PEAKS) lines += "{hero} climbs up a rocky hill. Almost at the top!"
-        if (Power.LANTERN in powers && land == Land.CAVES) lines += "{hero}'s lantern lights up a dark tunnel. Ooh, sparkly!"
-        if (Power.FLY in powers) lines += "{hero} flies over the treetops. Wheee!"
-        return lines.random(rnd)
+    /** Story powers join in when the scene suits them. */
+    private fun powerLine(piece: SetPiece, p: StoryParams): String? {
+        val powers = Leveling.powersAt(p.heroLevel)
+        return when {
+            piece == SetPiece.RIVER && Power.SWIM in powers -> "Good thing {hero} can swim! But {f} can't."
+            piece == SetPiece.BROKEN_BRIDGE && Power.JUMP in powers -> "{hero} could jump across, but {f} needs the bridge!"
+            (piece == SetPiece.TALL_TREE || piece == SetPiece.BIG_HILL) && Power.CLIMB in powers -> "{hero} is a great climber!"
+            piece == SetPiece.DARK_CAVE && Power.LANTERN in powers -> "{hero}'s lantern lights up the cave. Ooh, sparkly!"
+            (piece == SetPiece.NIGHT_SKY || piece == SetPiece.WINDY_SKY) && Power.FLY in powers -> "{hero} flies up high to look around!"
+            else -> null
+        }
     }
 
-    fun fill(text: String, p: StoryParams, f: Friend, land: Land) = text
+    fun fill(text: String, p: StoryParams, f: Friend, land: Land, visitor: Friend? = null) = text
         .replace("{f}", f.name)
         .replace("{hero}", p.heroName)
         .replace("{land}", "the ${land.title}")
+        .replace("{v}", (visitor?.species?.label ?: "friend").lowercase())
 }

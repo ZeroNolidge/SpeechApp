@@ -189,12 +189,15 @@ class StoryTest {
                 val p = StoryParams("Sam", heroLevel = 1 + i % 8, robotSolved = i, unlockedLands = Land.entries.toList())
                 val q = StoryGen.make(land, p, rnd, mixed = i % 5 == 0)
                 assertTrue(q.beats.size in 3..5)
-                assertFalse(q.intro.contains("{"))
-                assertFalse(q.ending.contains("{"))
+                listOf(q.intro, q.twist, q.ending).forEach { assertFalse(it.text, it.text.contains("{")) }
                 q.beats.forEach { b ->
-                    assertFalse(b.narration.contains("{"))
-                    assertFalse(b.travel?.contains("{") ?: false)
+                    assertFalse(b.narration, b.narration.contains("{"))
+                    assertFalse(b.scene.text.contains("{"))
                 }
+                // The story always ends on the plot's big finish.
+                assertEquals(q.plot.obstacles.last().piece, q.beats.last().scene.piece)
+                assertTrue(q.twistBefore in 1 until q.beats.size)
+                assertTrue(q.visitor.species != q.friend.species || q.plot.visitor != null)
                 if (land == Land.FOREST && i % 5 != 0) assertTrue(q.beats.all { it.challenge is Challenge.Say })
             }
         }
@@ -229,5 +232,29 @@ class MapSuggestionTest {
         val all = open.toSet()
         assertEquals(Land.MEADOW, Land.suggest(open, all, Land.FOREST))
         assertEquals(Land.FOREST, Land.suggest(open, all, Land.LAGOON))
+    }
+}
+
+class PlotTest {
+    @Test
+    fun plotsAreComplete() {
+        assertTrue(Plots.all.size >= 8)
+        assertEquals(Plots.all.size, Plots.all.map { it.id }.toSet().size)
+        Plots.all.forEach { p ->
+            assertEquals(4, p.obstacles.size)
+            assertTrue(p.twist.text.contains("{v}"))
+            assertEquals(Feeling.CHEER, p.ending.feeling)
+        }
+    }
+
+    @Test
+    fun obstacleCountsFitEveryQuestLength() {
+        Plots.all.forEach { p ->
+            (1..6).forEach { n ->
+                val obs = StoryGen.obstaclesFor(p, n)
+                assertEquals(n, obs.size)
+                assertEquals(p.obstacles.last(), obs.last())
+            }
+        }
     }
 }

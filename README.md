@@ -23,9 +23,13 @@ Everything is spoken, so they don't need to read. Mistakes just fade away with a
    | 🏰 Cloud Castle | A bit of everything | 🦸 Fly (level 6) |
 
    **⭐ Adventure!** on the map starts a surprise quest that mixes subjects.
-3. **Go on quests.** Every quest is a new, randomly built story: a cartoon friend (Benny Bunny,
-   Pip the Penguin, Daisy Dino…) has a problem, such as a lost kite, a birthday party or a treasure map.
-   Your child solves 3–5 challenges along the trail to help. Every quest also includes some
+3. **Go on quests.** Each quest is one of 8 illustrated stories, with a random cartoon friend
+   (Benny Bunny, Pip the Penguin, Daisy Dino…) and random challenges: the lost kite, the
+   birthday party, the treasure map, missing Teddy, the fallen star, the lost key, the picnic
+   and the runaway balloon. Every story has a beginning, 3–5 obstacles drawn as scenes
+   (a river, a broken bridge, a locked door, a tall tree, a dark cave…), a twist where someone
+   new turns up, and a happy ending. Solving a challenge changes the picture: the stepping
+   stones appear, the bridge is fixed, the door swings open. Every quest also includes some
    talking practice.
 4. **Level up.** Challenges give XP and 💎 gems, with a bonus for getting it right first time.
    Levelling up teaches new powers:
@@ -91,8 +95,8 @@ Open the project in Android Studio and press Run, or from a terminal:
 ## Changing the content
 
 All words, sounds, tips and pictures (emoji) are in
-`app/src/main/java/com/zeronolidge/speechapp/data/Content.kt`. Story friends, problems and lines
-are in `logic/Story.kt`. Heroes, outfits, powers, lands and the level curve are in `logic/Rpg.kt`.
+`app/src/main/java/com/zeronolidge/speechapp/data/Content.kt`. Story plots and scenes are in `logic/Plots.kt`, and friends and challenge lines
+are in `logic/Story.kt`. The scene pictures are drawn in `ui/art/SetPieces.kt`. Heroes, outfits, powers, lands and the level curve are in `logic/Rpg.kt`.
 The cartoon drawing code is in `ui/art/Critter.kt`. For example, to practice
 more words for a sound your child's speech therapist is working on, add a `Word("...", "emoji")`
 to that sound's list.

@@ -1,5 +1,12 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import com.zeronolidge.speechapp.logic.Feeling
+import com.zeronolidge.speechapp.logic.Friend
+import com.zeronolidge.speechapp.logic.Scene
+import com.zeronolidge.speechapp.ui.art.SetPieceView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -68,6 +75,8 @@ import kotlin.random.Random
 private sealed interface Phase {
     data object Intro : Phase
     data class Beat(val index: Int) : Phase
+    /** A story moment without a challenge, shown just before beat [before]. */
+    data class Twist(val before: Int) : Phase
     data object Ending : Phase
     data object Rewards : Phase
 }
@@ -90,7 +99,12 @@ fun QuestScreen(land: Land, mixed: Boolean, back: () -> Unit, go: (Screen) -> Un
         cheer = false
         phase = when (val ph = phase) {
             Phase.Intro -> Phase.Beat(0)
-            is Phase.Beat -> if (ph.index + 1 < quest.beats.size) Phase.Beat(ph.index + 1) else Phase.Ending
+            is Phase.Beat -> when {
+                ph.index + 1 >= quest.beats.size -> Phase.Ending
+                ph.index + 1 == quest.twistBefore -> Phase.Twist(ph.index + 1)
+                else -> Phase.Beat(ph.index + 1)
+            }
+            is Phase.Twist -> Phase.Beat(ph.before)
             Phase.Ending -> Phase.Rewards
             Phase.Rewards -> Phase.Rewards
         }
@@ -117,10 +131,8 @@ fun QuestScreen(land: Land, mixed: Boolean, back: () -> Unit, go: (Screen) -> Un
             QuestTopBar(quest, phase, back)
             Spacer(Modifier.height(6.dp))
             when (val ph = phase) {
-                Phase.Intro -> StoryScene(
-                    quest, quest.intro, species, Mood.HAPPY, Mood.THINK,
-                    onNext = ::next,
-                )
+                Phase.Intro -> StoryScene(quest, quest.intro, species, Mood.HAPPY, onNext = ::next)
+                is Phase.Twist -> StoryScene(quest, quest.twist, species, Mood.HAPPY, visitor = quest.visitor, onNext = ::next)
                 is Phase.Beat -> BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft -> solved(c, ft) }, onNext = ::next)
                 Phase.Ending -> {
                     LaunchedEffect(Unit) {
@@ -128,10 +140,7 @@ fun QuestScreen(land: Land, mixed: Boolean, back: () -> Unit, go: (Screen) -> Un
                         earnedGems += 5
                         p.finishQuest()
                     }
-                    StoryScene(
-                        quest, quest.ending, species, Mood.CHEER, Mood.CHEER,
-                        showGoal = true, onNext = ::next,
-                    )
+                    StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = ::next)
                 }
                 Phase.Rewards -> Rewards(
                     xpGained = p.xp - startXp,
@@ -166,6 +175,7 @@ private fun QuestTopBar(quest: Quest, phase: Phase, back: () -> Unit) {
         val current = when (phase) {
             Phase.Intro -> -1
             is Phase.Beat -> phase.index
+            is Phase.Twist -> phase.before
             else -> quest.beats.size
         }
         Row(
@@ -192,45 +202,78 @@ private fun QuestTopBar(quest: Quest, phase: Phase, back: () -> Unit) {
                 ) { Text(if (i < current) "✓" else "👣", fontSize = 16.sp, color = Color.White) }
             }
             Text("➜", fontSize = 18.sp, color = Kid.ink, modifier = Modifier.padding(horizontal = 4.dp))
-            Text(quest.goal.emoji, fontSize = 28.sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
+            Text(quest.goal, fontSize = 28.sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
         }
     }
 }
 
-/** A full-width story moment: the hero and the friend talking, with a big button to continue. */
+/** How a friend's feelings show on their face. */
+private fun Feeling.mood() = when (this) {
+    Feeling.HAPPY -> Mood.HAPPY
+    Feeling.SAD -> Mood.SAD
+    Feeling.WORRIED -> Mood.THINK
+    Feeling.CHEER -> Mood.CHEER
+}
+
+/** The hero strolls in from the left whenever the scene changes. */
+@Composable
+private fun walkIn(key: Any): Float {
+    val walk = remember(key) { Animatable(-1f) }
+    LaunchedEffect(key) { walk.animateTo(0f, tween(900)) }
+    return walk.value
+}
+
+/**
+ * A full-width story moment: the picture for the scene, the hero and the friend acting it out,
+ * and a big green arrow to carry on.
+ */
 @Composable
 private fun StoryScene(
     quest: Quest,
-    text: String,
+    scene: Scene,
     hero: Species,
     heroMood: Mood,
-    friendMood: Mood,
-    showGoal: Boolean = false,
+    visitor: Friend? = null,
+    solved: Boolean = false,
     onNext: () -> Unit,
 ) {
     val app = LocalApp.current
     val p = app.progress
+    val text = scene.text
     val goLine = "Tap the big green arrow!"
     LaunchedEffect(text) {
         app.speaker.say(text)
         app.speaker.then(goLine)
     }
     Nudge(text, goLine)
+    val walk = walkIn(scene)
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        SpeechBubble(text, Modifier.fillMaxWidth(0.8f), fontSize = 22) { app.speaker.say(text) }
-        Row(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            HeroWithPet(hero, p.heroColor(hero), p.outfit, p.pet, Modifier.fillMaxHeight(0.95f).width(200.dp), heroMood)
-            if (showGoal) Text(quest.goal.emoji, fontSize = 80.sp, modifier = Modifier.padding(bottom = 30.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxHeight(0.95f)) {
-                Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), friendMood, mirrored = true)
-                NameTag(quest.friend.name)
+        SpeechBubble(text, Modifier.fillMaxWidth(0.8f), fontSize = 21) { app.speaker.say(text) }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            SetPieceView(scene.piece, scene.prop, solved, Modifier.fillMaxSize())
+            Row(
+                Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                HeroWithPet(
+                    hero, p.heroColor(hero), p.outfit, p.pet,
+                    Modifier
+                        .fillMaxHeight(0.62f)
+                        .width(150.dp)
+                        .graphicsLayer { translationX = walk * size.width * 2f },
+                    heroMood,
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxHeight(0.58f)) {
+                    Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), scene.feeling.mood(), mirrored = true)
+                    NameTag(quest.friend.name)
+                }
+                if (visitor != null) {
+                    Critter(visitor.species, Modifier.fillMaxHeight(0.5f), Color(visitor.color), Outfit(), Mood.HAPPY, mirrored = true)
+                }
+                // The only way forward, so make it impossible to miss.
+                GoButton(Modifier.align(Alignment.CenterVertically), size = 100.dp, onClick = onNext)
             }
-            // The only way forward, so make it impossible to miss.
-            GoButton(Modifier.align(Alignment.CenterVertically), size = 104.dp, onClick = onNext)
         }
     }
 }
@@ -265,24 +308,32 @@ private fun BeatScene(
     val powers = remember(index) { PowerTicks() }
     var used by remember(index) { mutableStateOf(setOf<Power>()) }
     var solvedHere by remember(index) { mutableStateOf(false) }
-    val text = listOfNotNull(beat.travel, beat.narration).joinToString(" ")
-    if (solvedHere) AfterDelay(index, 900) { onNext() }
+    val text = beat.narration
+    // Pause on the solved picture (stones appear, the door opens) before moving on.
+    if (solvedHere) AfterDelay(index, 1800) { onNext() }
+    val walk = walkIn(index)
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         // Story side.
         Column(Modifier.weight(0.34f).fillMaxHeight()) {
             SpeechBubble(text, Modifier.fillMaxWidth(), fontSize = 16) { app.speaker.say(text) }
-            Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                HeroWithPet(
-                    hero, p.heroColor(hero), p.outfit, p.pet,
-                    Modifier.weight(1f).fillMaxHeight(0.9f),
-                    if (cheer) Mood.CHEER else Mood.HAPPY,
-                )
-                Critter(
-                    quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.75f),
-                    Color(quest.friend.color), Outfit(),
-                    if (cheer) Mood.CHEER else Mood.THINK, mirrored = true,
-                )
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                SetPieceView(beat.scene.piece, beat.scene.prop, solvedHere, Modifier.fillMaxSize())
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
+                    HeroWithPet(
+                        hero, p.heroColor(hero), p.outfit, p.pet,
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight(0.55f)
+                            .graphicsLayer { translationX = walk * size.width * 2f },
+                        if (cheer) Mood.CHEER else Mood.HAPPY,
+                    )
+                    Critter(
+                        quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.45f),
+                        Color(quest.friend.color), Outfit(),
+                        if (cheer) Mood.CHEER else beat.scene.feeling.mood(), mirrored = true,
+                    )
+                }
             }
             PowerBar(beat.challenge, used) { power ->
                 used = used + power

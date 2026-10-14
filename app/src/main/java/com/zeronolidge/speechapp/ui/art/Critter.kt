@@ -34,7 +34,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class Mood { HAPPY, CHEER, THINK }
+enum class Mood { HAPPY, CHEER, THINK, SAD }
 
 /** What a character is wearing. Any part can be null. */
 data class Outfit(
@@ -293,7 +293,7 @@ private fun DrawScope.drawCritter(
             circle(39f, 56f, 6f, glow); circle(61f, 56f, 6f, glow)
             circle(41f, 54f, 2f, Color.White); circle(63f, 54f, 2f, Color.White)
         }
-        smile(o(50f, 65f), 8f * u, glow, mood == Mood.CHEER)
+        mouth(o(50f, 65f), 8f * u, glow, mood)
     } else {
         val eyeH = 15f * (1f - blink * 0.9f)
         oval(39f, eyeY, 13f, eyeH, Color.White); oval(61f, eyeY, 13f, eyeH, Color.White)
@@ -303,15 +303,29 @@ private fun DrawScope.drawCritter(
             circle(39f + look, eyeY + ly, 4.6f, Ink); circle(61f + look, eyeY + ly, 4.6f, Ink)
             circle(40.5f + look, eyeY + ly - 2f, 1.7f, Color.White); circle(62.5f + look, eyeY + ly - 2f, 1.7f, Color.White)
         }
+        if (mood == Mood.SAD) {
+            // A little tear.
+            val tear = Path().apply {
+                val top = o(33f, eyeY + 6f)
+                moveTo(top.x, top.y)
+                val l = o(30.5f, eyeY + 12f)
+                val r = o(35.5f, eyeY + 12f)
+                lineTo(r.x, r.y)
+                lineTo(l.x, l.y)
+                close()
+            }
+            drawPath(tear, Color(0xFF64B5F6))
+            drawCircle(Color(0xFF64B5F6), 2.6f * u, o(33f, eyeY + 12.5f))
+        }
         // Cheeks.
         drawCircle(Blush.copy(alpha = 0.55f), 5f * u, o(30f, 72f))
         drawCircle(Blush.copy(alpha = 0.55f), 5f * u, o(70f, 72f))
         when (sp.mouth) {
-            Mouth.SMILE -> smile(o(50f, 73f), 7f * u, Ink, mood == Mood.CHEER)
+            Mouth.SMILE -> mouth(o(50f, 73f), 7f * u, Ink, mood)
             Mouth.SNOUT -> {
                 oval(50f, 76f, 26f, 18f, belly)
                 oval(50f, 71f, 10f, 7f, Ink)
-                smile(o(50f, 78f), 5f * u, Ink, mood == Mood.CHEER)
+                mouth(o(50f, 78f), 5f * u, Ink, mood)
             }
             Mouth.BEAK -> {
                 poly(Color(0xFFFFA726), 43f to 70f, 57f to 70f, 50f to 80f)
@@ -401,6 +415,19 @@ private fun DrawScope.drawCritter(
                 oval(50f, top + 2f, 44f, 7f, c)
             }
         }
+    }
+}
+
+private fun DrawScope.mouth(center: Offset, r: Float, color: Color, mood: Mood) {
+    if (mood == Mood.SAD) {
+        // A frown: the top of a circle sitting below the mouth position.
+        drawArc(
+            color, 200f, 140f, false,
+            Offset(center.x - r, center.y + r * 0.2f), Size(2 * r, 2 * r),
+            style = Stroke(r * 0.32f, cap = StrokeCap.Round),
+        )
+    } else {
+        smile(center, r, color, mood == Mood.CHEER)
     }
 }
 
