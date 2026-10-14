@@ -8,6 +8,9 @@ interface Speaker {
     /** True while something is being said. */
     val speaking: Boolean
 
+    /** Called when speech didn't start or finish in time, so the app can offer a big replay button. */
+    var onTrouble: (() -> Unit)?
+
     /** 1.0 is normal speed. Grown-ups can change this in settings. */
     var rate: Float
 
@@ -24,6 +27,18 @@ interface Speaker {
     /** Stops talking. Unlike being interrupted by [say], this drops any pending onDone callbacks. */
     fun stop()
 
+    fun shutdown()
+}
+
+/**
+ * The platform's voice, one utterance at a time. [QueueSpeaker] does the queueing, interrupting
+ * and time-outs on top, the same way on every platform.
+ */
+interface VoiceEngine {
+    /** Speaks [text] at [rate] (1.0 is normal). [onEnd] runs once on the main thread when it ends or fails. */
+    fun speakOne(text: String, rate: Float, onEnd: () -> Unit)
+    /** Stops talking now. A pending [onEnd] may still arrive; callers ignore it. */
+    fun cancel()
     fun shutdown()
 }
 

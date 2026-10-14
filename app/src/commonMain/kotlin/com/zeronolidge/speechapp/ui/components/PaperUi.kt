@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -293,7 +295,8 @@ fun <T> PagedChoices(
             val shown = items.drop(page * perPage).take(perPage)
             shown.forEachIndexed { i, it ->
                 Box(Modifier.weight(1f).popIn(page to i, i * 60), contentAlignment = Alignment.Center) {
-                    item(it, Modifier.fillMaxSize())
+                    // Big, but not blown up on a tablet: buttons stay the same physical size.
+                    item(it, Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 260.dp).widthIn(max = 240.dp).fillMaxHeight())
                 }
             }
             // Keep tiles the same size on a short last page.

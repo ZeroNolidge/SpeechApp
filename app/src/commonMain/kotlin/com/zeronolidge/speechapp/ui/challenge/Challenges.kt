@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,7 @@ import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.logic.CoinMode
 import com.zeronolidge.speechapp.ui.art.paperCircle
 import com.zeronolidge.speechapp.ui.art.star
+import com.zeronolidge.speechapp.ui.art.paperPath
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import com.zeronolidge.speechapp.ui.components.LocalApp
@@ -178,7 +180,8 @@ private fun QuestionLayout(
     answers: @Composable (cardSize: Dp) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val card = minOf(maxWidth / 4.2f, maxHeight / 2.6f, 140.dp)
+        // Same physical size on every screen: never smaller than a thumb, never blown up on a tablet.
+        val card = minOf(maxWidth / 4.4f, maxHeight / 2.6f).coerceIn(64.dp, 112.dp)
         Column(
             Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -222,7 +225,12 @@ fun EmojiGroup(
             if (onTapItem != null) {
                 // Things to count are raised paper, so it's clear they can be tapped.
                 Box {
-                    PaperButton(if (countIndex >= 0) Kid.highlight else PaperColorsUi.choice, circle = true, onClick = { onTapItem(i) }) {
+                    PaperButton(
+                        if (countIndex >= 0) Kid.highlight else PaperColorsUi.choice,
+                        Modifier.sizeIn(minWidth = 64.dp, minHeight = 64.dp),
+                        circle = true,
+                        onClick = { onTapItem(i) },
+                    ) {
                         Box(Modifier.padding(8.dp), contentAlignment = Alignment.Center) { inner() }
                     }
                     if (countIndex >= 0) {
@@ -426,7 +434,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
                             i in tapped -> Color(0xFFE1F5FE)
                             else -> PaperColorsUi.choice
                         },
-                        Modifier.size(card * 0.85f),
+                        Modifier.size((card * 0.85f).coerceAtLeast(64.dp)),
                         corner = 20.dp,
                         onClick = {
                             tapped = tapped + i
@@ -438,7 +446,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
                     }
                 }
                 Box(Modifier.width(4.dp))
-                RoundIcon("🐢", if (tapped.size == word.length) Kid.highlight else Kid.soft, size = card * 0.75f) { blend() }
+                RoundIcon("🐢", if (tapped.size == word.length) Kid.highlight else Kid.soft, size = (card * 0.75f).coerceAtLeast(64.dp)) { blend() }
             }
         },
         answers = { card ->
@@ -512,7 +520,7 @@ private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () 
 private fun OddOneView(c: Challenge.OddOne, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
     val r = c.round
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val card = minOf(maxWidth / 5f, maxHeight / 1.6f, 140.dp)
+        val card = minOf(maxWidth / 5.2f, maxHeight / 1.6f).coerceIn(64.dp, 112.dp)
         // Options are positions, so identical pictures are still separate cards.
         AnswerRow(
             r.items.indices.toList(), r.items.indexOf(r.odd), area, c,
@@ -660,7 +668,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RoundIcon("⌫", Kid.soft, size = 72.dp, enabled = !running && !won && program.isNotEmpty()) {
+                RoundIcon("↩️", Kid.soft, size = 72.dp, enabled = !running && !won && program.isNotEmpty()) {
                     program.removeAt(program.lastIndex)
                     app.speaker.say("Undo.")
                 }
@@ -712,12 +720,16 @@ private fun RobotFace(facing: Dir, cell: Dp, face: String) {
             Dir.DOWN -> Alignment.BottomCenter
             Dir.LEFT -> Alignment.CenterStart
         }
-        Text(
-            "▲",
-            fontSize = (cell.value * 0.2f).sp,
-            color = Color(0xFFD84315),
-            modifier = Modifier.align(align).padding(2.dp).rotate(facing.degrees),
-        )
+        // A little paper arrowhead (drawn, so it shows on every device).
+        Canvas(Modifier.align(align).padding(2.dp).size(cell * 0.22f).rotate(facing.degrees)) {
+            val tri = androidx.compose.ui.graphics.Path().apply {
+                moveTo(size.width / 2, 0f)
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            paperPath(tri, Color(0xFFD84315))
+        }
     }
 }
 
@@ -818,7 +830,7 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                         // Coins on the table: each one is a raised paper button.
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             repeat(r.onTable - paid) {
-                                PaperButton(Color(0xFFFFE082), Modifier.size(card * 0.62f), circle = true, onClick = {
+                                PaperButton(Color(0xFFFFE082), Modifier.size((card * 0.62f).coerceAtLeast(64.dp)), circle = true, onClick = {
                                     if (paid < r.price) {
                                         paid++
                                         if (paid == r.price) {
@@ -830,7 +842,7 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                                 }) { Coin(card * 0.46f) }
                             }
                         }
-                        Text("➜", fontSize = 34.sp, color = Kid.ink)
+                        Text("▶", fontSize = 30.sp)
                         // The stall keeper's jar fills up.
                         Box(
                             Modifier.size(card * 1.3f, card).paperCard(Color(0xFFB3E5FC), 22.dp).padding(8.dp),

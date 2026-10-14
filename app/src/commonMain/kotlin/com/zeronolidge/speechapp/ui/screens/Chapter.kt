@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -164,6 +165,8 @@ private fun RowScope.Footprints(quest: Quest, phase: Phase) {
         is Phase.Twist -> phase.before
         else -> quest.beats.size
     }
+    // The place this chapter happens, for grown-ups (the child follows the pictures).
+    PaperChip("${quest.land.emoji} ${quest.land.title}", fontSize = 18.sp)
     Spacer(Modifier.weight(1f))
     Row(
         Modifier.paperCard(PaperStyle.chip, 999.dp).padding(horizontal = 12.dp, vertical = 6.dp),
@@ -173,7 +176,7 @@ private fun RowScope.Footprints(quest: Quest, phase: Phase) {
             Box(
                 Modifier
                     .padding(horizontal = 3.dp)
-                    .size(36.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(
                         when {
@@ -183,12 +186,11 @@ private fun RowScope.Footprints(quest: Quest, phase: Phase) {
                         },
                     ),
                 contentAlignment = Alignment.Center,
-            ) { Text(if (i < current) "✓" else "👣", fontSize = 17.sp, color = Color.White) }
+            ) { Text(if (i < current) "✔️" else "👣", fontSize = 17.sp, color = Color.White) }
         }
-        Text("➜", fontSize = 20.sp, color = PaperStyle.ink, modifier = Modifier.padding(horizontal = 6.dp))
-        Text(quest.goal, fontSize = 30.sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
+        Text("▶", fontSize = 18.sp, modifier = Modifier.padding(horizontal = 6.dp))
+        Text(quest.goal, fontSize = 28.sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
     }
-    Spacer(Modifier.weight(1f))
 }
 
 /** How a friend's feelings show on their face. */
@@ -283,9 +285,8 @@ private fun BeatScene(
     if (solvedHere) AfterDelay(index, 1800) { onNext() }
     val walk = walkIn(index)
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Story side.
-        Column(Modifier.weight(0.34f).fillMaxHeight()) {
+    StorySplit(story = { m ->
+        Column(m) {
             SpeechBubble(text, Modifier.fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 SetPieceView(beat.scene.piece, beat.scene.prop, solvedHere, Modifier.fillMaxSize())
@@ -317,19 +318,35 @@ private fun BeatScene(
                 }
             }
         }
+    }, challenge = { m ->
         // Challenge side, on a big paper card.
-        Box(
-            Modifier
-                .weight(0.66f)
-                .fillMaxHeight()
-                .paperCard(Color(0xF2FFFAF0), 28.dp)
-                .padding(14.dp),
-        ) {
+        Box(m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
             ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers) { firstTry ->
                 if (!solvedHere) {
                     solvedHere = true
                     onSolved(beat.challenge, firstTry)
                 }
+            }
+        }
+    })
+}
+
+/**
+ * The story picture and the challenge: side by side on a tablet (story left, challenge right),
+ * stacked on a narrow phone screen.
+ */
+@Composable
+private fun StorySplit(story: @Composable (Modifier) -> Unit, challenge: @Composable (Modifier) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth < 600.dp) {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                story(Modifier.fillMaxWidth().weight(0.34f))
+                challenge(Modifier.fillMaxWidth().weight(0.66f))
+            }
+        } else {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                story(Modifier.weight(0.36f).fillMaxHeight())
+                challenge(Modifier.weight(0.64f).fillMaxHeight())
             }
         }
     }
@@ -347,8 +364,8 @@ private fun WakeScene(quest: Quest, hero: Species, onAwake: () -> Unit) {
     var awake by remember { mutableStateOf(false) }
     val text = "Shh! Someone is fast asleep. It's ${v.callName}! Let's wake them up by calling their name."
     if (awake) AfterDelay("awake", 1200) { onAwake() }
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(0.34f).fillMaxHeight()) {
+    StorySplit(story = { m ->
+        Column(m) {
             SpeechBubble(text, Modifier.fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 SetPieceView(quest.twist.piece, null, false, Modifier.fillMaxSize())
@@ -358,21 +375,16 @@ private fun WakeScene(quest: Quest, hero: Species, onAwake: () -> Unit) {
                 }
             }
         }
-        Box(
-            Modifier
-                .weight(0.66f)
-                .fillMaxHeight()
-                .paperCard(Color(0xF2FFFAF0), 28.dp)
-                .padding(14.dp),
-        ) {
+    }, challenge = { m ->
+        Box(m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
             SpeakMoment(
                 Word(v.callName, v.species.emoji), null, Modifier.fillMaxSize(),
                 intro = text,
                 afterLine = "${v.callName} is awake!",
-                picture = { m -> Critter(v.species, m, Color(v.color), Outfit(), if (awake) Mood.CHEER else Mood.SLEEP, mirrored = true) },
+                picture = { pm -> Critter(v.species, pm, Color(v.color), Outfit(), if (awake) Mood.CHEER else Mood.SLEEP, mirrored = true) },
             ) { awake = true }
         }
-    }
+    })
 }
 
 /** One helper power per challenge: the magic wand for picking, the treasure map for the robot. */

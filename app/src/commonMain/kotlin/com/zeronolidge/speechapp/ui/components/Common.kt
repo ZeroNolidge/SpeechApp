@@ -69,7 +69,17 @@ class AppServices(
     var celebrations by mutableIntStateOf(0)
         private set
 
-    /** What the big 🔊 "hear it again" button says: the current screen's instruction. */
+    /**
+     * True when speech didn't start or finish in time. The app shows a big replay speaker; the
+     * story itself has already carried on, so nothing is ever stuck waiting for speech.
+     */
+    var audioTrouble by mutableStateOf(false)
+
+    init {
+        speaker.onTrouble = { audioTrouble = true }
+    }
+
+        /** What the big 🔊 "hear it again" button says: the current screen's instruction. */
     var instruction by mutableStateOf("")
         private set
 

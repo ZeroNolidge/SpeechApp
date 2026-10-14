@@ -67,8 +67,8 @@ import kotlin.random.Random
 
 /** Free-play games, outside the story. Each one is an endless loop of one kind of challenge. */
 enum class PracticeKind(val emoji: String, val label: String, val spoken: String, val color: Color) {
-    BIG_SMALL("🅰️", "Big → small", "Find the little letter!", Kid.letters),
-    SMALL_BIG("🔡", "small → Big", "Find the big letter!", Kid.letters),
+    BIG_SMALL("🅰️", "A ▶ a", "Find the little letter!", Kid.letters),
+    SMALL_BIG("🔡", "a ▶ A", "Find the big letter!", Kid.letters),
     FIRST_SOUND("👂", "First sound", "What sound does it start with?", Kid.letters),
     SOUND_OUT("🧱", "Sound it out", "Let's sound out words!", Kid.reading),
     WHICH_WORD("🖼️", "Which word?", "Which word matches the picture?", Kid.reading),

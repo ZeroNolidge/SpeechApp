@@ -72,6 +72,9 @@ fun IslandMap(
     onUnfolded: () -> Unit,
     onStop: () -> Unit,
     onElsewhere: (Land) -> Unit,
+    /** A misted land that was just tapped: it wiggles and sparkles run from it to the next stop. */
+    hintFrom: Land? = null,
+    hintKey: Int = 0,
     modifier: Modifier = Modifier,
     /** Drawn next to the current stop, like a "you are here" marker. */
     hero: @Composable (Modifier) -> Unit = {},
@@ -91,6 +94,14 @@ fun IslandMap(
     val newLand = if (unfoldNew && Trail.opensLand(chapter)) Trail.landOf(chapter) else null
     val clearing = remember(newLand) { Animatable(if (newLand != null) 0f else 1f) }
     LaunchedEffect(newLand) { if (newLand != null) clearing.animateTo(1f, tween(1400)) }
+
+    val hint = remember(hintKey) { Animatable(0f) }
+    LaunchedEffect(hintKey) {
+        if (hintKey > 0) {
+            hint.snapTo(0f)
+            hint.animateTo(1f, tween(2600, easing = LinearEasing))
+        }
+    }
 
     BoxWithConstraints(modifier) {
         val w = maxWidth
@@ -115,11 +126,16 @@ fun IslandMap(
         SceneryWash()
         Canvas(Modifier.fillMaxSize()) {
             Land.entries.forEach { land ->
-                when {
-                    land == newLand -> mist(land, slow, 1f - clearing.value)
-                    !reached(land) -> mist(land, slow, 1f)
+                // The tapped misty land gives a quick wiggle.
+                val wiggle = if (land == hintFrom && hint.value in 0.001f..0.3f) sin(hint.value * 60f) * u * 0.012f * (1f - hint.value / 0.3f) else 0f
+                withTransform({ translate(wiggle, 0f) }) {
+                    when {
+                        land == newLand -> mist(land, slow, 1f - clearing.value)
+                        !reached(land) -> mist(land, slow, 1f)
+                    }
                 }
             }
+            if (hintFrom != null && hint.value in 0.001f..0.999f) sparklePath(at(hintFrom), Trail.position(current).let { (x, y) -> p(x, y) }, hint.value)
             birds(slow, flap)
         }
 
@@ -154,8 +170,9 @@ fun IslandMap(
         }
 
         // The next stop: a big raised paper button that unfolds when it is new.
+        // It keeps the same physical size on a phone and a tablet.
         val (cx, cy) = Trail.position(current)
-        val node = minOf(unit * 0.16f, 104.dp)
+        val node = 96.dp
         Box(
             Modifier
                 .offset(x = w * cx - node / 2, y = h * cy - node / 2)
@@ -648,6 +665,19 @@ private fun DrawScope.castle(land: Land, mid: Float) {
                 style = Stroke(s * 0.1f),
             )
         }
+    }
+}
+
+/** Sparkles that travel from [from] to [to], showing the way to the next stop. */
+private fun DrawScope.sparklePath(from: Offset, to: Offset, t: Float) {
+    val head = (t * 1.3f).coerceAtMost(1f)
+    for (k in 0 until 7) {
+        val f = head - k * 0.07f
+        if (f < 0f) continue
+        val q = from + (to - from) * f
+        val lift = sin(f * PI * 3).toFloat() * u * 0.015f
+        val fade = (1f - k / 7f) * (if (t > 0.85f) (1f - t) / 0.15f else 1f)
+        star(Offset(q.x, q.y - lift), u * (0.022f - k * 0.002f), Color(0xFFFFD54F).copy(alpha = fade.coerceIn(0f, 1f)))
     }
 }
 

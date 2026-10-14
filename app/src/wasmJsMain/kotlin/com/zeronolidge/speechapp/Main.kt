@@ -25,7 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.ComposeViewport
 import com.zeronolidge.speechapp.audio.WebListener
 import com.zeronolidge.speechapp.audio.WebParrot
-import com.zeronolidge.speechapp.audio.WebSpeaker
+import com.zeronolidge.speechapp.audio.QueueSpeaker
+import com.zeronolidge.speechapp.audio.WebVoiceEngine
 import com.zeronolidge.speechapp.res.Res
 import com.zeronolidge.speechapp.res.noto_color_emoji
 import com.zeronolidge.speechapp.state.Progress
@@ -44,7 +45,7 @@ import org.jetbrains.compose.resources.preloadFont
 fun main() {
     val progress = Progress(WebPrefs())
     val services = AppServices(
-        speaker = WebSpeaker().also { it.rate = progress.speechRate },
+        speaker = QueueSpeaker(WebVoiceEngine()).also { it.rate = progress.speechRate },
         listener = WebListener(),
         parrot = WebParrot(),
         progress = progress,

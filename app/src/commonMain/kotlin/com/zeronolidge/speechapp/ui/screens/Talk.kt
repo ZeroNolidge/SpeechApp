@@ -259,70 +259,87 @@ fun SpeakMoment(
     }
     DisposableEffect(key) { onDispose { stopAll() } }
 
-    BoxWithConstraints(modifier) {
-        val small = maxHeight < 320.dp
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            // The picture card: tap it to hear the word again.
-            val t = rememberInfiniteTransition(label = "model")
-            val beat by t.animateFloat(1f, 1.08f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "beat")
-            val pulse by animateFloatAsState(
-                when (state) {
-                    Speak.LISTENING -> 1f + level * 0.25f
-                    Speak.MODELLING -> beat
-                    else -> 1f
-                },
-                label = "pulse",
-            )
+    // The word card on top, then one row of big icon buttons. Works the same on a phone and a tablet.
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        val t = rememberInfiniteTransition(label = "model")
+        val beat by t.animateFloat(1f, 1.08f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "beat")
+        val pulse by animateFloatAsState(
+            when (state) {
+                Speak.LISTENING -> 1f + level * 0.25f
+                Speak.MODELLING -> beat
+                else -> 1f
+            },
+            label = "pulse",
+        )
+        // The picture card: tap it to hear the word again.
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val small = maxHeight < 240.dp
             PaperButton(
                 PaperStyle.chip,
-                Modifier.weight(1.2f).fillMaxHeight().padding(bottom = 8.dp),
+                Modifier.fillMaxSize().padding(bottom = 8.dp),
                 enabled = state != Speak.DONE,
                 onClick = { speakThen(model(), true) },
             ) {
-                Column(
+                Row(
                     Modifier.fillMaxSize().padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    Box(Modifier.weight(1f).fillMaxWidth().scale(pulse), contentAlignment = Alignment.Center) {
-                        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 72.sp else 120.sp)
+                    Box(Modifier.weight(1f).fillMaxHeight().scale(pulse), contentAlignment = Alignment.Center) {
+                        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 110.sp)
                     }
-                    Text(
-                        highlighted(word.text, sound?.id),
-                        fontSize = if (small) 34.sp else if (word.text.length > 12) 38.sp else 52.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = PaperStyle.ink,
-                    )
-                }
-            }
-
-            // Listening badge, then at most three big buttons.
-            Column(
-                Modifier.weight(1f).fillMaxHeight(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Box(Modifier.height(if (small) 70.dp else 104.dp), contentAlignment = Alignment.Center) {
-                    when (state) {
-                        Speak.LISTENING, Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 60.dp else 88.dp)
-                        Speak.PARROT_PLAYING -> Text("🦜", fontSize = 56.sp)
-                        Speak.MODELLING -> Text("👂", fontSize = 56.sp)
-                        Speak.WAITING_TAP -> Text("🗣️", fontSize = 56.sp)
-                        Speak.DONE -> shiny?.let { Sticker(it, if (small) 70.dp else 100.dp, Modifier.popIn(it.text)) }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RoundIcon("🐢", Color(0xFFC8E6C9), size = 84.dp, enabled = state != Speak.DONE) {
-                        speakThen(listOf(word.syllables to true, word.text to true), true)
-                    }
-                    if (showParrot && p.useMic) {
-                        RoundIcon("🦜", Color(0xFFB2EBF2), size = 84.dp, enabled = state != Speak.DONE) {
-                            withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
+                    Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            highlighted(word.text, sound?.id),
+                            fontSize = if (small) 30.sp else if (word.text.length > 12) 36.sp else 50.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = PaperStyle.ink,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
+                            when (state) {
+                                Speak.LISTENING, Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
+                                Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
+                                Speak.MODELLING -> Text("👂", fontSize = 52.sp)
+                                Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
+                                Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.popIn(it.text)) }
+                            }
                         }
                     }
                 }
-                // Always there: carry on. It pulses when there's no microphone, because it's the way forward.
-                GoButton(size = 92.dp, enabled = state != Speak.DONE, hint = state == Speak.WAITING_TAP) {
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        // One row of big buttons: hear it, slowly, mouth, microphone (and copy-me in practice), then ▶.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val count = 3 + (if (sound != null) 1 else 0) + (if (showParrot && p.useMic) 1 else 0)
+            val gap = 12.dp
+            val size = ((maxWidth - gap * count) / (count + 1)).coerceIn(64.dp, 88.dp)
+            val active = state != Speak.DONE
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.Top,
+            ) {
+                RoundIcon("🔊", PaperColorsUi.hear, size = size, enabled = active) { speakThen(model(), true) }
+                RoundIcon("🐢", Color(0xFFC8E6C9), size = size, enabled = active) {
+                    speakThen(listOf(word.syllables to true, word.text to true), true)
+                }
+                if (sound != null) {
+                    RoundIcon("👄", Color(0xFFFFCDD2), size = size, enabled = active) {
+                        speakThen(listOf(sound.tip to false, sound.modelSound to true), true)
+                    }
+                }
+                RoundIcon("🎤", Color(0xFFFFE0B2), size = size, enabled = active) {
+                    withMic(onDenied = { speakThen(emptyList(), false) }) { silent = 0; speakThen(emptyList(), true) }
+                }
+                if (showParrot && p.useMic) {
+                    RoundIcon("🦜", Color(0xFFB2EBF2), size = size, enabled = active) {
+                        withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
+                    }
+                }
+                // Always there: carry on. It pulses and is pointed at only when it's the way forward.
+                GoButton(size = size, enabled = active, hint = state == Speak.WAITING_TAP) {
                     if (state == Speak.WAITING_TAP) finish(clear = false, heard = false) else finish(clear = false, heard = false, skipped = true)
                 }
             }

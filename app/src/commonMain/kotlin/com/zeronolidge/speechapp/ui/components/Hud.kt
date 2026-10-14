@@ -62,8 +62,6 @@ fun SpeechBubble(text: String, modifier: Modifier = Modifier, fontSize: Int = 20
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(text, fontSize = fontSize.sp, color = PaperStyle.ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
-                Spacer(Modifier.width(8.dp))
-                Text("🔊", fontSize = (fontSize + 2).sp)
             }
         }
         Canvas(

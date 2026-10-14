@@ -1,6 +1,9 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -121,45 +124,68 @@ fun MapScreen(nav: Nav) {
     }
     Nudge("map", hintLine, everyMs = 12000)
     val species = p.hero ?: Species.KID
-    // The map fills the screen; the corner buttons sit on top of it, in the same spots as on every screen.
-    Box(Modifier.fillMaxSize()) {
+    var hintFrom by remember { mutableStateOf<Land?>(null) }
+    var hintKey by remember { mutableStateOf(0) }
+    val startChapter = {
+        app.speaker.say("${land.title}! Let's go!")
+        p.markUnfoldSeen()
+        nav.go(Screen.Chapter)
+    }
+    // The island keeps its shape and fits the screen; the sea fills any space around it.
+    // The corner buttons sit on top, in the same spots as on every screen.
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF3FA9E0))) {
+        val top = 60.dp
+        val bottom = 84.dp
+        val availH = maxHeight - top - bottom
+        val mapW = minOf(maxWidth, availH * 1.75f)
+        val mapH = mapW / 1.75f
         IslandMap(
             chapter = p.chapter,
             reached = { it in Trail.reached(p.chapter) },
             unfoldNew = unfoldNew,
             onUnfolded = { p.markUnfoldSeen() },
-            onStop = {
-                app.speaker.say("${land.title}! Let's go!")
-                p.markUnfoldSeen()
-                nav.go(Screen.Chapter)
-            },
+            onStop = startChapter,
             onElsewhere = { l ->
-                app.speaker.say(
-                    when {
-                        l == land -> "Let's go! $hintLine"
-                        l in Trail.reached(p.chapter) -> "We've been there! The next adventure is where the hand is pointing."
-                        else -> "That place is still hidden in the mist. Follow the trail to get there!"
-                    },
-                )
+                when {
+                    l == land -> app.speaker.say("Let's go! $hintLine")
+                    l in Trail.reached(p.chapter) -> app.speaker.say("We've been there! The next adventure is where the hand is pointing.")
+                    else -> {
+                        // A misty place: it wiggles, Rory pops up, and sparkles show the way.
+                        hintFrom = l
+                        hintKey++
+                        app.speaker.say("Beep boop! Visit ${land.title} first! Follow the sparkles!")
+                    }
+                }
             },
-            modifier = Modifier.fillMaxSize().padding(top = 60.dp),
+            hintFrom = hintFrom,
+            hintKey = hintKey,
+            modifier = Modifier.size(mapW, mapH).align(Alignment.Center).offset(y = (top - bottom) / 2),
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size -> PointingHand(m, size = size, pointDown = true) },
         )
-        MapCorners(nav)
+        if (hintKey > 0) RoryHint(hintKey)
+        MapCorners(nav, startChapter)
     }
     gift.value?.let { g -> GiftCard(g) { gift.value = null } }
 }
 
 /** The map's own buttons, kept to the corners so the trail stays the main thing to tap. */
 @Composable
-private fun MapCorners(nav: Nav) {
+private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
     val app = LocalApp.current
     Box(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             HeroBadge { app.speaker.say("Your buddy's closet!"); nav.go(Screen.Closet) }
             Spacer(Modifier.weight(1f))
             HearAgainButton()
+        }
+        // A big, flat-out-obvious way to start the next chapter.
+        PaperButton(Color(0xFFFFD54F), Modifier.align(Alignment.BottomCenter).height(76.dp), corner = 999.dp, onClick = onAdventure) {
+            Row(Modifier.padding(horizontal = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("▶", fontSize = 34.sp)
+                Spacer(Modifier.width(12.dp))
+                Text("Adventure!", fontSize = 28.sp, color = PaperStyle.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)
+            }
         }
         Row(
             Modifier.align(Alignment.BottomEnd),
@@ -169,10 +195,24 @@ private fun MapCorners(nav: Nav) {
             PaperIconButton("🎯", Color(0xFFF8BBD0)) { app.speaker.say("Practice games!"); nav.go(Screen.Practice) }
         }
         // Grown-ups only: a small gear that opens a grown-up check.
-        PaperIconButton("⚙️", Color(0xFFCFD8DC), size = 56.dp, modifier = Modifier.align(Alignment.BottomStart)) {
+        PaperIconButton("⚙️", Color(0xFFCFD8DC), size = 64.dp, modifier = Modifier.align(Alignment.BottomStart)) {
             app.speaker.say("This part is for grown-ups.")
             nav.go(Screen.Gate)
         }
+    }
+}
+
+/** Rory the robot pops up in the corner to give a hint, then hops away. */
+@Composable
+private fun RoryHint(key: Int) {
+    var show by remember(key) { mutableStateOf(true) }
+    LaunchedEffect(key) {
+        kotlinx.coroutines.delay(4000)
+        show = false
+    }
+    if (!show) return
+    Box(Modifier.fillMaxSize().padding(start = 20.dp, bottom = 96.dp), contentAlignment = Alignment.BottomStart) {
+        Critter(Species.ROBOT, Modifier.height(130.dp).popIn(key), Color(0xFFFFCC80), mood = Mood.CHEER)
     }
 }
 

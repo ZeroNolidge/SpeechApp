@@ -4,6 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.zeronolidge.speechapp.ui.components.PaperColorsUi
+import com.zeronolidge.speechapp.ui.components.PaperIconButton
+import com.zeronolidge.speechapp.ui.components.PointingHand
+import com.zeronolidge.speechapp.ui.components.popIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
@@ -39,6 +47,7 @@ fun TalkAndLearnApp(services: AppServices) {
             Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
                 Screens()
                 CelebrationOverlay()
+                AudioTroubleButton()
             }
         }
     }
@@ -90,5 +99,24 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         is Screen.TalkPractice -> TalkPracticeScreen(s.sound, nav)
         Screen.Alphabet -> AlphabetScreen(nav)
         Screen.NumberLine -> NumberLineScreen(nav)
+    }
+}
+
+/**
+ * If speech didn't start or finish in time, a big pulsing speaker appears at the bottom. Tapping
+ * it says the instructions again and hides it. The story never waits for it.
+ */
+@Composable
+private fun AudioTroubleButton() {
+    val app = LocalApp.current
+    if (!app.audioTrouble) return
+    Box(Modifier.fillMaxSize().padding(bottom = 24.dp), contentAlignment = Alignment.BottomCenter) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            PaperIconButton("🔊", PaperColorsUi.hear, size = 120.dp, modifier = Modifier.popIn("trouble")) {
+                app.audioTrouble = false
+                app.repeatInstruction()
+            }
+            PointingHand(size = 56.dp)
+        }
     }
 }

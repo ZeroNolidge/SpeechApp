@@ -6,7 +6,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.zeronolidge.speechapp.audio.AndroidListener
 import com.zeronolidge.speechapp.audio.AndroidParrot
-import com.zeronolidge.speechapp.audio.AndroidSpeaker
+import com.zeronolidge.speechapp.audio.AndroidVoiceEngine
+import com.zeronolidge.speechapp.audio.QueueSpeaker
 import com.zeronolidge.speechapp.state.AndroidPrefs
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.TalkAndLearnApp
@@ -20,7 +21,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val progress = Progress(AndroidPrefs(this))
         services = AppServices(
-            speaker = AndroidSpeaker(this).also { it.rate = progress.speechRate },
+            speaker = QueueSpeaker(AndroidVoiceEngine(this)).also { it.rate = progress.speechRate },
             listener = AndroidListener(this),
             parrot = AndroidParrot(this),
             progress = progress,

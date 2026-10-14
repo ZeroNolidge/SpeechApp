@@ -5,11 +5,10 @@ import kotlin.js.js
 
 // ---------------------------------------------------------------- talking (Web Speech synthesis)
 
-private fun jsSpeak(text: String, rate: Double, flush: Boolean, onEnd: () -> Unit): Unit = js(
+private fun jsSpeakOne(text: String, rate: Double, onEnd: () -> Unit): Unit = js(
     """(() => {
         const s = window.speechSynthesis;
         if (!s) { onEnd(); return; }
-        if (flush) s.cancel();
         const u = new SpeechSynthesisUtterance(text);
         u.rate = rate; u.pitch = 1.1; u.lang = 'en-US';
         const vs = s.getVoices();
@@ -28,35 +27,21 @@ private fun jsSpeak(text: String, rate: Double, flush: Boolean, onEnd: () -> Uni
             onEnd();
         };
         u.onend = fin; u.onerror = fin;
+        // Chrome can leave the synthesizer paused (e.g. after switching tabs); wake it first.
+        try { s.resume(); } catch (e) {}
         s.speak(u);
     })()"""
 )
 
-private fun jsSpeaking(): Boolean = js("!!(window.speechSynthesis && window.speechSynthesis.speaking)")
 private fun jsCancelSpeech(): Unit = js("(() => { if (window.speechSynthesis) window.speechSynthesis.cancel(); })()")
 
-/** Talking in the browser, using the device's own voices. */
-class WebSpeaker : Speaker {
-    // Bumped by stop(), so callbacks from cancelled speech are dropped (like on Android).
-    private var generation = 0
-    override var rate: Float = 0.85f
-    override val speaking: Boolean get() = jsSpeaking()
+/** The browser's own voice. [QueueSpeaker] handles the queue and time limits on top. */
+class WebVoiceEngine : VoiceEngine {
+    override fun speakOne(text: String, rate: Float, onEnd: () -> Unit) =
+        jsSpeakOne(text, rate.toDouble().coerceIn(0.3, 2.0), onEnd)
 
-    override fun say(text: String, slow: Boolean, onDone: (() -> Unit)?) = speak(text, slow, true, onDone)
-    override fun then(text: String, slow: Boolean, onDone: (() -> Unit)?) = speak(text, slow, false, onDone)
-
-    private fun speak(text: String, slow: Boolean, flush: Boolean, onDone: (() -> Unit)?) {
-        val gen = generation
-        val r = (if (slow) rate * 0.55f else rate).toDouble().coerceIn(0.3, 2.0)
-        jsSpeak(text, r, flush) { if (gen == generation) onDone?.invoke() }
-    }
-
-    override fun stop() {
-        generation++
-        jsCancelSpeech()
-    }
-
-    override fun shutdown() = stop()
+    override fun cancel() = jsCancelSpeech()
+    override fun shutdown() = cancel()
 }
 
 // ---------------------------------------------------------------- listening (Web Speech recognition)

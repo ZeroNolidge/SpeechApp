@@ -41,7 +41,7 @@ fun ParentGateScreen(nav: Nav) {
     ScreenFrame(onHome = nav.home) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
             PaperChip("Grown-ups: tap ${code.joinToString(", ") { Numbers.word(it) }}", fontSize = 26.sp)
-            Text("●".repeat(entered.size) + "○".repeat(3 - entered.size), fontSize = 30.sp, color = PaperStyle.ink)
+            Text("🔵".repeat(entered.size) + "⚪".repeat(3 - entered.size), fontSize = 30.sp, color = PaperStyle.ink)
             (0..2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     (1..3).forEach { col ->
