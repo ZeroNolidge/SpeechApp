@@ -55,8 +55,8 @@ android {
         applicationId = "com.zeronolidge.speechapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 3
+        versionName = "3.0"
     }
 
     // CI signs every build with the same permanent key (kept in GitHub secrets), so a new

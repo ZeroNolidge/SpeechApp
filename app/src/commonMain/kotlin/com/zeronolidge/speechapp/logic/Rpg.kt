@@ -1,7 +1,7 @@
 package com.zeronolidge.speechapp.logic
 
 /**
- * The role-playing side of the app: heroes, cosmetics, powers, levels and lands.
+ * The adventure side of the app: heroes, paper pieces for the buddy, powers, lands and the trail.
  * Plain Kotlin so it can be unit tested; drawing lives in ui/art.
  */
 
@@ -47,20 +47,18 @@ val heroSpecies = listOf(
 )
 
 enum class Slot(val label: String, val emoji: String) {
-    HAT("Hats", "🎩"), CAPE("Capes", "🦸"), GLASSES("Glasses", "👓"), COLOR("Colors", "🎨"), PET("Pets", "🐾"),
+    HAT("Hats", "🎩"), CAPE("Capes", "🦸"), WINGS("Wings", "🦋"), GLASSES("Glasses", "👓"), COLOR("Colors", "🎨"), PET("Pets", "🐾"),
 }
 
 /**
- * Something to wear (or a pet). Items show up in the shop at [level].
- * A [price] of 0 means it is a free gift at that level; otherwise it costs that many gems.
+ * A paper piece the buddy can wear (or a pet that follows them). Pieces are earned for showing
+ * up and trying, in the order of [Catalog.awardOrder], and are never taken away.
  */
 data class Cosmetic(
     val id: String,
     val slot: Slot,
     val name: String,
-    val level: Int,
-    val price: Int,
-    /** Main colour for capes, glasses and body colours. */
+    /** Main colour for hats, capes, wings, glasses and body colours. */
     val color: Long = 0,
     /** For pets: what kind of mini creature follows the hero. */
     val pet: Species? = null,
@@ -69,67 +67,90 @@ data class Cosmetic(
 object Catalog {
     val items: List<Cosmetic> = listOf(
         // Hats
-        Cosmetic("hat_cap", Slot.HAT, "Red cap", 2, 0, 0xFFE53935),
-        Cosmetic("hat_party", Slot.HAT, "Party hat", 1, 8, 0xFFAB47BC),
-        Cosmetic("hat_flower", Slot.HAT, "Flower crown", 3, 12, 0xFFFF80AB),
-        Cosmetic("hat_pirate", Slot.HAT, "Pirate hat", 4, 15, 0xFF263238),
-        Cosmetic("hat_wizard", Slot.HAT, "Wizard hat", 5, 20, 0xFF3949AB),
-        Cosmetic("hat_crown", Slot.HAT, "Golden crown", 6, 0, 0xFFFFC107),
-        Cosmetic("hat_top", Slot.HAT, "Top hat", 7, 25, 0xFF212121),
+        Cosmetic("hat_cap", Slot.HAT, "Red cap", 0xFFE53935),
+        Cosmetic("hat_party", Slot.HAT, "Party hat", 0xFFAB47BC),
+        Cosmetic("hat_flower", Slot.HAT, "Flower crown", 0xFFFF80AB),
+        Cosmetic("hat_pirate", Slot.HAT, "Pirate hat", 0xFF263238),
+        Cosmetic("hat_wizard", Slot.HAT, "Wizard hat", 0xFF3949AB),
+        Cosmetic("hat_crown", Slot.HAT, "Golden crown", 0xFFFFC107),
+        Cosmetic("hat_top", Slot.HAT, "Top hat", 0xFF212121),
         // Capes
-        Cosmetic("cape_red", Slot.CAPE, "Hero cape", 4, 0, 0xFFE53935),
-        Cosmetic("cape_blue", Slot.CAPE, "Ocean cape", 2, 10, 0xFF1E88E5),
-        Cosmetic("cape_green", Slot.CAPE, "Leaf cape", 3, 12, 0xFF43A047),
-        Cosmetic("cape_purple", Slot.CAPE, "Star cape", 6, 20, 0xFF8E24AA),
-        Cosmetic("cape_rainbow", Slot.CAPE, "Rainbow cape", 8, 30, 0xFFFF4081),
+        Cosmetic("cape_red", Slot.CAPE, "Hero cape", 0xFFE53935),
+        Cosmetic("cape_blue", Slot.CAPE, "Ocean cape", 0xFF1E88E5),
+        Cosmetic("cape_green", Slot.CAPE, "Leaf cape", 0xFF43A047),
+        Cosmetic("cape_purple", Slot.CAPE, "Star cape", 0xFF8E24AA),
+        Cosmetic("cape_rainbow", Slot.CAPE, "Rainbow cape", 0xFFFF4081),
+        // Wings
+        Cosmetic("wings_fairy", Slot.WINGS, "Fairy wings", 0xFFF8BBD0),
+        Cosmetic("wings_bird", Slot.WINGS, "Bird wings", 0xFFFFFFFF),
+        Cosmetic("wings_butterfly", Slot.WINGS, "Butterfly wings", 0xFFFFB74D),
+        Cosmetic("wings_gold", Slot.WINGS, "Golden wings", 0xFFFFD54F),
         // Glasses
-        Cosmetic("glasses_round", Slot.GLASSES, "Smart glasses", 1, 6, 0xFF5D4037),
-        Cosmetic("glasses_sun", Slot.GLASSES, "Cool shades", 3, 10, 0xFF212121),
-        Cosmetic("glasses_star", Slot.GLASSES, "Star glasses", 5, 15, 0xFFFFC107),
-        Cosmetic("glasses_heart", Slot.GLASSES, "Heart glasses", 7, 18, 0xFFE91E63),
-        // Colours (free from the start, or cheap)
-        Cosmetic("color_default", Slot.COLOR, "Classic", 1, 0, 0),
-        Cosmetic("color_sky", Slot.COLOR, "Sky blue", 1, 0, 0xFF81D4FA),
-        Cosmetic("color_pink", Slot.COLOR, "Bubblegum", 1, 0, 0xFFF8BBD0),
-        Cosmetic("color_lime", Slot.COLOR, "Lime", 1, 0, 0xFFC5E1A5),
-        Cosmetic("color_sun", Slot.COLOR, "Sunshine", 2, 4, 0xFFFFE082),
-        Cosmetic("color_grape", Slot.COLOR, "Grape", 3, 5, 0xFFCE93D8),
-        Cosmetic("color_gold", Slot.COLOR, "Gold", 6, 15, 0xFFFFD54F),
+        Cosmetic("glasses_round", Slot.GLASSES, "Smart glasses", 0xFF5D4037),
+        Cosmetic("glasses_sun", Slot.GLASSES, "Cool shades", 0xFF212121),
+        Cosmetic("glasses_star", Slot.GLASSES, "Star glasses", 0xFFFFC107),
+        Cosmetic("glasses_heart", Slot.GLASSES, "Heart glasses", 0xFFE91E63),
+        // Colours
+        Cosmetic("color_default", Slot.COLOR, "Classic", 0),
+        Cosmetic("color_sky", Slot.COLOR, "Sky blue", 0xFF81D4FA),
+        Cosmetic("color_pink", Slot.COLOR, "Bubblegum", 0xFFF8BBD0),
+        Cosmetic("color_lime", Slot.COLOR, "Lime", 0xFFC5E1A5),
+        Cosmetic("color_sun", Slot.COLOR, "Sunshine", 0xFFFFE082),
+        Cosmetic("color_grape", Slot.COLOR, "Grape", 0xFFCE93D8),
+        Cosmetic("color_gold", Slot.COLOR, "Gold", 0xFFFFD54F),
         // Pets
-        Cosmetic("pet_chick", Slot.PET, "Chick", 2, 0, pet = Species.CHICK),
-        Cosmetic("pet_puppy", Slot.PET, "Puppy", 3, 15, pet = Species.PUPPY),
-        Cosmetic("pet_kitty", Slot.PET, "Kitty", 4, 15, pet = Species.KITTY),
-        Cosmetic("pet_dino", Slot.PET, "Baby dino", 5, 20, pet = Species.DINO),
-        Cosmetic("pet_unicorn", Slot.PET, "Baby unicorn", 7, 25, pet = Species.UNICORN),
-        Cosmetic("pet_robot", Slot.PET, "Robo pal", 8, 25, pet = Species.ROBOT),
+        Cosmetic("pet_chick", Slot.PET, "Chick", pet = Species.CHICK),
+        Cosmetic("pet_puppy", Slot.PET, "Puppy", pet = Species.PUPPY),
+        Cosmetic("pet_kitty", Slot.PET, "Kitty", pet = Species.KITTY),
+        Cosmetic("pet_dino", Slot.PET, "Baby dino", pet = Species.DINO),
+        Cosmetic("pet_unicorn", Slot.PET, "Baby unicorn", pet = Species.UNICORN),
+        Cosmetic("pet_robot", Slot.PET, "Robo pal", pet = Species.ROBOT),
+    )
+
+    /** The buddy has these from the start. */
+    val starters = setOf("color_default")
+
+    /** The order pieces are given out: the big, exciting ones (hat, wings, cape) come first. */
+    val awardOrder: List<String> = listOf(
+        "hat_party", "wings_fairy", "cape_red", "pet_chick", "glasses_star", "hat_crown",
+        "color_sky", "wings_bird", "cape_blue", "hat_pirate", "pet_puppy", "glasses_sun",
+        "wings_butterfly", "cape_green", "hat_flower", "color_pink", "pet_kitty", "glasses_round",
+        "hat_wizard", "cape_purple", "color_lime", "pet_dino", "wings_gold", "hat_cap",
+        "glasses_heart", "color_sun", "cape_rainbow", "pet_unicorn", "hat_top", "color_grape",
+        "pet_robot", "color_gold",
     )
 
     fun byId(id: String?): Cosmetic? = items.firstOrNull { it.id == id }
     fun inSlot(slot: Slot) = items.filter { it.slot == slot }
-    fun freeAt(level: Int) = items.filter { it.level == level && it.price == 0 }
-    fun freeUpTo(level: Int) = items.filter { it.level <= level && it.price == 0 }
+
+    /** The next piece to give, or null once the buddy has everything. */
+    fun nextPiece(owned: Set<String>): Cosmetic? = awardOrder.firstOrNull { it !in owned && it !in starters }?.let { byId(it) }
 }
 
-/** Powers come with levels. Story powers open lands; helper powers make challenges easier. */
-enum class Power(val emoji: String, val label: String, val level: Int, val helper: Boolean, val describe: String) {
-    OWL("🦉", "Owl friend", 1, true, "Owl says the question again, nice and slow."),
-    SWIM("🏊", "Swim", 2, false, "Now you can swim to Letter Lagoon!"),
-    JUMP("🦘", "Super jump", 3, false, "Now you can jump over the fence into the Robot Factory!"),
-    WAND("🪄", "Magic wand", 3, true, "The magic wand makes one wrong answer disappear."),
-    CLIMB("🧗", "Climb", 4, false, "Now you can climb Puzzle Peaks!"),
-    LANTERN("🏮", "Lantern", 5, false, "Your lantern lights up the Word Caves!"),
-    MAP("🗺️", "Treasure map", 5, true, "The map shows the robot's next move."),
-    FLY("🦸", "Fly", 6, false, "You can fly! Let's visit the Cloud Castle!"),
+/**
+ * Helper powers make challenges easier and are always there. Story powers are learned when the
+ * trail first reaches their land, and then show up in the stories.
+ */
+enum class Power(val emoji: String, val label: String, val helper: Boolean, val describe: String) {
+    OWL("🦉", "Owl friend", true, "Owl says the question again, nice and slow."),
+    WAND("🪄", "Magic wand", true, "The magic wand makes one wrong answer disappear."),
+    MAP("🗺️", "Treasure map", true, "The map shows the robot's next move."),
+    SWIM("🏊", "Swim", false, "Now you can swim!"),
+    CLIMB("🧗", "Climb", false, "Now you can climb up high!"),
+    JUMP("🦘", "Super jump", false, "Now you can jump super high!"),
+    LANTERN("🏮", "Lantern", false, "Your lantern lights up dark places!"),
+    FLY("🦸", "Fly", false, "You can fly!"),
 }
 
 /** The kinds of learning challenges a story can contain. */
-enum class Subject { SPEECH, LETTERS, READING, NUMBERS, PATTERNS, ROBOT }
+enum class Subject { SPEECH, LETTERS, READING, NUMBERS, COINS, PATTERNS, ROBOT }
 
 enum class Land(
     val title: String,
     val emoji: String,
     val subjects: List<Subject>,
-    val needs: Power?,
+    /** The story power the buddy learns when the trail first gets here. */
+    val power: Power?,
     val sky: Long,
     val ground: Long,
     val decor: List<String>,
@@ -137,62 +158,65 @@ enum class Land(
     val mapX: Float,
     val mapY: Float,
 ) {
-    FOREST("Talking Forest", "🌳", listOf(Subject.SPEECH), null, 0xFFB3E5FC, 0xFF9CCC65, listOf("🌳", "🌲", "🍄", "🌼"), 0.13f, 0.55f),
-    MEADOW("Number Meadow", "🌻", listOf(Subject.NUMBERS), null, 0xFFFFF9C4, 0xFFAED581, listOf("🌻", "🌷", "🦋", "🐝"), 0.36f, 0.25f),
-    LAGOON("Letter Lagoon", "🏝️", listOf(Subject.LETTERS), Power.SWIM, 0xFFB2EBF2, 0xFFFFE0B2, listOf("🌴", "🐚", "🦀", "⛵"), 0.3f, 0.82f),
-    FACTORY("Robot Factory", "🏭", listOf(Subject.ROBOT), Power.JUMP, 0xFFCFD8DC, 0xFFB0BEC5, listOf("⚙️", "🔩", "🔋", "💡"), 0.52f, 0.52f),
-    PEAKS("Puzzle Peaks", "⛰️", listOf(Subject.PATTERNS), Power.CLIMB, 0xFFE1BEE7, 0xFFBCAAA4, listOf("⛰️", "🏔️", "🌲", "🦅"), 0.66f, 0.3f),
-    CAVES("Word Caves", "🕯️", listOf(Subject.READING), Power.LANTERN, 0xFF5C6BC0, 0xFF8D6E63, listOf("💎", "🕯️", "🦇", "🪨"), 0.74f, 0.7f),
-    CLOUDS("Cloud Castle", "🏰", Subject.entries.toList(), Power.FLY, 0xFFE3F2FD, 0xFFFFFFFF, listOf("☁️", "🌈", "⭐", "🏰"), 0.9f, 0.17f);
-
-    fun unlocked(level: Int, openAll: Boolean = false) = openAll || needs == null || level >= needs.level
+    FOREST("Talking Forest", "🌳", listOf(Subject.SPEECH), null, 0xFFB3E5FC, 0xFF9CCC65, listOf("🌳", "🌲", "🍄", "🌼"), 0.12f, 0.5f),
+    MEADOW("Number Meadow", "🌻", listOf(Subject.NUMBERS), null, 0xFFFFF9C4, 0xFFAED581, listOf("🌻", "🌷", "🦋", "🐝"), 0.28f, 0.74f),
+    LAGOON("Letter Lagoon", "🏝️", listOf(Subject.LETTERS), Power.SWIM, 0xFFB2EBF2, 0xFFFFE0B2, listOf("🌴", "🐚", "🦀", "⛵"), 0.5f, 0.8f),
+    MARKET("Market Town", "🏪", listOf(Subject.COINS), null, 0xFFFFE0B2, 0xFFD7CCC8, listOf("🍎", "🥕", "🧺", "🍞"), 0.67f, 0.72f),
+    PEAKS("Puzzle Peaks", "⛰️", listOf(Subject.PATTERNS), Power.CLIMB, 0xFFE1BEE7, 0xFFBCAAA4, listOf("⛰️", "🏔️", "🌲", "🦅"), 0.76f, 0.42f),
+    FACTORY("Robot Factory", "🏭", listOf(Subject.ROBOT), Power.JUMP, 0xFFCFD8DC, 0xFFB0BEC5, listOf("⚙️", "🔩", "🔋", "💡"), 0.5f, 0.48f),
+    CAVES("Word Caves", "🕯️", listOf(Subject.READING), Power.LANTERN, 0xFF5C6BC0, 0xFF8D6E63, listOf("💎", "🕯️", "🦇", "🍄"), 0.33f, 0.24f),
+    CLOUDS("Cloud Castle", "🏰", Subject.entries.toList(), Power.FLY, 0xFFE3F2FD, 0xFFFFFFFF, listOf("☁️", "🌈", "⭐", "🏰"), 0.88f, 0.16f);
 
     /** How to point at this land for a child who can't read: by its picture, not its name. */
     val hint: String get() = when (this) {
         FOREST -> "the big trees"
         MEADOW -> "the sunflower"
-        LAGOON -> "the palm tree island"
+        LAGOON -> "the palm tree beach"
+        MARKET -> "the market stalls"
+        PEAKS -> "the mountains"
         FACTORY -> "the factory"
-        PEAKS -> "the mountain"
-        CAVES -> "the candle cave"
+        CAVES -> "the cave"
         CLOUDS -> "the castle in the clouds"
-    }
-
-    companion object {
-        /**
-         * Which land the map should point at: the first open land not visited yet,
-         * otherwise the next open land after the last one played.
-         */
-        fun suggest(open: List<Land>, visited: Set<Land>, last: Land?): Land {
-            if (open.isEmpty()) return FOREST
-            open.firstOrNull { it !in visited }?.let { return it }
-            val i = open.indexOf(last)
-            return open[(i + 1) % open.size]
-        }
     }
 }
 
-object Leveling {
-    const val XP_PER_CHALLENGE = 10
-    const val XP_FIRST_TRY_BONUS = 5
-    const val XP_PER_QUEST = 20
+/**
+ * The paper trail across the map. Every land has [STOPS_PER_LAND] stops, and each stop is one
+ * short chapter. Finishing a chapter unfolds the next stop. After the last stop the trail starts
+ * a new lap from the beginning, so there is always a next chapter and nothing ever goes backwards.
+ */
+object Trail {
+    const val STOPS_PER_LAND = 2
+    val lands = listOf(Land.FOREST, Land.MEADOW, Land.LAGOON, Land.MARKET, Land.PEAKS, Land.FACTORY, Land.CAVES, Land.CLOUDS)
+    val size = lands.size * STOPS_PER_LAND
 
-    /** Total XP needed to *reach* [level]. Level 2 comes after about one quest. */
-    fun xpFor(level: Int): Int = if (level <= 1) 0 else (2..level).sumOf { 25 + 25 * (it - 1) }
+    /** Which stop on the map chapter [chapter] (counting from 0) is played at. */
+    fun stopOf(chapter: Int) = chapter.coerceAtLeast(0) % size
 
-    fun levelFor(xp: Int): Int {
-        var l = 1
-        while (xp >= xpFor(l + 1)) l++
-        return l
+    fun landOf(chapter: Int) = landAt(stopOf(chapter))
+    fun landAt(stop: Int) = lands[stop / STOPS_PER_LAND]
+
+    /** True for the first stop in a land, where a new place (and maybe a new skill) begins. */
+    fun opensLand(chapter: Int) = stopOf(chapter) % STOPS_PER_LAND == 0
+
+    /** Lands the trail has reached when [chapter] is the next chapter to play. */
+    fun reached(chapter: Int): List<Land> =
+        if (chapter >= size) lands else lands.take(stopOf(chapter) / STOPS_PER_LAND + 1)
+
+    /** Story powers learned so far. */
+    fun powers(chapter: Int): List<Power> = reached(chapter).mapNotNull { it.power }
+
+    /**
+     * Where stop [stop] sits on the map (0 to 1). The first stop in a land sits just in front of
+     * its landmark; the second sits halfway along the path to the next land.
+     */
+    fun position(stop: Int): Pair<Float, Float> {
+        val i = lands.indexOf(landAt(stop))
+        fun front(l: Land) = l.mapX to l.mapY + 0.09f
+        val first = front(lands[i])
+        if (stop % STOPS_PER_LAND == 0) return first
+        val next = lands.getOrNull(i + 1) ?: return lands[i].mapX + 0.04f to lands[i].mapY + 0.26f
+        val n = front(next)
+        return (first.first + n.first) / 2 to (first.second + n.second) / 2
     }
-
-    /** How far through the current level, from 0 to 1, for the XP bar. */
-    fun progress(xp: Int): Float {
-        val l = levelFor(xp)
-        val start = xpFor(l)
-        return (xp - start).toFloat() / (xpFor(l + 1) - start)
-    }
-
-    fun powersAt(level: Int) = Power.entries.filter { it.level <= level }
-    fun newPowers(level: Int) = Power.entries.filter { it.level == level }
 }

@@ -48,7 +48,18 @@ import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.challenge.ChallengeView
 import com.zeronolidge.speechapp.ui.challenge.EmojiGroup
-import com.zeronolidge.speechapp.ui.components.BigTile
+import com.zeronolidge.speechapp.ui.components.ChoiceTile
+import com.zeronolidge.speechapp.ui.components.PagedChoices
+import com.zeronolidge.speechapp.ui.components.PaperButton
+import com.zeronolidge.speechapp.ui.components.PaperChip
+import com.zeronolidge.speechapp.ui.components.PaperColorsUi
+import com.zeronolidge.speechapp.ui.components.RoundIcon
+import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.art.PaperStyle
+import com.zeronolidge.speechapp.ui.Nav
+import com.zeronolidge.speechapp.logic.Coins
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.width
 import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.theme.Kid
@@ -69,10 +80,11 @@ enum class PracticeKind(val emoji: String, val label: String, val spoken: String
     ODD("🔍", "Odd one out", "Which one is different?", Kid.patterns),
     ROBOT_ARROWS("⬆️", "Robot arrows", "Use arrows to move the robot!", Kid.robot),
     ROBOT_TURNS("↪️", "Robot turns", "Turn the robot and go forward!", Kid.robot),
+    COINS("💰", "Market", "Let's pay with coins at the market!", Kid.numbers),
 }
 
 @Composable
-fun PracticeMenu(go: (Screen) -> Unit, back: () -> Unit) {
+fun PracticeMenu(nav: Nav) {
     val app = LocalApp.current
     data class Tile(val emoji: String, val label: String, val spoken: String, val color: Color, val target: Screen)
     val tiles = listOf(
@@ -80,25 +92,18 @@ fun PracticeMenu(go: (Screen) -> Unit, back: () -> Unit) {
         Tile("🔠", "ABC", "The alphabet!", Kid.letters, Screen.Alphabet),
         Tile("🔟", "1 2 3", "Let's learn numbers!", Kid.numbers, Screen.NumberLine),
     ) + PracticeKind.entries.map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
-    KidScreen("Practice 🎯", Kid.patterns, back, "Pick a game") {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(130.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(tiles) { t ->
-                BigTile(t.emoji, t.label, t.color, Modifier.size(130.dp), emojiSize = 44.sp) {
-                    app.speaker.say(t.spoken)
-                    go(t.target)
-                }
-            }
+    KidScreen("🎯", nav.home, "Practice games! Tap a game to play. Tap the arrow to see more games.") {
+        PagedChoices(tiles, perPage = 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { t, m ->
+            ChoiceTile(t.emoji, t.label, t.color, m, onClick = {
+                app.speaker.say(t.spoken)
+                nav.go(t.target)
+            }) { Text(t.emoji, fontSize = 72.sp) }
         }
     }
 }
 
 @Composable
-fun PracticeGameScreen(kind: PracticeKind, back: () -> Unit) {
+fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
     val app = LocalApp.current
     val p = app.progress
     val rnd = remember { Random(Random.nextLong()) }
@@ -128,9 +133,10 @@ fun PracticeGameScreen(kind: PracticeKind, back: () -> Unit) {
                 val n = p.level("robot_turn")
                 Challenge.Robot(RobotLevels.robot.getOrNull(n) ?: RobotLevels.random(true, rnd), "🍪")
             }
+            PracticeKind.COINS -> Challenge.Coins(Coins.make(p.chapter, rnd))
         }
     }
-    KidScreen("${kind.label} ${kind.emoji}", kind.color, back, kind.spoken) {
+    KidScreen(kind.emoji, nav.home, kind.spoken) {
         ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry ->
             when (kind) {
                 PracticeKind.NEXT -> {
@@ -152,21 +158,14 @@ fun PracticeGameScreen(kind: PracticeKind, back: () -> Unit) {
 }
 
 @Composable
-fun TalkMenu(go: (Screen) -> Unit, back: () -> Unit) {
+fun TalkMenu(nav: Nav) {
     val app = LocalApp.current
-    KidScreen("Talk 🗣️", Kid.talk, back, "Pick a sound to practice") {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(130.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(SpeechContent.sounds) { sound ->
-                BigTile(sound.emoji, sound.label, Kid.talk, Modifier.size(130.dp), emojiSize = 44.sp) {
-                    app.speaker.say(sound.modelSound)
-                    go(Screen.TalkPractice(sound))
-                }
-            }
+    KidScreen("🗣️", nav.home, "Pick a sound to practice. Tap the arrow to see more sounds.") {
+        PagedChoices(SpeechContent.sounds, perPage = 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { sound, m ->
+            ChoiceTile(sound.emoji, sound.label, Kid.talk, m, onClick = {
+                app.speaker.say(sound.modelSound)
+                nav.go(Screen.TalkPractice(sound))
+            }) { Text(sound.emoji, fontSize = 72.sp) }
         }
     }
 }
@@ -174,100 +173,69 @@ fun TalkMenu(go: (Screen) -> Unit, back: () -> Unit) {
 /** Says a letter's name, its sound and a word that starts with it. */
 fun letterIntro(l: LetterInfo) = "${l.upper}. ${l.upper} says ${l.sound}. ${l.sound}, ${l.word.text}."
 
+/** One big letter at a time, with big arrows to go back and forward. Tap the letter to hear it again. */
 @Composable
-fun AlphabetScreen(back: () -> Unit) {
+fun AlphabetScreen(nav: Nav) {
     val app = LocalApp.current
-    var current by remember { mutableStateOf(LetterContent.letters.first()) }
-    KidScreen("ABC 🔠", Kid.letters, back, "Tap a letter") {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(
-                Modifier
-                    .weight(0.9f)
-                    .fillMaxHeight()
-                    .paperCard(Kid.card, 32.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .clickable { app.speaker.say(letterIntro(current)) }
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${current.upper}", fontSize = 96.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E88E5))
-                    Text("${current.lower}", fontSize = 80.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFE53935))
-                }
-                Text(current.word.emoji, fontSize = 64.sp)
-                Text(current.word.text, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
+    val letters = LetterContent.letters
+    var i by remember { mutableIntStateOf(0) }
+    val l = letters[i]
+    KidScreen("🔠", nav.home, "Tap the arrows to see the letters. Tap the letter to hear it.") {
+        Explorer(
+            onPrev = if (i > 0) ({ i--; app.speaker.say(letterIntro(letters[i])) }) else null,
+            onNext = { i = (i + 1) % letters.size; app.speaker.say(letterIntro(letters[i])) },
+            onTap = { app.speaker.say(letterIntro(l)) },
+            key = i,
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("${l.upper}", fontSize = 130.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E88E5))
+                Text("${l.lower}", fontSize = 110.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFE53935))
             }
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(7),
-                modifier = Modifier.weight(1.4f).fillMaxHeight(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(LetterContent.letters) { l ->
-                    Column(
-                        Modifier
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (l == current) Kid.highlight else Color.White)
-                            .clickable {
-                                current = l
-                                app.speaker.say(letterIntro(l))
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text("${l.upper}${l.lower}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
-                    }
-                }
-            }
+            Text(l.word.emoji, fontSize = 80.sp)
+            PaperChip(l.word.text, fontSize = 32.sp)
         }
     }
 }
 
-/** Tap any number from 1 to 20 to hear it and see that many dots. */
+/** One big number at a time, with that many dots. Big arrows go back and forward. */
 @Composable
-fun NumberLineScreen(back: () -> Unit) {
+fun NumberLineScreen(nav: Nav) {
     val app = LocalApp.current
-    var current by remember { mutableIntStateOf(1) }
-    KidScreen("1 2 3 🔟", Kid.numbers, back, "Tap a number") {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    var n by remember { mutableIntStateOf(1) }
+    KidScreen("🔟", nav.home, "Tap the arrows to count up and down. Tap the number to hear it.") {
+        Explorer(
+            onPrev = if (n > 1) ({ n--; app.speaker.say(Numbers.word(n)) }) else null,
+            onNext = { n = if (n >= 20) 1 else n + 1; app.speaker.say(Numbers.word(n)) },
+            onTap = { app.speaker.say(Numbers.word(n)) },
+            key = n,
+        ) {
+            Text("$n", fontSize = 140.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFF57C00))
+            EmojiGroup("🔵", n, Modifier.widthIn(max = 420.dp), size = 30)
+        }
+    }
+}
+
+/** A big paper card in the middle with ◀ and ▶ on either side: three things to tap, nothing more. */
+@Composable
+private fun Explorer(
+    onPrev: (() -> Unit)?,
+    onNext: () -> Unit,
+    onTap: () -> Unit,
+    key: Any,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Box(Modifier.width(96.dp), contentAlignment = Alignment.Center) {
+            if (onPrev != null) RoundIcon("◀", PaperColorsUi.choice, size = 96.dp, onClick = onPrev)
+        }
+        PaperButton(PaperStyle.chip, Modifier.weight(1f).fillMaxHeight().padding(vertical = 12.dp).popIn(key), onClick = onTap) {
             Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .paperCard(Kid.card, 32.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .clickable { app.speaker.say(Numbers.word(current)) }
-                    .padding(12.dp),
+                Modifier.fillMaxSize().padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                Text("$current", fontSize = 90.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFF57C00))
-                EmojiGroup("🔵", current, Modifier.widthIn(max = 300.dp), size = 24)
-            }
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(5),
-                modifier = Modifier.weight(1.2f).fillMaxHeight(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items((1..20).toList()) { n ->
-                    Box(
-                        Modifier
-                            .aspectRatio(1.3f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (n == current) Kid.highlight else Color.White)
-                            .clickable {
-                                current = n
-                                app.speaker.say(Numbers.word(n))
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("$n", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
-                    }
-                }
-            }
+                content = content,
+            )
         }
+        RoundIcon("▶", PaperColorsUi.choice, size = 96.dp, onClick = onNext)
     }
 }

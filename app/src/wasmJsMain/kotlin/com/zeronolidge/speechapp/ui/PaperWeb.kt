@@ -17,7 +17,7 @@ import kotlin.math.sqrt
  * The nudges depend only on the point's index and the shape's size (not its position),
  * so a shape that moves keeps the same torn edge instead of flickering.
  */
-internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: PaperShape) {
+internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: PaperShape, shadow: Boolean) {
     val rough = extent >= 14f
     val seg = (extent * 0.16f).coerceIn(5f, 26f)
     val outline: Path = when (shape) {
@@ -25,7 +25,7 @@ internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: Pape
         else -> roughOutline(outline(shape, seg), if (rough) seg * 0.16f else 0f, extent)
     }
     // Only solid paper casts a shadow; see-through things (mist, glows) don't.
-    if (color.alpha > 0.9f) {
+    if (shadow && color.alpha > 0.9f) {
         val d = paperShadowOffset(extent)
         translate(d * 0.6f, d) { drawPath(outline, PaperShadowColor) }
     }

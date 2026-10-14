@@ -1,126 +1,70 @@
 package com.zeronolidge.speechapp.ui.components
 
-import com.zeronolidge.speechapp.ui.art.paperCard
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zeronolidge.speechapp.logic.Leveling
+import androidx.compose.runtime.Composable
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.ui.art.Critter
-import com.zeronolidge.speechapp.ui.theme.Kid
+import com.zeronolidge.speechapp.ui.art.PaperStyle
+import com.zeronolidge.speechapp.ui.art.paperCard
 
-/** The hero's face, level, XP bar and gems, shown at the top of the map. */
+/** The buddy's face on a raised paper button, top-left of the map. Tapping it opens the closet. */
 @Composable
 fun HeroBadge(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val p = LocalApp.current.progress
     val species = p.hero ?: Species.KID
-    Row(
-        modifier
-            .paperCard(Kid.card, 999.dp)
-            .clip(RoundedCornerShape(50))
-            .clickable(onClick = onClick)
-            .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFE1F5FE)),
-            contentAlignment = Alignment.Center,
+    PaperButton(PaperStyle.chip, modifier.height(CornerButtonSize), corner = 999.dp, onClick = onClick) {
+        Row(
+            Modifier.padding(start = 6.dp, end = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Critter(species, Modifier.fillMaxHeight(), p.heroColor(species), p.outfit, animate = false)
-        }
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(p.heroName, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
-                Spacer(Modifier.width(8.dp))
-                LevelPill(p.heroLevel)
+            Box(
+                Modifier
+                    .size(CornerButtonSize - 12.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE1F5FE)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Critter(species, Modifier.fillMaxHeight(), p.heroColor(species), p.outfit, animate = false)
             }
-            Spacer(Modifier.height(4.dp))
-            XpBar(Leveling.progress(p.xp), Modifier.width(140.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("🎒", fontSize = 34.sp)
         }
-        Spacer(Modifier.width(14.dp))
-        Text("💎 ${p.gems}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
     }
 }
 
-@Composable
-fun LevelPill(level: Int) {
-    Text(
-        "Lv $level",
-        fontSize = 14.sp,
-        fontWeight = FontWeight.ExtraBold,
-        color = Color.White,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color(0xFF7C4DFF))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-    )
-}
-
-@Composable
-fun XpBar(fraction: Float, modifier: Modifier = Modifier, height: Dp = 12.dp) {
-    val f by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(900), label = "xp")
-    Box(
-        modifier
-            .height(height)
-            .clip(RoundedCornerShape(50))
-            .background(Color(0xFFEDE7F6)),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth(f)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFFFFC107)),
-        )
-    }
-}
-
-/** A comic-style speech bubble. Tapping it reads it again. */
+/** A comic-style speech bubble: crisp words on plain paper. Tapping it reads it again. */
 @Composable
 fun SpeechBubble(text: String, modifier: Modifier = Modifier, fontSize: Int = 20, tailLeft: Boolean = true, onClick: () -> Unit) {
     Column(modifier) {
-        Row(
-            Modifier
-                .paperCard(Kid.card, 22.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text, fontSize = fontSize.sp, color = Kid.ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
-            Spacer(Modifier.width(8.dp))
-            Text("🔊", fontSize = (fontSize + 2).sp)
+        PaperButton(PaperStyle.chip, corner = 22.dp, onClick = onClick) {
+            Row(
+                Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text, fontSize = fontSize.sp, color = PaperStyle.ink, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(8.dp))
+                Text("🔊", fontSize = (fontSize + 2).sp)
+            }
         }
         Canvas(
             Modifier
@@ -134,7 +78,11 @@ fun SpeechBubble(text: String, modifier: Modifier = Modifier, fontSize: Int = 20
                 lineTo(if (tailLeft) size.width * 0.2f else size.width * 0.8f, size.height)
                 close()
             }
-            drawPath(p, Color.White)
+            drawPath(p, PaperStyle.chip)
         }
     }
 }
+
+/** A word or name tag under a character. */
+@Composable
+fun NameTag(name: String, modifier: Modifier = Modifier) = PaperChip(name, modifier, fontSize = 16.sp)

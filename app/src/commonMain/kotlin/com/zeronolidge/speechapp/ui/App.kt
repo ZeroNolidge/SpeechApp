@@ -10,22 +10,24 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import com.zeronolidge.speechapp.ui.art.PaperGrain
 import com.zeronolidge.speechapp.ui.components.AppServices
 import com.zeronolidge.speechapp.ui.components.CelebrationOverlay
 import com.zeronolidge.speechapp.ui.components.LocalApp
+import com.zeronolidge.speechapp.ui.components.paperEnter
 import com.zeronolidge.speechapp.ui.platform.PlatformBackHandler
 import com.zeronolidge.speechapp.ui.screens.AlphabetScreen
+import com.zeronolidge.speechapp.ui.screens.ChapterScreen
+import com.zeronolidge.speechapp.ui.screens.ClosetScreen
 import com.zeronolidge.speechapp.ui.screens.GrownUpsScreen
 import com.zeronolidge.speechapp.ui.screens.HeroPickScreen
 import com.zeronolidge.speechapp.ui.screens.MapScreen
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
+import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeMenu
-import com.zeronolidge.speechapp.ui.screens.QuestScreen
+import com.zeronolidge.speechapp.ui.screens.StickerBookScreen
 import com.zeronolidge.speechapp.ui.screens.TalkMenu
 import com.zeronolidge.speechapp.ui.screens.TalkPracticeScreen
-import com.zeronolidge.speechapp.ui.screens.WardrobeScreen
 import com.zeronolidge.speechapp.ui.theme.Kid
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 
@@ -36,45 +38,57 @@ fun TalkAndLearnApp(services: AppServices) {
         CompositionLocalProvider(LocalApp provides services) {
             Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
                 Screens()
-                // Paper grain over everything, so the whole app feels like paper.
-                PaperGrain()
                 CelebrationOverlay()
             }
         }
     }
 }
 
+/** Moves between screens. Every screen gets [Nav], so 🏠 and "back" work the same everywhere. */
+class Nav(val go: (Screen) -> Unit, val back: () -> Unit, val home: () -> Unit, val replace: (Screen) -> Unit)
+
 @Composable
 private fun Screens() {
     val app = LocalApp.current
     val stack = remember { mutableStateListOf<Screen>(Screen.Map) }
-    val go: (Screen) -> Unit = { stack.add(it) }
-    val back: () -> Unit = { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
-    PlatformBackHandler(enabled = stack.size > 1) { back() }
+    val nav = remember {
+        Nav(
+            go = { stack.add(it) },
+            back = { if (stack.size > 1) stack.removeAt(stack.lastIndex) },
+            home = { stack.clear(); stack.add(Screen.Map) },
+            replace = { stack.removeAt(stack.lastIndex); stack.add(it) },
+        )
+    }
+    PlatformBackHandler(enabled = stack.size > 1) { nav.back() }
 
-    // First launch: pick a hero before anything else.
+    // First launch: pick a buddy before anything else.
     if (app.progress.hero == null) {
-        HeroPickScreen(onPicked = { stack.clear(); stack.add(Screen.Map) })
+        HeroPickScreen(onPicked = { nav.home() })
         return
     }
 
     // A fresh key per back-stack entry, so every visit to a game starts clean.
     val s = stack.last()
-    key(stack.size, s) { ShowScreen(s, go, back) }
+    key(stack.size, s) {
+        Box(Modifier.fillMaxSize().paperEnter(s)) { ShowScreen(s, nav) }
+    }
 }
 
 @Composable
-private fun ShowScreen(s: Screen, go: (Screen) -> Unit, back: () -> Unit) {
+private fun ShowScreen(s: Screen, nav: Nav) {
     when (s) {
-        Screen.Map -> MapScreen(go)
-        is Screen.Quest -> QuestScreen(s.land, s.mixed, back, go)
-        Screen.Wardrobe -> WardrobeScreen(back)
-        Screen.GrownUps -> GrownUpsScreen(back)
-        Screen.Practice -> PracticeMenu(go, back)
-        is Screen.PracticeGame -> PracticeGameScreen(s.kind, back)
-        Screen.TalkMenu -> TalkMenu(go, back)
-        is Screen.TalkPractice -> TalkPracticeScreen(s.sound, back)
-        Screen.Alphabet -> AlphabetScreen(back)
-        Screen.NumberLine -> NumberLineScreen(back)
+        Screen.Map -> MapScreen(nav)
+        Screen.Chapter -> ChapterScreen(nav)
+        Screen.Closet -> ClosetScreen(nav)
+        Screen.Stickers -> StickerBookScreen(nav)
+        Screen.Gate -> ParentGateScreen(nav)
+        Screen.GrownUps -> GrownUpsScreen(nav)
+        Screen.HeroPick -> HeroPickScreen(onPicked = nav.home, onHome = nav.home)
+        Screen.Practice -> PracticeMenu(nav)
+        is Screen.PracticeGame -> PracticeGameScreen(s.kind, nav)
+        Screen.TalkMenu -> TalkMenu(nav)
+        is Screen.TalkPractice -> TalkPracticeScreen(s.sound, nav)
+        Screen.Alphabet -> AlphabetScreen(nav)
+        Screen.NumberLine -> NumberLineScreen(nav)
     }
 }

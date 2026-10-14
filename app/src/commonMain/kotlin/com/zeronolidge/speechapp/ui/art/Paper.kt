@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.random.Random
@@ -38,8 +40,8 @@ sealed interface PaperShape {
     class Shape(val path: Path) : PaperShape
 }
 
-/** Draws [shape] as paper: a soft shadow (for solid colours) and then a rough-edged fill. */
-internal expect fun DrawScope.drawPaper(color: Color, extent: Float, shape: PaperShape)
+/** Draws [shape] as paper: a soft shadow (for solid colours) and then a rough-edged fill. [shadow] false skips the built-in soft shadow (for layered cut-outs). */
+internal expect fun DrawScope.drawPaper(color: Color, extent: Float, shape: PaperShape, shadow: Boolean = true)
 
 /** How far a paper layer's shadow falls, for a shape of this size. */
 internal fun paperShadowOffset(extent: Float) = (extent * 0.05f).coerceIn(1.5f, 7f)
@@ -79,7 +81,55 @@ fun Modifier.paperCard(color: Color, corner: Dp = 22.dp, circle: Boolean = false
     }
 }
 
-/** A fine paper-grain texture laid over everything, so the whole app feels like paper. */
+/**
+ * One look for the whole app. Anything the child can tap is a thick, raised cut-out with a clear
+ * drop shadow; scenery sits flat and a little muted behind it, so it is obvious what to tap.
+ */
+object PaperStyle {
+    /** How far a tappable cut-out's drop shadow falls. */
+    val lift = 7.dp
+    /** How thick the card stock looks along a tappable cut-out's bottom edge. */
+    val edge = 5.dp
+    val corner = 26.dp
+    val shadow = Color(0x45000000)
+    /** Laid over scenery so it sits back and tappable things stand out. */
+    val sceneryWash = Color(0x4DF5E6C8)
+    /** Text and icons: dark ink on plain cream paper, with no texture over them. */
+    val chip = Color(0xFFFFFAF0)
+    val ink = Color(0xFF2E2140)
+}
+
+private fun DrawScope.paperLayer(color: Color, corner: Float, circle: Boolean, dx: Float, dy: Float) = translate(dx, dy) {
+    if (circle) drawPaper(color, size.minDimension, PaperShape.Circle(center, size.minDimension / 2), shadow = false)
+    else drawPaper(color, minOf(size.width, size.height), PaperShape.RoundRect(Offset.Zero, size, CornerRadius(corner, corner)), shadow = false)
+}
+
+/**
+ * The drop shadow and card-stock edge under a raised cut-out. [press] (0 to 1) squashes the
+ * cut-out down onto the table while a finger is on it.
+ */
+fun Modifier.raisedPaperBase(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false, press: () -> Float = { 0f }): Modifier = drawBehind {
+    val lift = PaperStyle.lift.toPx()
+    val edge = PaperStyle.edge.toPx()
+    val p = press()
+    val r = corner.toPx()
+    paperLayer(PaperStyle.shadow, r, circle, lift * 0.45f * (1f - p), edge + lift * (1f - 0.7f * p))
+    paperLayer(lerp(color, Color.Black, 0.28f), r, circle, 0f, edge)
+}
+
+/** The top face of a raised cut-out. */
+fun Modifier.raisedPaperFace(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false): Modifier = drawBehind {
+    paperLayer(color, corner.toPx(), circle, 0f, 0f)
+}
+
+/** Scenery sits back: a soft wash and paper grain over the background, but never over text or buttons. */
+@Composable
+fun SceneryWash(modifier: Modifier = Modifier.fillMaxSize()) {
+    Canvas(modifier) { drawRect(PaperStyle.sceneryWash) }
+    PaperGrain(modifier)
+}
+
+/** A fine paper-grain texture for backgrounds, so the app feels like paper. */
 @Composable
 fun PaperGrain(modifier: Modifier = Modifier.fillMaxSize()) {
     val brush = remember {

@@ -34,13 +34,14 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class Mood { HAPPY, CHEER, THINK, SAD }
+enum class Mood { HAPPY, CHEER, THINK, SAD, SLEEP }
 
 /** What a character is wearing. Any part can be null. */
 data class Outfit(
     val hat: Cosmetic? = null,
     val cape: Cosmetic? = null,
     val glasses: Cosmetic? = null,
+    val wings: Cosmetic? = null,
 )
 
 private val Ink = Color(0xFF3A2E5C)
@@ -153,6 +154,46 @@ private fun DrawScope.drawCritter(
     paperOval(Color(0x22000000), Offset(25 * u, (H - 8) * u), Size(50 * u, 7 * u))
 
     // ---- Behind the body ----
+    outfit.wings?.let { wings ->
+        val c = Color(wings.color)
+        val flutter = lift * 0.6f
+        when (wings.id) {
+            "wings_fairy", "wings_butterfly" -> listOf(-1f, 1f).forEach { side ->
+                fun x(v: Float) = 50f + side * v
+                // Two rounded paper lobes each side, like a butterfly.
+                val top = Path().apply {
+                    val a = o(x(14f), 84f); moveTo(a.x, a.y)
+                    val c1 = o(x(30f), 56f + flutter); val c2 = o(x(52f), 62f + flutter); val e = o(x(44f), 86f)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y)
+                    close()
+                }
+                paperPath(top, c)
+                val bottom = Path().apply {
+                    val a = o(x(14f), 90f); moveTo(a.x, a.y)
+                    val c1 = o(x(40f), 92f); val c2 = o(x(42f), 112f); val e = o(x(24f), 108f)
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y)
+                    close()
+                }
+                paperPath(bottom, if (wings.id == "wings_butterfly") Color(0xFFFF7043) else lighter(c, 0.3f))
+                circle(x(34f), 74f + flutter * 0.5f, 3.5f, Color.White.copy(alpha = 0.95f))
+            }
+            else -> listOf(-1f, 1f).forEach { side ->
+                fun x(v: Float) = 50f + side * v
+                // Feathered wings: three overlapping paper feathers each side.
+                listOf(0f, 7f, 14f).forEachIndexed { i, dy ->
+                    val f = Path().apply {
+                        val a = o(x(16f), 80f + dy * 0.4f); moveTo(a.x, a.y)
+                        val c1 = o(x(36f), 60f + dy + flutter); val e = o(x(48f - i * 4f), 70f + dy * 1.4f + flutter)
+                        quadraticTo(c1.x, c1.y, e.x, e.y)
+                        val c2 = o(x(34f), 86f + dy)
+                        quadraticTo(c2.x, c2.y, a.x, a.y)
+                        close()
+                    }
+                    paperPath(f, if (i == 1) darker(c, 0.08f) else c)
+                }
+            }
+        }
+    }
     outfit.cape?.let { cape ->
         val c = Color(cape.color)
         poly(c, 34f to 74f, 66f to 74f, 80f to 122f, 20f to 122f)
@@ -296,8 +337,29 @@ private fun DrawScope.drawCritter(
         mouth(o(50f, 65f), 8f * u, glow, mood)
     } else {
         val eyeH = 15f * (1f - blink * 0.9f)
-        oval(39f, eyeY, 13f, eyeH, Color.White); oval(61f, eyeY, 13f, eyeH, Color.White)
-        if (blink < 0.5f) {
+        if (mood == Mood.SLEEP) {
+            // Closed, sleepy eyes and a little "z z".
+            listOf(39f, 61f).forEach { ex ->
+                val lid = Path().apply {
+                    val a = o(ex - 6f, eyeY); moveTo(a.x, a.y)
+                    val c = o(ex, eyeY + 5f); val b = o(ex + 6f, eyeY)
+                    quadraticTo(c.x, c.y, b.x, b.y)
+                }
+                drawPath(lid, Ink, style = Stroke(2.2f * u, cap = StrokeCap.Round))
+            }
+            listOf(Triple(76f, 40f, 5f), Triple(84f, 28f, 7f)).forEach { (zx, zy, zs) ->
+                val z = Path().apply {
+                    val a = o(zx, zy); moveTo(a.x, a.y)
+                    val b = o(zx + zs, zy); lineTo(b.x, b.y)
+                    val c = o(zx, zy + zs); lineTo(c.x, c.y)
+                    val d = o(zx + zs, zy + zs); lineTo(d.x, d.y)
+                }
+                drawPath(z, Ink.copy(alpha = 0.7f), style = Stroke(1.6f * u, cap = StrokeCap.Round))
+            }
+        } else {
+            oval(39f, eyeY, 13f, eyeH, Color.White); oval(61f, eyeY, 13f, eyeH, Color.White)
+        }
+        if (blink < 0.5f && mood != Mood.SLEEP) {
             val look = if (mood == Mood.THINK) -2f else 1f
             val ly = if (mood == Mood.THINK) -2f else 1f
             circle(39f + look, eyeY + ly, 4.6f, Ink); circle(61f + look, eyeY + ly, 4.6f, Ink)

@@ -126,6 +126,32 @@ object Numbers {
     fun word(n: Int): String = ones.getOrElse(n) { n.toString() }
 }
 
+// ---------- Coins (the market) ----------
+
+/**
+ * Market games. PAY: tap coins into the shopkeeper's jar until there are [price] of them.
+ * PURSE: pick the purse that holds exactly [price] coins.
+ */
+enum class CoinMode { PAY, PURSE }
+
+data class CoinRound(val item: String, val price: Int, val mode: CoinMode, val purses: Choice<Int>) {
+    /** Coins on the table to pay with: always a few more than needed. */
+    val onTable get() = price + 2
+}
+
+object Coins {
+    /** The things you can get at the market stalls. */
+    val goods = listOf("🍎", "🍌", "🥕", "🍞", "🧀", "🍓", "🥚", "🍪")
+
+    fun make(chapter: Int, rnd: Random, item: String = goods.random(rnd)): CoinRound {
+        val max = if (chapter >= Trail.size) 6 else 4
+        val price = rnd.nextInt(1, max + 1)
+        val mode = if (rnd.nextInt(3) == 0) CoinMode.PURSE else CoinMode.PAY
+        val pool = (1..max + 1).filter { it != price }
+        return CoinRound(item, price, mode, choiceOf(price, pool + price, 3, rnd))
+    }
+}
+
 // ---------- Letters & reading ----------
 
 enum class LetterMode { BIG_TO_SMALL, SMALL_TO_BIG, FIRST_SOUND }

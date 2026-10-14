@@ -1,15 +1,19 @@
 package com.zeronolidge.speechapp.ui
 
 import com.zeronolidge.speechapp.data.SpeechSound
-import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.ui.screens.PracticeKind
 
-/** Every place the app can go. The app keeps a simple back stack of these. */
+/** Every place the app can go. The app keeps a simple back stack of these; 🏠 always returns to the map. */
 sealed interface Screen {
     data object Map : Screen
-    data class Quest(val land: Land, val mixed: Boolean = false) : Screen
-    data object Wardrobe : Screen
+    /** The next chapter on the trail. */
+    data object Chapter : Screen
+    data object Closet : Screen
+    data object Stickers : Screen
+    /** The grown-up check in front of the grown-ups page. */
+    data object Gate : Screen
     data object GrownUps : Screen
+    data object HeroPick : Screen
 
     data object Practice : Screen
     data class PracticeGame(val kind: PracticeKind) : Screen

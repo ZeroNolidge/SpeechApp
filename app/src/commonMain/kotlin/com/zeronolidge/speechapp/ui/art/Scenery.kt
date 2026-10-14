@@ -82,6 +82,8 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
                 modifier = Modifier.offset(x = w * x, y = h * (0.52f + y * 0.12f)),
             )
         }
+        // Scenery sits back so the raised paper buttons on top are clearly the things to tap.
+        SceneryWash()
         Box(Modifier.fillMaxSize(), content = content)
     }
 }

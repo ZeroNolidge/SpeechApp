@@ -171,3 +171,31 @@ object Plots {
         ),
     )
 }
+
+/**
+ * Words the child says out loud to make a scene happen, e.g. "open" opens the door.
+ * [words] go from easiest to hardest: one syllable, two syllables, then a short phrase.
+ */
+data class StoryWord(val piece: SetPiece, val words: List<String>, val emoji: String, val doing: String) {
+    fun at(step: Int) = words[step.coerceIn(0, words.lastIndex)]
+}
+
+object StoryWords {
+    val all = listOf(
+        StoryWord(SetPiece.LOCKED_DOOR, listOf("knock", "open", "open the door"), "🚪", "open the door"),
+        StoryWord(SetPiece.RIVER, listOf("jump", "jumping", "jump across"), "🐸", "jump across the water"),
+        StoryWord(SetPiece.BROKEN_BRIDGE, listOf("fix", "hammer", "fix the bridge"), "🔨", "fix the bridge"),
+        StoryWord(SetPiece.TALL_TREE, listOf("up", "climbing", "up we go"), "🌳", "climb up the tree"),
+        StoryWord(SetPiece.DARK_CAVE, listOf("glow", "sparkle", "light it up"), "✨", "light up the cave"),
+        StoryWord(SetPiece.BIG_HILL, listOf("climb", "up up", "up the hill"), "⛰️", "get up the hill"),
+        StoryWord(SetPiece.PARTY, listOf("pop", "party", "happy birthday"), "🎈", "start the party"),
+        StoryWord(SetPiece.TREASURE, listOf("dig", "open", "open the box"), "🎁", "open the treasure"),
+        StoryWord(SetPiece.WINDY_SKY, listOf("blow", "windy", "blow wind blow"), "💨", "make the wind blow"),
+        StoryWord(SetPiece.FORK_PATH, listOf("go", "follow", "follow me"), "👣", "find the way"),
+        StoryWord(SetPiece.NIGHT_SKY, listOf("fly", "twinkle", "fly up high"), "🌟", "fly up high"),
+        StoryWord(SetPiece.PICNIC, listOf("yum", "yummy", "yum yum yum"), "😋", "start the picnic"),
+        StoryWord(SetPiece.GARDEN, listOf("grow", "flowers", "grow grow grow"), "🌱", "make the flowers grow"),
+    )
+
+    fun forPiece(piece: SetPiece) = all.first { it.piece == piece }
+}

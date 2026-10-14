@@ -8,6 +8,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -67,6 +69,25 @@ class AppServices(
     var celebrations by mutableIntStateOf(0)
         private set
 
+    /** What the big 🔊 "hear it again" button says: the current screen's instruction. */
+    var instruction by mutableStateOf("")
+        private set
+
+    /** Says an instruction out loud and remembers it for "hear it again". */
+    fun instruct(text: String, onDone: (() -> Unit)? = null) {
+        instruction = text
+        speaker.say(text, onDone = onDone)
+    }
+
+    /** Sets what "hear it again" says without saying it now. */
+    fun rememberInstruction(text: String) {
+        instruction = text
+    }
+
+    fun repeatInstruction() {
+        if (instruction.isNotBlank()) speaker.say(instruction)
+    }
+
     fun reward(area: String, message: String = Praise.great.random(), onDone: (() -> Unit)? = null) {
         progress.addStar(area)
         celebrate(message, onDone)
@@ -83,58 +104,26 @@ class AppServices(
 
 val LocalApp = staticCompositionLocalOf<AppServices> { error("AppServices not provided") }
 
-/** A screen with a home/back button, a title and the star counter. */
+/**
+ * A plain screen in the shared frame: 🏠 top-left, 🔊 top-right, a title chip between them.
+ * [spoken] is said when the screen opens and is what "hear it again" repeats.
+ */
 @Composable
 fun KidScreen(
     title: String,
-    color: Color,
     onBack: () -> Unit,
-    titleSpoken: String = title,
+    spoken: String,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val app = LocalApp.current
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Kid.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RoundIcon("⬅️", color, size = 56.dp) { app.speaker.stop(); onBack() }
-            Spacer(Modifier.width(12.dp))
-            Text(
-                title,
-                style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
-                color = Kid.ink,
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { app.speaker.say(titleSpoken) },
-            )
-            StarCount(app.progress.stars)
-        }
-        Spacer(Modifier.size(8.dp))
-        content()
-    }
+    SpeakOnOpen(spoken)
+    ScreenFrame(
+        onHome = onBack,
+        top = { PaperChip(title, fontSize = 26.sp) },
+        content = content,
+    )
 }
 
-@Composable
-fun StarCount(stars: Int) {
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color.White)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("⭐", fontSize = 28.sp)
-        Spacer(Modifier.width(6.dp))
-        Text("$stars", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
-    }
-}
-
+/** A round emoji button on raised paper. */
 @Composable
 fun RoundIcon(
     emoji: String,
@@ -142,57 +131,9 @@ fun RoundIcon(
     size: Dp = 72.dp,
     enabled: Boolean = true,
     onClick: () -> Unit,
-) {
-    Box(
-        Modifier
-            .size(size)
-            .alpha(if (enabled) 1f else 0.4f)
-            .paperCard(color, circle = true)
-            .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(emoji, fontSize = (size.value * 0.5f).sp)
-    }
-}
+) = PaperIconButton(emoji, color, size, enabled, onClick = onClick)
 
-/** A big, chunky, colourful button with an emoji and an optional label. */
-@Composable
-fun BigTile(
-    emoji: String,
-    label: String?,
-    color: Color,
-    modifier: Modifier = Modifier,
-    emojiSize: TextUnit = 56.sp,
-    selected: Boolean = false,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier
-            .alpha(if (enabled) 1f else 0.35f)
-            .paperCard(color, 28.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .then(if (selected) Modifier.border(6.dp, Kid.highlight, RoundedCornerShape(28.dp)) else Modifier)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(emoji, fontSize = emojiSize, textAlign = TextAlign.Center)
-        if (label != null) {
-            Text(
-                label,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Kid.ink,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-/** A white answer card. Wrong answers fade out so the child can try again. */
+/** A raised answer card. Wrong answers fold flat and fade so the child can try again. */
 @Composable
 fun AnswerCard(
     modifier: Modifier = Modifier,
@@ -207,16 +148,19 @@ fun AnswerCard(
         infiniteRepeatable(tween(400), RepeatMode.Reverse),
         label = "scale",
     )
-    Box(
+    val fold by animateFloatAsState(if (faded) 1f else 0f, tween(300), label = "fold")
+    PaperButton(
+        if (correct) Kid.good else PaperColorsUi.choice,
         modifier
             .scale(if (correct) s else 1f)
-            .alpha(if (faded) 0.3f else 1f)
-            .paperCard(if (correct) Kid.good else Kid.card, 24.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .clickable(enabled = !faded && !correct, onClick = onClick)
-            .padding(12.dp),
-        contentAlignment = Alignment.Center,
-    ) { content() }
+            .graphicsLayer {
+                scaleY = 1f - 0.12f * fold
+                alpha = 1f - 0.6f * fold
+            },
+        corner = 24.dp,
+        enabled = !faded && !correct,
+        onClick = onClick,
+    ) { Box(Modifier.padding(10.dp), contentAlignment = Alignment.Center) { content() } }
 }
 
 /**
@@ -328,21 +272,5 @@ fun AfterDelay(key: Any, ms: Long, action: () -> Unit) {
     LaunchedEffect(key) {
         delay(ms)
         action()
-    }
-}
-
-@Composable
-fun Prompt(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color.White)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("🔊", fontSize = 26.sp)
-        Spacer(Modifier.width(10.dp))
-        Text(text, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
     }
 }

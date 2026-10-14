@@ -52,6 +52,7 @@ import com.zeronolidge.speechapp.data.Word
 import com.zeronolidge.speechapp.logic.SpeechMatch
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.components.KidScreen
+import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.theme.Kid
@@ -63,11 +64,11 @@ private var askedForMic = false
 
 /** Free practice of one speech sound, word by word. */
 @Composable
-fun TalkPracticeScreen(sound: SpeechSound, back: () -> Unit) {
+fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     var index by remember { mutableIntStateOf(0) }
     val word = sound.words[index]
     val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}. ${word.text}." else word.text
-    KidScreen("Say ${sound.label} ${sound.emoji}", Kid.talk, back, "Let's say ${sound.modelSound}") {
+    KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}") {
         SayPanel(sound, word, Modifier.fillMaxSize(), intro = intro, showParrot = true, onSaid = {}) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NavArrow("◀️", index > 0) { index-- }
@@ -96,7 +97,7 @@ fun TalkPracticeScreen(sound: SpeechSound, back: () -> Unit) {
  */
 @Composable
 fun SayPanel(
-    sound: SpeechSound,
+    sound: SpeechSound?,
     word: Word,
     modifier: Modifier = Modifier,
     /** Said first, before "Your turn!", e.g. the story narration. */
@@ -121,7 +122,8 @@ fun SayPanel(
     val canRecognize = remember { app.listener.available }
     val micOn = app.progress.useMic && canRecognize
 
-    fun success(message: String) {
+    fun success(message: String, clear: Boolean, heardSomething: Boolean) {
+        app.progress.recordWord(word.text, word.emoji, clear, heardSomething)
         app.listener.cancel()
         session++
         mic = Mic.IDLE
@@ -150,12 +152,12 @@ fun SayPanel(
                     else speakThenListen(listOf("I didn't hear you." to false), true)
                 }
                 SpeechMatch.isGood(word.text, results) ->
-                    success("I heard ${word.text}! ${Praise.great.random()}")
+                    success("I heard ${word.text}! ${Praise.great.random()}", clear = true, heardSomething = true)
                 else -> {
                     silent = 0
                     tries++
                     // Practice is what matters; reward effort, too.
-                    if (tries >= 3) success("Great trying! You worked so hard. ${word.syllables}. ${word.text}.")
+                    if (tries >= 3) success("Great trying! You worked so hard. ${word.syllables}. ${word.text}.", clear = false, heardSomething = true)
                     else speakThenListen(listOf(Praise.speechTry.random() to false, word.syllables to true), true)
                 }
             }
@@ -214,6 +216,7 @@ fun SayPanel(
 
     // Start each word: say the intro, then "Your turn!" and listen.
     LaunchedEffect(word) {
+        app.rememberInstruction("Say ${word.text}!")
         val lines = listOfNotNull(intro?.let { it to false })
         when {
             !micOn -> speakThenListen(lines + ("Say ${word.text}!" to false), false)
@@ -244,7 +247,7 @@ fun SayPanel(
                 val pulse by animateFloatAsState(if (mic == Mic.LISTENING) 1f + level * 0.25f else 1f, label = "pulse")
                 Text(word.emoji, fontSize = if (small) 64.sp else 100.sp, modifier = Modifier.scale(pulse))
                 Text(
-                    highlighted(word.text, sound.id),
+                    highlighted(word.text, sound?.id),
                     fontSize = if (small) 36.sp else 50.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Kid.ink,
@@ -279,8 +282,10 @@ fun SayPanel(
                     ActionButton("🐢", "Slowly", Modifier.weight(1f), enabled = canTap) {
                         speakAndMaybeListen(word.syllables to true, word.text to true)
                     }
-                    ActionButton("👄", "How?", Modifier.weight(1f), enabled = canTap) {
-                        speakAndMaybeListen(sound.tip to false, sound.modelSound to true)
+                    if (sound != null) {
+                        ActionButton("👄", "How?", Modifier.weight(1f), enabled = canTap) {
+                            speakAndMaybeListen(sound.tip to false, sound.modelSound to true)
+                        }
                     }
                 }
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -304,7 +309,7 @@ fun SayPanel(
                     // For the grown-up: tap when the child says it well.
                     ActionButton("👍", "Said it!", Modifier.weight(1f), color = Color(0xFFFFF59D), enabled = !done) {
                         stopAll()
-                        success("${Praise.great.random()} You said ${word.text}!")
+                        success("${Praise.great.random()} You said ${word.text}!", clear = false, heardSomething = false)
                     }
                 }
             }
@@ -341,7 +346,11 @@ private fun ListeningBadge(level: Float, size: androidx.compose.ui.unit.Dp) {
 }
 
 /** Makes the practised sound stand out in the word, e.g. the "sh" in "fish". */
-private fun highlighted(text: String, soundId: String) = buildAnnotatedString {
+private fun highlighted(text: String, soundId: String?) = buildAnnotatedString {
+    if (soundId == null) {
+        append(text)
+        return@buildAnnotatedString
+    }
     // "c" makes the K sound in words like "cat" and "cookie".
     val at = text.indexOf(soundId).takeIf { it >= 0 }
         ?: if (soundId == "k") text.indexOf('c') else -1

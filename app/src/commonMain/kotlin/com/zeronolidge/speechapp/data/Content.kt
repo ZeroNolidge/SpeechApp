@@ -10,7 +10,10 @@ data class Word(
     val emoji: String,
     /** Slow, chunked version spoken by the "turtle" button, e.g. "ba - na - na". */
     val syllables: String = text,
-)
+) {
+    /** 1 for "pig", 2 for "pizza"; a short phrase counts its words' syllables. */
+    val syllableCount: Int get() = text.split(' ').size.coerceAtLeast(syllables.split(" - ").size)
+}
 
 data class SpeechSound(
     val id: String,
@@ -22,6 +25,8 @@ data class SpeechSound(
     /** A short, spoken coaching tip about where the lips and tongue go. */
     val tip: String,
     val words: List<Word>,
+    /** Short phrases for when single words get easy. */
+    val phrases: List<Word> = emptyList(),
 )
 
 object SpeechContent {
@@ -34,6 +39,9 @@ object SpeechContent {
                 Word("pizza", "🍕", "pee - tsa"), Word("penguin", "🐧", "pen - gwin"),
                 Word("popcorn", "🍿", "pop - corn"),
             ),
+            listOf(
+                Word("a pink pig", "🐷"), Word("pizza pie", "🍕", "pee - tsa pie"), Word("pop the popcorn", "🍿"),
+            ),
         ),
         SpeechSound(
             "b", "B", "🐝", "buh, buh, buh",
@@ -41,6 +49,9 @@ object SpeechContent {
             listOf(
                 Word("bee", "🐝"), Word("ball", "⚽"), Word("banana", "🍌", "ba - na - na"),
                 Word("bus", "🚌"), Word("bear", "🐻"), Word("boat", "⛵"),
+            ),
+            listOf(
+                Word("a big ball", "⚽"), Word("bye bye bee", "🐝"), Word("a blue bus", "🚌"),
             ),
         ),
         SpeechSound(
@@ -51,6 +62,9 @@ object SpeechContent {
                 Word("monkey", "🐵", "mon - key"), Word("mushroom", "🍄", "mush - room"),
                 Word("map", "🗺️"),
             ),
+            listOf(
+                Word("more milk", "🥛"), Word("my mouse", "🐭"), Word("a moon map", "🗺️"),
+            ),
         ),
         SpeechSound(
             "t", "T", "🐯", "tuh, tuh, tuh",
@@ -59,6 +73,9 @@ object SpeechContent {
                 Word("tiger", "🐯", "ti - ger"), Word("toe", "🦶"), Word("tent", "⛺"),
                 Word("taco", "🌮", "ta - co"), Word("turtle", "🐢", "tur - tle"),
                 Word("tooth", "🦷"),
+            ),
+            listOf(
+                Word("ten toes", "🦶"), Word("a tiny tent", "⛺"), Word("two tacos", "🌮"),
             ),
         ),
         SpeechSound(
@@ -69,6 +86,9 @@ object SpeechContent {
                 Word("dinosaur", "🦕", "di - no - saur"), Word("donut", "🍩", "do - nut"),
                 Word("drum", "🥁"),
             ),
+            listOf(
+                Word("a dog and a duck", "🐶"), Word("open the door", "🚪"), Word("a big drum", "🥁"),
+            ),
         ),
         SpeechSound(
             "k", "K", "🐱", "kuh, kuh, kuh",
@@ -76,6 +96,9 @@ object SpeechContent {
             listOf(
                 Word("cat", "🐱"), Word("key", "🔑"), Word("cake", "🎂"),
                 Word("car", "🚗"), Word("cow", "🐮"), Word("cookie", "🍪", "coo - kie"),
+            ),
+            listOf(
+                Word("cake for the cat", "🎂"), Word("a car key", "🔑"), Word("cookie please", "🍪"),
             ),
         ),
         SpeechSound(
@@ -86,6 +109,9 @@ object SpeechContent {
                 Word("grapes", "🍇"), Word("guitar", "🎸", "gi - tar"),
                 Word("gorilla", "🦍", "go - ril - la"),
             ),
+            listOf(
+                Word("a goat and a gift", "🐐"), Word("go go go", "🚦"), Word("green grapes", "🍇"),
+            ),
         ),
         SpeechSound(
             "f", "F", "🐸", "fffff",
@@ -94,6 +120,9 @@ object SpeechContent {
                 Word("fish", "🐟"), Word("fox", "🦊"), Word("frog", "🐸"),
                 Word("fire", "🔥"), Word("fork", "🍴"), Word("flower", "🌸", "flow - er"),
             ),
+            listOf(
+                Word("a fish and a frog", "🐟"), Word("four fish", "🐠"), Word("a funny fox", "🦊"),
+            ),
         ),
         SpeechSound(
             "s", "S", "🐍", "sssss",
@@ -101,6 +130,9 @@ object SpeechContent {
             listOf(
                 Word("sun", "☀️"), Word("sock", "🧦"), Word("soap", "🧼"),
                 Word("six", "6️⃣"), Word("snake", "🐍"), Word("sandwich", "🥪", "sand - wich"),
+            ),
+            listOf(
+                Word("the sun is up", "☀️"), Word("six socks", "🧦"), Word("a silly snake", "🐍"),
             ),
         ),
         SpeechSound(
@@ -111,6 +143,9 @@ object SpeechContent {
                 Word("lock", "🔒"), Word("ladybug", "🐞", "la - dy - bug"),
                 Word("lollipop", "🍭", "lol - li - pop"),
             ),
+            listOf(
+                Word("a lion and a lemon", "🦁"), Word("lots of leaves", "🍃"), Word("a little ladybug", "🐞"),
+            ),
         ),
         SpeechSound(
             "r", "R", "🚀", "rrrrr",
@@ -118,6 +153,9 @@ object SpeechContent {
             listOf(
                 Word("rabbit", "🐰", "rab - bit"), Word("rain", "🌧️"), Word("rocket", "🚀", "rock - et"),
                 Word("ring", "💍"), Word("robot", "🤖", "ro - bot"), Word("rainbow", "🌈", "rain - bow"),
+            ),
+            listOf(
+                Word("a red rocket", "🚀"), Word("rain and rainbow", "🌈"), Word("run rabbit run", "🐰"),
             ),
         ),
         SpeechSound(
@@ -127,6 +165,9 @@ object SpeechContent {
                 Word("shoe", "👟"), Word("sheep", "🐑"), Word("ship", "🚢"),
                 Word("shark", "🦈"), Word("shell", "🐚"), Word("shirt", "👕"),
             ),
+            listOf(
+                Word("a shark and a ship", "🦈"), Word("shoes on", "👟"), Word("a shiny shell", "🐚"),
+            ),
         ),
         SpeechSound(
             "ch", "Ch", "🚂", "choo choo",
@@ -135,6 +176,9 @@ object SpeechContent {
                 Word("cheese", "🧀"), Word("chicken", "🐔", "chick - en"), Word("cherry", "🍒", "cher - ry"),
                 Word("chocolate", "🍫", "choc - o - late"), Word("chick", "🐤"), Word("chair", "🪑"),
             ),
+            listOf(
+                Word("cheese please", "🧀"), Word("a chick on a chair", "🐤"), Word("cherry pie", "🍒"),
+            ),
         ),
         SpeechSound(
             "th", "Th", "👅", "thhhhh",
@@ -142,6 +186,9 @@ object SpeechContent {
             listOf(
                 Word("thumb", "👍"), Word("three", "3️⃣"), Word("think", "🤔"),
                 Word("thunder", "⛈️", "thun - der"), Word("bath", "🛁"), Word("mouth", "👄"),
+            ),
+            listOf(
+                Word("thumbs up", "👍"), Word("three things", "3️⃣"), Word("take a bath", "🛁"),
             ),
         ),
     )
@@ -211,6 +258,7 @@ object Things {
         "🌼" to "daisies", "☁️" to "clouds", "🍩" to "donuts", "🐠" to "fish", "🎁" to "presents",
         "🍎" to "apples", "⭐" to "stars", "🐟" to "fish", "🚗" to "cars", "🎈" to "balloons",
         "🐞" to "ladybugs", "🍪" to "cookies", "🌸" to "flowers", "🐥" to "chicks", "⚽" to "balls",
+        "🍞" to "bread rolls", "🧀" to "cheeses", "🥚" to "eggs",
     )
     val shapes = listOf("🔴", "🔵", "🟡", "🟢", "🟣", "🟠")
     val shapeNames = mapOf(

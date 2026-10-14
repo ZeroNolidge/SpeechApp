@@ -35,26 +35,22 @@ import kotlinx.coroutines.delay
  * next thing to press pulse, point at it with a bouncing hand, and say so out loud.
  */
 
-/** A big green "go" arrow that gently pulses, with a hand pointing at it. */
+/** A big green "go" arrow on raised paper that gently pulses, with a hand pointing at it. */
 @Composable
 fun GoButton(modifier: Modifier = Modifier, size: Dp = 96.dp, enabled: Boolean = true, onClick: () -> Unit) {
     val t = rememberInfiniteTransition(label = "go")
-    val pulse by t.animateFloat(1f, 1.12f, infiniteRepeatable(tween(550), RepeatMode.Reverse), label = "pulse")
+    val pulse by t.animateFloat(1f, 1.1f, infiniteRepeatable(tween(550), RepeatMode.Reverse), label = "pulse")
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(size)
-                .scale(if (enabled) pulse else 1f)
-                .alpha(if (enabled) 1f else 0.35f)
-                .paperCard(Color(0xFF43A047), circle = true)
-                .clip(CircleShape)
-                .border(5.dp, Color.White, CircleShape)
-                .clickable(enabled = enabled, onClick = onClick),
-            contentAlignment = Alignment.Center,
+        PaperButton(
+            PaperColorsUi.go,
+            Modifier.size(size).scale(if (enabled) pulse else 1f),
+            circle = true,
+            enabled = enabled,
+            onClick = onClick,
         ) {
             Text("▶", fontSize = (size.value * 0.45f).sp, color = Color.White, modifier = Modifier.offset(x = size * 0.04f))
         }
-        if (enabled) PointingHand(Modifier.offset(y = (-6).dp), size = size * 0.5f)
+        if (enabled) PointingHand(Modifier.offset(y = 4.dp), size = size * 0.5f)
     }
 }
 

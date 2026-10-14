@@ -33,7 +33,7 @@ private object PaperInk {
     }
 }
 
-internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: PaperShape) = drawIntoCanvas { c ->
+internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: PaperShape, shadow: Boolean) = drawIntoCanvas { c ->
     val canvas = c.nativeCanvas
     val effect = PaperInk.effect(extent)
 
@@ -68,7 +68,7 @@ internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: Pape
     }
 
     // Only solid paper casts a shadow; see-through things (mist, glows) don't.
-    if (color.alpha > 0.9f) {
+    if (shadow && color.alpha > 0.9f) {
         PaperInk.shadow.pathEffect = effect
         draw(PaperInk.shadow, paperShadowOffset(extent))
     }

@@ -62,6 +62,15 @@ import com.zeronolidge.speechapp.logic.StepResult
 import com.zeronolidge.speechapp.logic.Subject
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.components.AnswerRow
+import com.zeronolidge.speechapp.ui.components.PaperButton
+import com.zeronolidge.speechapp.ui.components.PaperColorsUi
+import com.zeronolidge.speechapp.ui.components.PaperChip
+import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.logic.CoinMode
+import com.zeronolidge.speechapp.ui.art.paperCircle
+import com.zeronolidge.speechapp.ui.art.star
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.RoundIcon
 import com.zeronolidge.speechapp.ui.screens.SayPanel
@@ -94,6 +103,10 @@ fun promptFor(c: Challenge): String = when (c) {
     is Challenge.Pattern -> "What comes next?"
     is Challenge.OddOne -> "Which one is different?"
     is Challenge.Robot -> "Tap the arrows to make a plan, then press Go!"
+    is Challenge.Coins -> when (c.round.mode) {
+        CoinMode.PAY -> "The ${Things.nameOf(c.round.item)} cost ${Numbers.word(c.round.price)} ${if (c.round.price == 1) "coin" else "coins"}. Tap the coins to put them in the jar!"
+        CoinMode.PURSE -> "Which purse has ${Numbers.word(c.round.price)} ${if (c.round.price == 1) "coin" else "coins"}?"
+    }
 }
 
 fun areaOf(c: Challenge): String = when (c.subject) {
@@ -103,6 +116,7 @@ fun areaOf(c: Challenge): String = when (c.subject) {
     Subject.NUMBERS -> Progress.AREA_NUMBERS
     Subject.PATTERNS -> Progress.AREA_PATTERNS
     Subject.ROBOT -> Progress.AREA_ROBOT
+    Subject.COINS -> Progress.AREA_COINS
 }
 
 /** Helper powers poke challenges through these counters. */
@@ -129,6 +143,7 @@ fun ChallengeView(
     LaunchedEffect(challenge) {
         // The speaking challenge says its own intro, then turns the microphone on.
         if (challenge !is Challenge.Say) {
+            app.rememberInstruction(listOfNotNull(intro, promptFor(challenge)).joinToString(" "))
             if (intro != null) app.speaker.say(intro)
             app.speaker.then(promptFor(challenge))
         }
@@ -150,6 +165,7 @@ fun ChallengeView(
             is Challenge.Pattern -> PatternView(challenge, area, powers.wand, miss, done)
             is Challenge.OddOne -> OddOneView(challenge, area, powers.wand, miss, done)
             is Challenge.Robot -> RobotView(challenge, area, powers.map, miss, done)
+            is Challenge.Coins -> CoinsView(challenge, area, miss, done)
         }
     }
 }
@@ -192,31 +208,34 @@ fun EmojiGroup(
 ) {
     FlowRow(
         modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (onTapItem != null) 12.dp else 4.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(if (onTapItem != null) 14.dp else 4.dp),
     ) {
         repeat(count) { i ->
             val crossed = i >= count - crossedOut
             val countIndex = counted.indexOf(i)
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .background(if (countIndex >= 0) Kid.highlight else Color.Transparent)
-                    .then(if (onTapItem != null) Modifier.clickable { onTapItem(i) } else Modifier)
-                    .padding(3.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+            val inner: @Composable () -> Unit = {
                 Text(emoji, fontSize = size.sp, modifier = Modifier.alpha(if (crossed) 0.3f else 1f))
                 if (crossed) Text("❌", fontSize = (size * 0.7f).sp)
-                if (countIndex >= 0) {
-                    Text(
-                        "${countIndex + 1}",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFD84315),
-                        modifier = Modifier.align(Alignment.TopEnd),
-                    )
+            }
+            if (onTapItem != null) {
+                // Things to count are raised paper, so it's clear they can be tapped.
+                Box {
+                    PaperButton(if (countIndex >= 0) Kid.highlight else PaperColorsUi.choice, circle = true, onClick = { onTapItem(i) }) {
+                        Box(Modifier.padding(8.dp), contentAlignment = Alignment.Center) { inner() }
+                    }
+                    if (countIndex >= 0) {
+                        Text(
+                            "${countIndex + 1}",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFD84315),
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        )
+                    }
                 }
+            } else {
+                Box(Modifier.padding(3.dp), contentAlignment = Alignment.Center) { inner() }
             }
         }
     }
@@ -294,14 +313,14 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
             val right = isLeft == r.moreIsLeft
-            Box(
+            PaperButton(
+                if (solved && right) Kid.good else PaperColorsUi.choice,
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .alpha(if (isLeft in faded) 0.35f else 1f)
-                    .paperCard(if (solved && right) Kid.good else Color.White, 24.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .clickable(enabled = !solved && isLeft !in faded) {
+                    .padding(bottom = 10.dp),
+                enabled = !solved && isLeft !in faded,
+                onClick = {
                         if (right) {
                             solved = true
                             app.reward(
@@ -314,11 +333,9 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
                             miss()
                             app.tryAgain()
                         }
-                    }
-                    .padding(10.dp),
-                contentAlignment = Alignment.Center,
+                    },
             ) {
-                EmojiGroup(r.emoji, n, size = 40)
+                EmojiGroup(r.emoji, n, Modifier.padding(10.dp), size = 40)
                 if (solved) {
                     Text("$n", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink, modifier = Modifier.align(Alignment.TopEnd))
                 }
@@ -402,24 +419,19 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 word.forEachIndexed { i, ch ->
                     val letter = LetterContent.of(ch)
-                    Box(
-                        Modifier
-                            .size(card * 0.85f)
-                            .shadow(6.dp, RoundedCornerShape(20.dp))
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                when {
-                                    lit == i -> Kid.highlight
-                                    i in tapped -> Color(0xFFE1F5FE)
-                                    else -> Color.White
-                                },
-                            )
-                            .clickable {
-                                tapped = tapped + i
-                                lit = i
-                                app.speaker.say(letter.sound)
-                            },
-                        contentAlignment = Alignment.Center,
+                    PaperButton(
+                        when {
+                            lit == i -> Kid.highlight
+                            i in tapped -> Color(0xFFE1F5FE)
+                            else -> PaperColorsUi.choice
+                        },
+                        Modifier.size(card * 0.85f),
+                        corner = 20.dp,
+                        onClick = {
+                            tapped = tapped + i
+                            lit = i
+                            app.speaker.say(letter.sound)
+                        },
                     ) {
                         Text("$ch", fontSize = (card.value * 0.55f).sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink)
                     }
@@ -620,22 +632,20 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
             ProgramStrip(program, runningStep, Modifier.weight(1f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 palette.forEach { cmd ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(64.dp)
-                            .paperCard(if (cmd == hint) Kid.highlight else Color.White, 16.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable(enabled = !running && !won) {
-                                hint = null
-                                if (program.size < MAX_PROGRAM) {
-                                    program.add(cmd)
-                                    app.speaker.say(cmd.spoken)
-                                } else {
-                                    app.speaker.say("The plan is full! Press Go.")
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
+                    PaperButton(
+                        if (cmd == hint) Kid.highlight else PaperColorsUi.choice,
+                        Modifier.weight(1f).height(76.dp),
+                        corner = 16.dp,
+                        enabled = !running && !won,
+                        onClick = {
+                            hint = null
+                            if (program.size < MAX_PROGRAM) {
+                                program.add(cmd)
+                                app.speaker.say(cmd.spoken)
+                            } else {
+                                app.speaker.say("The plan is full! Press Go.")
+                            }
+                        },
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(cmd.symbol, fontSize = 30.sp)
@@ -649,16 +659,11 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RoundIcon("🗑️", Kid.soft, size = 52.dp, enabled = !running && !won && program.isNotEmpty()) {
-                    program.clear()
-                    reset()
-                    app.speaker.say("All gone!")
-                }
-                RoundIcon("⌫", Kid.soft, size = 52.dp, enabled = !running && !won && program.isNotEmpty()) {
+                RoundIcon("⌫", Kid.soft, size = 72.dp, enabled = !running && !won && program.isNotEmpty()) {
                     program.removeAt(program.lastIndex)
                     app.speaker.say("Undo.")
                 }
-                RoundIcon("▶️", Kid.good, size = 72.dp, enabled = !running && !won) { go() }
+                RoundIcon("▶", Kid.good, size = 84.dp, enabled = !running && !won) { go() }
             }
         }
     }
@@ -746,4 +751,96 @@ private fun ProgramStrip(program: List<Cmd>, runningStep: Int, modifier: Modifie
             }
         }
     }
+}
+
+// ---------------- Market coins ----------------
+
+/** A gold paper coin, drawn rather than an emoji so it shows on every device. */
+@Composable
+fun Coin(size: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension / 2
+        paperCircle(Color(0xFFF9A825), r, center)
+        paperCircle(Color(0xFFFFD54F), r * 0.78f, center)
+        star(center, r * 0.42f, Color(0xFFF9A825))
+    }
+}
+
+/** A row of coins for showing an amount. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CoinPile(n: Int, coin: Dp, modifier: Modifier = Modifier) {
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        repeat(n) { Coin(coin) }
+    }
+}
+
+/**
+ * The market stall. PAY: tap coins on the table to drop them into the stall keeper's jar; each
+ * one is counted out loud, and when there are enough the goods are yours. PURSE: pick the purse
+ * that holds just the right number of coins.
+ */
+@Composable
+private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: () -> Unit) {
+    val app = LocalApp.current
+    val r = c.round
+    val name = Things.nameOf(r.item)
+    QuestionLayout(
+        question = { card ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(r.item, fontSize = (card.value * 0.6f).sp)
+                Row(
+                    Modifier.paperCard(Color(0xFFFFFAF0), 999.dp).padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PaperChip("${r.price}", fontSize = 34.sp, color = Color.Transparent)
+                    Coin(44.dp)
+                }
+            }
+        },
+        answers = { card ->
+            when (r.mode) {
+                CoinMode.PURSE -> AnswerRow(
+                    r.purses.options, r.price, area, c,
+                    Modifier.fillMaxWidth(), Modifier.size(card * 1.2f, card),
+                    onSolved = done,
+                    describe = { "${Numbers.word(it)} ${if (it == 1) "coin" else "coins"}" },
+                    onMiss = miss,
+                ) { n -> CoinPile(n, card * 0.22f) }
+                CoinMode.PAY -> {
+                    var paid by remember(c) { mutableIntStateOf(0) }
+                    Row(
+                        Modifier.fillMaxWidth().height(card),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Coins on the table: each one is a raised paper button.
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            repeat(r.onTable - paid) {
+                                PaperButton(Color(0xFFFFE082), Modifier.size(card * 0.62f), circle = true, onClick = {
+                                    if (paid < r.price) {
+                                        paid++
+                                        if (paid == r.price) {
+                                            app.reward(area, "${Numbers.word(paid)}! That's just right. Here are your $name!", onDone = done)
+                                        } else {
+                                            app.speaker.say(Numbers.word(paid))
+                                        }
+                                    }
+                                }) { Coin(card * 0.46f) }
+                            }
+                        }
+                        Text("➜", fontSize = 34.sp, color = Kid.ink)
+                        // The stall keeper's jar fills up.
+                        Box(
+                            Modifier.size(card * 1.3f, card).paperCard(Color(0xFFB3E5FC), 22.dp).padding(8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CoinPile(paid, card * 0.24f)
+                            if (paid == 0) Text("🧺", fontSize = (card.value * 0.4f).sp, modifier = Modifier.alpha(0.5f))
+                        }
+                    }
+                }
+            }
+        },
+    )
 }

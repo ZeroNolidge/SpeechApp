@@ -141,23 +141,55 @@ class SpeechMatchTest {
 
 class RpgTest {
     @Test
-    fun levelCurveIsIncreasing() {
-        assertEquals(1, Leveling.levelFor(0))
-        assertEquals(2, Leveling.levelFor(Leveling.xpFor(2)))
-        assertEquals(1, Leveling.levelFor(Leveling.xpFor(2) - 1))
-        (1..20).forEach { assertTrue(Leveling.xpFor(it + 1) > Leveling.xpFor(it)) }
-        assertTrue(Leveling.progress(Leveling.xpFor(3) + 1) in 0f..1f)
+    fun trailVisitsEveryLandInOrderAndLoops() {
+        assertEquals(16, Trail.size)
+        assertEquals(Land.FOREST, Trail.landOf(0))
+        assertEquals(Land.FOREST, Trail.landOf(1))
+        assertEquals(Land.MEADOW, Trail.landOf(2))
+        assertEquals(Land.MARKET, Trail.landOf(6))
+        assertEquals(Land.CLOUDS, Trail.landOf(15))
+        // After the last stop, a new lap begins; the chapter number keeps going up.
+        assertEquals(Land.FOREST, Trail.landOf(16))
+        assertEquals(Trail.lands.toSet(), Land.entries.toSet())
+        assertTrue(Trail.opensLand(0))
+        assertFalse(Trail.opensLand(1))
     }
 
     @Test
-    fun everyLockedLandHasAReachablePower() {
-        Land.entries.forEach { land ->
-            assertTrue(land.unlocked(10))
-            land.needs?.let { assertFalse(it.helper) }
+    fun reachedLandsOnlyGrow() {
+        var before = 0
+        (0..40).forEach { ch ->
+            val n = Trail.reached(ch).size
+            assertTrue(n >= before)
+            assertTrue(Trail.landOf(ch) in Trail.reached(ch))
+            before = n
         }
-        assertTrue(Land.FOREST.unlocked(1))
-        assertFalse(Land.CLOUDS.unlocked(1))
-        assertTrue(Land.CLOUDS.unlocked(1, openAll = true))
+        assertEquals(listOf(Land.FOREST), Trail.reached(0))
+        assertEquals(Trail.lands, Trail.reached(16))
+    }
+
+    @Test
+    fun stopsSitOnTheMap() {
+        (0 until Trail.size).forEach {
+            val (x, y) = Trail.position(it)
+            assertTrue(x in 0.03f..0.97f && y in 0.05f..0.97f, "stop $it at $x,$y")
+        }
+    }
+
+    @Test
+    fun piecesAreGivenInOrderAndNeverRepeat() {
+        assertEquals(Catalog.awardOrder.size, Catalog.awardOrder.toSet().size)
+        Catalog.awardOrder.forEach { assertNotNull(Catalog.byId(it), it) }
+        val owned = Catalog.starters.toMutableSet()
+        val given = mutableListOf<String>()
+        while (true) {
+            val c = Catalog.nextPiece(owned) ?: break
+            given += c.id
+            owned += c.id
+        }
+        assertEquals(Catalog.items.size, owned.size)
+        assertEquals("hat_party", given.first())
+        assertTrue(given.indexOf("wings_fairy") < 3)
     }
 
     @Test
@@ -186,7 +218,7 @@ class StoryTest {
         repeat(40) { i ->
             val rnd = Random(i)
             Land.entries.forEach { land ->
-                val p = StoryParams("Sam", heroLevel = 1 + i % 8, robotSolved = i, unlockedLands = Land.entries.toList())
+                val p = StoryParams("Sam", chapter = i, robotSolved = i, reachedLands = Land.entries.toList(), speechStep = i % 3)
                 val q = StoryGen.make(land, p, rnd, mixed = i % 5 == 0)
                 assertTrue(q.beats.size in 3..5)
                 listOf(q.intro, q.twist, q.ending).forEach { assertFalse(it.text.contains("{"), it.text) }
@@ -208,7 +240,8 @@ class StoryTest {
         val p = StoryParams("Sam", 1, focusSounds = setOf("s", "r"))
         repeat(20) {
             val q = StoryGen.make(Land.FOREST, p, Random(it))
-            q.beats.forEach { b -> assertTrue((b.challenge as Challenge.Say).sound.id in setOf("s", "r")) }
+            q.beats.map { it.challenge as Challenge.Say }.filter { it.kind == SayKind.PRACTICE }
+                .forEach { assertTrue(it.sound!!.id in setOf("s", "r")) }
         }
     }
 
@@ -222,16 +255,84 @@ class StoryTest {
     }
 }
 
-class MapSuggestionTest {
+class SpeechPlanTest {
     @Test
-    fun suggestsUnvisitedLandsFirstThenRotates() {
-        val open = listOf(Land.FOREST, Land.MEADOW, Land.LAGOON)
-        assertEquals(Land.FOREST, Land.suggest(open, emptySet(), null))
-        assertEquals(Land.MEADOW, Land.suggest(open, setOf(Land.FOREST), Land.FOREST))
-        assertEquals(Land.LAGOON, Land.suggest(open, setOf(Land.FOREST, Land.MEADOW), Land.MEADOW))
-        val all = open.toSet()
-        assertEquals(Land.MEADOW, Land.suggest(open, all, Land.FOREST))
-        assertEquals(Land.FOREST, Land.suggest(open, all, Land.LAGOON))
+    fun wordsMatchTheDifficultyStep() {
+        repeat(30) {
+            val one = StoryGen.practiceWord(StoryParams("Sam", speechStep = 0), emptySet(), Random(it)).second
+            assertEquals(1, one.syllableCount, one.text)
+            val two = StoryGen.practiceWord(StoryParams("Sam", speechStep = 1), emptySet(), Random(it)).second
+            assertEquals(2, two.syllableCount, two.text)
+            val phrase = StoryGen.practiceWord(StoryParams("Sam", speechStep = 2), emptySet(), Random(it)).second
+            assertTrue(" " in phrase.text, phrase.text)
+        }
+    }
+
+    @Test
+    fun storyWordsGetHarderStepByStep() {
+        StoryWords.all.forEach { sw ->
+            assertEquals(3, sw.words.size)
+            assertTrue(" " !in sw.at(0), sw.at(0))
+            assertTrue(" " in sw.at(2), sw.at(2))
+        }
+        SetPiece.entries.forEach { StoryWords.forPiece(it) }
+    }
+
+    @Test
+    fun forestChaptersStartWithAStoryWord() {
+        repeat(10) {
+            val q = StoryGen.make(Land.FOREST, StoryParams("Sam", chapter = it), Random(it))
+            val first = q.beats.first().challenge as Challenge.Say
+            assertEquals(SayKind.STORY, first.kind)
+            assertEquals(StoryWords.forPiece(q.beats.first().scene.piece).at(0), first.word.text)
+        }
+    }
+
+    @Test
+    fun wordsFromEarlierDaysComeBack() {
+        val book = WordBook()
+            .record("pig", "🐷", today = 10, clear = false, heard = true)
+            .record("pig", "🐷", today = 10, clear = false, heard = true)
+            .record("sun", "☀️", today = 11, clear = true, heard = true)
+        assertTrue(book.dueForReview(10, 3).isEmpty())
+        assertEquals(listOf("pig", "sun"), book.dueForReview(12, 3).map { it.text })
+        val p = StoryParams("Sam", chapter = 0, today = 12, words = book)
+        val q = StoryGen.make(Land.FOREST, p, Random(1))
+        val says = q.beats.map { it.challenge as Challenge.Say }
+        assertTrue(says.any { it.kind == SayKind.REVIEW && it.word.text == "pig" })
+    }
+
+    @Test
+    fun ownWordsShowUp() {
+        val p = StoryParams("Sam", chapter = 0, customWords = listOf("Grandma" to "👵"))
+        val q = StoryGen.make(Land.FOREST, p, Random(3))
+        assertTrue(q.beats.any { (it.challenge as Challenge.Say).word.text == "Grandma" })
+    }
+
+    @Test
+    fun wordBookTracksStickersAndTrickyWords() {
+        var b = WordBook()
+        b = b.record("Pig", "🐷", 1, clear = false, heard = true)
+        b = b.record("cat", "🐱", 1, clear = true, heard = true)
+        b = b.record("pig", "🐷", 2, clear = false, heard = true)
+        b = b.record("pig", "🐷", 2, clear = false, heard = true)
+        assertEquals(listOf("pig", "cat"), b.stickers.map { it.text })
+        assertTrue(b["cat"]!!.shiny)
+        assertEquals(WordStatus.STILL_TRICKY, b.status(b["pig"]!!))
+        assertEquals(WordStatus.GOING_WELL, b.status(b["cat"]!!))
+        assertEquals(2, b["pig"]!!.days)
+        assertEquals(b, WordBook.decode(b.encode()))
+    }
+
+    @Test
+    fun coinRoundsAreFair() {
+        repeat(50) {
+            val r = Coins.make(it, Random(it))
+            assertTrue(r.price >= 1)
+            assertTrue(r.onTable > r.price)
+            assertTrue(r.price in r.purses.options)
+            assertEquals(r.purses.options.size, r.purses.options.toSet().size)
+        }
     }
 }
 
