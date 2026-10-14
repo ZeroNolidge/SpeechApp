@@ -37,20 +37,27 @@ import kotlinx.coroutines.delay
 
 /** A big green "go" arrow on raised paper that gently pulses, with a hand pointing at it. */
 @Composable
-fun GoButton(modifier: Modifier = Modifier, size: Dp = 96.dp, enabled: Boolean = true, onClick: () -> Unit) {
+fun GoButton(
+    modifier: Modifier = Modifier,
+    size: Dp = 96.dp,
+    enabled: Boolean = true,
+    /** Pulse and point at it. Off when it's only a "skip", so it doesn't pull attention. */
+    hint: Boolean = true,
+    onClick: () -> Unit,
+) {
     val t = rememberInfiniteTransition(label = "go")
     val pulse by t.animateFloat(1f, 1.1f, infiniteRepeatable(tween(550), RepeatMode.Reverse), label = "pulse")
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         PaperButton(
             PaperColorsUi.go,
-            Modifier.size(size).scale(if (enabled) pulse else 1f),
+            Modifier.size(size).scale(if (enabled && hint) pulse else 1f),
             circle = true,
             enabled = enabled,
             onClick = onClick,
         ) {
             Text("▶", fontSize = (size.value * 0.45f).sp, color = Color.White, modifier = Modifier.offset(x = size * 0.04f))
         }
-        if (enabled) PointingHand(Modifier.offset(y = 4.dp), size = size * 0.5f)
+        if (enabled && hint) PointingHand(Modifier.offset(y = 4.dp), size = size * 0.5f)
     }
 }
 

@@ -1,6 +1,5 @@
 package com.zeronolidge.speechapp.ui.screens
 
-import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,12 +7,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,284 +29,301 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.data.Praise
 import com.zeronolidge.speechapp.data.SpeechSound
 import com.zeronolidge.speechapp.data.Word
 import com.zeronolidge.speechapp.logic.SpeechMatch
+import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.state.Progress
-import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.Nav
-import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
+import com.zeronolidge.speechapp.ui.art.PaperStyle
+import com.zeronolidge.speechapp.ui.components.GoButton
+import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
-import com.zeronolidge.speechapp.ui.theme.Kid
+import com.zeronolidge.speechapp.ui.components.PaperButton
+import com.zeronolidge.speechapp.ui.components.PaperColorsUi
+import com.zeronolidge.speechapp.ui.components.RoundIcon
+import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-private enum class Mic { IDLE, PROMPTING, LISTENING, PARROT_RECORDING, PARROT_PLAYING }
+private enum class Speak { MODELLING, LISTENING, WAITING_TAP, DONE, PARROT_RECORDING, PARROT_PLAYING }
 
 /** Only ask for the microphone automatically once per run, so a "no" isn't asked again and again. */
 private var askedForMic = false
 
-/** Free practice of one speech sound, word by word. */
+/** Free practice of one speech sound, word by word. Each word moves on by itself after a try. */
 @Composable
 fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
+    val app = LocalApp.current
+    val words = remember(sound) {
+        when (app.progress.speechStep) {
+            0 -> sound.words.sortedBy { it.syllableCount }
+            1 -> sound.words.sortedByDescending { it.syllableCount == 2 }
+            else -> sound.phrases + sound.words
+        }
+    }
     var index by remember { mutableIntStateOf(0) }
-    val word = sound.words[index]
-    val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}. ${word.text}." else word.text
+    val word = words[index % words.size]
+    val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}." else null
     KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}") {
-        SayPanel(sound, word, Modifier.fillMaxSize(), intro = intro, showParrot = true, onSaid = {}) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                NavArrow("◀️", index > 0) { index-- }
-                Spacer(Modifier.size(12.dp))
-                sound.words.indices.forEach { i ->
-                    Box(
-                        Modifier
-                            .padding(4.dp)
-                            .size(if (i == index) 18.dp else 12.dp)
-                            .clip(CircleShape)
-                            .background(if (i == index) Kid.talk else Kid.soft),
-                    )
-                }
-                Spacer(Modifier.size(12.dp))
-                NavArrow("▶️", true) { index = (index + 1) % sound.words.size }
-            }
+        SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index) {
+            index++
         }
     }
 }
 
 /**
- * Practise saying one word. After the narrator says "Your turn!", the microphone switches on
- * by itself, because young children can't read a "talk now" button. They can also hear the word,
- * hear it slowly, learn where the mouth goes, or a grown-up can give the thumbs up.
- * [onSaid] runs after the word has been said well and praised.
+ * A speaking moment, used inside the story and in free practice. In order:
+ *  1. The picture and word, modelled slowly and clearly a few times (normal, slow, normal).
+ *  2. "Your turn!" and the microphone turns on by itself.
+ *  3. Any honest try moves on. A clear catch earns a shiny sticker and an extra sparkle.
+ *     A miss gets a friendly "say it with me", one more listen, and then moves on anyway.
+ *  4. The big ▶ skips at any time. Without a microphone, the child says the word and taps ▶.
+ * The microphone never blocks the story and a miss is never a fail.
+ * [onDone] gets true if the microphone heard the word clearly.
  */
 @Composable
-fun SayPanel(
-    sound: SpeechSound?,
+fun SpeakMoment(
     word: Word,
+    sound: SpeechSound?,
     modifier: Modifier = Modifier,
-    /** Said first, before "Your turn!", e.g. the story narration. */
+    /** Story narration said first. */
     intro: String? = null,
+    /** Said after the try, e.g. "Now we can open the door!". */
+    afterLine: String? = null,
     showParrot: Boolean = false,
-    onSaid: () -> Unit,
-    footer: @Composable ColumnScope.() -> Unit = {},
+    /** What to show instead of the word's emoji, e.g. a sleeping friend. */
+    picture: (@Composable (Modifier) -> Unit)? = null,
+    key: Any = word,
+    onDone: (clear: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
+    val p = app.progress
     val micPermission = rememberMicPermission()
-    var mic by remember(word) { mutableStateOf(Mic.IDLE) }
+    val scope = rememberCoroutineScope()
+    var state by remember(key) { mutableStateOf(Speak.MODELLING) }
     var level by remember { mutableFloatStateOf(0f) }
-    var heard by remember(word) { mutableStateOf<String?>(null) }
-    var tries by remember(word) { mutableIntStateOf(0) }
-    var silent by remember(word) { mutableIntStateOf(0) }
-    var done by remember(word) { mutableStateOf(false) }
-    // Bumped whenever a new prompt starts, so callbacks from an interrupted one are ignored.
-    var session by remember(word) { mutableIntStateOf(0) }
-
-    fun hasMic() = micPermission.granted()
-
+    var attempt by remember(key) { mutableIntStateOf(0) }
+    var silent by remember(key) { mutableIntStateOf(0) }
+    var shiny by remember(key) { mutableStateOf<WordStat?>(null) }
+    // Bumped whenever a new step starts, so callbacks from an interrupted one are ignored.
+    var session by remember(key) { mutableIntStateOf(0) }
     val canRecognize = remember { app.listener.available }
-    val micOn = app.progress.useMic && canRecognize
-
-    fun success(message: String, clear: Boolean, heardSomething: Boolean) {
-        app.progress.recordWord(word.text, word.emoji, clear, heardSomething)
-        app.listener.cancel()
-        session++
-        mic = Mic.IDLE
-        level = 0f
-        tries = 0
-        done = true
-        app.reward(Progress.AREA_SPEECH, message, onDone = { done = false; onSaid() })
-    }
-
-    // Declared up front because the recognizer's result handler prompts again.
-    lateinit var speakThenListen: (List<Pair<String, Boolean>>, Boolean) -> Unit
-
-    fun startRecognizer(s: Int) {
-        if (s != session || mic != Mic.PROMPTING) return
-        mic = Mic.LISTENING
-        app.listener.listen(word.text, onLevel = { level = it }) { results ->
-            if (s != session) return@listen
-            mic = Mic.IDLE
-            level = 0f
-            heard = results.firstOrNull()
-            when {
-                results.isEmpty() -> {
-                    silent++
-                    // Don't keep listening to a quiet room; wait for a tap instead.
-                    if (silent >= 2) app.speaker.say("Tap the microphone when you're ready!")
-                    else speakThenListen(listOf("I didn't hear you." to false), true)
-                }
-                SpeechMatch.isGood(word.text, results) ->
-                    success("I heard ${word.text}! ${Praise.great.random()}", clear = true, heardSomething = true)
-                else -> {
-                    silent = 0
-                    tries++
-                    // Practice is what matters; reward effort, too.
-                    if (tries >= 3) success("Great trying! You worked so hard. ${word.syllables}. ${word.text}.", clear = false, heardSomething = true)
-                    else speakThenListen(listOf(Praise.speechTry.random() to false, word.syllables to true), true)
-                }
-            }
-        }
-    }
-
-    /** Says each line (text to slow?), then "Your turn!" and switches the microphone on if [listen]. */
-    speakThenListen = { lines, listen ->
-        if (!done) {
-            app.listener.cancel()
-            session++
-            val s = session
-            level = 0f
-            val all = lines + if (listen) listOf("Your turn! Say ${word.text}!" to false) else emptyList()
-            mic = if (listen) Mic.PROMPTING else Mic.IDLE
-            all.forEachIndexed { i, (text, slow) ->
-                val cb: (() -> Unit)? = if (listen && i == all.lastIndex) ({ startRecognizer(s) }) else null
-                if (i == 0) app.speaker.say(text, slow, cb) else app.speaker.then(text, slow, cb)
-            }
-        }
-    }
-
-    /** Speaks, then listens automatically when the microphone is allowed. */
-    fun speakAndMaybeListen(vararg lines: Pair<String, Boolean>) =
-        speakThenListen(lines.toList(), micOn && hasMic())
-
-    fun parrotNow() {
-        app.listener.cancel()
-        session++
-        mic = Mic.PARROT_RECORDING
-        app.speaker.say("Say ${word.text} and I'll copy you!") {
-            if (mic != Mic.PARROT_RECORDING) return@say
-            app.parrot.recordThenPlay(
-                seconds = 3,
-                onPlaying = { mic = Mic.PARROT_PLAYING },
-                onDone = { mic = Mic.IDLE },
-            )
-        }
-    }
-
-
-    fun withMic(onDenied: () -> Unit = { app.speaker.say("Ask a grown-up to turn on the microphone.") }, action: () -> Unit) {
-        if (hasMic()) action() else {
-            askedForMic = true
-            micPermission.request { ok -> if (ok) action() else onDenied() }
-        }
-    }
+    fun micUsable() = p.useMic && canRecognize && micPermission.granted()
+    val yourTurn = "Your turn! Say ${word.text}!"
 
     fun stopAll() {
         app.listener.cancel()
         app.parrot.stop()
         session++
-        mic = Mic.IDLE
         level = 0f
     }
 
-    // Start each word: say the intro, then "Your turn!" and listen.
-    LaunchedEffect(word) {
-        app.rememberInstruction("Say ${word.text}!")
-        val lines = listOfNotNull(intro?.let { it to false })
-        when {
-            !micOn -> speakThenListen(lines + ("Say ${word.text}!" to false), false)
-            hasMic() -> speakThenListen(lines, true)
-            !askedForMic -> withMic(onDenied = { speakThenListen(lines + ("Say ${word.text}!" to false), false) }) {
-                speakThenListen(lines, true)
-            }
-            else -> speakThenListen(lines + ("Say ${word.text}!" to false), false)
+    /** The try is over: record it, reward it, and move the story on. */
+    fun finish(clear: Boolean, heard: Boolean, skipped: Boolean = false) {
+        if (state == Speak.DONE) return
+        stopAll()
+        state = Speak.DONE
+        val next = { onDone(clear) }
+        if (skipped) {
+            app.speaker.say(listOfNotNull("Okay! Let's keep going.", afterLine).joinToString(" "), onDone = next)
+            return
         }
+        val stat = p.recordWord(word.text, word.emoji, clear, heard)
+        if (heard) p.speechResult(clear)
+        val praise = when {
+            clear -> "I heard ${word.text}! So clear! You got a shiny sticker!"
+            heard -> listOf("Great trying!", "Good talking!", "I love your trying!").random()
+            else -> Praise.great.random()
+        }
+        if (clear) shiny = stat
+        app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, afterLine).joinToString(" "), onDone = next)
     }
-    DisposableEffect(word) { onDispose { stopAll() } }
 
-    BoxWithConstraints(modifier) {
-        val small = maxHeight < 320.dp
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            // The word card.
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .paperCard(Kid.card, 28.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .clickable(enabled = !done) { speakAndMaybeListen(word.text to false) }
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                val pulse by animateFloatAsState(if (mic == Mic.LISTENING) 1f + level * 0.25f else 1f, label = "pulse")
-                Text(word.emoji, fontSize = if (small) 64.sp else 100.sp, modifier = Modifier.scale(pulse))
-                Text(
-                    highlighted(word.text, sound?.id),
-                    fontSize = if (small) 36.sp else 50.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Kid.ink,
-                )
-                if (mic == Mic.LISTENING || mic == Mic.PARROT_RECORDING) {
-                    ListeningBadge(level, if (small) 56.dp else 72.dp)
-                } else {
-                    Text(
-                        when (mic) {
-                            Mic.PARROT_PLAYING -> "🦜 Here's you!"
-                            Mic.PROMPTING -> "🔊"
-                            else -> heard?.let { "I heard: “$it”" } ?: " "
-                        },
-                        fontSize = if (mic == Mic.PROMPTING) 30.sp else 18.sp,
-                        color = Kid.ink.copy(alpha = 0.7f),
-                    )
-                }
-                footer()
-            }
+    lateinit var listen: () -> Unit
 
-            // The action buttons, big enough for small hands.
-            Column(
-                Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                // Hearing the word again interrupts the microphone, then it listens again.
-                val canTap = !done && mic != Mic.PARROT_RECORDING && mic != Mic.PARROT_PLAYING
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ActionButton("🔊", "Hear it", Modifier.weight(1f), enabled = canTap) {
-                        speakAndMaybeListen(word.text to false)
-                    }
-                    ActionButton("🐢", "Slowly", Modifier.weight(1f), enabled = canTap) {
-                        speakAndMaybeListen(word.syllables to true, word.text to true)
-                    }
-                    if (sound != null) {
-                        ActionButton("👄", "How?", Modifier.weight(1f), enabled = canTap) {
-                            speakAndMaybeListen(sound.tip to false, sound.modelSound to true)
-                        }
-                    }
-                }
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (micOn) {
-                        val listening = mic == Mic.LISTENING || mic == Mic.PROMPTING
-                        ActionButton(
-                            "🎤", if (listening) "Stop" else "My turn", Modifier.weight(1f),
-                            color = Color(0xFFFFCDD2), enabled = canTap,
-                        ) {
-                            if (listening) stopAll() else withMic {
-                                silent = 0
-                                speakThenListen(emptyList(), true)
+    /** "Let's say it together": the word, slowly, then [then]. Ignored if a newer step has started. */
+    fun sayItWithMe(then: () -> Unit) {
+        stopAll()
+        val s = session
+        state = Speak.MODELLING
+        app.speaker.say("Let's say it together.")
+        app.speaker.then(word.syllables, slow = true)
+        app.speaker.then(word.text) { if (s == session) then() }
+    }
+
+    /** Says [lines] (text to slow?), then either listens or waits for a tap on ▶. */
+    fun speakThen(lines: List<Pair<String, Boolean>>, thenListen: Boolean) {
+        if (state == Speak.DONE) return
+        stopAll()
+        val s = session
+        state = Speak.MODELLING
+        val all = lines + (yourTurn to false)
+        all.forEachIndexed { i, (text, slow) ->
+            val cb: (() -> Unit)? = if (i == all.lastIndex) ({
+                if (s == session && state != Speak.DONE) {
+                    if (thenListen && micUsable()) listen() else {
+                        // No microphone: give time to say it, then the big ▶ to carry on.
+                        state = Speak.WAITING_TAP
+                        scope.launch {
+                            delay(2500)
+                            if (s == session && state == Speak.WAITING_TAP) {
+                                app.speaker.say("When you've said it, tap the big green arrow!")
                             }
                         }
                     }
-                    if (showParrot && app.progress.useMic) {
-                        ActionButton("🦜", "Copy me", Modifier.weight(1f), color = Color(0xFFC8E6C9), enabled = canTap) {
-                            withMic { parrotNow() }
+                }
+            }) else null
+            if (i == 0) app.speaker.say(text, slow, cb) else app.speaker.then(text, slow, cb)
+        }
+    }
+
+    /** The word, modelled clearly: normal, slow and in pieces, then normal again. */
+    fun model(): List<Pair<String, Boolean>> = listOf(
+        "Listen. ${word.text}." to false,
+        word.syllables to true,
+        word.text to false,
+    )
+
+    listen = {
+        val s = session
+        state = Speak.LISTENING
+        attempt++
+        app.listener.listen(word.text, onLevel = { level = it }) { results ->
+            if (s != session || state == Speak.DONE) return@listen
+            level = 0f
+            when {
+                results.isEmpty() -> {
+                    silent++
+                    if (silent == 1) speakThen(listOf("I'm listening!" to false), true)
+                    // Two quiet turns: say it together, then carry on anyway.
+                    else sayItWithMe { finish(clear = false, heard = false) }
+                }
+                SpeechMatch.isGood(word.text, results) -> finish(clear = true, heard = true)
+                attempt < 2 -> {
+                    // A miss: say it together, and one more listen.
+                    p.speechResult(false)
+                    speakThen(listOf("Good try! Say it with me." to false, word.syllables to true, word.text to false), true)
+                }
+                else -> finish(clear = false, heard = true)
+            }
+        }
+    }
+
+    fun withMic(onDenied: () -> Unit, action: () -> Unit) {
+        if (micPermission.granted()) action() else {
+            askedForMic = true
+            micPermission.request { ok -> if (ok) action() else onDenied() }
+        }
+    }
+
+    fun parrotNow() {
+        stopAll()
+        state = Speak.PARROT_RECORDING
+        app.speaker.say("Say ${word.text} and I'll copy you!") {
+            if (state != Speak.PARROT_RECORDING) return@say
+            app.parrot.recordThenPlay(
+                seconds = 3,
+                onPlaying = { state = Speak.PARROT_PLAYING },
+                onDone = { state = Speak.WAITING_TAP },
+            )
+        }
+    }
+
+    // Start: narration, the word modelled a few times, "Your turn!", then listen.
+    LaunchedEffect(key) {
+        app.rememberInstruction("${word.text}. ${word.syllables}. ${word.text}. $yourTurn")
+        val lines = listOfNotNull(intro?.let { it to false }) + model()
+        when {
+            !p.useMic || !canRecognize -> speakThen(lines, false)
+            micPermission.granted() -> speakThen(lines, true)
+            !askedForMic -> withMic(onDenied = { speakThen(lines, false) }) { speakThen(lines, true) }
+            else -> speakThen(lines, false)
+        }
+    }
+    DisposableEffect(key) { onDispose { stopAll() } }
+
+    BoxWithConstraints(modifier) {
+        val small = maxHeight < 320.dp
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            // The picture card: tap it to hear the word again.
+            val t = rememberInfiniteTransition(label = "model")
+            val beat by t.animateFloat(1f, 1.08f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "beat")
+            val pulse by animateFloatAsState(
+                when (state) {
+                    Speak.LISTENING -> 1f + level * 0.25f
+                    Speak.MODELLING -> beat
+                    else -> 1f
+                },
+                label = "pulse",
+            )
+            PaperButton(
+                PaperStyle.chip,
+                Modifier.weight(1.2f).fillMaxHeight().padding(bottom = 8.dp),
+                enabled = state != Speak.DONE,
+                onClick = { speakThen(model(), true) },
+            ) {
+                Column(
+                    Modifier.fillMaxSize().padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    Box(Modifier.weight(1f).fillMaxWidth().scale(pulse), contentAlignment = Alignment.Center) {
+                        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 72.sp else 120.sp)
+                    }
+                    Text(
+                        highlighted(word.text, sound?.id),
+                        fontSize = if (small) 34.sp else if (word.text.length > 12) 38.sp else 52.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = PaperStyle.ink,
+                    )
+                }
+            }
+
+            // Listening badge, then at most three big buttons.
+            Column(
+                Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Box(Modifier.height(if (small) 70.dp else 104.dp), contentAlignment = Alignment.Center) {
+                    when (state) {
+                        Speak.LISTENING, Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 60.dp else 88.dp)
+                        Speak.PARROT_PLAYING -> Text("🦜", fontSize = 56.sp)
+                        Speak.MODELLING -> Text("👂", fontSize = 56.sp)
+                        Speak.WAITING_TAP -> Text("🗣️", fontSize = 56.sp)
+                        Speak.DONE -> shiny?.let { Sticker(it, if (small) 70.dp else 100.dp, Modifier.popIn(it.text)) }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RoundIcon("🐢", Color(0xFFC8E6C9), size = 84.dp, enabled = state != Speak.DONE) {
+                        speakThen(listOf(word.syllables to true, word.text to true), true)
+                    }
+                    if (showParrot && p.useMic) {
+                        RoundIcon("🦜", Color(0xFFB2EBF2), size = 84.dp, enabled = state != Speak.DONE) {
+                            withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
                         }
                     }
-                    // For the grown-up: tap when the child says it well.
-                    ActionButton("👍", "Said it!", Modifier.weight(1f), color = Color(0xFFFFF59D), enabled = !done) {
-                        stopAll()
-                        success("${Praise.great.random()} You said ${word.text}!", clear = false, heardSomething = false)
-                    }
+                }
+                // Always there: carry on. It pulses when there's no microphone, because it's the way forward.
+                GoButton(size = 92.dp, enabled = state != Speak.DONE, hint = state == Speak.WAITING_TAP) {
+                    if (state == Speak.WAITING_TAP) finish(clear = false, heard = false) else finish(clear = false, heard = false, skipped = true)
                 }
             }
         }
@@ -319,7 +332,7 @@ fun SayPanel(
 
 /** A big red microphone that throbs with the child's voice, so they can see it's their turn. */
 @Composable
-private fun ListeningBadge(level: Float, size: androidx.compose.ui.unit.Dp) {
+private fun ListeningBadge(level: Float, size: Dp) {
     val t = rememberInfiniteTransition(label = "listen")
     val ring by t.animateFloat(1f, 1.35f, infiniteRepeatable(tween(700), RepeatMode.Restart), label = "ring")
     val ringAlpha by t.animateFloat(0.6f, 0f, infiniteRepeatable(tween(700), RepeatMode.Restart), label = "ringAlpha")
@@ -335,7 +348,6 @@ private fun ListeningBadge(level: Float, size: androidx.compose.ui.unit.Dp) {
             Modifier
                 .size(size)
                 .scale(1f + level * 0.3f)
-                .shadow(6.dp, CircleShape)
                 .clip(CircleShape)
                 .background(Color(0xFFE53935)),
             contentAlignment = Alignment.Center,
@@ -362,43 +374,4 @@ private fun highlighted(text: String, soundId: String?) = buildAnnotatedString {
     append(text.substring(0, at))
     withStyle(SpanStyle(color = Color(0xFFE53935))) { append(text.substring(at, at + len)) }
     append(text.substring(at + len))
-}
-
-@Composable
-private fun ActionButton(
-    emoji: String,
-    label: String,
-    modifier: Modifier,
-    color: Color = Color.White,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier
-            .fillMaxHeight()
-            .paperCard(if (enabled) color else color.copy(alpha = 0.4f), 22.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(emoji, fontSize = 40.sp)
-        Spacer(Modifier.height(2.dp))
-        Text(label, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Kid.ink)
-    }
-}
-
-@Composable
-private fun NavArrow(emoji: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(56.dp)
-            .clip(CircleShape)
-            .background(if (enabled) Kid.soft else Color.Transparent)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (enabled) Text(emoji, fontSize = 30.sp)
-    }
 }

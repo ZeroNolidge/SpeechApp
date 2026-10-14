@@ -1,68 +1,65 @@
 # Talk & Learn
 
-An Android adventure game for a ~5-year-old that teaches speech, letters, early reading, numbers,
-patterns and Cubetto-style coding. Your child picks a cartoon hero, explores a world map,
-and helps friends in randomly generated story quests, levelling up for new powers and outfits.
-Everything is spoken, so they don't need to read. Mistakes just fade away with a gentle
-"try again".
+An adventure game for a ~5-year-old early reader that teaches speech, letters, early reading,
+numbers, coins, patterns and Cubetto-style coding. Your child picks a cartoon buddy and follows a
+paper trail across an island, one short story chapter at a time. Everything is spoken, so they
+never need to read. Mistakes just fold away with a gentle "try again".
 
-**Look:** a paper cut-out style. Every shape is drawn as coloured construction paper with
-rough edges and soft shadows (`ui/art/Paper.kt`), there's paper grain over the whole app, and
-text uses the rounded Sniglet font (SIL Open Font License, see `FONT_LICENSE_Sniglet_OFL.txt`).
+**Look:** a paper cut-out style. Anything your child can tap is a thick, raised paper cut-out
+that presses down under a finger; the scenery behind is flatter and softer, so it's obvious what
+to tap. Text uses the rounded Sniglet font (SIL Open Font License, see `FONT_LICENSE_Sniglet_OFL.txt`).
+
+**Same on every screen:** 🏠 top-left goes back to the map, and the big 🔊 top-right says the
+instructions again. Every screen speaks when it opens, and there are never more than 3 or 4 big
+choices at a time. No ads, links, purchases, timers, lives, streaks or buzzers.
 
 ## How it plays
 
-1. **Pick a hero.** Kid, puppy, kitty, dino, unicorn, robot or bunny. They're all cartoon
-   characters drawn by the app, so they bounce, blink and cheer.
-2. **Explore the world map.** Each land teaches one thing:
+1. **Pick a buddy.** Kid, puppy, kitty, dino, unicorn, robot or bunny.
+2. **Follow the trail.** The map has 16 stops across 8 places. Tap the big yellow button where
+   the hand points. Each stop is a 3 to 5 minute story chapter that ends with "see you next
+   time"; then the next stop unfolds. After the last stop the trail starts a new lap. Nothing
+   ever locks or goes backwards.
 
-   | Land | Subject | Opens with |
-   |---|---|---|
-   | 🌳 Talking Forest | Speech sounds | Open from the start |
-   | 🌻 Number Meadow | Counting, more/less, adding, taking away | Open from the start |
-   | 🏝️ Letter Lagoon | Capital and small letters, first sounds | 🏊 Swim (level 2) |
-   | 🏭 Robot Factory | Cubetto-style "plan, then Go" robot puzzles | 🦘 Super jump (level 3) |
-   | ⛰️ Puzzle Peaks | Patterns and odd one out | 🧗 Climb (level 4) |
-   | 🕯️ Word Caves | Sounding out and reading words | 🏮 Lantern (level 5) |
-   | 🏰 Cloud Castle | A bit of everything | 🦸 Fly (level 6) |
+   | Place | What's new there |
+   |---|---|
+   | 🌳 Talking Forest | Speaking |
+   | 🌻 Number Meadow | Counting, more/less, adding, taking away |
+   | 🏝️ Letter Lagoon | Capital and small letters, first sounds |
+   | 🏪 Market Town | Paying with coins |
+   | ⛰️ Puzzle Peaks | Patterns (fix the rope bridge) |
+   | 🏭 Robot Factory | "Plan, then Go" robot puzzles |
+   | 🕯️ Word Caves | Sounding out and reading words |
+   | 🏰 Cloud Castle | A bit of everything |
 
-   **⭐ Adventure!** on the map starts a surprise quest that mixes subjects.
-3. **Go on quests.** Each quest is one of 8 illustrated stories, with a random cartoon friend
-   (Benny Bunny, Pip the Penguin, Daisy Dino…) and random challenges: the lost kite, the
-   birthday party, the treasure map, missing Teddy, the fallen star, the lost key, the picnic
-   and the runaway balloon. Every story has a beginning, 3–5 obstacles drawn as scenes
-   (a river, a broken bridge, a locked door, a tall tree, a dark cave…), a twist where someone
-   new turns up, and a happy ending. Solving a challenge changes the picture: the stepping
-   stones appear, the bridge is fixed, the door swings open. Every quest also includes some
-   talking practice.
-4. **Level up.** Challenges give XP and 💎 gems, with a bonus for getting it right first time.
-   Levelling up teaches new powers:
-   - **Story powers** (Swim, Jump, Climb, Lantern, Fly) open new lands and show up in the story.
-   - **Helper powers** can each be used once per challenge: 🦉 Owl repeats the question slowly,
-     🪄 Magic wand removes a wrong answer, 🗺️ Treasure map shows the robot's next move.
-5. **Dress up.** Spend gems in 🎒 Dress up on hats, capes, glasses, colors and pet sidekicks.
-   Some items are free gifts at certain levels. You can switch heroes there too.
+3. **Story chapters.** Each chapter is one of 8 illustrated stories with a random friend (Benny
+   Bunny, Pip the Penguin…). Obstacles are drawn as scenes: a river, a broken bridge, a locked
+   door. Solving a challenge changes the picture. Before the twist, someone is fast asleep, and
+   your child wakes them by calling their name.
+4. **Talking makes the story happen.** Saying "open" opens the door, and "jump" gets everyone
+   across the river. Each word is first played slowly and clearly with its picture, a few times;
+   then the microphone turns on by itself. Any honest try moves the story on. If the microphone
+   hears the word clearly, there's an extra sparkle and a shiny sticker. If it misses, everyone
+   says it together and the story carries on anyway. The ▶ button always skips. Words start at one
+   syllable and quietly move up to two syllables and short phrases (and back down after two
+   misses). Words come back on later days for more practice.
+5. **Buddy pieces.** Your buddy gets a new paper piece (party hat, fairy wings, hero cape, a pet…)
+   after every chapter, and a "welcome back" present on the first visit of a new day. Pieces are
+   never taken away. Try them on in the 🎒 closet (tap your buddy, top-left of the map).
+6. **Sticker book.** Every word practised becomes a sticker in 📒. Shiny stickers are words the
+   microphone heard clearly.
 
-**🎯 Practice** on the map has every activity as endless free play: speech sounds with 🦜
-record-and-playback, the ABC and 1–20 explorers, and all the challenge types.
+**🎯 Practice** on the map has every activity as free play.
 
-**⚙️ Grown-ups**: press and hold the gear on the map. You can:
-- set your child's name, so the story says it
-- pick the **speech sounds to focus on**, which stories will then use
-- open every land without waiting for levels
-- change the voice speed or turn off the microphone
-- see progress and reset everything
+**⚙️ Grown-ups**: tap the small gear, bottom-left of the map, then tap the three numbers written
+on the screen. You can:
+- see which words your child has tried, grouped as going well, still tricky and just started (no scores)
+- add up to 3 of your own words, such as family names or favourite things, with a picture
+- set your child's name, pick speech sounds to focus on, change the voice speed, turn off the microphone
+- reset everything
 
-### The speech practice
-
-Each word has these buttons:
-- **🔊 Hear it**
-- **🐢 Slowly**: syllable by syllable
-- **👄 How?**: where the lips and tongue go
-- **🎤 Microphone**: switches on by itself after "Your turn!" (with a big pulsing mic so the child knows to talk), and scores generously. Tap it to stop or start listening again
-- **👍 Said it!**: a grown-up gives the star
-
-The recognizer finds young voices hard, so it also gives a star for effort after three tries.
+If there's no microphone (or permission is denied), everything still works: the word is played,
+your child says it, then taps the green arrow.
 
 ## Getting the app
 
@@ -116,9 +113,12 @@ GitHub Actions builds both on every push and publishes the web app to GitHub Pag
 
 ## Changing the content
 
-All words, sounds, tips and pictures (emoji) are in
-`app/src/commonMain/kotlin/com/zeronolidge/speechapp/data/Content.kt`. Story plots and scenes are in `logic/Plots.kt`, and friends and challenge lines
-are in `logic/Story.kt`. The scene pictures are drawn in `ui/art/SetPieces.kt`. Heroes, outfits, powers, lands and the level curve are in `logic/Rpg.kt`.
+All words, phrases, sounds, tips and pictures (emoji) are in
+`app/src/commonMain/kotlin/com/zeronolidge/speechapp/data/Content.kt`. Story plots, scenes and
+the "story words" (like "open" for a door) are in `logic/Plots.kt`, and friends and challenge
+lines are in `logic/Story.kt`. The scene pictures are drawn in `ui/art/SetPieces.kt`. Buddies,
+paper pieces, lands and the trail are in `logic/Rpg.kt`. The easiest way to add a word for your
+child is the grown-ups page.
 The cartoon drawing code is in `ui/art/Critter.kt`. For example, to practice
 more words for a sound your child's speech therapist is working on, add a `Word("...", "emoji")`
 to that sound's list.

@@ -44,6 +44,8 @@ import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.StoryGen
 import com.zeronolidge.speechapp.logic.Trail
 import com.zeronolidge.speechapp.logic.WordStat
+import com.zeronolidge.speechapp.logic.emoji
+import com.zeronolidge.speechapp.data.Word
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.HeroWithPet
@@ -92,6 +94,7 @@ fun ChapterScreen(nav: Nav) {
     var cheer by remember { mutableStateOf(false) }
     var patternWins by remember { mutableStateOf(0) }
     var piece by remember { mutableStateOf<Cosmetic?>(null) }
+    var woken by remember { mutableStateOf(false) }
     val stickersBefore = remember { p.words.words.keys }
     val species = p.hero ?: Species.KID
 
@@ -129,7 +132,11 @@ fun ChapterScreen(nav: Nav) {
     ) {
         when (val ph = phase) {
             Phase.Intro -> StoryScene(quest, quest.intro, species, Mood.HAPPY, onNext = ::next)
-            is Phase.Twist -> StoryScene(quest, quest.twist, species, Mood.HAPPY, visitor = quest.visitor, onNext = ::next)
+            is Phase.Twist -> if (!woken) {
+                WakeScene(quest, species) { woken = true }
+            } else {
+                StoryScene(quest, quest.twist, species, Mood.HAPPY, visitor = quest.visitor, onNext = ::next)
+            }
             is Phase.Beat -> BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft -> solved(c, ft) }, onNext = ::next)
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
@@ -324,6 +331,46 @@ private fun BeatScene(
                     onSolved(beat.challenge, firstTry)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Before the twist, someone is fast asleep. The child wakes them by calling their name out loud
+ * (any try works, and ▶ skips). Then the twist carries on with them awake.
+ */
+@Composable
+private fun WakeScene(quest: Quest, hero: Species, onAwake: () -> Unit) {
+    val app = LocalApp.current
+    val p = app.progress
+    val v = quest.visitor
+    var awake by remember { mutableStateOf(false) }
+    val text = "Shh! Someone is fast asleep. It's ${v.callName}! Let's wake them up by calling their name."
+    if (awake) AfterDelay("awake", 1200) { onAwake() }
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(0.34f).fillMaxHeight()) {
+            SpeechBubble(text, Modifier.fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                SetPieceView(quest.twist.piece, null, false, Modifier.fillMaxSize())
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
+                    HeroWithPet(hero, p.heroColor(hero), p.outfit, p.pet, Modifier.weight(1f).fillMaxHeight(0.55f), Mood.HAPPY)
+                    Critter(quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.45f), Color(quest.friend.color), Outfit(), Mood.HAPPY, mirrored = true)
+                }
+            }
+        }
+        Box(
+            Modifier
+                .weight(0.66f)
+                .fillMaxHeight()
+                .paperCard(Color(0xF2FFFAF0), 28.dp)
+                .padding(14.dp),
+        ) {
+            SpeakMoment(
+                Word(v.callName, v.species.emoji), null, Modifier.fillMaxSize(),
+                intro = text,
+                afterLine = "${v.callName} is awake!",
+                picture = { m -> Critter(v.species, m, Color(v.color), Outfit(), if (awake) Mood.CHEER else Mood.SLEEP, mirrored = true) },
+            ) { awake = true }
         }
     }
 }

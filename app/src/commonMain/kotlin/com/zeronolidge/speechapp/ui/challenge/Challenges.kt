@@ -73,7 +73,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.RoundIcon
-import com.zeronolidge.speechapp.ui.screens.SayPanel
+import com.zeronolidge.speechapp.ui.screens.SpeakMoment
 import com.zeronolidge.speechapp.ui.theme.Kid
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -153,9 +153,10 @@ fun ChallengeView(
     val area = areaOf(challenge)
     Box(modifier) {
         when (challenge) {
-            is Challenge.Say -> {
-                SayPanel(challenge.sound, challenge.word, Modifier.fillMaxSize(), intro = intro, onSaid = { onDone(true) })
-            }
+            is Challenge.Say -> SpeakMoment(
+                challenge.word, challenge.sound, Modifier.fillMaxSize(), intro = intro,
+                afterLine = challenge.doing?.let { "Now we can $it!" },
+            ) { onDone(true) }
             is Challenge.Count -> CountView(challenge, area, powers.wand, miss, done)
             is Challenge.Math -> MathView(challenge, area, powers.wand, miss, done)
             is Challenge.More -> MoreView(challenge, area, powers.wand, miss, done)

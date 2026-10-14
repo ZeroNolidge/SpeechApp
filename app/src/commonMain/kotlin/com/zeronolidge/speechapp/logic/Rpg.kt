@@ -41,6 +41,24 @@ enum class Species(
     CHICK("Chick", Ears.NONE, Mouth.BEAK, 0xFFFFE066, 0xFFFFF5BF),
 }
 
+/** A picture for a character, used for name stickers. */
+val Species.emoji: String get() = when (this) {
+    Species.KID -> "🧒"
+    Species.PUPPY -> "🐶"
+    Species.KITTY -> "🐱"
+    Species.DINO -> "🦕"
+    Species.UNICORN -> "🦄"
+    Species.ROBOT -> "🤖"
+    Species.BUNNY -> "🐰"
+    Species.BEAR -> "🐻"
+    Species.MOUSE -> "🐭"
+    Species.FOX -> "🦊"
+    Species.FROG -> "🐸"
+    Species.OWL -> "🦉"
+    Species.PENGUIN -> "🐧"
+    Species.CHICK -> "🐤"
+}
+
 /** Heroes the child can be. */
 val heroSpecies = listOf(
     Species.KID, Species.PUPPY, Species.KITTY, Species.DINO, Species.UNICORN, Species.ROBOT, Species.BUNNY,
