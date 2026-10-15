@@ -83,6 +83,17 @@ jobs:
           cp "$RUNNER_TEMP/emoji.ttf" app/src/wasmJsMain/composeResources/font/noto_color_emoji.ttf
       - name: Build the web app
         run: ./gradlew --no-daemon :app:wasmJsBrowserDistribution
+      - name: Check the web app starts in a real browser
+        # Loads the build in headless Chrome and fails (so nothing broken gets published) if the
+        # app never gets past "Loading…". Startup errors are printed here.
+        run: |
+          (cd app/build/dist/wasmJs/productionExecutable && python -m http.server 8123 >/dev/null 2>&1 &)
+          cp tools/smoke_web.mjs "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          npm init -y >/dev/null
+          npm install --silent --no-audit --no-fund puppeteer-core@23
+          sleep 1
+          node smoke_web.mjs http://localhost:8123/
       - name: Stamp the service worker with this build
         run: sed -i "s/BUILD_ID/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" app/build/dist/wasmJs/productionExecutable/sw.js
       - uses: actions/upload-pages-artifact@v3
