@@ -249,7 +249,7 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
                 Spacer(Modifier.width(24.dp))
                 if (!narrow) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        adventure(Modifier.fillMaxWidth().widthIn(max = 460.dp))
+                        adventure(Modifier.widthIn(max = 460.dp).fillMaxWidth())
                     }
                 } else {
                     Spacer(Modifier.weight(1f))
