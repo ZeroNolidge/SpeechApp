@@ -168,7 +168,7 @@ fun PipStoryScreen(nav: Nav) {
     }
 
     ScreenFrame(onHome = nav.home, onBack = nav.back, background = { Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 77) }, top = {
-        PaperChip("🐶 Pip", fontSize = 22.sp, maxLines = 1)
+        PaperChip("🐶", fontSize = 26.sp, maxLines = 1)
     }) {
         ContinueHost {
             val nightness by animateFloatAsState(if (night) 1f else 0f, tween(450), label = "night")
@@ -191,7 +191,7 @@ fun PipStoryScreen(nav: Nav) {
                 val unit = minOf(w, h * 1.4f)
                 val logX = w * 0.52f
                 val logY = h * 0.70f
-                PipHidingSpot(PipSpot.BUSH, w * 0.80f, h * 0.52f, unit * 0.22f, current == PipSpot.BUSH, stage, PipSpot.BUSH in opened, rustle)
+                PipHidingSpot(PipSpot.BUSH, w * 0.80f, h * 0.60f, unit * 0.22f, current == PipSpot.BUSH, stage, PipSpot.BUSH in opened, rustle)
                 PipHidingSpot(PipSpot.ROCK, w * 0.34f, h * 0.56f, unit * 0.26f, current == PipSpot.ROCK, stage, PipSpot.ROCK in opened, rustle)
                 PipHidingSpot(PipSpot.LOG, logX, logY, unit * 0.32f, current == PipSpot.LOG, stage, PipSpot.LOG in opened, rustle)
                 if (pipOut) {
