@@ -335,43 +335,69 @@ fun SpeakMoment(
             // The picture card: tap it to hear the word again.
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val small = maxHeight < 240.dp
+                val cardW = maxWidth
                 val roryHeight = minOf(maxHeight * 0.7f, 150.dp)
+                // A narrow card (the right-hand column on an upright iPad, a phone): picture above
+                // the word instead of beside it, so the word always fits on one line.
+                val narrowCard = cardW < 400.dp
+                val textW = if (narrowCard) cardW - 32.dp else (cardW - 24.dp) * (1.2f / 2.2f)
+                // Big, but never wider than the room it has (about 0.62 of the size per letter).
+                val wordSize = minOf(if (small) 30f else if (word.text.length > 12) 36f else 50f, textW.value / (word.text.length.coerceAtLeast(3) * 0.62f)).sp
+                val wordAndState: @Composable () -> Unit = {
+                    Text(
+                        highlighted(word.text, sound?.id),
+                        fontSize = wordSize,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = PaperStyle.ink,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
+                        when (state) {
+                            Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                RoryListens(level, if (small) 64.dp else 96.dp)
+                                // "Your turn!" is spoken anyway; the chip only goes where it fits.
+                                if (!narrowCard) {
+                                    Spacer(Modifier.width(10.dp))
+                                    PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
+                                }
+                            }
+                            Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
+                            Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
+                            Speak.MODELLING -> Text("👂", fontSize = 52.sp)
+                            Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
+                            Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
+                        }
+                    }
+                }
                 PaperButton(
                     PaperStyle.chip,
                     Modifier.fillMaxSize().padding(bottom = 8.dp),
                     enabled = state != Speak.DONE,
                     onClick = { speakThen(model(), true) },
                 ) {
-                    Row(
-                        Modifier.fillMaxSize().padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        Box(Modifier.weight(1f).fillMaxHeight().scale(pulse), contentAlignment = Alignment.Center) {
-                            if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 110.sp)
-                        }
-                        Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                highlighted(word.text, sound?.id),
-                                fontSize = if (small) 30.sp else if (word.text.length > 12) 36.sp else 50.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = PaperStyle.ink,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
-                                when (state) {
-                                    Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        RoryListens(level, if (small) 64.dp else 96.dp)
-                                        Spacer(Modifier.width(10.dp))
-                                        PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
-                                    }
-                                    Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
-                                    Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
-                                    Speak.MODELLING -> Text("👂", fontSize = 52.sp)
-                                    Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
-                                    Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
-                                }
+                    if (narrowCard) {
+                        Column(
+                            Modifier.fillMaxSize().padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            Box(Modifier.weight(1f).fillMaxWidth().scale(pulse), contentAlignment = Alignment.Center) {
+                                if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 96.sp)
                             }
+                            wordAndState()
+                        }
+                    } else {
+                        Row(
+                            Modifier.fillMaxSize().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            Box(Modifier.weight(1f).fillMaxHeight().scale(pulse), contentAlignment = Alignment.Center) {
+                                if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 110.sp)
+                            }
+                            Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) { wordAndState() }
                         }
                     }
                 }

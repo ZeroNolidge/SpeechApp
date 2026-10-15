@@ -165,7 +165,11 @@ if (started) {
             await open('#test=talk', 1180, 820, 'talk-ipad-landscape');
             // Let the word play out (the fake microphone hums, so a voice is "heard"): next comes
             // "Tap the P!" with 2 or 3 letters.
-            await wait(22000);
+            await wait(16000);
+            // No microphone in the test browser, so Rory waits for the big "I said it!" button
+            // (bottom-right); after the praise comes "Tap the P!".
+            await page.mouse.click(1180 - 70, 820 - 60);
+            await wait(9000);
             await shot('talk-letters');
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
