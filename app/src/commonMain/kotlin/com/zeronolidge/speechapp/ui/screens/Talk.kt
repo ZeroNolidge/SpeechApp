@@ -282,6 +282,7 @@ fun SpeakMoment(
         // The picture card: tap it to hear the word again.
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val small = maxHeight < 240.dp
+            val roryHeight = minOf(maxHeight * 0.7f, 150.dp)
             PaperButton(
                 PaperStyle.chip,
                 Modifier.fillMaxSize().padding(bottom = 8.dp),
@@ -322,7 +323,7 @@ fun SpeakMoment(
                     Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    Critter(Species.ROBOT, Modifier.height(minOf(maxHeight * 0.7f, 150.dp)), Color(0xFFFFCC80), mood = Mood.CHEER)
+                    Critter(Species.ROBOT, Modifier.height(roryHeight), Color(0xFFFFCC80), mood = Mood.CHEER)
                     PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
                 }
             }

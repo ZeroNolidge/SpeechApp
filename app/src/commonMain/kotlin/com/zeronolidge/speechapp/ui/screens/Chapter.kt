@@ -237,13 +237,14 @@ private fun StoryScene(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 560.dp
         val go = if (narrow) 84.dp else 104.dp
+        val bubbleMax = maxHeight * 0.34f
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             // The words are spoken; the bubble is for grown-ups, so it never takes over the screen.
             SpeechBubble(
                 text,
                 Modifier
                     .fillMaxWidth(if (narrow) 1f else 0.8f)
-                    .heightIn(max = maxHeight * 0.34f)
+                    .heightIn(max = bubbleMax)
                     .verticalScroll(rememberScrollState()),
                 fontSize = if (narrow) 16 else 20,
             ) { app.speaker.say(text) }
