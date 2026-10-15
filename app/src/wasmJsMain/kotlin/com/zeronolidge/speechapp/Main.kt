@@ -37,6 +37,9 @@ import com.zeronolidge.speechapp.ui.components.AppServices
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.theme.Kid
 import com.zeronolidge.speechapp.ui.platform.MicStatus
+import com.zeronolidge.speechapp.ui.Screen
+import com.zeronolidge.speechapp.ui.screens.PracticeKind
+import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.ui.platform.WebMic
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 import kotlinx.browser.document
@@ -55,6 +58,20 @@ fun main() {
     )
     hideLoading()
     ComposeViewport(document.body!!) { WebRoot(services) }
+}
+
+private fun locationHash(): String = js("(() => { try { return window.location.hash || ''; } catch (e) { return ''; } })()")
+
+/**
+ * For the automatic screenshot check only: "#test=ADD" opens that practice game and
+ * "#test=land-MEADOW" an area's games, so layouts can be checked at different screen sizes.
+ */
+private fun testStart(): Screen? {
+    val v = locationHash().removePrefix("#test=").takeIf { locationHash().startsWith("#test=") } ?: return null
+    return runCatching {
+        if (v.startsWith("land-")) Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
+        else Screen.PracticeGame(PracticeKind.valueOf(v))
+    }.getOrNull()
 }
 
 private fun hideLoading(): Unit = js("(() => { const l = document.getElementById('loading'); if (l) l.remove(); })()")
@@ -86,7 +103,7 @@ private fun WebRoot(services: AppServices) {
             }
             started = true
         }
-        else -> TalkAndLearnApp(services)
+        else -> TalkAndLearnApp(services, start = remember { testStart() })
     }
 }
 

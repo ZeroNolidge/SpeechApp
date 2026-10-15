@@ -54,6 +54,7 @@ import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
 import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeMenu
+import com.zeronolidge.speechapp.ui.screens.LandGamesScreen
 import com.zeronolidge.speechapp.ui.screens.StickerBookScreen
 import com.zeronolidge.speechapp.ui.screens.TalkMenu
 import com.zeronolidge.speechapp.ui.screens.TalkPracticeScreen
@@ -62,11 +63,15 @@ import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 
 /** The whole app, shared by Android and the web. Each platform passes in its own [services]. */
 @Composable
-fun TalkAndLearnApp(services: AppServices) {
+fun TalkAndLearnApp(
+    services: AppServices,
+    /** Opens straight onto this screen (above the map), for automatic layout checks. */
+    start: Screen? = null,
+) {
     SpeechAppTheme {
         CompositionLocalProvider(LocalApp provides services, LocalReduceMotion provides rememberReduceMotion()) {
             Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
-                Screens()
+                Screens(start)
                 CelebrationOverlay()
                 GiftOverlay()
             }
@@ -78,9 +83,9 @@ fun TalkAndLearnApp(services: AppServices) {
 class Nav(val go: (Screen) -> Unit, val back: () -> Unit, val home: () -> Unit, val replace: (Screen) -> Unit)
 
 @Composable
-private fun Screens() {
+private fun Screens(start: Screen? = null) {
     val app = LocalApp.current
-    val stack = remember { mutableStateListOf<Screen>(Screen.Map) }
+    val stack = remember { mutableStateListOf<Screen>(Screen.Map).apply { if (start != null) add(start) } }
     val nav = remember {
         Nav(
             go = { stack.add(it) },
@@ -121,6 +126,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
     when (s) {
         Screen.Map -> MapScreen(nav)
         is Screen.Chapter -> ChapterScreen(nav, s.visit)
+        is Screen.LandGames -> LandGamesScreen(s.land, nav)
         Screen.Closet -> ClosetScreen(nav)
         Screen.Stickers -> StickerBookScreen(nav)
         Screen.Gate -> ParentGateScreen(nav)

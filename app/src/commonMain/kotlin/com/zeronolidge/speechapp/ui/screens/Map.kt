@@ -179,12 +179,11 @@ fun MapScreen(nav: Nav) {
             onStop = startChapter,
             onElsewhere = { l ->
                 when {
-                    // The next stop's area: tapping anywhere on it starts the adventure.
-                    l == land -> startChapter()
-                    // An area already reached: open it for a new story there.
+                    // An open area (its label, picture or landmark): open its own games.
+                    // The story itself starts from the yellow stop button or the Adventure banner.
                     l in Trail.reached(p.chapter) -> {
-                        app.speaker.say("${l.title}! Let's play there again!")
-                        nav.go(Screen.Chapter(l))
+                        app.speaker.say("${l.title}!")
+                        nav.go(Screen.LandGames(l))
                     }
                     else -> {
                         // A misty place: it wiggles, and Rory walks along a sparkly trail to the next stop.

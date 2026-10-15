@@ -461,3 +461,28 @@ class TrailOrderTest {
         assertEquals(Trail.lands, seen)
     }
 }
+
+class QuizLookTest {
+    private val cases = sequence {
+        for (isAnswer in listOf(true, false)) for (m in 0..3) for (s in listOf(true, false))
+            for (r in listOf(true, false)) for (wd in listOf(true, false)) yield(listOf(isAnswer, m, s, r, wd))
+    }
+
+    @Test
+    fun onlyTheCorrectAnswerCanEverBeGreenOrGlow() {
+        cases.forEach { (isAnswer, m, s, r, wd) ->
+            val look = tileLook(isAnswer as Boolean, m as Int, s as Boolean, r as Boolean, wd as Boolean)
+            if (!isAnswer) assertTrue(look == TileLook.PLAIN || look == TileLook.GREY, "wrong tile was $look")
+        }
+    }
+
+    @Test
+    fun secondMissHighlightsTheCorrectAnswerOnly() {
+        assertEquals(TileLook.GLOW, tileLook(isAnswer = true, misses = 2, solvedByTap = false, revealed = false, wanded = false))
+        assertEquals(TileLook.PLAIN, tileLook(isAnswer = false, misses = 2, solvedByTap = false, revealed = false, wanded = false))
+        // Shown after the 3rd miss: the correct one glows (not green), the wrong ones grey.
+        assertEquals(TileLook.GLOW, tileLook(isAnswer = true, misses = 3, solvedByTap = false, revealed = true, wanded = false))
+        assertEquals(TileLook.GREY, tileLook(isAnswer = false, misses = 3, solvedByTap = false, revealed = true, wanded = false))
+        assertEquals(TileLook.RIGHT, tileLook(isAnswer = true, misses = 1, solvedByTap = true, revealed = false, wanded = false))
+    }
+}

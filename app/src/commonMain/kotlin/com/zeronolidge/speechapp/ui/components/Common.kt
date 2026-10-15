@@ -5,6 +5,8 @@ import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.Numbers
+import com.zeronolidge.speechapp.logic.TileLook
+import com.zeronolidge.speechapp.logic.tileLook
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.MaxMotionMs
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -321,11 +323,13 @@ fun <T> AnswerRow(
     val answerWords = describe?.invoke(answer)
     val cards: @Composable () -> Unit = {
         options.forEach { opt ->
+            // One shared rule (logic/Quiz.kt, unit-tested): only the correct answer can be green.
+            val look = tileLook(opt == answer, misses.count, solvedByTap = solved && !revealed, revealed = revealed, wanded = opt in faded)
             AnswerCard(
                 modifier = cardModifier,
-                faded = opt in faded,
-                correct = solved && !revealed && opt == answer,
-                glow = (revealed || (misses.glow && !solved)) && opt == answer,
+                faded = look == TileLook.GREY,
+                correct = look == TileLook.RIGHT,
+                glow = look == TileLook.GLOW,
                 wiggle = wiggles[opt] ?: 0,
                 onClick = {
                     // A tap is checked against the right answer before anything is cheered.

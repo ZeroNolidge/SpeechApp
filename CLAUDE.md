@@ -23,8 +23,9 @@ These are the owner's rules for all work:
 - Must keep working as a static site on GitHub Pages.
 - **Continue button:** one per step, drawn by `ContinueHost` (Guide.kt): same size
   (`ContinueSize`), pinned bottom-right inside the screen. Steps register it with `ContinueAction`.
-  Narration shows it ~3 s after it starts and, from then on, a tap anywhere empty moves on
-  (`ContinueAction(delayMs = 3000, tapAnywhere = true)`), whatever the audio does. Steps leave
+  Narration shows it 2.5 s after it starts (always before 3 s) and, from then on, a tap anywhere
+  empty moves on (`ContinueAction(delayMs = 2500, tapAnywhere = true)`), whatever the audio does.
+  Quiz steps move on by answering (3rd miss shows the answer), so they have no skip button. Steps leave
   `ContinueReserve` free at the bottom-right for the button and the 👉 hand beside it.
 - **Hands and hints never cover tiles, keys or headers:** they sit in empty space beside the
   target and hide as soon as anything is tapped (the continue hand, the map hand, which comes
@@ -43,7 +44,8 @@ These are the owner's rules for all work:
   carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.
 - **Wrong answers, one pattern everywhere** (`Misses`, `AnswerRow`, `TryAgainSlot` in
   `Common.kt`; `MoreView` and `RobotView` follow it too): every tap is checked against the answer
-  first. 1st miss: wiggle + "Try again!" spoken and written (in a reserved slot above the
+  first, and tile colours come from one unit-tested rule (`tileLook` in `logic/Quiz.kt`): only the
+  correct answer can ever be green or glow. 1st miss: wiggle + "Try again!" spoken and written (in a reserved slot above the
   answers). 2nd miss: Rory pops up in that slot and says a game-specific hint out loud (`hint`:
   "Count with me: one, two, three", "Listen: buh, buh, ball") while the right answer glows. 3rd
   miss: wrong tiles grey out, the right one is shown and spoken, then it moves on by itself. A
@@ -130,9 +132,10 @@ These are the owner's rules for all work:
   A land's second stop sits a third of the way to the next land. The map hand points at the stop
   from the side away from the buddy (👉/👈), never over a label. Tapping a
   misty land wiggles it and Rory walks along a sparkly trail from there to the next stop ("Follow
-  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Tapping the
-  next stop's land (or its marker, ring included) starts the next chapter; tapping a land already
-  passed opens a bonus story there (`Screen.Chapter(visit)`), which doesn't move the trail on. A wide
+  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Tapping an open
+  land's label, picture or landmark opens that area's own games (`Screen.LandGames`,
+  `gamesFor(land)`: Meadow = count, add, take away, more; Forest = the sounds menu). The story
+  starts from the next-stop marker (ring included) or the Adventure banner. A wide
   "▶ Adventure!" banner (tappable all over, presses down like every `PaperButton`) starts the next chapter. The island keeps a 1.75:1 shape.
 
 ## Work in progress / agreed next steps
@@ -190,7 +193,9 @@ Kotlin Multiplatform module `app` with three source sets:
 - **Seeing the web app without a device:** the CI smoke test (`tools/smoke_web.mjs --shots`) prints
   small screenshots (first launch, map, story, next step) as `SHOT <name> <base64 jpeg>` lines in
   the web job log. Fetch the log with `get_job_logs` (return_content, ~400 tail lines; a subagent can
-  decode the saved output into JPEGs) and look at them. GitHub Pages itself is blocked from here.
+  decode the saved output into JPEGs) and look at them. It also opens a game at iPad portrait,
+  iPad landscape and phone sizes (`#test=ADD`, `#test=land-MEADOW` URL hooks in `Main.kt`) to
+  check the two-column switch for real. GitHub Pages itself is blocked from here.
 - The service worker is network-first, so the PWA updates on the next launch when online.
   Speech can't play until the first tap, hence the start screen.
 - **Signing:** release builds use a permanent key from repo secrets `SIGNING_KEYSTORE`

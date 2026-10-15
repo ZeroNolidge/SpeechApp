@@ -110,7 +110,7 @@ private fun DrawScope.faceShape(color: Color, corner: Float, circle: Boolean) {
  */
 fun Modifier.raisedPaperBase(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false, press: () -> Float = { 0f }): Modifier =
     this then BakedPaperElement(
-        spec = listOf("base", corner, circle),
+        spec = listOf("base", color, corner, circle),
         edge = false,
         live = { baked ->
             val lift = PaperStyle.lift.toPx()

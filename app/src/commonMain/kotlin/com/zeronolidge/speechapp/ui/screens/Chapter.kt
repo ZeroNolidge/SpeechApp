@@ -277,7 +277,8 @@ private fun StoryScene(
     // Safety net: about 3 seconds after the narration starts, the big continue button appears
     // (bottom-right, as on every step) and a tap anywhere on the scene also moves on, whether or
     // not the voice has finished.
-    ContinueAction(delayMs = 3000, tapAnywhere = true, onClick = onNext)
+    // 2.5 s, so it is always there well before 3 s, even with a slow first frame.
+    ContinueAction(delayMs = 2500, tapAnywhere = true, onClick = onNext)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 560.dp
         val bubbleMax = maxHeight * 0.34f

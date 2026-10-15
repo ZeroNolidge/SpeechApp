@@ -56,6 +56,8 @@ import com.zeronolidge.speechapp.logic.Dir
 import com.zeronolidge.speechapp.logic.LetterMode
 import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.logic.Reading
+import com.zeronolidge.speechapp.logic.TileLook
+import com.zeronolidge.speechapp.logic.tileLook
 import com.zeronolidge.speechapp.logic.RobotLevel
 import com.zeronolidge.speechapp.logic.RobotSim
 import com.zeronolidge.speechapp.logic.RobotState
@@ -381,13 +383,15 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
             listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
                 val right = isLeft == r.moreIsLeft
                 val wiggling = (isLeft && wiggleLeft > 0) || (!isLeft && wiggleRight > 0)
-                val grey = isLeft in faded
+                // The shared rule (logic/Quiz.kt): only the side with more can turn green or glow.
+                val look = tileLook(right, misses.count, solvedByTap = solved && !revealed, revealed = revealed, wanded = isLeft in faded)
+                val grey = look == TileLook.GREY
                 PaperButton(
-                    when {
-                        solved && right && !revealed -> Kid.good
-                        (revealed || (misses.glow && !solved)) && right -> Kid.highlight
-                        grey -> Color(0xFFDCDCDC)
-                        else -> PaperColorsUi.choice
+                    when (look) {
+                        TileLook.RIGHT -> Kid.good
+                        TileLook.GLOW -> Kid.highlight
+                        TileLook.GREY -> Color(0xFFDCDCDC)
+                        TileLook.PLAIN -> PaperColorsUi.choice
                     },
                     Modifier
                         .weight(1f)
@@ -918,13 +922,13 @@ private fun CoinPile(n: Int, coin: Dp, modifier: Modifier = Modifier) {
  * one is counted out loud, and when there are enough the goods are yours. PURSE: pick the purse
  * that holds just the right number of coins.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     val r = c.round
     val name = Things.nameOf(r.item)
     QuestionLayout(
-        allowSide = r.mode == CoinMode.PURSE,
         question = { card ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(r.item, fontSize = (card.value * 0.6f).sp)
@@ -949,15 +953,16 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                 ) { n -> CoinPile(n, card * 0.22f) }
                 CoinMode.PAY -> {
                     var paid by remember(c) { mutableIntStateOf(0) }
-                    Row(
-                        Modifier.fillMaxWidth().height(card),
-                        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // Coins on the table: each one is a raised paper button.
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val stacked = LocalAnswersStacked.current
+                    val coinSize = (card * 0.62f).coerceAtLeast(64.dp)
+                    // Coins on the table: each one is a raised paper button.
+                    val coins = @Composable {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             repeat(r.onTable - paid) {
-                                PaperButton(Color(0xFFFFE082), Modifier.size((card * 0.62f).coerceAtLeast(64.dp)), circle = true, onClick = {
+                                PaperButton(Color(0xFFFFE082), Modifier.size(coinSize), circle = true, onClick = {
                                     if (paid < r.price) {
                                         paid++
                                         if (paid == r.price) {
@@ -969,14 +974,33 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                                 }) { Coin(card * 0.46f) }
                             }
                         }
-                        ArrowIcon(30.dp, color = Kid.ink)
-                        // The stall keeper's jar fills up.
+                    }
+                    // The stall keeper's jar fills up.
+                    val jar = @Composable {
                         Box(
                             Modifier.size(card * 1.3f, card).paperCard(Color(0xFFB3E5FC), 22.dp).padding(8.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             CoinPile(paid, card * 0.24f)
                             if (paid == 0) Text("🧺", fontSize = (card.value * 0.4f).sp, modifier = Modifier.alpha(0.5f))
+                        }
+                    }
+                    if (stacked) {
+                        // Wide screens: the coins and the jar in the right-hand column.
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            coins()
+                            ArrowIcon(30.dp, Modifier.rotate(90f), color = Kid.ink)
+                            jar()
+                        }
+                    } else {
+                        Row(
+                            Modifier.fillMaxWidth().height(card),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.weight(1f, fill = false)) { coins() }
+                            ArrowIcon(30.dp, color = Kid.ink)
+                            jar()
                         }
                     }
                 }

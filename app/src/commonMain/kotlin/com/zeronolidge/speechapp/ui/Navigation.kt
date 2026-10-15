@@ -12,6 +12,8 @@ sealed interface Screen {
      * has already reached, which doesn't move the trail on.
      */
     data class Chapter(val visit: Land? = null) : Screen
+    /** An area's own games, opened from its label or picture on the map (Meadow: counting, adding...). */
+    data class LandGames(val land: Land) : Screen
     data object Closet : Screen
     data object Stickers : Screen
     /** The grown-up check in front of the grown-ups page. */

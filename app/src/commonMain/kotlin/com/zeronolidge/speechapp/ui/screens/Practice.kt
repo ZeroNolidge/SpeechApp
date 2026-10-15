@@ -40,6 +40,7 @@ import com.zeronolidge.speechapp.data.ReadingContent
 import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.logic.Challenge
 import com.zeronolidge.speechapp.logic.LetterMode
+import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Letters
 import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.logic.OddOneOut
@@ -127,6 +128,41 @@ fun PracticeMenu(nav: Nav) {
                     app.speaker.say("New games!")
                 }
             }
+        }
+    }
+}
+
+/** The games that belong to each area of the map. */
+fun gamesFor(land: Land): List<PracticeKind> = when (land) {
+    Land.FOREST -> emptyList() // talking: opens the sounds menu
+    Land.MEADOW -> listOf(PracticeKind.COUNT, PracticeKind.ADD, PracticeKind.TAKE_AWAY, PracticeKind.MORE)
+    Land.LAGOON -> listOf(PracticeKind.BIG_SMALL, PracticeKind.SMALL_BIG, PracticeKind.FIRST_SOUND)
+    Land.MARKET -> listOf(PracticeKind.COINS, PracticeKind.COUNT)
+    Land.PEAKS -> listOf(PracticeKind.NEXT, PracticeKind.ODD)
+    Land.FACTORY -> listOf(PracticeKind.ROBOT_ARROWS, PracticeKind.ROBOT_TURNS)
+    Land.CAVES -> listOf(PracticeKind.SOUND_OUT, PracticeKind.WHICH_WORD)
+    Land.CLOUDS -> PracticeKind.entries.toList()
+}
+
+/**
+ * An area's own games, opened by tapping its label or picture on the map: Number Meadow has the
+ * counting and adding games, Letter Lagoon the letter games, and so on. Big picture tiles, a few
+ * at a time; the talking forest opens the sounds.
+ */
+@Composable
+fun LandGamesScreen(land: Land, nav: Nav) {
+    val app = LocalApp.current
+    if (land == Land.FOREST) {
+        TalkMenu(nav)
+        return
+    }
+    val games = gamesFor(land)
+    KidScreen("${land.emoji} ${land.shortName}", nav.home, "${land.title}! Pick a game. Tap a picture to play.") {
+        PagedChoices(games, perPage = if (games.size == 4) 4 else 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { kind, m ->
+            ChoiceTile(kind.emoji, kind.label, kind.color, m, onClick = {
+                app.speaker.say(kind.spoken)
+                nav.go(Screen.PracticeGame(kind))
+            })
         }
     }
 }

@@ -78,6 +78,22 @@ if (started) {
             await page.mouse.click(300, 520);
             await wait(3500);
             await shot('challenge');
+            // Layout check: the same game at iPad sizes (both ways up) and on a narrow phone.
+            // Over 700 wide the picture should be on the left and the answers on the right.
+            const open = async (hash, w, h, name) => {
+                await page.setViewport({ width: w, height: h });
+                await page.goto(url + hash, { waitUntil: 'load' });
+                await page.reload({ waitUntil: 'load' });
+                await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+                await wait(3000);
+                await page.mouse.click(w / 2, h / 2);
+                await wait(4000);
+                await shot(name);
+            };
+            await open('#test=ADD', 820, 1180, 'ipad-portrait-add');
+            await open('#test=ADD', 1180, 820, 'ipad-landscape-add');
+            await open('#test=ADD', 400, 860, 'phone-add');
+            await open('#test=land-MEADOW', 1180, 820, 'meadow-games');
         } catch (e) {
             console.log(`Screenshots stopped: ${e.message}`);
         }
