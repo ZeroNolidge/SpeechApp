@@ -358,7 +358,7 @@ fun SpeakMoment(
                             Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
                                 RoryListens(level, if (small) 64.dp else 96.dp)
                                 // "Your turn!" is spoken anyway; the chip only goes where it fits.
-                                if (!narrowCard) {
+                                if (textW >= (if (small) 200.dp else 260.dp)) {
                                     Spacer(Modifier.width(10.dp))
                                     PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
                                 }
