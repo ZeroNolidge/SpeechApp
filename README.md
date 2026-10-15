@@ -37,15 +37,16 @@ choices at a time. No ads, links, purchases, timers, lives, streaks or buzzers.
    door. Solving a challenge changes the picture. Before the twist, someone is fast asleep, and
    your child wakes them by calling their name.
 4. **Talking makes the story happen.** Saying "open" opens the door, and "jump" gets everyone
-   across the river. Each word is first played slowly and clearly with its picture, a few times;
-   then the microphone turns on by itself. Any honest try moves the story on. If the microphone
-   hears the word clearly, there's an extra sparkle and a shiny sticker. If it misses, everyone
-   says it together and the story carries on anyway. The ▶ button always skips. Words start at one
-   syllable and quietly move up to two syllables and short phrases (and back down after two
-   misses). Words come back on later days for more practice.
-5. **Buddy pieces.** Your buddy gets a new paper piece (party hat, fairy wings, hero cape, a pet…)
-   after every chapter, and a "welcome back" present on the first visit of a new day. Pieces are
-   never taken away. Try them on in the 🎒 closet (tap your buddy, top-left of the map).
+   across the river. Each word is played slowly with its picture, then "3, 2, 1, your turn!" and
+   the microphone listens for about 4 seconds. It only listens for a voice, not the exact word, so
+   it works with young voices and on iPhone and iPad. Voice heard: a celebration and a shiny
+   sticker. Nothing heard: "Let's say it together!", and the story carries on. No microphone:
+   Rory says "Say it out loud to me!" and waits for a tap. The ▶ button always skips.
+5. **Gems and buddy pieces.** Every word your child tries to say puts a gem in the backpack (for
+   trying, not for being right). A full backpack gives the buddy a new paper piece (party hat,
+   fairy wings, hero cape, a pet…), and there's a "welcome back" present on the first visit of a
+   new day. No levels or scores. Try pieces on in the closet (tap your buddy, top-left of the map).
+   Wrong answers are gentle: a wiggle and "try again", then the right answer glows, then it's shown.
 6. **Sticker book.** Every word practised becomes a sticker in 📒. Shiny stickers are words the
    microphone heard clearly.
 
@@ -56,6 +57,7 @@ on the screen. You can:
 - see which words your child has tried, grouped as going well, still tricky and just started (no scores)
 - add up to 3 of your own words, such as family names or favourite things, with a picture
 - set your child's name, pick speech sounds to focus on, change the voice speed, turn off the microphone
+- make a **backup code** (and restore it) so a cleared browser or a new tablet doesn't start over
 - reset everything
 
 If there's no microphone (or permission is denied), everything still works: the word is played,
@@ -74,7 +76,8 @@ your child says it, then taps the green arrow.
 3. The first time it listens, Chrome asks to use the microphone: tap **Allow**.
 
 Progress is saved in the browser on that device. The web and Android versions keep separate
-progress.
+progress. To move progress to another device (or keep it safe if the browser's data is cleared),
+use **Back up progress** on the grown-ups page.
 
 ### Android APK (optional)
 

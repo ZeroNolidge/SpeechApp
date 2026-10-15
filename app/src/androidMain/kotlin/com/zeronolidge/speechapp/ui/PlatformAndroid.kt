@@ -33,3 +33,16 @@ actual fun rememberMicPermission(): MicPermission {
 
 @Composable
 actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) = BackHandler(enabled, onBack)
+
+@Composable
+actual fun rememberCopyText(): (String) -> Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(context) {
+        { text: String ->
+            runCatching {
+                val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Talk & Learn backup", text))
+            }.isSuccess
+        }
+    }
+}

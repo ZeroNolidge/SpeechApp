@@ -29,7 +29,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +45,9 @@ import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.data.Praise
 import com.zeronolidge.speechapp.data.SpeechSound
 import com.zeronolidge.speechapp.data.Word
-import com.zeronolidge.speechapp.logic.SpeechMatch
+import com.zeronolidge.speechapp.logic.Species
+import com.zeronolidge.speechapp.ui.art.Critter
+import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.Nav
@@ -59,13 +60,14 @@ import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.RoundIcon
 import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 private enum class Speak { MODELLING, LISTENING, WAITING_TAP, DONE, PARROT_RECORDING, PARROT_PLAYING }
 
 /** Only ask for the microphone automatically once per run, so a "no" isn't asked again and again. */
 private var askedForMic = false
+
+/** Set when the microphone couldn't be opened, so later words go straight to "say it out loud". */
+private var micBroken = false
 
 /** Free practice of one speech sound, word by word. Each word moves on by itself after a try. */
 @Composable
@@ -90,13 +92,16 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
 
 /**
  * A speaking moment, used inside the story and in free practice. In order:
- *  1. The picture and word, modelled slowly and clearly a few times (normal, slow, normal).
- *  2. "Your turn!" and the microphone turns on by itself.
- *  3. Any honest try moves on. A clear catch earns a shiny sticker and an extra sparkle.
- *     A miss gets a friendly "say it with me", one more listen, and then moves on anyway.
- *  4. The big ▶ skips at any time. Without a microphone, the child says the word and taps ▶.
- * The microphone never blocks the story and a miss is never a fail.
- * [onDone] gets true if the microphone heard the word clearly.
+ *  1. The picture and word, played slowly and clearly (slow, then normal).
+ *  2. "3, 2, 1, your turn!" and about 4 seconds of listening, with a throbbing microphone.
+ *     Listening only checks for a voice (loudness), not the exact word, so it works with young
+ *     voices and on iPhones and iPads.
+ *  3. Voice heard: a celebration and a shiny sticker. Nothing heard: "Let's say it together!",
+ *     the word again, and the story carries on. No microphone (or permission denied): Rory says
+ *     "Say it out loud to me!" and waits for a tap on ▶.
+ *  4. The big ▶ skips at any time. Every try (not a skip) puts a gem in the backpack.
+ * The microphone never blocks the story and quiet is never a fail.
+ * [onDone] gets true if a voice was heard.
  */
 @Composable
 fun SpeakMoment(
@@ -111,92 +116,89 @@ fun SpeakMoment(
     /** What to show instead of the word's emoji, e.g. a sleeping friend. */
     picture: (@Composable (Modifier) -> Unit)? = null,
     key: Any = word,
-    onDone: (clear: Boolean) -> Unit,
+    onDone: (heard: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
     val p = app.progress
     val micPermission = rememberMicPermission()
-    val scope = rememberCoroutineScope()
     var state by remember(key) { mutableStateOf(Speak.MODELLING) }
     var level by remember { mutableFloatStateOf(0f) }
-    var attempt by remember(key) { mutableIntStateOf(0) }
-    var silent by remember(key) { mutableIntStateOf(0) }
     var shiny by remember(key) { mutableStateOf<WordStat?>(null) }
+    /** Rory is waiting for the child to say it out loud (no microphone). */
+    var roryWaiting by remember(key) { mutableStateOf(false) }
     // Bumped whenever a new step starts, so callbacks from an interrupted one are ignored.
     var session by remember(key) { mutableIntStateOf(0) }
-    val canRecognize = remember { app.listener.available }
-    fun micUsable() = p.useMic && canRecognize && micPermission.granted()
-    val yourTurn = "Your turn! Say ${word.text}!"
+    fun micUsable() = p.useMic && app.voice.available && micPermission.granted() && !micBroken
+    val countdown = "3, 2, 1, your turn!"
 
     fun stopAll() {
-        app.listener.cancel()
+        app.voice.cancel()
         app.parrot.stop()
         session++
         level = 0f
     }
 
     /** The try is over: record it, reward it, and move the story on. */
-    fun finish(clear: Boolean, heard: Boolean, skipped: Boolean = false) {
+    fun finish(heard: Boolean, micUsed: Boolean, skipped: Boolean = false) {
         if (state == Speak.DONE) return
         stopAll()
         state = Speak.DONE
-        val next = { onDone(clear) }
+        roryWaiting = false
+        val next = { onDone(heard) }
         if (skipped) {
             app.speaker.say(listOfNotNull("Okay! Let's keep going.", afterLine).joinToString(" "), onDone = next)
             return
         }
-        val stat = p.recordWord(word.text, word.emoji, clear, heard)
-        if (heard) p.speechResult(clear)
+        val stat = p.recordWord(word.text, word.emoji, clear = heard, heard = micUsed)
+        if (micUsed) p.speechResult(heard)
+        if (heard) shiny = stat
+        // Gems are for trying to say words, not for getting things right.
+        val piece = p.addGem()
         val praise = when {
-            clear -> "I heard ${word.text}! So clear! You got a shiny sticker!"
-            heard -> listOf("Great trying!", "Good talking!", "I love your trying!").random()
-            else -> Praise.great.random()
+            heard -> "I heard you! Great saying ${word.text}! You got a shiny sticker!"
+            micUsed -> "Great job saying it together!"
+            else -> listOf("Great talking!", "Good saying!", "I love your talking!").random()
         }
-        if (clear) shiny = stat
-        app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, afterLine).joinToString(" "), onDone = next)
+        val gemLine = if (piece != null) "Your backpack is full! Your buddy got a new ${piece.name}!" else "A gem for your backpack!"
+        app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, gemLine, afterLine).joinToString(" "), onDone = next)
+        if (piece != null) app.showGift(piece)
+    }
+
+    /** No microphone: Rory asks for it out loud and waits for a tap on ▶. */
+    fun askOutLoud() {
+        state = Speak.WAITING_TAP
+        roryWaiting = true
+        app.instruct("Say it out loud to me! Then tap the big green arrow.")
     }
 
     lateinit var listen: () -> Unit
 
-    /** "Let's say it together": the word, slowly, then [then]. Ignored if a newer step has started. */
-    fun sayItWithMe(then: () -> Unit) {
-        stopAll()
-        val s = session
-        state = Speak.MODELLING
-        app.speaker.say("Let's say it together.")
-        app.speaker.then(word.syllables, slow = true)
-        app.speaker.then(word.text) { if (s == session) then() }
-    }
-
-    /** Says [lines] (text to slow?), then either listens or waits for a tap on ▶. */
+    /** Says [lines] (text to slow?), then the countdown and listening, or Rory's "say it out loud". */
     fun speakThen(lines: List<Pair<String, Boolean>>, thenListen: Boolean) {
         if (state == Speak.DONE) return
         stopAll()
         val s = session
         state = Speak.MODELLING
-        val all = lines + (yourTurn to false)
+        roryWaiting = false
+        val useMic = thenListen && micUsable()
+        val all = lines + if (useMic) listOf(countdown to false) else emptyList()
+        if (all.isEmpty()) {
+            if (useMic) listen() else askOutLoud()
+            return
+        }
         all.forEachIndexed { i, (text, slow) ->
             val cb: (() -> Unit)? = if (i == all.lastIndex) ({
                 if (s == session && state != Speak.DONE) {
-                    if (thenListen && micUsable()) listen() else {
-                        // No microphone: give time to say it, then the big ▶ to carry on.
-                        state = Speak.WAITING_TAP
-                        scope.launch {
-                            delay(2500)
-                            if (s == session && state == Speak.WAITING_TAP) {
-                                app.speaker.say("When you've said it, tap the big green arrow!")
-                            }
-                        }
-                    }
+                    if (useMic) listen() else askOutLoud()
                 }
             }) else null
             if (i == 0) app.speaker.say(text, slow, cb) else app.speaker.then(text, slow, cb)
         }
     }
 
-    /** The word, modelled clearly: normal, slow and in pieces, then normal again. */
+    /** The word, played slowly and clearly, then at normal speed. */
     fun model(): List<Pair<String, Boolean>> = listOf(
-        "Listen. ${word.text}." to false,
+        "Listen." to false,
         word.syllables to true,
         word.text to false,
     )
@@ -204,24 +206,25 @@ fun SpeakMoment(
     listen = {
         val s = session
         state = Speak.LISTENING
-        attempt++
-        app.listener.listen(word.text, onLevel = { level = it }) { results ->
+        app.voice.listen(4000, onLevel = { level = it }) { heard ->
             if (s != session || state == Speak.DONE) return@listen
             level = 0f
-            when {
-                results.isEmpty() -> {
-                    silent++
-                    if (silent == 1) speakThen(listOf("I'm listening!" to false), true)
-                    // Two quiet turns: say it together, then carry on anyway.
-                    else sayItWithMe { finish(clear = false, heard = false) }
+            when (heard) {
+                true -> finish(heard = true, micUsed = true)
+                false -> {
+                    // Quiet: say it together, then carry on anyway.
+                    stopAll()
+                    val s2 = session
+                    state = Speak.MODELLING
+                    app.speaker.say("Let's say it together!")
+                    app.speaker.then(word.syllables, slow = true)
+                    app.speaker.then(word.text) { if (s2 == session) finish(heard = false, micUsed = true) }
                 }
-                SpeechMatch.isGood(word.text, results) -> finish(clear = true, heard = true)
-                attempt < 2 -> {
-                    // A miss: say it together, and one more listen.
-                    p.speechResult(false)
-                    speakThen(listOf("Good try! Say it with me." to false, word.syllables to true, word.text to false), true)
+                null -> {
+                    // The microphone couldn't be opened: carry on without it.
+                    micBroken = true
+                    askOutLoud()
                 }
-                else -> finish(clear = false, heard = true)
             }
         }
     }
@@ -246,12 +249,12 @@ fun SpeakMoment(
         }
     }
 
-    // Start: narration, the word modelled a few times, "Your turn!", then listen.
+    // Start: narration, the word played slowly, the countdown, then listen.
     LaunchedEffect(key) {
-        app.rememberInstruction("${word.text}. ${word.syllables}. ${word.text}. $yourTurn")
+        app.rememberInstruction("${word.syllables}. ${word.text}. Your turn! Say ${word.text}!")
         val lines = listOfNotNull(intro?.let { it to false }) + model()
         when {
-            !p.useMic || !canRecognize -> speakThen(lines, false)
+            !p.useMic || !app.voice.available || micBroken -> speakThen(lines, false)
             micPermission.granted() -> speakThen(lines, true)
             !askedForMic -> withMic(onDenied = { speakThen(lines, false) }) { speakThen(lines, true) }
             else -> speakThen(lines, false)
@@ -301,7 +304,9 @@ fun SpeakMoment(
                                 Speak.LISTENING, Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
                                 Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
                                 Speak.MODELLING -> Text("👂", fontSize = 52.sp)
-                                Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
+                                Speak.WAITING_TAP ->
+                                    if (roryWaiting) Critter(Species.ROBOT, Modifier.fillMaxHeight(), Color(0xFFFFCC80), mood = Mood.CHEER)
+                                    else Text("🗣️", fontSize = 52.sp)
                                 Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.popIn(it.text)) }
                             }
                         }
@@ -331,7 +336,8 @@ fun SpeakMoment(
                     }
                 }
                 RoundIcon("🎤", Color(0xFFFFE0B2), size = size, enabled = active) {
-                    withMic(onDenied = { speakThen(emptyList(), false) }) { silent = 0; speakThen(emptyList(), true) }
+                    micBroken = false
+                    withMic(onDenied = { speakThen(emptyList(), false) }) { speakThen(emptyList(), true) }
                 }
                 if (showParrot && p.useMic) {
                     RoundIcon("🦜", Color(0xFFB2EBF2), size = size, enabled = active) {
@@ -340,7 +346,7 @@ fun SpeakMoment(
                 }
                 // Always there: carry on. It pulses and is pointed at only when it's the way forward.
                 GoButton(size = size, enabled = active, hint = state == Speak.WAITING_TAP) {
-                    if (state == Speak.WAITING_TAP) finish(clear = false, heard = false) else finish(clear = false, heard = false, skipped = true)
+                    if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
                 }
             }
         }

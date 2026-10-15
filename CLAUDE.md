@@ -20,10 +20,21 @@ These are the owner's rules for all work:
 - **No ads, outside links, buy buttons, timers, lives, streaks or buzzer sounds.** Gentle only:
   wrong answers fold away with "try again".
 - Must keep working as a static site on GitHub Pages.
-- **Speech:** spoken words make the story happen (`SpeakMoment`). The word is modelled first
-  (normal, slow, normal), then the mic turns on. Any honest try moves on; a clear catch earns a
-  shiny sticker; a miss gets "say it with me" and continues anyway; ▶ always skips. The mic never
-  blocks or counts as a fail. Without a mic, the child says the word and taps ▶.
+- **Speech:** spoken words make the story happen (`SpeakMoment`). The word is played slowly, then
+  "3, 2, 1, your turn!" and ~4 s of listening. Listening is **voice detection by loudness**
+  (`VoiceDetector` + `logic/VoiceMeter.kt`), NOT speech recognition (unreliable on iPhone/iPad and
+  with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
+  carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.
+- **Wrong answers, one pattern everywhere** (`Misses` in `Common.kt`): 1st miss wiggle + "Try
+  again!", 2nd miss the right answer glows and is spoken, 3rd miss show it and move on.
+- **Growth without numbers:** no levels, XP or star counts. Gems are for words he *tried* to say
+  (not right answers); they fill the 🎒 backpack (`Progress.addGem`), and a full backpack gives a
+  paper piece. Practice shows ~3 games that rotate daily (🔄 for others).
+- **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
+  limit on each). If speech doesn't finish in time the flow carries on and a big replay 🔊 appears
+  (`AudioTroubleButton`). Chrome sometimes never fires `onend`; that used to freeze the story.
+- Only use symbols that are emoji (they're in the web emoji font) or in Sniglet. Plain symbols like
+  → ➜ ✓ ⌫ ▲ ● show as boxes on the web. Draw arrows if needed.
 - Not a substitute for a speech-language pathologist; keep that note on the grown-ups page.
 
 ## Art style (decided)
@@ -49,8 +60,9 @@ These are the owner's rules for all work:
   (`ChapterScreen`, 3 to 5 minutes) ending in "see you next time". Finishing unfolds the next stop.
   After stop 16 a new lap starts, so there's always a next chapter. Nothing locks or goes back.
   New lands bring new skills: Market Town = coins, Puzzle Peaks = patterns on a rope bridge.
-- **Buddy pieces:** one paper piece per finished chapter, plus a "welcome back" piece on the
-  first visit of a new day (`Progress.checkIn`). Order is `Catalog.awardOrder`. Never taken away.
+- **Buddy pieces:** from a full backpack (4 gems, one per word tried) and a "welcome back" piece
+  on the first visit of a new day (`Progress.checkIn`). Order is `Catalog.awardOrder`. Never taken
+  away. New pieces pop up on `GiftOverlay`.
 - **Stickers:** every practised word becomes a sticker (`WordBook` in `logic/Words.kt`); a clear
   mic catch makes it shiny. The sticker book shows 4 per page.
 - **Speech plan** (`StoryGen.sayKinds` / `practiceWord`): story words that make a scene happen
@@ -59,7 +71,11 @@ These are the owner's rules for all work:
   grown-up's own words, and calling the sleeping visitor's name before the twist.
   `Progress.speechResult` quietly steps difficulty: 3 clear catches up, 2 misses down.
 - **Grown-ups page:** settings, words grouped as going well / still tricky / just started (no
-  scores), and up to 3 of the grown-up's own words with a picture.
+  scores), up to 3 of the grown-up's own words with a picture, and a **backup code**
+  (`Progress.exportCode` / `importCode`, format in `logic/Backup.kt`) so a cleared browser or a new
+  tablet doesn't start over.
+- **Map:** tapping a misty land wiggles it, Rory pops up ("Visit X first!") and sparkles run to the
+  next stop. A big "▶ Adventure!" button starts the next chapter. The island keeps a 1.75:1 shape.
 
 ## Work in progress / agreed next steps
 
@@ -82,13 +98,14 @@ Kotlin Multiplatform module `app` with three source sets:
   `data/Content.kt` holds words, sounds, tips and emoji. `ui/art/`: Critter, Scenery,
   SetPieces, IslandMap, Paper. `ui/screens/`: Map, Chapter, Talk (`SpeakMoment`), Practice, Closet, StickerBook, ParentGate, GrownUps.
   `ui/App.kt` is the shared entry and navigation. `state/Progress.kt` sits on `Prefs`.
-- Platform seams (interfaces/expect): `audio/Audio.kt` (`Speaker`, `Listener`, `Parrot`),
+- Platform seams (interfaces/expect): `audio/Audio.kt` (`Speaker`, `VoiceEngine`, `MicLevels`, `Parrot`;
+  `QueueSpeaker` and `VoiceDetector` sit on top in common code),
   `state/Prefs.kt`, `state/Clock.kt` (`today()`, local day number), `ui/platform/Platform.kt` (mic permission, back handler), and
   `drawPaper` in `ui/art/Paper.kt`.
-- `androidMain`: `MainActivity`, `AndroidSpeaker/Listener/Parrot`, `AndroidPrefs`
+- `androidMain`: `MainActivity`, `AndroidVoiceEngine` (TTS), `AndroidMicLevels` (AudioRecord), `AndroidParrot`, `AndroidPrefs`
   (SharedPreferences "progress"), `PaperAndroid.kt` (DiscretePathEffect), manifest and res.
 - `wasmJsMain`: `Main.kt` (tap-to-start screen, emoji font preload), `WebAudio.kt` (Web Speech
-  synthesis and recognition, MediaRecorder via `js()` interop), `WebPrefs.kt` (localStorage),
+  synthesis, mic loudness via getUserMedia + AnalyserNode, MediaRecorder via `js()` interop), `WebPrefs.kt` (localStorage),
   `PaperWeb.kt` (jittered outlines), and `resources/` (index.html, manifest, sw.js, icons).
 - Fonts are Compose resources (`commonMain/composeResources/font`). The web build also ships
   `wasmJsMain/composeResources/font/noto_color_emoji.ttf`, a trimmed Noto Color Emoji, because

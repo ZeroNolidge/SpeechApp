@@ -108,11 +108,11 @@ fun MapScreen(nav: Nav) {
     val p = app.progress
     val land = p.currentLand
     val unfoldNew = p.unfoldedSeen < p.chapter
-    val gift = remember { mutableStateOf<Cosmetic?>(null) }
     val hintLine = "Tap the big yellow button by ${land.hint}, where the hand is pointing!"
     LaunchedEffect(Unit) {
-        gift.value = p.checkIn(today())
-        val welcome = gift.value?.let { "Welcome back, ${p.heroName}! Your buddy found a present for coming to play: the ${it.name}! " } ?: ""
+        val present = p.checkIn(today())
+        present?.let { app.showGift(it) }
+        val welcome = present?.let { "Welcome back, ${p.heroName}! Your buddy found a present for coming to play: the ${it.name}! " } ?: ""
         val line = when {
             p.chapter == 0 -> "This is the map! Let's start the adventure. $hintLine"
             unfoldNew && Trail.opensLand(p.chapter) -> "Look, the map is opening up! A new place to explore. $hintLine"
@@ -120,7 +120,7 @@ fun MapScreen(nav: Nav) {
             else -> "Where shall we go, ${p.heroName}? $hintLine"
         }
         app.rememberInstruction(line)
-        if (gift.value != null) app.celebrate(welcome + line) else app.instruct(line)
+        if (present != null) app.celebrate(welcome + line) else app.instruct(line)
     }
     Nudge("map", hintLine, everyMs = 12000)
     val species = p.hero ?: Species.KID
@@ -166,7 +166,6 @@ fun MapScreen(nav: Nav) {
         if (hintKey > 0) RoryHint(hintKey)
         MapCorners(nav, startChapter)
     }
-    gift.value?.let { g -> GiftCard(g) { gift.value = null } }
 }
 
 /** The map's own buttons, kept to the corners so the trail stays the main thing to tap. */
@@ -213,28 +212,5 @@ private fun RoryHint(key: Int) {
     if (!show) return
     Box(Modifier.fillMaxSize().padding(start = 20.dp, bottom = 96.dp), contentAlignment = Alignment.BottomStart) {
         Critter(Species.ROBOT, Modifier.height(130.dp).popIn(key), Color(0xFFFFCC80), mood = Mood.CHEER)
-    }
-}
-
-/** A "welcome back" present: the new paper piece pops up on a card. Tap anywhere to close. */
-@Composable
-private fun GiftCard(piece: Cosmetic, onClose: () -> Unit) {
-    val p = LocalApp.current.progress
-    val species = p.hero ?: Species.KID
-    Box(
-        Modifier.fillMaxSize().padding(40.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        PaperButton(
-            PaperStyle.chip,
-            Modifier.fillMaxWidth(0.55f).fillMaxHeight(0.8f).popIn(piece),
-            onClick = onClose,
-        ) {
-            Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("🎁", fontSize = 44.sp)
-                HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, Modifier.weight(1f).fillMaxWidth(), Mood.CHEER)
-                PaperChip(piece.name)
-            }
-        }
     }
 }

@@ -23,7 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.ComposeViewport
-import com.zeronolidge.speechapp.audio.WebListener
+import com.zeronolidge.speechapp.audio.VoiceDetector
+import com.zeronolidge.speechapp.audio.WebMicLevels
 import com.zeronolidge.speechapp.audio.WebParrot
 import com.zeronolidge.speechapp.audio.QueueSpeaker
 import com.zeronolidge.speechapp.audio.WebVoiceEngine
@@ -46,7 +47,7 @@ fun main() {
     val progress = Progress(WebPrefs())
     val services = AppServices(
         speaker = QueueSpeaker(WebVoiceEngine()).also { it.rate = progress.speechRate },
-        listener = WebListener(),
+        voice = VoiceDetector(WebMicLevels()),
         parrot = WebParrot(),
         progress = progress,
     )

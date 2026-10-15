@@ -59,6 +59,7 @@ import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.ui.challenge.ChallengeView
 import com.zeronolidge.speechapp.ui.challenge.PowerTicks
 import com.zeronolidge.speechapp.ui.components.AfterDelay
+import com.zeronolidge.speechapp.ui.components.BackpackMeter
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.NameTag
@@ -94,7 +95,7 @@ fun ChapterScreen(nav: Nav) {
     var phase by remember { mutableStateOf<Phase>(Phase.Intro) }
     var cheer by remember { mutableStateOf(false) }
     var patternWins by remember { mutableStateOf(0) }
-    var piece by remember { mutableStateOf<Cosmetic?>(null) }
+    val piecesBefore = remember { p.pieces.map { it.id }.toSet() }
     var woken by remember { mutableStateOf(false) }
     val stickersBefore = remember { p.words.words.keys }
     val species = p.hero ?: Species.KID
@@ -141,16 +142,13 @@ fun ChapterScreen(nav: Nav) {
             is Phase.Beat -> BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft -> solved(c, ft) }, onNext = ::next)
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
-                    if (p.chapter == chapter) {
-                        p.finishChapter()
-                        piece = p.awardPiece()
-                    }
+                    if (p.chapter == chapter) p.finishChapter()
                 }
                 StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = ::next)
             }
             Phase.Goodbye -> {
                 val earned = p.words.stickers.filter { it.text !in stickersBefore }
-                Goodbye(piece, earned, onMap = nav.home)
+                Goodbye(p.pieces.lastOrNull { it.id !in piecesBefore }, earned, onMap = nav.home)
             }
         }
     }
@@ -413,7 +411,7 @@ private fun Goodbye(piece: Cosmetic?, stickers: List<WordStat>, onMap: () -> Uni
     LaunchedEffect(Unit) {
         val parts = buildList {
             add("What an adventure!")
-            if (piece != null) add("Your buddy got a new ${piece.name}!")
+            if (piece != null) add("Your buddy got a new ${piece.name} from the backpack!")
             if (stickers.isNotEmpty()) add(if (stickers.size == 1) "And you got a new sticker!" else "And you got ${stickers.size} new stickers!")
             add("See you next time, ${p.heroName}! Tap the big green arrow to go back to the map.")
         }
@@ -433,6 +431,7 @@ private fun Goodbye(piece: Cosmetic?, stickers: List<WordStat>, onMap: () -> Uni
             Column(Modifier.weight(0.9f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                 HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, Modifier.weight(1f).fillMaxWidth().popIn(piece), Mood.CHEER)
                 if (piece != null) PaperChip("🎁 ${piece.name}", Modifier.popIn(piece, 400))
+                BackpackMeter(gemSize = 26)
             }
             Column(
                 Modifier.weight(1.3f).fillMaxHeight(),

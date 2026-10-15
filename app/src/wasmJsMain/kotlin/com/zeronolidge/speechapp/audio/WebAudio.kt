@@ -44,49 +44,60 @@ class WebVoiceEngine : VoiceEngine {
     override fun shutdown() = cancel()
 }
 
-// ---------------------------------------------------------------- listening (Web Speech recognition)
+// ---------------------------------------------------------------- microphone loudness
 
-private fun jsRecognitionAvailable(): Boolean = js("!!(window.SpeechRecognition || window.webkitSpeechRecognition)")
+private fun jsMicAvailable(): Boolean = js("!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))")
 
-private fun jsListen(hint: String, onResult: (String) -> Unit): JsAny = js(
+private fun jsMicStart(onLevel: (Double) -> Unit, onFail: () -> Unit): JsAny = js(
     """(() => {
-        const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const r = new R();
-        r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 5; r.continuous = false;
-        let sent = false;
-        const send = (s) => { if (!sent) { sent = true; onResult(s); } };
-        r.onresult = (e) => {
-            const res = e.results[0];
-            const out = [];
-            for (let i = 0; i < res.length; i++) out.push(res[i].transcript);
-            send(out.join('\n'));
-        };
-        r.onerror = () => send('');
-        r.onend = () => send('');
-        try { r.start(); } catch (e) { send(''); }
-        return r;
+        const st = { stopped: false, stream: null, timer: null, src: null };
+        try {
+            navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(stream => {
+                if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+                st.stream = stream;
+                const C = window.AudioContext || window.webkitAudioContext;
+                window.__tlAudio = window.__tlAudio || new C();
+                const ctx = window.__tlAudio;
+                try { ctx.resume(); } catch (e) {}
+                const src = ctx.createMediaStreamSource(stream);
+                const an = ctx.createAnalyser();
+                an.fftSize = 1024;
+                src.connect(an);
+                st.src = src;
+                const buf = new Float32Array(an.fftSize);
+                st.timer = setInterval(() => {
+                    an.getFloatTimeDomainData(buf);
+                    let sum = 0;
+                    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+                    onLevel(Math.sqrt(sum / buf.length));
+                }, 50);
+            }).catch(() => { if (!st.stopped) onFail(); });
+        } catch (e) { onFail(); }
+        return st;
     })()"""
 )
 
-private fun jsStopListening(r: JsAny): Unit = js(
-    "(() => { try { r.onresult = null; r.onerror = null; r.onend = null; r.abort(); } catch (e) {} })()"
+private fun jsMicStop(st: JsAny): Unit = js(
+    """(() => {
+        st.stopped = true;
+        try { if (st.timer) clearInterval(st.timer); } catch (e) {}
+        try { if (st.src) st.src.disconnect(); } catch (e) {}
+        try { if (st.stream) st.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    })()"""
 )
 
-/** Listening in the browser (Chrome on Android supports this; it usually needs internet). */
-class WebListener : Listener {
+/** Microphone loudness in the browser (getUserMedia and an analyser). Works on iPhone and iPad too. */
+class WebMicLevels : MicLevels {
     private var current: JsAny? = null
-    override val available: Boolean get() = jsRecognitionAvailable()
+    override val available: Boolean get() = jsMicAvailable()
 
-    override fun listen(hint: String, onLevel: (Float) -> Unit, onResult: (List<String>) -> Unit) {
-        cancel()
-        current = jsListen(hint) { joined ->
-            current = null
-            onResult(joined.split('\n').map { it.trim() }.filter { it.isNotEmpty() })
-        }
+    override fun start(onLevel: (Float) -> Unit, onFail: () -> Unit) {
+        stop()
+        current = jsMicStart({ onLevel(it.toFloat()) }, onFail)
     }
 
-    override fun cancel() {
-        current?.let { jsStopListening(it) }
+    override fun stop() {
+        current?.let { jsMicStop(it) }
         current = null
     }
 }

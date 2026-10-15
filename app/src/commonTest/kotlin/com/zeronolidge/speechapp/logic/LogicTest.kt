@@ -359,3 +359,77 @@ class PlotTest {
         }
     }
 }
+
+class VoiceMeterTest {
+    private fun run(levels: List<Float>): VoiceMeter {
+        val m = VoiceMeter()
+        for (l in levels) if (m.feed(l, 50)) break
+        return m
+    }
+
+    @Test
+    fun quietRoomIsNotAVoice() {
+        assertFalse(run(List(80) { 0.004f }).heard)
+    }
+
+    @Test
+    fun aShortWordIsHeard() {
+        val levels = List(10) { 0.005f } + List(8) { 0.08f } + List(62) { 0.005f }
+        assertTrue(run(levels).heard)
+    }
+
+    @Test
+    fun aClickIsNotAVoice() {
+        val levels = List(10) { 0.005f } + listOf(0.3f, 0.3f) + List(68) { 0.005f }
+        assertFalse(run(levels).heard)
+    }
+
+    @Test
+    fun aNoisyRoomNeedsALouderVoice() {
+        val m = VoiceMeter()
+        repeat(6) { m.feed(0.03f, 50) }
+        assertTrue(m.threshold > 0.08f)
+        assertFalse(run(List(80) { 0.03f }).heard)
+    }
+
+    @Test
+    fun listeningEndsEarlyAfterTheChildStops() {
+        val m = VoiceMeter()
+        var steps = 0
+        val levels = List(10) { 0.005f } + List(10) { 0.1f } + List(70) { 0.005f }
+        for (l in levels) {
+            steps++
+            if (m.feed(l, 50)) break
+        }
+        assertTrue(m.heard)
+        assertTrue(steps < 40, "stopped after $steps steps")
+    }
+}
+
+class BackupTest {
+    @Test
+    fun codesRoundTrip() {
+        val values = mapOf("chapter" to "i:7", "childName" to "s:Sam = the\\ best\nkid", "words" to "S:a\u001Fb", "speechRate" to "f:0.85")
+        val code = Backup.encode(values)
+        assertTrue(code.startsWith("TALK1-"))
+        assertEquals(values, Backup.decode(code))
+        // Spaces and line breaks from copying are fine.
+        assertEquals(values, Backup.decode(code.chunked(20).joinToString("\n ")))
+    }
+
+    @Test
+    fun brokenCodesAreRejected() {
+        val code = Backup.encode(mapOf("chapter" to "i:3"))
+        assertEquals(null, Backup.decode(code.dropLast(5)))
+        assertEquals(null, Backup.decode("hello"))
+        val tampered = code.replaceRange(8, 9, if (code[8] == 'A') "B" else "A")
+        assertEquals(null, Backup.decode(tampered))
+    }
+
+    @Test
+    fun base64MatchesTheStandard() {
+        assertEquals("aGk=", Base64Lite.encode("hi".encodeToByteArray()))
+        assertEquals("aGVsbG8gd29ybGQ=", Base64Lite.encode("hello world".encodeToByteArray()))
+        assertEquals("hello world", Base64Lite.decode("aGVsbG8gd29ybGQ=")!!.decodeToString())
+    }
+}

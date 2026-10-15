@@ -58,6 +58,9 @@ import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.ui.art.PaperStyle
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.logic.Coins
+import com.zeronolidge.speechapp.state.today
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.width
 import com.zeronolidge.speechapp.ui.components.KidScreen
@@ -92,12 +95,31 @@ fun PracticeMenu(nav: Nav) {
         Tile("🔠", "ABC", "The alphabet!", Kid.letters, Screen.Alphabet),
         Tile("🔟", "1 2 3", "Let's learn numbers!", Kid.numbers, Screen.NumberLine),
     ) + PracticeKind.entries.map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
-    KidScreen("🎯", nav.home, "Practice games! Tap a game to play. Tap the arrow to see more games.") {
-        PagedChoices(tiles, perPage = 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { t, m ->
-            ChoiceTile(t.emoji, t.label, t.color, m, onClick = {
-                app.speaker.say(t.spoken)
-                nav.go(t.target)
-            }) { Text(t.emoji, fontSize = 72.sp) }
+    // A short set of three games that changes every day; 🔄 swaps in three others.
+    var start by remember { mutableIntStateOf((today() * 3).mod(tiles.size)) }
+    val shown = (0 until 3).map { tiles[(start + it) % tiles.size] }
+    KidScreen("🎯", nav.home, "Practice games! Tap a game to play. Tap the round arrows for different games.") {
+        Row(
+            Modifier.fillMaxSize().padding(vertical = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            shown.forEachIndexed { i, t ->
+                Box(Modifier.weight(1f).popIn(start to i, i * 60), contentAlignment = Alignment.Center) {
+                    ChoiceTile(
+                        t.emoji, t.label, t.color,
+                        Modifier.fillMaxWidth().widthIn(max = 240.dp).heightIn(min = 120.dp, max = 260.dp).fillMaxHeight(),
+                        onClick = {
+                            app.speaker.say(t.spoken)
+                            nav.go(t.target)
+                        },
+                    ) { Text(t.emoji, fontSize = 72.sp) }
+                }
+            }
+            RoundIcon("🔄", PaperColorsUi.choice, size = 80.dp) {
+                start = (start + 3) % tiles.size
+                app.speaker.say("New games!")
+            }
         }
     }
 }

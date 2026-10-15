@@ -5,6 +5,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
+import com.zeronolidge.speechapp.logic.Species
+import com.zeronolidge.speechapp.ui.art.HeroWithPet
+import com.zeronolidge.speechapp.ui.art.Mood
+import com.zeronolidge.speechapp.ui.art.PaperStyle
+import com.zeronolidge.speechapp.ui.components.PaperButton
+import com.zeronolidge.speechapp.ui.components.PaperChip
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
@@ -47,6 +58,7 @@ fun TalkAndLearnApp(services: AppServices) {
             Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
                 Screens()
                 CelebrationOverlay()
+                GiftOverlay()
                 AudioTroubleButton()
             }
         }
@@ -117,6 +129,28 @@ private fun AudioTroubleButton() {
                 app.repeatInstruction()
             }
             PointingHand(size = 56.dp)
+        }
+    }
+}
+
+/** A new paper piece pops up on a card over whatever is on screen. Tap it to close. */
+@Composable
+private fun GiftOverlay() {
+    val app = LocalApp.current
+    val piece = app.gift ?: return
+    val p = app.progress
+    val species = p.hero ?: Species.KID
+    Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
+        PaperButton(
+            PaperStyle.chip,
+            Modifier.fillMaxWidth(0.5f).fillMaxHeight(0.8f).widthIn(min = 260.dp).popIn(piece),
+            onClick = { app.closeGift() },
+        ) {
+            Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("🎁", fontSize = 44.sp)
+                HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, Modifier.weight(1f).fillMaxWidth(), Mood.CHEER)
+                PaperChip(piece.name)
+            }
         }
     }
 }

@@ -47,6 +47,7 @@ import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.SpeakOnOpen
+import com.zeronolidge.speechapp.ui.platform.rememberCopyText
 import com.zeronolidge.speechapp.ui.theme.Kid
 import kotlin.math.roundToInt
 
@@ -98,8 +99,8 @@ fun GrownUpsScreen(nav: Nav) {
                     Switch(checked = p.useMic, onCheckedChange = { p.updateUseMic(it) })
                 }
                 Text(
-                    if (app.listener.available) "Speech recognition is available. Any honest try moves the story on; a word heard clearly earns a shiny sticker."
-                    else "Speech recognition isn't available here, so the app models each word and your child taps the green arrow after saying it.",
+                    if (app.voice.available) "The microphone only listens for a voice (how loud), not for the exact word, so it works with young voices and on iPhone and iPad. Any try moves the story on; a voice heard earns a shiny sticker. If the microphone is off or blocked, the app asks your child to say the word out loud and tap the green arrow."
+                    else "There's no microphone here, so the app plays each word, asks your child to say it out loud, then waits for a tap on the green arrow.",
                     fontSize = 14.sp,
                     color = Kid.ink.copy(alpha = 0.7f),
                 )
@@ -111,10 +112,13 @@ fun GrownUpsScreen(nav: Nav) {
                     fontSize = 16.sp,
                 )
                 Spacer(Modifier.padding(4.dp))
+                Heading("Back up progress")
+                BackupSection()
+                Spacer(Modifier.padding(4.dp))
                 OutlinedButton(onClick = { confirmReset = true }) { Text("Reset all progress") }
                 Heading("Tips")
                 Tip("Sit with your child for speaking. Say the word together, face to face, so they can watch your mouth.")
-                Tip("The microphone often misses young voices. That's fine: any try moves the story on. Shiny stickers are a bonus.")
+                Tip("Gems go in the backpack for every word your child tries to say, not for right answers. A full backpack gives the buddy a new paper piece.")
                 Tip("Each chapter takes about 3 to 5 minutes and ends with “see you next time”. One or two chapters a day is plenty.")
                 Tip("Words he's tried come back on later days, and the trickiest come back first.")
                 Tip("This app is for practice and fun. It doesn't replace a speech-language pathologist. Ask them which sounds to focus on, and add their words above.")
@@ -137,6 +141,65 @@ fun GrownUpsScreen(nav: Nav) {
     }
 }
 
+/**
+ * Progress is saved in this browser (or app) only. A backup code carries it to a new tablet, or
+ * back after the browser's data is cleared.
+ */
+@Composable
+private fun BackupSection() {
+    val app = LocalApp.current
+    val p = app.progress
+    val copy = rememberCopyText()
+    var code by remember { mutableStateOf("") }
+    var paste by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var confirmRestore by remember { mutableStateOf(false) }
+    Text(
+        "Progress is saved on this device only. Make a backup code and keep it somewhere safe (email it to yourself). " +
+            "On a new tablet, or if the browser's data is cleared, paste it below to carry on where your child left off.",
+        fontSize = 14.sp,
+        color = Kid.ink.copy(alpha = 0.7f),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = {
+            code = p.exportCode()
+            message = if (copy(code)) "Backup code made and copied." else "Backup code made. Select it and copy it."
+        }) { Text("Make backup code") }
+        if (code.isNotEmpty()) OutlinedButton(onClick = { message = if (copy(code)) "Copied." else "Select the code and copy it." }) { Text("Copy") }
+    }
+    if (code.isNotEmpty()) {
+        OutlinedTextField(value = code, onValueChange = {}, readOnly = true, label = { Text("Backup code") }, maxLines = 3, modifier = Modifier.fillMaxWidth())
+    }
+    OutlinedTextField(
+        value = paste,
+        onValueChange = { paste = it },
+        label = { Text("Paste a backup code to restore") },
+        maxLines = 3,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Button(enabled = paste.isNotBlank(), onClick = { confirmRestore = true }) { Text("Restore") }
+    if (message.isNotEmpty()) Text(message, fontSize = 14.sp, color = Kid.ink)
+    if (confirmRestore) {
+        AlertDialog(
+            onDismissRequest = { confirmRestore = false },
+            title = { Text("Restore this backup?") },
+            text = { Text("This replaces the progress on this device with the progress in the code.") },
+            confirmButton = {
+                Button(onClick = {
+                    confirmRestore = false
+                    message = if (p.importCode(paste)) {
+                        paste = ""
+                        "Restored! Welcome back."
+                    } else {
+                        "That code didn't work. Check it was copied completely."
+                    }
+                }) { Text("Restore") }
+            },
+            dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
+        )
+    }
+}
+
 /** Words grouped by how they're going, with when each was last practised. No scores. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -149,10 +212,10 @@ private fun WordsReport() {
     }
     val now = today()
     val groups = listOf(
-        WordStatus.STILL_TRICKY to "Still tricky (the microphone keeps missing these, so practise them together)",
-        WordStatus.GOING_WELL to "Going well",
+        WordStatus.STILL_TRICKY to "Still tricky (often quiet on these lately, so say them together)",
+        WordStatus.GOING_WELL to "Going well (said out loud)",
         WordStatus.JUST_STARTED to "Just started",
-        WordStatus.NOT_HEARD to "Tried, but the microphone hasn't caught them yet",
+        WordStatus.NOT_HEARD to "Tried, but not heard out loud yet",
     )
     groups.forEach { (status, title) ->
         val ws = book.stickers.filter { book.status(it) == status }

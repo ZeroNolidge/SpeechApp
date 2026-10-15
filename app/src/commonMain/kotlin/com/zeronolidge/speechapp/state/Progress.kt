@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import com.zeronolidge.speechapp.logic.Backup
 import com.zeronolidge.speechapp.logic.Catalog
 import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.Land
@@ -84,6 +85,27 @@ class Progress(private val prefs: Prefs) {
     fun heroColor(species: Species = hero ?: Species.KID): Color {
         val chosen = equippedIn(Slot.COLOR)?.color?.takeIf { it != 0L }
         return Color(chosen ?: if (species == Species.KID) 0xFFFF7043 else species.defaultColor)
+    }
+
+    // ---------- The backpack ----------
+
+    /** Gems in the backpack right now (shown as pictures, never as a number). */
+    var backpack by mutableIntStateOf(prefs.getInt("backpack", 0))
+        private set
+
+    /**
+     * One gem for trying to say a word. When the backpack is full, it empties and the buddy gets
+     * a new paper piece, which is returned (null otherwise).
+     */
+    fun addGem(): Cosmetic? {
+        backpack++
+        var piece: Cosmetic? = null
+        if (backpack >= BACKPACK_SIZE) {
+            backpack = 0
+            piece = awardPiece()
+        }
+        prefs.edit().putInt("backpack", backpack).apply()
+        return piece
     }
 
     // ---------- The trail ----------
@@ -235,6 +257,64 @@ class Progress(private val prefs: Prefs) {
         customWords = customWords,
     )
 
+    // ---------- Backup ----------
+
+    private val intKeys get() = listOf("stars", "chapter", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack") +
+        areas.map { "area_$it" } + listOf("patterns", "story_robot", "robot_easy", "robot_turn").map { "level_$it" }
+    private val stringKeys get() = listOf("hero", "childName", "customWords") + Slot.entries.map { "equip_${it.name}" }
+    private val setKeys = listOf("owned", "words", "focus")
+
+    /** Everything worth keeping, as a code a grown-up can copy and paste on another device. */
+    fun exportCode(): String {
+        val m = mutableMapOf<String, String>()
+        intKeys.forEach { m[it] = "i:" + prefs.getInt(it, 0) }
+        m["speechRate"] = "f:" + prefs.getFloat("speechRate", 0.85f)
+        m["useMic"] = "b:" + prefs.getBoolean("useMic", true)
+        stringKeys.forEach { k -> prefs.getString(k, null)?.let { m[k] = "s:$it" } }
+        setKeys.forEach { k -> m[k] = "S:" + prefs.getStringSet(k, emptySet())!!.joinToString(SET_SEP) }
+        return Backup.encode(m)
+    }
+
+    /** Replaces all progress with the one in [code]. Returns false (and changes nothing) if the code isn't valid. */
+    fun importCode(code: String): Boolean {
+        val m = Backup.decode(code) ?: return false
+        if ("chapter" !in m) return false
+        val e = prefs.edit().clear()
+        m.forEach { (k, v) ->
+            val body = v.drop(2)
+            when (v.take(2)) {
+                "i:" -> body.toIntOrNull()?.let { e.putInt(k, it) }
+                "f:" -> body.toFloatOrNull()?.let { e.putFloat(k, it) }
+                "b:" -> e.putBoolean(k, body == "true")
+                "s:" -> e.putString(k, body)
+                "S:" -> e.putStringSet(k, if (body.isEmpty()) emptySet() else body.split(SET_SEP).toSet())
+            }
+        }
+        e.apply()
+        load()
+        return true
+    }
+
+    /** Reads everything back from storage (after a restore). */
+    private fun load() {
+        stars = prefs.getInt("stars", 0)
+        hero = prefs.getString("hero", null)?.let { runCatching { Species.valueOf(it) }.getOrNull() }
+        owned = prefs.getStringSet("owned", emptySet())!!.toSet() + Catalog.starters
+        equipped = readEquipped()
+        backpack = prefs.getInt("backpack", 0)
+        chapter = prefs.getInt("chapter", 0)
+        unfoldedSeen = prefs.getInt("unfoldedSeen", 0)
+        words = WordBook.decode(prefs.getStringSet("words", emptySet())!!)
+        speechStep = prefs.getInt("speechStep", 0)
+        clearRun = prefs.getInt("clearRun", 0)
+        missRun = prefs.getInt("speechMissRun", 0)
+        customWords = readCustom()
+        childName = prefs.getString("childName", "") ?: ""
+        speechRate = prefs.getFloat("speechRate", 0.85f)
+        useMic = prefs.getBoolean("useMic", true)
+        focusSounds = prefs.getStringSet("focus", emptySet())!!.toSet()
+    }
+
     /** Clears the buddy, the trail, pieces, stickers and stars. Grown-up settings and own words are kept. */
     fun reset() {
         prefs.edit().clear()
@@ -253,6 +333,7 @@ class Progress(private val prefs: Prefs) {
         speechStep = 0
         clearRun = 0
         missRun = 0
+        backpack = 0
     }
 
     companion object {
@@ -266,5 +347,7 @@ class Progress(private val prefs: Prefs) {
         val areas = listOf(AREA_SPEECH, AREA_LETTERS, AREA_READING, AREA_NUMBERS, AREA_COINS, AREA_PATTERNS, AREA_ROBOT)
         const val MAX_SPEECH_STEP = 2
         const val MAX_CUSTOM = 3
+        const val BACKPACK_SIZE = 4
+        private const val SET_SEP = "\u001F"
     }
 }

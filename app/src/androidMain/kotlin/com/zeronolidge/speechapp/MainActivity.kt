@@ -4,7 +4,8 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.zeronolidge.speechapp.audio.AndroidListener
+import com.zeronolidge.speechapp.audio.AndroidMicLevels
+import com.zeronolidge.speechapp.audio.VoiceDetector
 import com.zeronolidge.speechapp.audio.AndroidParrot
 import com.zeronolidge.speechapp.audio.AndroidVoiceEngine
 import com.zeronolidge.speechapp.audio.QueueSpeaker
@@ -22,7 +23,7 @@ class MainActivity : ComponentActivity() {
         val progress = Progress(AndroidPrefs(this))
         services = AppServices(
             speaker = QueueSpeaker(AndroidVoiceEngine(this)).also { it.rate = progress.speechRate },
-            listener = AndroidListener(this),
+            voice = VoiceDetector(AndroidMicLevels()),
             parrot = AndroidParrot(this),
             progress = progress,
         )
@@ -32,13 +33,13 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         services.speaker.stop()
-        services.listener.cancel()
+        services.voice.cancel()
         services.parrot.stop()
     }
 
     override fun onDestroy() {
         services.speaker.shutdown()
-        services.listener.cancel()
+        services.voice.cancel()
         services.parrot.stop()
         super.onDestroy()
     }

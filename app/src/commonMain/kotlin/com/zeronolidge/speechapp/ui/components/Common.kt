@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zeronolidge.speechapp.audio.Listener
+import com.zeronolidge.speechapp.audio.VoiceDetector
 import com.zeronolidge.speechapp.audio.Parrot
 import com.zeronolidge.speechapp.audio.Speaker
 import com.zeronolidge.speechapp.data.Praise
@@ -61,7 +61,8 @@ import kotlinx.coroutines.delay
 /** Everything a screen needs to talk, listen and award stars. */
 class AppServices(
     val speaker: Speaker,
-    val listener: Listener,
+    /** "Did the child say something?" from microphone loudness. */
+    val voice: VoiceDetector,
     val parrot: Parrot,
     val progress: Progress,
 ) {
@@ -77,6 +78,18 @@ class AppServices(
 
     init {
         speaker.onTrouble = { audioTrouble = true }
+    }
+
+    /** A new paper piece to show off on a pop-up card (from the backpack or a welcome-back present). */
+    var gift by mutableStateOf<com.zeronolidge.speechapp.logic.Cosmetic?>(null)
+        private set
+
+    fun showGift(piece: com.zeronolidge.speechapp.logic.Cosmetic) {
+        gift = piece
+    }
+
+    fun closeGift() {
+        gift = null
     }
 
         /** What the big 🔊 "hear it again" button says: the current screen's instruction. */
@@ -143,12 +156,18 @@ fun RoundIcon(
     onClick: () -> Unit,
 ) = PaperIconButton(emoji, color, size, enabled, onClick = onClick)
 
-/** A raised answer card. Wrong answers fold flat and fade so the child can try again. */
+/**
+ * A raised answer card. A wrong tap makes it wiggle; [glow] makes the right answer shine after a
+ * second miss; [correct] turns it green.
+ */
 @Composable
 fun AnswerCard(
     modifier: Modifier = Modifier,
     faded: Boolean = false,
     correct: Boolean = false,
+    glow: Boolean = false,
+    /** Each time this goes up, the card gives a little wiggle. */
+    wiggle: Int = 0,
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -159,11 +178,26 @@ fun AnswerCard(
         label = "scale",
     )
     val fold by animateFloatAsState(if (faded) 1f else 0f, tween(300), label = "fold")
+    val shake = remember { Animatable(0f) }
+    LaunchedEffect(wiggle) {
+        if (wiggle > 0) {
+            repeat(3) {
+                shake.animateTo(9f, tween(55))
+                shake.animateTo(-9f, tween(55))
+            }
+            shake.animateTo(0f, tween(55))
+        }
+    }
     PaperButton(
-        if (correct) Kid.good else PaperColorsUi.choice,
+        when {
+            correct -> Kid.good
+            glow -> Kid.highlight
+            else -> PaperColorsUi.choice
+        },
         modifier
-            .scale(if (correct) s else 1f)
+            .scale(if (correct || glow) s else 1f)
             .graphicsLayer {
+                rotationZ = shake.value
                 scaleY = 1f - 0.12f * fold
                 alpha = 1f - 0.6f * fold
             },
@@ -174,8 +208,24 @@ fun AnswerCard(
 }
 
 /**
- * Shows answer options and handles right/wrong taps the same way everywhere:
- * wrong answers fade with a gentle "try again", the right one glows and earns a star.
+ * How every multiple-choice question handles a wrong tap, the same everywhere:
+ *  1st miss: the card wiggles and "Try again!".
+ *  2nd miss: the right answer glows and is said out loud.
+ *  3rd miss: the right answer is shown, and the story moves on.
+ */
+class Misses {
+    var count by mutableIntStateOf(0)
+        private set
+
+    fun add() = ++count
+
+    val showAnswer get() = count >= 2
+}
+
+/**
+ * Shows answer options and handles taps the same way everywhere (see [Misses]): wrong answers
+ * wiggle, then the right one glows and is said, then it's shown and the story moves on.
+ * The right answer earns a star.
  */
 @Composable
 fun <T> AnswerRow(
@@ -195,7 +245,9 @@ fun <T> AnswerRow(
     content: @Composable (T) -> Unit,
 ) {
     val app = LocalApp.current
+    val misses = remember(roundKey) { Misses() }
     var faded by remember(roundKey) { mutableStateOf(setOf<T>()) }
+    var wiggles by remember(roundKey) { mutableStateOf(mapOf<T, Int>()) }
     var solved by remember(roundKey) { mutableStateOf(false) }
     var advanced by remember(roundKey) { mutableStateOf(false) }
     val advance = {
@@ -210,11 +262,12 @@ fun <T> AnswerRow(
             if (wrong.isNotEmpty()) faded = faded + wrong.random()
         }
     }
-    // Normally the next round starts when the praise finishes; this is a backstop.
-    if (solved) AfterDelay(roundKey, 4000) { advance() }
+    // Normally the next round starts when the voice finishes; this is a backstop.
+    if (solved) AfterDelay(roundKey, 6000) { advance() }
+    val answerWords = describe?.invoke(answer)
     Row(
         modifier,
-        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEach { opt ->
@@ -222,6 +275,8 @@ fun <T> AnswerRow(
                 modifier = cardModifier,
                 faded = opt in faded,
                 correct = solved && opt == answer,
+                glow = !solved && misses.showAnswer && opt == answer,
+                wiggle = wiggles[opt] ?: 0,
                 onClick = {
                     if (!solved) {
                         val said = describe?.invoke(opt)?.let { "$it! " } ?: ""
@@ -229,9 +284,16 @@ fun <T> AnswerRow(
                             solved = true
                             app.reward(area, said + Praise.great.random(), onDone = advance)
                         } else {
-                            faded = faded + opt
+                            wiggles = wiggles + (opt to (wiggles[opt] ?: 0) + 1)
                             onMiss()
-                            app.tryAgain(said + Praise.tryAgain.random())
+                            when (misses.add()) {
+                                1 -> app.speaker.say(said + "Try again!")
+                                2 -> app.speaker.say(said + "Here's the right one, shining!" + (answerWords?.let { " $it!" } ?: "") + " Tap it!")
+                                else -> {
+                                    solved = true
+                                    app.speaker.say("It's this one" + (answerWords?.let { ": $it" } ?: "") + ". Good trying! Let's keep going.", onDone = advance)
+                                }
+                            }
                         }
                     }
                 },

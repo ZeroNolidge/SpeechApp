@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -47,7 +48,25 @@ fun HeroBadge(modifier: Modifier = Modifier, onClick: () -> Unit) {
                 Critter(species, Modifier.fillMaxHeight(), p.heroColor(species), p.outfit, animate = false)
             }
             Spacer(Modifier.width(10.dp))
-            Text("🎒", fontSize = 34.sp)
+            BackpackMeter()
+        }
+    }
+}
+
+/**
+ * The backpack: a gem goes in for every word the child tries to say. When it's full, the buddy
+ * gets a new paper piece. Shown as pictures only, never as a number.
+ */
+@Composable
+fun BackpackMeter(gemSize: Int = 20) {
+    val p = LocalApp.current.progress
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("🎒", fontSize = (gemSize * 1.7f).sp)
+        Spacer(Modifier.width(4.dp))
+        Row {
+            repeat(com.zeronolidge.speechapp.state.Progress.BACKPACK_SIZE) { i ->
+                Text("💎", fontSize = gemSize.sp, modifier = Modifier.alpha(if (i < p.backpack) 1f else 0.22f))
+            }
         }
     }
 }

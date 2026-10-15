@@ -63,6 +63,7 @@ import com.zeronolidge.speechapp.logic.StepResult
 import com.zeronolidge.speechapp.logic.Subject
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.components.AnswerRow
+import com.zeronolidge.speechapp.ui.components.Misses
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.PaperChip
@@ -316,33 +317,56 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
     val app = LocalApp.current
     var solved by remember(c) { mutableStateOf(false) }
     var faded by remember(c) { mutableStateOf(setOf<Boolean>()) }
+    val misses = remember(c) { Misses() }
+    var wiggleLeft by remember(c) { mutableIntStateOf(0) }
+    var wiggleRight by remember(c) { mutableIntStateOf(0) }
+    val shake = remember(c) { Animatable(0f) }
+    LaunchedEffect(wiggleLeft, wiggleRight) {
+        if (wiggleLeft + wiggleRight > 0) {
+            repeat(3) {
+                shake.animateTo(8f, tween(55))
+                shake.animateTo(-8f, tween(55))
+            }
+            shake.animateTo(0f, tween(55))
+        }
+    }
     LaunchedEffect(c, wand) {
         if (wand > 0 && !solved) faded = setOf(!r.moreIsLeft)
     }
+    val moreLine = "${Numbers.word(maxOf(r.left, r.right))} is more than ${Numbers.word(minOf(r.left, r.right))}."
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
             val right = isLeft == r.moreIsLeft
+            val wiggling = (isLeft && wiggleLeft > 0) || (!isLeft && wiggleRight > 0)
             PaperButton(
-                if (solved && right) Kid.good else PaperColorsUi.choice,
+                when {
+                    solved && right -> Kid.good
+                    !solved && right && misses.showAnswer -> Kid.highlight
+                    else -> PaperColorsUi.choice
+                },
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(bottom = 10.dp),
+                    .padding(bottom = 10.dp)
+                    .rotate(if (wiggling && !right) shake.value else 0f),
                 enabled = !solved && isLeft !in faded,
                 onClick = {
-                        if (right) {
-                            solved = true
-                            app.reward(
-                                area,
-                                "${Praise.great.random()} ${Numbers.word(maxOf(r.left, r.right))} is more than ${Numbers.word(minOf(r.left, r.right))}.",
-                                onDone = done,
-                            )
-                        } else {
-                            faded = faded + isLeft
-                            miss()
-                            app.tryAgain()
+                    if (right) {
+                        solved = true
+                        app.reward(area, "${Praise.great.random()} $moreLine", onDone = done)
+                    } else {
+                        if (isLeft) wiggleLeft++ else wiggleRight++
+                        miss()
+                        when (misses.add()) {
+                            1 -> app.speaker.say("Try again!")
+                            2 -> app.speaker.say("This side is shining! It has more. Tap it!")
+                            else -> {
+                                solved = true
+                                app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = done)
+                            }
                         }
-                    },
+                    }
+                },
             ) {
                 EmojiGroup(r.emoji, n, Modifier.padding(10.dp), size = 40)
                 if (solved) {
@@ -549,6 +573,8 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
     var bumpAt by remember(c) { mutableStateOf<Cell?>(null) }
     var won by remember(c) { mutableStateOf(false) }
     var hint by remember(c) { mutableStateOf<Cmd?>(null) }
+    var failures by remember(c) { mutableIntStateOf(0) }
+    var autoGo by remember(c) { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     val running = runningStep >= 0
     val wobble = remember { Animatable(0f) }
@@ -580,6 +606,29 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
         bumpAt = null
     }
 
+    /**
+     * The same gentle pattern as every other question: after the 1st failed run "try again",
+     * after the 2nd the next good move lights up, after the 3rd the robot is shown the way.
+     */
+    fun afterFailure() {
+        reset()
+        when (failures) {
+            1 -> app.speaker.say("Let's fix the plan and try again!")
+            2 -> {
+                program.clear()
+                hint = RobotSim.solve(level)?.firstOrNull()
+                app.speaker.say(hint?.let { "Try this one first: ${it.spoken}! It's shining." } ?: "Let's try again!")
+            }
+            else -> {
+                // Show the way: fill in a working plan and let the robot go.
+                program.clear()
+                RobotSim.solve(level)?.let { program.addAll(it.take(MAX_PROGRAM)) }
+                app.speaker.say("Here's a plan that works. Watch the robot go!")
+                autoGo = true
+            }
+        }
+    }
+
     fun go() {
         if (program.isEmpty()) {
             app.speaker.say("Tap the arrows to make a plan first!")
@@ -601,6 +650,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                         robot = r.state
                         bumpAt = r.into
                         miss()
+                        failures++
                         app.speaker.say(if (r.into in level.blocks) "Bump! A tree is in the way." else "Bump! That's the edge.")
                         repeat(3) {
                             wobble.animateTo(8f, tween(60))
@@ -608,8 +658,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                         }
                         wobble.animateTo(0f, tween(60))
                         delay(1500)
-                        app.speaker.say("Let's fix the plan and try again!")
-                        reset()
+                        afterFailure()
                         return@launch
                     }
                 }
@@ -622,10 +671,19 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                 app.reward(area, "Hooray! The robot made it! You did it!", onDone = done)
             } else {
                 miss()
-                app.speaker.say("Hmm, the robot didn't get there. Let's change the plan!")
+                failures++
+                app.speaker.say("Hmm, the robot didn't get there.")
                 delay(2200)
-                reset()
+                afterFailure()
             }
+        }
+    }
+
+    LaunchedEffect(autoGo) {
+        if (autoGo) {
+            delay(2500)
+            autoGo = false
+            go()
         }
     }
 

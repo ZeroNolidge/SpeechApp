@@ -42,17 +42,26 @@ interface VoiceEngine {
     fun shutdown()
 }
 
-/** Listens for one short phrase. Results always arrive on the main thread. */
-interface Listener {
+/**
+ * The platform's microphone, as a stream of loudness readings. [VoiceDetector] decides on top
+ * whether the child spoke, the same way on every platform.
+ */
+interface MicLevels {
+    /** False if this device has no usable microphone at all. */
     val available: Boolean
 
     /**
-     * [onResult] gets every guess the recognizer made (best first), or an empty list
-     * if it heard nothing it could understand.
+     * Starts the microphone and calls [onLevel] with the loudness (RMS, 0 to 1) about every
+     * [STEP_MS] milliseconds, on the main thread. Calls [onFail] if the microphone can't be opened
+     * (no microphone, or permission denied).
      */
-    fun listen(hint: String, onLevel: (Float) -> Unit = {}, onResult: (List<String>) -> Unit)
+    fun start(onLevel: (Float) -> Unit, onFail: () -> Unit)
 
-    fun cancel()
+    fun stop()
+
+    companion object {
+        const val STEP_MS = 50
+    }
 }
 
 /**
