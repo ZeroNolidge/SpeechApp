@@ -157,6 +157,7 @@ fun LandGamesScreen(land: Land, nav: Nav) {
     val tiles = if (land == Land.FOREST) {
         listOf(
             Tile("📖", "Story", "A forest story!", Kid.talk, Screen.Chapter(Land.FOREST)),
+            Tile("🐶", "Find Pip", "Let's find Pip the puppy!", Kid.talk, Screen.Pip),
             Tile("🗣️", "Talk", "Let's practise talking!", Kid.talk, Screen.TalkMenu),
         )
     } else {

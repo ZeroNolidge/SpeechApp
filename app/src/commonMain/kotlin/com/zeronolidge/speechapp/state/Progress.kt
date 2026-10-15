@@ -122,6 +122,15 @@ class Progress(private val prefs: Prefs) {
     var chaptersDone by mutableIntStateOf(prefs.getInt("chaptersDone", (chapter - prefs.getInt("quests", 0)).coerceAtLeast(0)))
         private set
 
+    /** Tags on Pip's collar: one for each time he found Lost Puppy Pip. */
+    var pipTags by mutableIntStateOf(prefs.getInt("pipTags", 0))
+        private set
+
+    fun addPipTag() {
+        pipTags++
+        prefs.edit().putInt("pipTags", pipTags).apply()
+    }
+
     /** The last chapter whose stop has already been shown unfolding on the map. */
     var unfoldedSeen by mutableIntStateOf(prefs.getInt("unfoldedSeen", 0))
         private set
@@ -282,7 +291,7 @@ class Progress(private val prefs: Prefs) {
 
     // ---------- Backup ----------
 
-    private val intKeys get() = listOf("stars", "chapter", "chaptersDone", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack") +
+    private val intKeys get() = listOf("stars", "chapter", "chaptersDone", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack", "pipTags") +
         areas.map { "area_$it" } + listOf("patterns", "story_robot", "robot_easy", "robot_turn").map { "level_$it" }
     private val stringKeys get() = listOf("hero", "childName", "customWords") + Slot.entries.map { "equip_${it.name}" }
     private val setKeys = listOf("owned", "words", "focus")
@@ -326,6 +335,7 @@ class Progress(private val prefs: Prefs) {
         equipped = readEquipped()
         backpack = prefs.getInt("backpack", 0)
         chapter = prefs.getInt("chapter", 0)
+        pipTags = prefs.getInt("pipTags", 0)
         chaptersDone = prefs.getInt("chaptersDone", 0)
         unfoldedSeen = prefs.getInt("unfoldedSeen", 0)
         words = WordBook.decode(prefs.getStringSet("words", emptySet())!!)
@@ -353,6 +363,7 @@ class Progress(private val prefs: Prefs) {
         equipped = readEquipped()
         chapter = 0
         chaptersDone = 0
+        pipTags = 0
         unfoldedSeen = 0
         words = WordBook()
         speechStep = 0

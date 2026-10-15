@@ -64,6 +64,7 @@ import com.zeronolidge.speechapp.ui.platform.rememberReduceMotion
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
 import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
+import com.zeronolidge.speechapp.ui.screens.PipStoryScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeMenu
 import com.zeronolidge.speechapp.ui.screens.LandGamesScreen
@@ -201,6 +202,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         is Screen.TalkPractice -> TalkPracticeScreen(s.sound, nav)
         Screen.Alphabet -> AlphabetScreen(nav)
         Screen.NumberLine -> NumberLineScreen(nav)
+        Screen.Pip -> PipStoryScreen(nav)
     }
 }
 

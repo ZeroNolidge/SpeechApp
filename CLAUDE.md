@@ -116,6 +116,24 @@ These are the owner's rules for all work:
 - **Buddy pieces:** from a full backpack (4 gems, one per word tried) and a "welcome back" piece
   on the first visit of a new day (`Progress.checkIn`). Order is `Catalog.awardOrder`. Never taken
   away. New pieces pop up on `GiftOverlay`.
+- **Lost Puppy Pip** (`logic/Pip.kt` `PipStory`, `ui/screens/Pip.kt`, Forest tile "Find Pip"): he
+  calls "Pip!" / "Here, puppy!" (calls step up with `speechStep`); each call rustles the bush, rock,
+  then log (ears peek on the 3rd call, the 4th folds it open) until Pip jumps out; 2 goodnight turns
+  end with Pip asleep under a blanket. 14 turns, every try works (heard: Rory's `Echo`; quiet: "Pip
+  heard you!"; no mic: "I called!" button). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
+- **Rory's echo** (`logic/Echo.kt`): when the mic hears him, Rory repeats the target word and adds
+  one word ("Dog! A big dog!"). Loudness only, never speech recognition.
+- **Answers live in one place** (`logic/AnswerKey.kt`); every quiz goes through `QuizState.tap`
+  and `AnswerRow(key = AnswerKey.x(c))`. `PlayEveryQuizTest` plays every quiz kind with a right and
+  wrong tap and fails if a wrong tap is ever marked right.
+- **Every tap reacts:** `PaperButton` crinkles (`Sfx`) and presses down; scenery decor wiggles
+  (`WigglyDecor`); any other tap leaves a small paper puff (`PuffOverlay`). Listening dims the
+  scene (`app.listening`) and Rory cups a glowing ear inside a ring that grows with his voice.
+- **Offline + install:** the CI stamp step writes every file into sw.js `PRECACHE`; the grown-ups
+  page shows "works offline" / "progress protected" (`AppHome`, `navigator.storage.persist()`)
+  and an add-to-home-screen button with iPad steps.
+- **Own words and target sounds** (grown-ups page, up to 8 words, 1 or 2 sounds) are used most of
+  the time in the speech plan and the first-sound game (`Letters.targetsFor`).
 - **Stickers:** every practised word becomes a sticker (`WordBook` in `logic/Words.kt`); a clear
   mic catch makes it shiny. The sticker book shows 4 per page.
 - **Speech plan** (`StoryGen.sayKinds` / `practiceWord`): story words that make a scene happen
@@ -139,7 +157,7 @@ These are the owner's rules for all work:
   it (`MapAreas.hit`), logging `MAPTAP x,y -> LAND` (and `MAPAREAS` label positions, which the
   smoke test taps). Tapping an open land, or the next land peeking through its mist, opens that
   area (`Screen.LandGames`, `gamesFor(land)`: Meadow = count, add, take away, more; Forest = its
-  story + talking practice). The story
+  story, "Find Pip" + talking practice). The story
   starts from the next-stop marker (ring included) or the Adventure banner. A wide
   "▶ Adventure!" banner (tappable all over, presses down like every `PaperButton`) starts the next chapter. The island keeps a 1.75:1 shape.
 

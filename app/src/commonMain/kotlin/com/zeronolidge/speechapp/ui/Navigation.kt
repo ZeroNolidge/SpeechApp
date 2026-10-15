@@ -27,4 +27,5 @@ sealed interface Screen {
     data class TalkPractice(val sound: SpeechSound) : Screen
     data object Alphabet : Screen
     data object NumberLine : Screen
+    data object Pip : Screen
 }

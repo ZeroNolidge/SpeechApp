@@ -611,3 +611,19 @@ class PersonalWordsTest {
         assertEquals(listOf('s', 'g'), Letters.targetsFor(setOf("sh"), listOf("Grandma")).map { it.lower })
     }
 }
+
+class PipStoryTest {
+    @Test
+    fun pipHasTenToTwentyShortTurnsAndEndsAsleep() {
+        (0..2).forEach { step ->
+            val t = PipStory.turns(step)
+            assertTrue(t.size in 10..20, "${t.size} turns")
+            // Each hiding spot gets its calls in order, far to near, and the last one opens.
+            assertEquals(PipSpot.entries.toList(), t.mapNotNull { it.spot }.distinct())
+            assertTrue(t.first { it.spot == PipSpot.LOG && it.stage == PipStory.CALLS_PER_SPOT - 1 }.reaction.contains("jumps out"))
+            assertTrue(t.last().reaction.contains("asleep"))
+            assertTrue(t.all { it.call.isNotBlank() && it.prompt.contains(it.call) })
+        }
+        assertTrue(PipStory.turns(0).all { it.call.split(' ').size <= 2 })
+    }
+}

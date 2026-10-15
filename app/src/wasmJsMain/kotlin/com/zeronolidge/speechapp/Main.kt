@@ -74,6 +74,7 @@ private fun testStart(): Screen? {
         when {
             v.startsWith("land-") -> Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
             v == "talk" -> Screen.TalkPractice(SpeechContent.sounds.first())
+            v == "pip" -> Screen.Pip
             else -> Screen.PracticeGame(PracticeKind.valueOf(v))
         }
     }.getOrNull()

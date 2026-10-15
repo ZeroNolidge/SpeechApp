@@ -125,6 +125,8 @@ if (started) {
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');
+            await open('#test=pip', 1180, 820, 'pip-ipad-landscape');
+            await open('#test=pip', 400, 860, 'pip-phone');
             // Offline: once the service worker has saved every file, switch the network off,
             // reload, and the app must still start.
             await page.setViewport({ width: 1280, height: 800 });
