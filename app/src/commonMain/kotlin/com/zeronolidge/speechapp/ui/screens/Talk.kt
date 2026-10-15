@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.loop
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -66,6 +67,7 @@ import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.RoundIcon
 import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.components.peelIn
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
 
 private enum class Speak { MODELLING, LISTENING, WAITING_TAP, DONE, PARROT_RECORDING, PARROT_PLAYING }
@@ -268,7 +270,7 @@ fun SpeakMoment(
     // The word card on top, then one row of big icon buttons. Works the same on a phone and a tablet.
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         val t = rememberInfiniteTransition(label = "model")
-        val beat by t.animateFloat(1f, 1.08f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "beat")
+        val beat by t.loop(1f, 1.08f, 500, label = "beat")
         val pulse by animateFloatAsState(
             when (state) {
                 Speak.LISTENING -> 1f + level * 0.25f
@@ -314,7 +316,7 @@ fun SpeakMoment(
                                 Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
                                 Speak.MODELLING -> Text("👂", fontSize = 52.sp)
                                 Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
-                                Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.popIn(it.text)) }
+                                Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
                             }
                         }
                     }
@@ -326,7 +328,7 @@ fun SpeakMoment(
                     Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    Critter(Species.ROBOT, Modifier.height(roryHeight), Color(0xFFFFCC80), mood = Mood.CHEER)
+                    Critter(Species.ROBOT, Modifier.height(roryHeight), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
                     PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
                 }
             }
@@ -380,8 +382,8 @@ fun SpeakMoment(
 @Composable
 private fun ListeningBadge(level: Float, size: Dp) {
     val t = rememberInfiniteTransition(label = "listen")
-    val ring by t.animateFloat(1f, 1.35f, infiniteRepeatable(tween(700), RepeatMode.Restart), label = "ring")
-    val ringAlpha by t.animateFloat(0.6f, 0f, infiniteRepeatable(tween(700), RepeatMode.Restart), label = "ringAlpha")
+    val ring by t.loop(1f, 1.35f, 700, mode = RepeatMode.Restart, label = "ring")
+    val ringAlpha by t.loop(0.6f, 0f, 700, mode = RepeatMode.Restart, label = "ringAlpha")
     Box(contentAlignment = Alignment.Center) {
         Box(
             Modifier

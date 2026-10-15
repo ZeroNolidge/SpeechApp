@@ -122,7 +122,7 @@ private fun Preview(species: Species, c: Cosmetic) {
             Slot.PET -> Critter(c.pet!!, Modifier.fillMaxHeight(), animate = false)
             Slot.COLOR -> Critter(
                 species, Modifier.fillMaxHeight(),
-                Color(if (c.color != 0L) c.color else if (species == Species.KID) 0xFFFF7043 else species.defaultColor),
+                Color(if (c.color != 0L) c.color else if (species == Species.KID) 0xFF5B7FDB else species.defaultColor),
                 animate = false,
             )
             Slot.HAT -> Critter(species, Modifier.fillMaxHeight(), p.heroColor(species), Outfit(hat = c), animate = false)

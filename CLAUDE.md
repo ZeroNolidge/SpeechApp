@@ -68,19 +68,37 @@ These are the owner's rules for all work:
 ## Art style (decided)
 
 - **Paper cut-out**, warm and bright colours (`PaperColors`, `Kid` in `ui/theme/Theme.kt`).
-- **One shared style** (`PaperStyle` in `ui/art/Paper.kt`, components in `ui/components/PaperUi.kt`):
-  - Anything tappable is a thick raised cut-out with a drop shadow that presses down
-    (`PaperButton`, `PaperIconButton`, `ChoiceTile`).
-  - Scenery is flatter and muted: `SceneryWash` puts a soft wash and the paper grain over the
-    background, never over text or buttons.
-  - Words, letters and numbers go on plain chips (`PaperChip`) in dark ink.
-  - Animations behave like paper and stay short: `popIn`, `unfold`, `flip`, `paperEnter`.
+  **Decoration always stays behind buttons; if anything makes a button harder to see, the button
+  wins** (scenery gets a light `PaperStyle.sceneryWash`).
+- **Layered depth:** scenes are 3 to 5 stacked paper layers (`Scenery`: sky, drifting clouds, far
+  hills, near hills, ground; the map: sea, island, front clouds), each with a soft shadow lit from
+  the top left, deeper the nearer it is (2 to 4dp). Buttons get the deepest shadow
+  (`PaperStyle.lift`, 8dp).
+- **Paper feel:** faint paper-fibre grain (`PaperTexture`, one shared texture) on large coloured
+  shapes and a thin white hand-cut edge (`PaperPen.edge`). Text, numbers and icons stay on smooth
+  chips (`PaperChip`) with no texture.
+- **Palette per area** (`Land.palette` in `Scenery.kt`, 4 or 5 bold colours each: Forest deep
+  greens + mustard, Lagoon coral + teal, ...). **Tomato red (`PaperColors.tomato`,
+  `PaperColorsUi.home`) is only for things he can tap**: 🏠, the Adventure button, the ring round
+  the next map stop, the pulsing 🔊. Never in scenery or characters.
+- **Bake, don't redraw** (`ui/art/Bake.kt`): paper art is drawn once into an image with its
+  shadow, edge and grain (`BakedLayer`, `BakedPaperElement`, used by `paperCard` and the raised
+  button base/face); only the images move. Keep animated state reads in draw/graphicsLayer
+  lambdas, not in composition. The web caches rough outlines (`OutlineCache`).
+- **Motion** (`ui/art/Motion.kt`): one-off animations stay under 0.5 s (`MaxMotionMs`): scene
+  layers stand up like a pop-up book (`Modifier.popUp`), stickers peel on (`Modifier.peelIn`),
+  confetti is a quick burst. Gentle loops use `InfiniteTransition.loop`. With the device's reduce
+  motion setting on (`rememberReduceMotion`, `LocalReduceMotion`) nothing moves by itself. The map's
+  layers drift at different speeds when it's dragged (no tilt sensors) and spring back.
+- **Characters are paper puppets** (`ui/art/Critter.kt`): body, head and arms are separate baked
+  cut-outs joined by brass split pins at the shoulders and neck; moods move the arms on their pins
+  (HAPPY, CHEER, THINK, SAD, SLEEP), and `talking = true` gives a small hinge wiggle while speech is
+  playing. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
+  a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
   `paperArc`, `paperPath`, `Modifier.paperCard`), not raw `drawCircle` etc. They give rough torn
-  edges (deterministic, so no flicker) and soft shadows. Strokes stay plain.
+  edges (deterministic, so no flicker). Strokes stay plain.
 - Font: Sniglet (OFL, `FONT_LICENSE_Sniglet_OFL.txt`).
-- Characters are drawn in code (`ui/art/Critter.kt`). Moods: HAPPY, CHEER, THINK, SAD, SLEEP.
-  Outfits: hat, cape, wings, glasses, colour, pet.
 
 ## How the game works
 

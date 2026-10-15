@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.loop
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -55,7 +56,7 @@ import kotlinx.coroutines.launch
 fun Sticker(w: WordStat, size: Dp, modifier: Modifier = Modifier, onTap: (() -> Unit)? = null) {
     val tilt = remember(w.text) { ((w.text.hashCode() % 13) - 6).toFloat() }
     val twinkle = rememberInfiniteTransition(label = "twinkle")
-    val shine by twinkle.animateFloat(0.3f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "shine")
+    val shine by twinkle.loop(0.3f, 1f, 900, label = "shine")
     val flipping = remember(w.text) { Animatable(0f) }
     val scope = rememberCoroutineScope()
     Box(
@@ -68,8 +69,8 @@ fun Sticker(w: WordStat, size: Dp, modifier: Modifier = Modifier, onTap: (() -> 
                     onTap()
                     scope.launch {
                         flipping.snapTo(0f)
-                        flipping.animateTo(1f, tween(260))
-                        flipping.animateTo(0f, tween(260))
+                        flipping.animateTo(1f, tween(200))
+                        flipping.animateTo(0f, tween(200))
                     }
                 },
             ),

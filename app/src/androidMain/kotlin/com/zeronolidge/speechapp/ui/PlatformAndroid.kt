@@ -58,3 +58,14 @@ actual fun rememberCopyText(): (String) -> Boolean {
         }
     }
 }
+
+@Composable
+actual fun rememberReduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        // "Remove animations" in Android's accessibility settings sets the animator scale to 0.
+        android.provider.Settings.Global.getFloat(
+            context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f,
+        ) == 0f
+    }
+}

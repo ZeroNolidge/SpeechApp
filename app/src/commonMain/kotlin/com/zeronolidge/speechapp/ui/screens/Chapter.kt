@@ -75,6 +75,9 @@ import com.zeronolidge.speechapp.ui.components.PaperIconButton
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.SpeechBubble
 import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.components.peelIn
+import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
+import com.zeronolidge.speechapp.ui.art.MaxMotionMs
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import kotlinx.coroutines.delay
@@ -238,8 +241,9 @@ private fun Feeling.mood() = when (this) {
 /** The buddy strolls in from the left whenever the scene changes. */
 @Composable
 private fun walkIn(key: Any): Float {
-    val walk = remember(key) { Animatable(-1f) }
-    LaunchedEffect(key) { walk.animateTo(0f, tween(900)) }
+    val still = LocalReduceMotion.current
+    val walk = remember(key) { Animatable(if (still) 0f else -1f) }
+    LaunchedEffect(key) { walk.animateTo(0f, tween(MaxMotionMs)) }
     return walk.value
 }
 
@@ -301,6 +305,7 @@ private fun StoryScene(
                                 .fillMaxHeight(0.62f)
                                 .graphicsLayer { translationX = walk * size.width * 2f },
                             heroMood,
+                            talking = true,
                         )
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).fillMaxHeight(0.58f)) {
                             Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), scene.feeling.mood(), mirrored = true)
@@ -499,7 +504,7 @@ private fun Goodbye(piece: Cosmetic?, stickers: List<WordStat>, onMap: () -> Uni
                 PaperChip("👋 See you next time!", fontSize = 30.sp)
                 if (stickers.isNotEmpty()) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        stickers.take(4).forEachIndexed { i, w -> Sticker(w, 96.dp, Modifier.popIn(w.text, 600 + i * 200)) }
+                        stickers.take(4).forEachIndexed { i, w -> Sticker(w, 96.dp, Modifier.peelIn(w.text, 600 + i * 200)) }
                     }
                 }
                 // Leaves room for the continue button, pinned bottom-right as on every step.

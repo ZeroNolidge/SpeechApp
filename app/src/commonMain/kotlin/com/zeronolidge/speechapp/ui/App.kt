@@ -48,6 +48,8 @@ import com.zeronolidge.speechapp.ui.screens.MapScreen
 import com.zeronolidge.speechapp.ui.screens.MicHelloScreen
 import com.zeronolidge.speechapp.ui.platform.MicStatus
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
+import com.zeronolidge.speechapp.ui.platform.rememberReduceMotion
+import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
 import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
@@ -62,7 +64,7 @@ import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 @Composable
 fun TalkAndLearnApp(services: AppServices) {
     SpeechAppTheme {
-        CompositionLocalProvider(LocalApp provides services) {
+        CompositionLocalProvider(LocalApp provides services, LocalReduceMotion provides rememberReduceMotion()) {
             Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
                 Screens()
                 CelebrationOverlay()

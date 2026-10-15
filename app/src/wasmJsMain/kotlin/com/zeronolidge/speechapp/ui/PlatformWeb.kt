@@ -71,3 +71,8 @@ private fun jsCopy(text: String): Boolean = js("(() => { try { if (navigator.cli
 
 @Composable
 actual fun rememberCopyText(): (String) -> Boolean = remember { { text: String -> jsCopy(text) } }
+
+private fun jsReduceMotion(): Boolean = js("(() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })()")
+
+@Composable
+actual fun rememberReduceMotion(): Boolean = remember { jsReduceMotion() }

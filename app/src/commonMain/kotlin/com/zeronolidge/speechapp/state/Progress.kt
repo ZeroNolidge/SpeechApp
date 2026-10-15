@@ -84,7 +84,7 @@ class Progress(private val prefs: Prefs) {
 
     fun heroColor(species: Species = hero ?: Species.KID): Color {
         val chosen = equippedIn(Slot.COLOR)?.color?.takeIf { it != 0L }
-        return Color(chosen ?: if (species == Species.KID) 0xFFFF7043 else species.defaultColor)
+        return Color(chosen ?: if (species == Species.KID) 0xFF5B7FDB else species.defaultColor)
     }
 
     // ---------- The backpack ----------

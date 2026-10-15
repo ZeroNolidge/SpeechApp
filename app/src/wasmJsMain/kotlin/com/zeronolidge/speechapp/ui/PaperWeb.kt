@@ -5,6 +5,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -22,14 +24,32 @@ internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: Pape
     val seg = (extent * 0.16f).coerceIn(5f, 26f)
     val outline: Path = when (shape) {
         is PaperShape.Shape -> shape.path
-        else -> roughOutline(outline(shape, seg), if (rough) seg * 0.16f else 0f, extent)
+        else -> OutlineCache.get(shape, extent) { roughOutline(outline(shape, seg), if (rough) seg * 0.16f else 0f, extent) }
     }
     // Only solid paper casts a shadow; see-through things (mist, glows) don't.
-    if (shadow && color.alpha > 0.9f) {
+    if (shadow && PaperPen.shapeShadows && color.alpha > 0.9f) {
         val d = paperShadowOffset(extent)
         translate(d * 0.6f, d) { drawPath(outline, PaperShadowColor) }
     }
     drawPath(outline, color)
+    // The thin white hand-cut edge, while baking a layer.
+    if (PaperPen.edge > 0f && color.alpha > 0.9f && extent >= PaperPen.edgeMin) {
+        drawPath(outline, EdgeColor, style = Stroke(PaperPen.edge, join = StrokeJoin.Round))
+    }
+}
+
+private val EdgeColor = Color(0xE1FFFFFF)
+
+/** Rough outlines are worked out once per shape and reused, so redrawing is cheap. */
+private object OutlineCache {
+    private val paths = HashMap<Pair<PaperShape, Float>, Path>()
+
+    fun get(shape: PaperShape, extent: Float, make: () -> Path): Path {
+        val key = shape to extent
+        paths[key]?.let { return it }
+        if (paths.size > 800) paths.clear()
+        return make().also { paths[key] = it }
+    }
 }
 
 /** Points around the shape's edge, roughly [seg] apart. */

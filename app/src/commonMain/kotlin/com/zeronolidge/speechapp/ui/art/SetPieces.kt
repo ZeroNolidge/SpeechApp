@@ -42,9 +42,9 @@ import kotlin.math.sin
 @Composable
 fun SetPieceView(piece: SetPiece, prop: String?, solved: Boolean, modifier: Modifier = Modifier) {
     val t = rememberInfiniteTransition(label = "piece")
-    val loop by t.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart), label = "loop")
-    val bob by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "bob")
-    val done by animateFloatAsState(if (solved) 1f else 0f, tween(900), label = "solved")
+    val loop by t.loop(0f, 1f, 4000, mode = RepeatMode.Restart, easing = LinearEasing, label = "loop")
+    val bob by t.loop(0f, 1f, 1200, label = "bob")
+    val done by animateFloatAsState(if (solved) 1f else 0f, tween(motionMs(MaxMotionMs)), label = "solved")
 
     BoxWithConstraints(modifier) {
         val w = maxWidth
@@ -226,8 +226,8 @@ private fun DrawScope.tree() {
     listOf(0.51f to 0.12f, 0.38f to 0.2f, 0.64f to 0.2f, 0.45f to 0.05f, 0.58f to 0.04f, 0.51f to 0.25f).forEachIndexed { i, (x, y) ->
         paperCircle(if (i % 2 == 0) Leaf else DarkLeaf, m * 0.13f, px(x, y))
     }
-    paperCircle(Color(0xFFE53935), m * 0.015f, px(0.4f, 0.22f))
-    paperCircle(Color(0xFFE53935), m * 0.015f, px(0.62f, 0.15f))
+    paperCircle(Color(0xFFE84A7F), m * 0.015f, px(0.4f, 0.22f))
+    paperCircle(Color(0xFFE84A7F), m * 0.015f, px(0.62f, 0.15f))
 }
 
 private fun DrawScope.cave(done: Float, loop: Float) {
@@ -259,7 +259,7 @@ private fun DrawScope.hill(loop: Float) {
     drawPath(p, Color(0xFFE6C79C), style = Stroke(m * 0.05f, cap = StrokeCap.Round))
     drawLine(DarkBrown, px(0.5f, 0.27f), px(0.5f, 0.08f), m * 0.012f)
     val wave = 0.02f * sin(loop * 2 * PI * 2).toFloat()
-    poly(Color(0xFFE53935), 0.5f to 0.08f, 0.62f to (0.12f + wave), 0.5f to 0.16f)
+    poly(Color(0xFFE84A7F), 0.5f to 0.08f, 0.62f to (0.12f + wave), 0.5f to 0.16f)
 }
 
 private fun DrawScope.party(done: Float, bob: Float) {
@@ -270,13 +270,13 @@ private fun DrawScope.party(done: Float, bob: Float) {
     paperRect(DarkBrown, px(0.65f, 0.6f), sz(0.02f, 0.14f))
     // Bunting and balloons arrive once the party is ready.
     if (done > 0f) {
-        val colors = listOf(0xFFE53935, 0xFFFFEB3B, 0xFF43A047, 0xFF1E88E5, 0xFFAB47BC)
+        val colors = listOf(0xFFE84A7F, 0xFFFFEB3B, 0xFF43A047, 0xFF1E88E5, 0xFFAB47BC)
         drawLine(DarkBrown.copy(alpha = done), px(0.02f, 0.04f), px(0.98f, 0.04f), m * 0.006f)
         for (i in 0 until 10) {
             val x = 0.04f + i * 0.095f
             poly(Color(colors[i % colors.size]).copy(alpha = done), x to 0.04f, (x + 0.07f) to 0.04f, (x + 0.035f) to 0.12f)
         }
-        listOf(0.12f to 0xFFE53935, 0.2f to 0xFF1E88E5, 0.8f to 0xFFFFEB3B, 0.88f to 0xFF43A047).forEachIndexed { i, (x, c) ->
+        listOf(0.12f to 0xFFE84A7F, 0.2f to 0xFF1E88E5, 0.8f to 0xFFFFEB3B, 0.88f to 0xFF43A047).forEachIndexed { i, (x, c) ->
             val y = 0.16f + (if (i % 2 == 0) bob else 1 - bob) * 0.03f
             drawLine(Color.Gray.copy(alpha = done), px(x, y + 0.12f), px(x, 0.6f), m * 0.004f)
             paperOval(Color(c).copy(alpha = done), px(x - 0.04f, y), sz(0.08f, 0.13f))
@@ -326,7 +326,7 @@ private fun DrawScope.picnic() {
             val x01 = l0 + (r0 - l0) * (c + 1) / cols
             val x10 = l1 + (r1 - l1) * c / cols
             val x11 = l1 + (r1 - l1) * (c + 1) / cols
-            poly(if ((r + c) % 2 == 0) Color(0xFFE53935) else Color.White, x00 to y0, x01 to y0, x11 to y1, x10 to y1)
+            poly(if ((r + c) % 2 == 0) Color(0xFFE84A7F) else Color.White, x00 to y0, x01 to y0, x11 to y1, x10 to y1)
         }
     }
 }

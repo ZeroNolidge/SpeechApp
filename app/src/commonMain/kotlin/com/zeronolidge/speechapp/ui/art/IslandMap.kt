@@ -1,6 +1,12 @@
 package com.zeronolidge.speechapp.ui.art
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -83,130 +89,211 @@ fun IslandMap(
     pointer: @Composable (Modifier, Dp) -> Unit = { _, _ -> },
 ) {
     val t = rememberInfiniteTransition(label = "island")
-    val slow by t.animateFloat(0f, 1f, infiniteRepeatable(tween(24000, easing = LinearEasing), RepeatMode.Restart), label = "slow")
-    val mid by t.animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Restart), label = "mid")
-    val fast by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart), label = "fast")
-    val flap by t.animateFloat(0f, 1f, infiniteRepeatable(tween(350), RepeatMode.Reverse), label = "flap")
-    val pulse by t.animateFloat(1f, 1.1f, infiniteRepeatable(tween(550), RepeatMode.Reverse), label = "pulse")
+    val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
+    val mid by t.loop(0f, 1f, 9000, mode = RepeatMode.Restart, easing = LinearEasing, label = "mid")
+    val fast by t.loop(0f, 1f, 2400, mode = RepeatMode.Restart, easing = LinearEasing, label = "fast")
+    val flap by t.loop(0f, 1f, 350, label = "flap")
+    val pulse by t.loop(1f, 1.1f, 550, label = "pulse")
+    val still = LocalReduceMotion.current
 
     val current = Trail.stopOf(chapter)
     val lap = chapter / Trail.size
     // A land the trail has just reached: its mist clears as the new stop unfolds.
     val newLand = if (unfoldNew && Trail.opensLand(chapter)) Trail.landOf(chapter) else null
-    val clearing = remember(newLand) { Animatable(if (newLand != null) 0f else 1f) }
-    LaunchedEffect(newLand) { if (newLand != null) clearing.animateTo(1f, tween(1400)) }
+    val clearing = remember(newLand) { Animatable(if (newLand != null && !still) 0f else 1f) }
+    LaunchedEffect(newLand) { if (newLand != null) clearing.animateTo(1f, tween(MaxMotionMs)) }
 
     val hint = remember(hintKey) { Animatable(0f) }
     LaunchedEffect(hintKey) {
         if (hintKey > 0) {
             hint.snapTo(0f)
-            hint.animateTo(1f, tween(3600, easing = LinearEasing))
+            // Sparkles make three quick runs to the next stop (each under half a second).
+            hint.animateTo(1f, tween(if (still) 1 else 1500, easing = LinearEasing))
         }
     }
 
-    BoxWithConstraints(modifier) {
+    // Drag the map a little and its paper layers drift at different speeds: the sea slowly,
+    // the island with its stops, the clouds in front fastest. It springs back on letting go.
+    val scope = rememberCoroutineScope()
+    val pan = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+
+    BoxWithConstraints(
+        modifier.pointerInput(still) {
+            if (still) return@pointerInput
+            val limit = minOf(size.width, size.height) * 0.05f
+            detectDragGestures(
+                onDragEnd = { scope.launch { pan.animateTo(Offset.Zero, tween(380)) } },
+                onDragCancel = { scope.launch { pan.animateTo(Offset.Zero, tween(380)) } },
+            ) { change, drag ->
+                change.consume()
+                val next = pan.value + drag * 0.4f
+                scope.launch { pan.snapTo(Offset(next.x.coerceIn(-limit, limit), next.y.coerceIn(-limit, limit))) }
+            }
+        },
+    ) {
         val w = maxWidth
         val h = maxHeight
-        Canvas(Modifier.fillMaxSize()) {
-            ocean(mid, fast)
-            boat(fast)
-            fish(mid)
-            island()
-            river(fast)
-            trail(current, lap)
-            forest(Land.FOREST)
-            meadow(Land.MEADOW)
-            lagoon(Land.LAGOON, fast)
-            market(Land.MARKET, fast)
-            factory(Land.FACTORY, fast)
-            peaks(Land.PEAKS)
-            caves(Land.CAVES, fast)
-            castle(Land.CLOUDS, mid)
+        val unit = minOf(w, h)
+        fun Modifier.drift(f: Float) = graphicsLayer {
+            translationX = pan.value.x * f
+            translationY = pan.value.y * f
         }
-        // Scenery sits back; the trail stops below stand out. The wash reaches past the map's edges
-        // so the sea around it matches and there's no visible rectangle.
-        SceneryWash(overflow = 3000f)
-        Canvas(Modifier.fillMaxSize()) {
+
+        // Layer 1, the sea: baked paper with live waves, the boat, fish and the castle's shadow.
+        Box(Modifier.fillMaxSize().drift(0.35f)) {
+            BakedLayer("map-sea", depth = 0.dp, edge = false) { ocean() }
+            Canvas(Modifier.fillMaxSize()) {
+                waves(mid, fast)
+                boat(fast)
+                fish(mid)
+                castleShadow(Land.CLOUDS, mid)
+            }
+        }
+
+        // Layer 2, the island and everything on it, moving together so the stops stay put on it.
+        Box(Modifier.fillMaxSize().drift(1f)) {
+            BakedLayer(listOf("map-island", current, lap), depth = 4.dp) {
+                island()
+                riverBase()
+                trail(current, lap)
+                forest(Land.FOREST)
+                meadow(Land.MEADOW)
+                lagoon(Land.LAGOON)
+                market(Land.MARKET)
+                factory(Land.FACTORY)
+                peaks(Land.PEAKS)
+                caves(Land.CAVES)
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                riverFlow(fast)
+                lagoonGlint(Land.LAGOON, fast)
+                factorySmoke(Land.FACTORY, fast)
+                caveSparkles(Land.CAVES, fast)
+            }
+            // The castle floats on its cloud, baked in its own small box.
+            val castleBox = unit * 0.3f
+            Box(
+                Modifier
+                    .offset(x = w * Land.CLOUDS.mapX - castleBox / 2, y = h * Land.CLOUDS.mapY - castleBox / 2)
+                    .size(castleBox)
+                    .graphicsLayer { translationY = sin(mid * 2 * PI).toFloat() * size.height * 0.03f },
+            ) {
+                BakedLayer("map-castle", depth = 4.dp) { castleArt(center, size.minDimension / 4.4f) }
+            }
+
+            // Mist over lands the trail hasn't reached, each patch baked once and drifting.
             Land.entries.forEach { land ->
-                // The tapped misty land gives a quick wiggle.
-                val wiggle = if (land == hintFrom && hint.value in 0.001f..0.25f) sin(hint.value * 90f) * u * 0.03f * (1f - hint.value / 0.25f) else 0f
-                withTransform({ translate(wiggle, 0f) }) {
-                    when {
-                        land == newLand -> mist(land, slow, 1f - clearing.value)
-                        !reached(land) -> mist(land, slow, 1f)
+                val strength = when {
+                    land == newLand -> 1f - clearing.value
+                    !reached(land) -> 1f
+                    else -> 0f
+                }
+                if (strength > 0.01f) {
+                    val box = unit * 0.34f
+                    val wiggle = if (land == hintFrom && hint.value in 0.001f..0.2f) sin(hint.value * 110f) * (1f - hint.value / 0.2f) else 0f
+                    Box(
+                        Modifier
+                            .offset(x = w * land.mapX - box / 2, y = h * land.mapY - box / 2)
+                            .size(box)
+                            .graphicsLayer {
+                                val sway = sin(slow * 2 * PI + land.ordinal).toFloat()
+                                translationX = (sway * 0.04f + wiggle * 0.05f) * size.width
+                                alpha = strength
+                            },
+                    ) {
+                        BakedLayer("map-mist", depth = 0.dp, edge = false, grain = false) { mist() }
                     }
                 }
             }
-            if (hintFrom != null && hint.value in 0.001f..0.999f) sparklePath(at(hintFrom), Trail.position(current).let { (x, y) -> p(x, y) }, hint.value)
-            birds(slow, flap)
-        }
+            Canvas(Modifier.fillMaxSize()) {
+                if (hintFrom != null && hint.value in 0.001f..0.999f) sparklePath(at(hintFrom), Trail.position(current).let { (x, y) -> p(x, y) }, hint.value, still)
+                birds(slow, flap)
+            }
+            // A soft wash so the scenery sits back and the raised stop button wins.
+            Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash, Offset(-3000f, -3000f), Size(size.width + 6000f, size.height + 6000f)) }
 
-        val unit = minOf(w, h)
-        // Tapping anywhere near a land says something helpful.
-        Land.entries.forEach { land ->
-            val r = unit * 0.13f
-            Box(
-                Modifier
-                    .offset(x = w * land.mapX - r, y = h * land.mapY - r)
-                    .size(r * 2)
-                    .clip(CircleShape)
-                    .clickable { onElsewhere(land) },
-            )
-        }
-
-        // Finished stops: flat star stickers on the trail.
-        val sticker = unit * 0.075f
-        (0 until Trail.size).forEach { s ->
-            val done = lap > 0 || s < current
-            if (done && s != current) {
-                val (fx, fy) = Trail.position(s)
+            // Tapping anywhere near a land says something helpful.
+            Land.entries.forEach { land ->
+                val r = unit * 0.13f
                 Box(
                     Modifier
-                        .offset(x = w * fx - sticker / 2, y = h * fy - sticker / 2)
-                        .size(sticker)
-                        .rotate(((s * 37) % 21 - 10).toFloat())
-                        .paperCard(Color(0xFFFFF8E1), circle = true),
-                    contentAlignment = Alignment.Center,
-                ) { Text("⭐", fontSize = (sticker.value * 0.55f).sp) }
+                        .offset(x = w * land.mapX - r, y = h * land.mapY - r)
+                        .size(r * 2)
+                        .clip(CircleShape)
+                        .clickable { onElsewhere(land) },
+                )
             }
         }
 
-        // The next stop: a big raised paper button that unfolds when it is new.
-        // It keeps the same physical size on a phone and a tablet.
-        val (cx, cy) = Trail.position(current)
-        val node = 96.dp
-        Box(
-            Modifier
-                .offset(x = w * cx - node / 2, y = h * cy - node / 2)
-                .size(node)
-                .zIndex(2f)
-                .unfold(unfoldNew, onUnfolded),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .size(node)
-                    .scale(pulse)
-                    .border(6.dp, Color(0xFFFFD600), CircleShape),
-            )
-            PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, onClick = onStop) {
-                ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
+        // Layer 3, paper clouds in front over the sea, drifting fastest. Behind every button.
+        Box(Modifier.fillMaxSize().drift(1.7f)) {
+            listOf(Triple(0.0f, 0.02f, 1f), Triple(0.78f, 0.86f, 0.8f), Triple(0.9f, 0.5f, 0.7f)).forEach { (x, y, k) ->
+                val cw = unit * 0.24f * k
+                Box(Modifier.offset(x = w * x, y = h * y).size(cw, cw * 0.5f)) {
+                    BakedLayer("map-cloud", depth = 2.dp, grain = false) { frontCloud() }
+                }
             }
         }
-        val heroOnRight = cx < 0.5f
-        hero(
-            Modifier
-                .offset(x = if (heroOnRight) w * cx + node * 0.55f else w * cx - node * 1.2f, y = h * cy - node * 0.6f)
-                .size(width = node * 0.7f, height = node * 0.85f)
-                .zIndex(3f),
-        )
-        val hand = node * 0.55f
-        pointer(
-            Modifier
-                .offset(x = w * cx - hand / 2, y = h * cy - node / 2 - hand * 1.3f)
-                .zIndex(4f),
-            hand,
-        )
+
+        // The stops, the buddy and the pointer ride on the island layer.
+        Box(Modifier.fillMaxSize().drift(1f)) {
+            // Finished stops: flat star stickers on the trail.
+            val sticker = unit * 0.075f
+            (0 until Trail.size).forEach { s ->
+                val done = lap > 0 || s < current
+                if (done && s != current) {
+                    val (fx, fy) = Trail.position(s)
+                    Box(
+                        Modifier
+                            .offset(x = w * fx - sticker / 2, y = h * fy - sticker / 2)
+                            .size(sticker)
+                            .rotate(((s * 37) % 21 - 10).toFloat())
+                            .paperCard(Color(0xFFFFF8E1), circle = true),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("⭐", fontSize = (sticker.value * 0.55f).sp) }
+                }
+            }
+
+            // The next stop: a big raised paper button that unfolds when it is new, ringed in
+            // tomato red (the colour kept for things to tap). Same physical size on every screen.
+            val (cx, cy) = Trail.position(current)
+            val node = 96.dp
+            Box(
+                Modifier
+                    .offset(x = w * cx - node / 2, y = h * cy - node / 2)
+                    .size(node)
+                    .zIndex(2f)
+                    .unfold(unfoldNew, onUnfolded),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(node)
+                        .graphicsLayer {
+                            scaleX = pulse
+                            scaleY = pulse
+                        }
+                        .border(6.dp, PaperColors.tomato, CircleShape),
+                )
+                PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, onClick = onStop) {
+                    ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
+                }
+            }
+            val heroOnRight = cx < 0.5f
+            hero(
+                Modifier
+                    .offset(x = if (heroOnRight) w * cx + node * 0.55f else w * cx - node * 1.2f, y = h * cy - node * 0.6f)
+                    .size(width = node * 0.7f, height = node * 0.85f)
+                    .zIndex(3f),
+            )
+            val hand = node * 0.55f
+            pointer(
+                Modifier
+                    .offset(x = w * cx - hand / 2, y = h * cy - node / 2 - hand * 1.3f)
+                    .zIndex(4f),
+                hand,
+            )
+        }
     }
 }
 
@@ -259,10 +346,13 @@ private fun DrawScope.blob(c: Offset, rx: Float, ry: Float, color: Color, seed: 
 
 // ---------------------------------------------------------------- sea
 
-private fun DrawScope.ocean(mid: Float, fast: Float) {
-    // Flat paper sea, with a slightly darker band of deep water around the edges.
-    drawRect(Color(0xFF3FA9E0))
+private fun DrawScope.ocean() {
+    // Flat paper sea (reaching past the edges, for drifting), with a lighter band of shallow water.
+    drawRect(Color(0xFF3FA9E0), Offset(-size.width, -size.height), Size(size.width * 3, size.height * 3))
     paperPath(coast(1.32f), Color(0xFF58BCEB))
+}
+
+private fun DrawScope.waves(mid: Float, fast: Float) {
     // Shimmering wave marks drifting slowly.
     for (i in 0 until 26) {
         val fx = ((i * 0.137f + mid * (0.04f + (i % 3) * 0.02f)) % 1f)
@@ -303,7 +393,7 @@ private fun DrawScope.boat(fast: Float) {
             lineTo(c.x, c.y - s * 1.16f)
             close()
         }
-        paperPath(flag, Color(0xFFE53935))
+        paperPath(flag, Color(0xFFF2B630))
     }
 }
 
@@ -311,9 +401,9 @@ private fun DrawScope.boat(fast: Float) {
 private fun DrawScope.fish(mid: Float) {
     data class Lane(val x0: Float, val x1: Float, val y: Float, val color: Long, val speed: Float, val phase: Float)
     val lanes = listOf(
-        Lane(0.02f, 0.13f, 0.14f, 0xFFFF8A65, 1f, 0f),
+        Lane(0.02f, 0.13f, 0.14f, 0xFFFFB347, 1f, 0f),
         Lane(0.01f, 0.08f, 0.32f, 0xFFFFD54F, 1.4f, 0.4f),
-        Lane(0.14f, 0.3f, 0.97f, 0xFFFF7043, 1.2f, 0.7f),
+        Lane(0.14f, 0.3f, 0.97f, 0xFFF6C35B, 1.2f, 0.7f),
         Lane(0.88f, 0.98f, 0.44f, 0xFFFFB74D, 0.9f, 0.2f),
         Lane(0.82f, 0.97f, 0.92f, 0xFFF06292, 1.1f, 0.55f),
         Lane(0.55f, 0.72f, 0.985f, 0xFFFFD54F, 1.3f, 0.1f),
@@ -358,20 +448,31 @@ private fun DrawScope.island() {
     }
 }
 
-private fun DrawScope.river(fast: Float) {
+private fun DrawScope.riverPath(): Path {
     val a = p(Land.PEAKS.mapX - 0.02f, Land.PEAKS.mapY + 0.05f)
     val c1 = p(0.64f, 0.52f)
     val c2 = p(0.58f, 0.68f)
     val b = p(Land.LAGOON.mapX + 0.03f, Land.LAGOON.mapY - 0.03f)
-    val path = Path().apply {
+    return Path().apply {
         moveTo(a.x, a.y)
         cubicTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
     }
-    drawPath(path, Color(0xFF4FC3F7), style = Stroke(u * 0.028f, cap = StrokeCap.Round))
+}
+
+/** The river's flowing ripples, drawn live over the baked river. */
+private fun DrawScope.riverFlow(fast: Float) {
     drawPath(
-        path, Color.White.copy(alpha = 0.5f),
+        riverPath(), Color.White.copy(alpha = 0.5f),
         style = Stroke(u * 0.006f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(u * 0.02f, u * 0.05f), -fast * u * 0.07f)),
     )
+}
+
+private fun DrawScope.riverBase() {
+    val a = p(Land.PEAKS.mapX - 0.02f, Land.PEAKS.mapY + 0.05f)
+    val c1 = p(0.64f, 0.52f)
+    val c2 = p(0.58f, 0.68f)
+    val b = p(Land.LAGOON.mapX + 0.03f, Land.LAGOON.mapY - 0.03f)
+    drawPath(riverPath(), Color(0xFF4FC3F7), style = Stroke(u * 0.028f, cap = StrokeCap.Round))
     // A little rope bridge where the patterns live.
     fun at(t: Float): Offset {
         val m = 1 - t
@@ -402,10 +503,10 @@ private fun DrawScope.river(fast: Float) {
 }
 
 /** Two market stalls with striped paper awnings and fruit on the counters. */
-private fun DrawScope.market(land: Land, fast: Float) {
+private fun DrawScope.market(land: Land) {
     val c = at(land)
     val s = u * 0.06f
-    listOf(-0.75f to 0xFFE53935, 0.75f to 0xFF1E88E5).forEachIndexed { k, (dx, stripe) ->
+    listOf(-0.75f to 0xFF7D4C96, 0.75f to 0xFF1E88E5).forEachIndexed { k, (dx, stripe) ->
         val x = c.x + dx * s
         val y = c.y + (if (k == 0) 0.1f else -0.15f) * s
         // Posts and counter.
@@ -419,9 +520,9 @@ private fun DrawScope.market(land: Land, fast: Float) {
             paperRect(col, Offset(left, y - s * 0.78f), Size(s * 0.3f, s * 0.32f))
             paperArc(col, 0f, 180f, true, Offset(left, y - s * 0.6f), Size(s * 0.3f, s * 0.24f))
         }
-        // Fruit on the counter, gently bobbing as if being arranged.
-        val bob = sin((fast + k * 0.5f) * 2 * PI).toFloat() * s * 0.02f
-        listOf(0xFFFF5252, 0xFFFFCA28, 0xFF66BB6A).forEachIndexed { i, col ->
+        // Fruit on the counter.
+        val bob = 0f
+        listOf(0xFFE84A7F, 0xFFFFCA28, 0xFF66BB6A).forEachIndexed { i, col ->
             paperCircle(Color(col), s * 0.12f, Offset(x - s * 0.35f + i * s * 0.35f, y + s * 0.08f + bob))
         }
     }
@@ -491,7 +592,7 @@ private fun DrawScope.forest(land: Land) {
         val q = Offset(c.x + dx * s, c.y + dy * s)
         if (i % 3 == 2) pine(q, s * 0.9f) else tree(q, s, i % 2 == 0)
     }
-    paperCircle(Color(0xFFE53935), s * 0.12f, Offset(c.x + s * 0.3f, c.y + s * 0.9f))
+    paperCircle(Color(0xFFE2A72E), s * 0.12f, Offset(c.x + s * 0.3f, c.y + s * 0.9f))
     paperCircle(Color.White, s * 0.04f, Offset(c.x + s * 0.28f, c.y + s * 0.86f))
 }
 
@@ -535,32 +636,43 @@ private fun DrawScope.palm(c: Offset, s: Float, lean: Float) {
     paperCircle(Color(0xFF6D4C41), s * 0.07f, Offset(top.x + s * 0.05f, top.y + s * 0.06f))
 }
 
-private fun DrawScope.lagoon(land: Land, fast: Float) {
+private fun DrawScope.lagoon(land: Land) {
     val c = at(land)
     val s = u * 0.07f
     // A bay that opens out to the sea at the bottom of the island.
     blob(Offset(c.x, c.y + s * 0.3f), s * 1.5f, s * 0.9f, Color(0xFFFFE0B2), 7)
     blob(Offset(c.x, c.y + s * 0.4f), s * 1.25f, s * 0.7f, Color(0xFF26C6DA), 8)
     blob(Offset(c.x, c.y + s * 0.45f), s * 0.8f, s * 0.42f, Color(0xFF80DEEA), 9)
-    val glint = ((sin(fast * 2 * PI) + 1) / 2).toFloat()
-    drawArc(Color.White.copy(alpha = 0.4f + 0.4f * glint), 200f, 140f, false, Offset(c.x - s * 0.3f, c.y + s * 0.3f), Size(s * 0.4f, s * 0.2f), style = Stroke(s * 0.05f))
     palm(Offset(c.x - s * 1.2f, c.y + s * 0.1f), s, 1f)
     palm(Offset(c.x + s * 1.25f, c.y), s * 0.85f, -1f)
 }
 
-private fun DrawScope.factory(land: Land, fast: Float) {
+/** The lagoon's glint, drawn live over the baked lagoon. */
+private fun DrawScope.lagoonGlint(land: Land, fast: Float) {
     val c = at(land)
     val s = u * 0.07f
-    // Puffs of smoke drifting up from the chimney.
+    val glint = ((sin(fast * 2 * PI) + 1) / 2).toFloat()
+    drawArc(Color.White.copy(alpha = 0.4f + 0.4f * glint), 200f, 140f, false, Offset(c.x - s * 0.3f, c.y + s * 0.3f), Size(s * 0.4f, s * 0.2f), style = Stroke(s * 0.05f))
+}
+
+/** Puffs of smoke drifting up from the factory chimney, drawn live. */
+private fun DrawScope.factorySmoke(land: Land, fast: Float) {
+    val c = at(land)
+    val s = u * 0.07f
     for (k in 0..2) {
         val t = (fast + k / 3f) % 1f
-        paperCircle(
+        drawCircle(
             Color.White.copy(alpha = 0.7f * (1 - t)), s * (0.15f + 0.2f * t),
-            Offset(c.x + s * 0.55f + t * s * 0.4f, c.y - s * 1.0f - t * s * 0.9f),
+            Offset(c.x + s * 0.55f + t * s * 0.4f, c.y - s * 1.1f - t * s * 0.9f),
         )
     }
+}
+
+private fun DrawScope.factory(land: Land) {
+    val c = at(land)
+    val s = u * 0.07f
     paperRect(Color(0xFF78909C), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.7f))
-    paperRect(Color(0xFFE53935), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.1f))
+    paperRect(Color(0xFF22A699), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.1f))
     paperRect(Color(0xFF90A4AE), Offset(c.x - s * 0.9f, c.y - s * 0.4f), Size(s * 1.8f, s * 0.8f))
     // Saw-tooth roof.
     for (k in 0..2) {
@@ -605,80 +717,94 @@ private fun DrawScope.peaks(land: Land) {
     mountain(Offset(c.x, c.y + s * 0.6f), s * 1.1f, s * 1.9f, Color(0xFF8E7CC3))
 }
 
-private fun DrawScope.caves(land: Land, fast: Float) {
+private fun DrawScope.caves(land: Land) {
     val c = at(land)
     val s = u * 0.07f
     blob(Offset(c.x, c.y), s * 1.4f, s * 1.0f, Color(0xFF8D8D8D), 11)
     blob(Offset(c.x - s * 0.2f, c.y - s * 0.2f), s * 0.9f, s * 0.6f, Color(0xFFA1A1A1), 12)
     paperArc(Color(0xFF263238), 180f, 180f, true, Offset(c.x - s * 0.5f, c.y - s * 0.2f), Size(s, s * 0.9f))
     paperRect(Color(0xFF263238), Offset(c.x - s * 0.5f, c.y + s * 0.25f), Size(s, s * 0.3f))
+}
+
+/** Crystals twinkling round the cave mouth, drawn live. */
+private fun DrawScope.caveSparkles(land: Land, fast: Float) {
+    val c = at(land)
+    val s = u * 0.07f
     listOf(-0.9f to -0.4f, 0.8f to -0.5f, 0.95f to 0.3f).forEachIndexed { i, (dx, dy) ->
         val a = ((sin((fast + i * 0.3f) * 2 * PI) + 1) / 2).toFloat()
         star(Offset(c.x + dx * s, c.y + dy * s), s * 0.18f, Color(0xFF80DEEA).copy(alpha = 0.5f + 0.5f * a))
     }
 }
 
-private fun DrawScope.castle(land: Land, mid: Float) {
+/** The castle's shadow on the sea far below shows it is up in the sky. */
+private fun DrawScope.castleShadow(land: Land, mid: Float) {
     val c = at(land)
     val s = u * 0.065f
     val float = sin(mid * 2 * PI).toFloat() * s * 0.12f
-    // Its shadow on the sea far below shows the castle is up in the sky.
     val shadowW = s * (2.6f - float / s)
-    drawOval(
-        Color(0x22003050),
-        Offset(c.x - shadowW / 2, c.y + s * 3.4f),
-        Size(shadowW, s * 0.55f),
-    )
-    withTransform({ translate(0f, float) }) {
-        // A fluffy cloud island.
-        listOf(-1.0f to 0.55f, -0.4f to 0.75f, 0.3f to 0.75f, 0.95f to 0.55f, 0f to 0.45f).forEach { (dx, dy) ->
-            paperCircle(Color.White, s * 0.55f, Offset(c.x + dx * s, c.y + dy * s))
-        }
-        // Towers with pointy roofs and flags.
-        paperRect(Color(0xFFF8BBD0), Offset(c.x - s * 0.6f, c.y - s * 0.5f), Size(s * 1.2f, s * 0.9f))
-        listOf(-0.75f, 0.75f, 0f).forEachIndexed { i, dx ->
-            val tall = if (i == 2) 1.3f else 1.0f
-            val x = c.x + dx * s
-            paperRect(Color(0xFFF48FB1), Offset(x - s * 0.22f, c.y - s * tall), Size(s * 0.44f, s * tall + s * 0.4f))
-            val roof = Path().apply {
-                moveTo(x - s * 0.3f, c.y - s * tall)
-                lineTo(x, c.y - s * tall - s * 0.5f)
-                lineTo(x + s * 0.3f, c.y - s * tall)
-                close()
-            }
-            paperPath(roof, Color(0xFF7E57C2))
-            drawLine(Color(0xFF5D4037), Offset(x, c.y - s * tall - s * 0.5f), Offset(x, c.y - s * tall - s * 0.8f), s * 0.05f)
-            val wave = sin(mid * 2 * PI * 6 + i).toFloat() * s * 0.04f
-            val flag = Path().apply {
-                moveTo(x, c.y - s * tall - s * 0.8f)
-                lineTo(x + s * 0.3f, c.y - s * tall - s * 0.72f + wave)
-                lineTo(x, c.y - s * tall - s * 0.62f)
-                close()
-            }
-            paperPath(flag, Color(0xFFFFD54F))
-        }
-        paperArc(Color(0xFF7E57C2), 180f, 180f, true, Offset(c.x - s * 0.2f, c.y - s * 0.1f), Size(s * 0.4f, s * 0.4f))
-        paperRect(Color(0xFF7E57C2), Offset(c.x - s * 0.2f, c.y + s * 0.1f), Size(s * 0.4f, s * 0.3f))
-        // A little rainbow behind.
-        listOf(0xFFFF8A80, 0xFFFFE082, 0xFFA5D6A7, 0xFF90CAF9).forEachIndexed { i, col ->
-            drawArc(
-                Color(col).copy(alpha = 0.6f), 180f, 180f, false,
-                Offset(c.x - s * (1.9f - i * 0.12f), c.y - s * (1.4f - i * 0.12f)), Size(s * (1.2f - i * 0.24f), s * (1.2f - i * 0.24f)),
-                style = Stroke(s * 0.1f),
-            )
-        }
+    drawOval(Color(0x22003050), Offset(c.x - shadowW / 2, c.y + s * 3.4f), Size(shadowW, s * 0.55f))
+}
+
+/** The castle on its fluffy cloud, centred on [c] at scale [s]; baked once in its own box. */
+private fun DrawScope.castleArt(c: Offset, s: Float) {
+    // A little rainbow behind.
+    listOf(0xFFF8BBD0, 0xFFFFE082, 0xFFA5D6A7, 0xFF90CAF9).forEachIndexed { i, col ->
+        drawArc(
+            Color(col).copy(alpha = 0.8f), 180f, 180f, false,
+            Offset(c.x - s * (1.9f - i * 0.12f), c.y - s * (1.4f - i * 0.12f)), Size(s * (1.2f - i * 0.24f), s * (1.2f - i * 0.24f)),
+            style = Stroke(s * 0.1f),
+        )
     }
+    // A fluffy cloud island.
+    listOf(-1.0f to 0.55f, -0.4f to 0.75f, 0.3f to 0.75f, 0.95f to 0.55f, 0f to 0.45f).forEach { (dx, dy) ->
+        paperCircle(Color.White, s * 0.55f, Offset(c.x + dx * s, c.y + dy * s))
+    }
+    // Towers with pointy roofs and flags.
+    paperRect(Color(0xFFF8BBD0), Offset(c.x - s * 0.6f, c.y - s * 0.5f), Size(s * 1.2f, s * 0.9f))
+    listOf(-0.75f, 0.75f, 0f).forEachIndexed { i, dx ->
+        val tall = if (i == 2) 1.3f else 1.0f
+        val x = c.x + dx * s
+        paperRect(Color(0xFFF48FB1), Offset(x - s * 0.22f, c.y - s * tall), Size(s * 0.44f, s * tall + s * 0.4f))
+        val roof = Path().apply {
+            moveTo(x - s * 0.3f, c.y - s * tall)
+            lineTo(x, c.y - s * tall - s * 0.5f)
+            lineTo(x + s * 0.3f, c.y - s * tall)
+            close()
+        }
+        paperPath(roof, Color(0xFF7E57C2))
+        drawLine(Color(0xFF5D4037), Offset(x, c.y - s * tall - s * 0.5f), Offset(x, c.y - s * tall - s * 0.8f), s * 0.05f)
+        val flag = Path().apply {
+            moveTo(x, c.y - s * tall - s * 0.8f)
+            lineTo(x + s * 0.3f, c.y - s * tall - s * 0.72f)
+            lineTo(x, c.y - s * tall - s * 0.62f)
+            close()
+        }
+        paperPath(flag, Color(0xFFFFD54F))
+    }
+    paperArc(Color(0xFF7E57C2), 180f, 180f, true, Offset(c.x - s * 0.2f, c.y - s * 0.1f), Size(s * 0.4f, s * 0.4f))
+    paperRect(Color(0xFF7E57C2), Offset(c.x - s * 0.2f, c.y + s * 0.1f), Size(s * 0.4f, s * 0.3f))
+}
+
+/** A paper cloud filling its box, for the front layer. */
+private fun DrawScope.frontCloud() {
+    val r = size.height * 0.3f
+    val c = Offset(size.width * 0.5f, size.height * 0.55f)
+    paperCircle(Color.White, r, c)
+    paperCircle(Color.White, r * 0.8f, Offset(c.x - r * 1.1f, c.y + r * 0.25f))
+    paperCircle(Color.White, r * 0.85f, Offset(c.x + r * 1.1f, c.y + r * 0.2f))
+    paperCircle(Color.White, r * 0.7f, Offset(c.x + r * 0.4f, c.y - r * 0.55f))
 }
 
 /** Sparkles that travel from [from] to [to] (twice), showing the way to the next stop. */
-private fun DrawScope.sparklePath(from: Offset, to: Offset, t: Float) {
+private fun DrawScope.sparklePath(from: Offset, to: Offset, t: Float, still: Boolean) {
     // A faint dotted guide line, then a trail of big sparkles running along it.
     val fadeAll = if (t > 0.85f) (1f - t) / 0.15f else 1f
     drawLine(
         Color.White.copy(alpha = 0.6f * fadeAll), from, to, u * 0.008f, cap = StrokeCap.Round,
         pathEffect = PathEffect.dashPathEffect(floatArrayOf(u * 0.01f, u * 0.02f)),
     )
-    val head = (t * 2.2f) % 1.1f
+    if (still) return
+    val head = (t * 3.3f) % 1.1f
     for (k in 0 until 8) {
         val f = head - k * 0.06f
         if (f < 0f || f > 1f) continue
@@ -689,15 +815,13 @@ private fun DrawScope.sparklePath(from: Offset, to: Offset, t: Float) {
     }
 }
 
-/** Soft drifting mist over a land that isn't open yet. */
-private fun DrawScope.mist(land: Land, slow: Float, strength: Float) {
-    if (strength <= 0.01f) return
-    val c = at(land)
-    val s = u * 0.07f
-    val drift = sin(slow * 2 * PI + land.ordinal).toFloat() * s * 0.25f
+/** Soft mist filling its box, laid over a land that isn't open yet. */
+private fun DrawScope.mist() {
+    val c = center
+    val s = size.minDimension / 4.8f
     listOf(-1.0f to 0.1f, -0.3f to -0.4f, 0.5f to -0.2f, 1.0f to 0.25f, 0f to 0.45f, -0.6f to 0.6f, 0.6f to 0.7f, 0f to -0.9f).forEachIndexed { i, (dx, dy) ->
         val r = s * (0.75f + 0.15f * (i % 3))
-        paperCircle(Color(0xFFECEFF1).copy(alpha = 0.62f * strength), r, Offset(c.x + dx * s + drift * (if (i % 2 == 0) 1 else -1), c.y + dy * s))
+        drawCircle(Color(0xFFECEFF1).copy(alpha = 0.62f), r, Offset(c.x + dx * s, c.y + dy * s))
     }
 }
 

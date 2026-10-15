@@ -65,7 +65,7 @@ fun MicHelloScreen(onDone: () -> Unit) {
             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 PaperChip("👂 Can Rory hear you?", fontSize = 26.sp)
                 Spacer(Modifier.height(12.dp))
-                Critter(Species.ROBOT, Modifier.weight(1f).fillMaxWidth(), Color(0xFFFFCC80), mood = Mood.CHEER)
+                Critter(Species.ROBOT, Modifier.weight(1f).fillMaxWidth(), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 PaperIconButton("🎤", Color(0xFFFFE0B2), size = 150.dp, enabled = !asking, modifier = Modifier.popIn("mic")) {

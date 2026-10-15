@@ -26,3 +26,7 @@ expect fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit)
 /** Copies text (a backup code) to the clipboard. Returns false if it couldn't. */
 @Composable
 expect fun rememberCopyText(): (String) -> Boolean
+
+/** True when the device asks for less motion (iPad/browser "Reduce motion", Android "Remove animations"). */
+@Composable
+expect fun rememberReduceMotion(): Boolean

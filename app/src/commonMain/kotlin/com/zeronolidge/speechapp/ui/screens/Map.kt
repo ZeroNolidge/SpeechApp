@@ -56,6 +56,7 @@ import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.PaperIconButton
 import com.zeronolidge.speechapp.ui.components.PointingHand
+import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.SpeakOnOpen
 import com.zeronolidge.speechapp.ui.components.popIn
@@ -83,7 +84,7 @@ fun HeroPickScreen(onPicked: () -> Unit, onHome: (() -> Unit)? = null, onBack: (
             ) {
                 Critter(
                     sp, Modifier.fillMaxHeight(),
-                    color = Color(if (sp == Species.KID) 0xFFFF7043 else sp.defaultColor),
+                    color = Color(if (sp == Species.KID) 0xFF5B7FDB else sp.defaultColor),
                     mood = if (sp == picked) Mood.CHEER else Mood.HAPPY,
                 )
             }
@@ -212,12 +213,13 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
         // The bottom row: grown-ups' gear, the big Adventure button, then stickers and practice.
         // Every button has its own space. On a narrow phone, Adventure gets a row of its own above.
         val adventure = @Composable {
-            PaperButton(Color(0xFFFFD54F), Modifier.height(76.dp), corner = 999.dp, onClick = onAdventure) {
+            // Tomato red: the one warm accent, kept for things he can tap.
+            PaperButton(PaperColorsUi.home, Modifier.height(76.dp), corner = 999.dp, onClick = onAdventure) {
                 Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ArrowIcon(30.dp, color = Color(0xFF2E7D32))
+                    ArrowIcon(30.dp, color = Color.White)
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        "Adventure!", fontSize = 26.sp, color = PaperStyle.ink, maxLines = 1, softWrap = false,
+                        "Adventure!", fontSize = 26.sp, color = Color.White, maxLines = 1, softWrap = false,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
                     )
                 }
@@ -261,7 +263,7 @@ private fun RoryHint(key: Int, next: Land) {
     if (!show) return
     Box(Modifier.fillMaxSize().padding(start = 16.dp, bottom = 170.dp), contentAlignment = Alignment.BottomStart) {
         Row(Modifier.popIn(key), verticalAlignment = Alignment.Top) {
-            Critter(Species.ROBOT, Modifier.height(130.dp), Color(0xFFFFCC80), mood = Mood.CHEER)
+            Critter(Species.ROBOT, Modifier.height(130.dp), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
             // Rory's speech bubble: "go there first", pointing by picture.
             PaperChip("👉 ${next.emoji} ✨", fontSize = 30.sp)
         }

@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -65,7 +66,7 @@ fun GoButton(
     onClick: () -> Unit,
 ) {
     val t = rememberInfiniteTransition(label = "go")
-    val pulse by t.animateFloat(1f, 1.1f, infiniteRepeatable(tween(550), RepeatMode.Reverse), label = "pulse")
+    val pulse by t.loop(1f, 1.1f, 550, label = "pulse")
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         PaperButton(
             PaperColorsUi.go,
@@ -84,7 +85,7 @@ fun GoButton(
 @Composable
 fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boolean = false, pointRight: Boolean = false) {
     val t = rememberInfiniteTransition(label = "hand")
-    val bob by t.animateFloat(0f, 1f, infiniteRepeatable(tween(450), RepeatMode.Reverse), label = "bob")
+    val bob by t.loop(0f, 1f, 450, label = "bob")
     val shift = size * 0.25f * bob
     Text(
         when {

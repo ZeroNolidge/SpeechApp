@@ -66,6 +66,7 @@ import com.zeronolidge.speechapp.ui.components.AnswerRow
 import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.PaperArrowButton
 import com.zeronolidge.speechapp.ui.components.Misses
+import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.heightIn
 import com.zeronolidge.speechapp.ui.components.LocalAnswersStacked
@@ -348,8 +349,9 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
     var wiggleLeft by remember(c) { mutableIntStateOf(0) }
     var wiggleRight by remember(c) { mutableIntStateOf(0) }
     val shake = remember(c) { Animatable(0f) }
+    val still = LocalReduceMotion.current
     LaunchedEffect(wiggleLeft, wiggleRight) {
-        if (wiggleLeft + wiggleRight > 0) {
+        if (wiggleLeft + wiggleRight > 0 && !still) {
             repeat(3) {
                 shake.animateTo(8f, tween(55))
                 shake.animateTo(-8f, tween(55))
@@ -788,7 +790,7 @@ private fun Board(level: RobotLevel, robot: RobotState, cell: Dp, bumpAt: Cell?,
                         Modifier
                             .size(cell)
                             .background(if ((r + col) % 2 == 0) Kid.grass else Kid.grassDark)
-                            .then(if (here == bumpAt) Modifier.border(3.dp, Color(0xFFE53935)) else Modifier),
+                            .then(if (here == bumpAt) Modifier.border(3.dp, Color(0xFFE84A7F)) else Modifier),
                         contentAlignment = Alignment.Center,
                     ) {
                         val big = (cell.value * 0.55f).sp

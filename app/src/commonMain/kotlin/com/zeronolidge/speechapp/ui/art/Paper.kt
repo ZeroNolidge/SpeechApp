@@ -69,58 +69,66 @@ fun DrawScope.paperPath(path: Path, color: Color) {
 }
 
 /**
- * Makes a button, card or panel look like a piece of paper: rough edges and a soft shadow.
+ * Makes a button, card or panel look like a piece of paper: rough edges, a thin white cut edge
+ * and a soft shadow, baked into an image once (not redrawn every frame).
  * Put it before `clip(...)` so the shadow isn't cut off.
  */
-fun Modifier.paperCard(color: Color, corner: Dp = 22.dp, circle: Boolean = false): Modifier = drawBehind {
-    if (circle) {
-        paperCircle(color, size.minDimension / 2, center)
-    } else {
-        val r = corner.toPx()
-        paperRoundRect(color, Offset.Zero, size, CornerRadius(r, r))
-    }
-}
+fun Modifier.paperCard(color: Color, corner: Dp = 22.dp, circle: Boolean = false): Modifier =
+    this then BakedPaperElement(
+        spec = listOf("card", color, corner, circle),
+        depth = 3.dp,
+    ) { faceShape(color, corner.toPx(), circle) }
 
 /**
  * One look for the whole app. Anything the child can tap is a thick, raised cut-out with a clear
  * drop shadow; scenery sits flat and a little muted behind it, so it is obvious what to tap.
  */
 object PaperStyle {
-    /** How far a tappable cut-out's drop shadow falls. */
-    val lift = 7.dp
+    /** How far a tappable cut-out's drop shadow falls: deeper than any scenery layer. */
+    val lift = 8.dp
     /** How thick the card stock looks along a tappable cut-out's bottom edge. */
     val edge = 5.dp
     val corner = 26.dp
     val shadow = Color(0x45000000)
     /** Laid over scenery so it sits back and tappable things stand out. */
-    val sceneryWash = Color(0x4DF5E6C8)
+    val sceneryWash = Color(0x33F5E6C8)
     /** Text and icons: dark ink on plain cream paper, with no texture over them. */
     val chip = Color(0xFFFFFAF0)
     val ink = Color(0xFF2E2140)
 }
 
-private fun DrawScope.paperLayer(color: Color, corner: Float, circle: Boolean, dx: Float, dy: Float) = translate(dx, dy) {
+/** The flat shape of a cut-out, filling the drawing area. */
+private fun DrawScope.faceShape(color: Color, corner: Float, circle: Boolean) {
     if (circle) drawPaper(color, size.minDimension, PaperShape.Circle(center, size.minDimension / 2), shadow = false)
     else drawPaper(color, minOf(size.width, size.height), PaperShape.RoundRect(Offset.Zero, size, CornerRadius(corner, corner)), shadow = false)
 }
 
 /**
- * The drop shadow and card-stock edge under a raised cut-out. [press] (0 to 1) squashes the
- * cut-out down onto the table while a finger is on it.
+ * The drop shadow and card-stock edge under a raised cut-out: the deepest shadow in the app, so
+ * buttons always sit on top of the scenery. [press] (0 to 1) squashes the cut-out down onto the
+ * table while a finger is on it. The shape is baked once; only its position changes.
  */
-fun Modifier.raisedPaperBase(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false, press: () -> Float = { 0f }): Modifier = drawBehind {
-    val lift = PaperStyle.lift.toPx()
-    val edge = PaperStyle.edge.toPx()
-    val p = press()
-    val r = corner.toPx()
-    paperLayer(PaperStyle.shadow, r, circle, lift * 0.45f * (1f - p), edge + lift * (1f - 0.7f * p))
-    paperLayer(lerp(color, Color.Black, 0.28f), r, circle, 0f, edge)
-}
+fun Modifier.raisedPaperBase(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false, press: () -> Float = { 0f }): Modifier =
+    this then BakedPaperElement(
+        spec = listOf("base", corner, circle),
+        edge = false,
+        live = { baked ->
+            val lift = PaperStyle.lift.toPx()
+            val edge = PaperStyle.edge.toPx()
+            val p = press()
+            // A soft shadow lit from the top left: a few faint copies, further and fainter.
+            val dx = lift * 0.5f * (1f - p)
+            val dy = edge + lift * (1f - 0.7f * p)
+            listOf(1.25f to 0.10f, 1f to 0.16f, 0.75f to 0.16f).forEach { (k, a) ->
+                drawBaked(baked, dx * k, dy * k, tint = Color.Black, alpha = a)
+            }
+            drawBaked(baked, 0f, edge, tint = lerp(color, Color.Black, 0.28f))
+        },
+    ) { faceShape(Color.White, corner.toPx(), circle) }
 
-/** The top face of a raised cut-out. */
-fun Modifier.raisedPaperFace(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false): Modifier = drawBehind {
-    paperLayer(color, corner.toPx(), circle, 0f, 0f)
-}
+/** The top face of a raised cut-out, with its thin white hand-cut edge. */
+fun Modifier.raisedPaperFace(color: Color, corner: Dp = PaperStyle.corner, circle: Boolean = false): Modifier =
+    this then BakedPaperElement(spec = listOf("face", color, corner, circle)) { faceShape(color, corner.toPx(), circle) }
 
 /** Scenery sits back: a soft wash and paper grain over the background, but never over text or buttons. */
 @Composable
@@ -131,29 +139,10 @@ fun SceneryWash(modifier: Modifier = Modifier.fillMaxSize(), overflow: Float = 0
     PaperGrain(modifier, overflow)
 }
 
-/** A fine paper-grain texture for backgrounds, so the app feels like paper. */
+/** A fine paper-grain texture for backgrounds, so the app feels like paper. One shared texture. */
 @Composable
 fun PaperGrain(modifier: Modifier = Modifier.fillMaxSize(), overflow: Float = 0f) {
-    val brush = remember {
-        val n = 160
-        val rnd = Random(7)
-        val bmp = ImageBitmap(n, n)
-        val canvas = androidx.compose.ui.graphics.Canvas(bmp)
-        val paint = Paint()
-        for (y in 0 until n) {
-            for (x in 0 until n) {
-                val v = rnd.nextInt(256)
-                paint.color = when {
-                    v < 18 -> Color(60, 40, 20, 26) // dark fleck
-                    v > 236 -> Color(255, 255, 255, 34) // light fleck
-                    v % 3 == 0 -> Color(90, 70, 40, rnd.nextInt(6))
-                    else -> continue
-                }
-                canvas.drawRect(x.toFloat(), y.toFloat(), x + 1f, y + 1f, paint)
-            }
-        }
-        ShaderBrush(ImageShader(bmp, TileMode.Repeated, TileMode.Repeated))
-    }
+    val brush = remember { PaperTexture.brush() }
     Canvas(modifier) { drawRect(brush, Offset(-overflow, -overflow), Size(size.width + overflow * 2, size.height + overflow * 2)) }
 }
 
@@ -161,6 +150,7 @@ fun PaperGrain(modifier: Modifier = Modifier.fillMaxSize(), overflow: Float = 0f
 object PaperColors {
     val kraft = Color(0xFFF3E3C3)
     val cream = Color(0xFFFFF7E6)
+    /** The one warm accent, kept for things he can tap. Never used in scenery. */
     val tomato = Color(0xFFF2643D)
     val sunshine = Color(0xFFFFC63A)
     val grass = Color(0xFF7CC242)

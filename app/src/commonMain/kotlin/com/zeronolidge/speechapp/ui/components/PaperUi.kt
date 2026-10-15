@@ -1,5 +1,9 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.ui.art.loop
+import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
+import com.zeronolidge.speechapp.ui.art.MaxMotionMs
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -217,10 +221,10 @@ fun HearAgainButton() {
     val app = LocalApp.current
     val trouble = app.audioTrouble
     val t = rememberInfiniteTransition(label = "hear")
-    val pulse by t.animateFloat(1f, 1.12f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "hearPulse")
+    val pulse by t.loop(1f, 1.12f, 500, label = "hearPulse")
     PaperIconButton(
         "🔊",
-        if (trouble) Color(0xFFFFB300) else PaperColorsUi.hear,
+        if (trouble) PaperColorsUi.home else PaperColorsUi.hear,
         modifier = Modifier.scale(if (trouble) pulse else 1f),
     ) {
         app.audioTrouble = false
@@ -230,7 +234,8 @@ fun HearAgainButton() {
 
 /** The colours of the shared controls, picked from the paper palette. */
 object PaperColorsUi {
-    val home = Color(0xFFFF8A65)
+    /** Tomato: the one warm accent, only on things he can tap. */
+    val home = Color(0xFFF2643D)
     val back = Color(0xFFFFE0B2)
     val hear = Color(0xFFFFD54F)
     val go = Color(0xFF43A047)
@@ -299,10 +304,13 @@ fun PlainBackdrop() {
 
 /** Pops up like a paper cut-out being stood up: a quick springy grow with a little twist. */
 fun Modifier.popIn(key: Any? = Unit, delayMillis: Int = 0): Modifier = composed {
-    val anim = remember(key) { Animatable(0f) }
+    val still = LocalReduceMotion.current
+    val anim = remember(key) { Animatable(if (still) 1f else 0f) }
     LaunchedEffect(key) {
+        if (still) return@LaunchedEffect
         if (delayMillis > 0) delay(delayMillis.toLong())
-        anim.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+        // A quick springy settle, well under half a second.
+        anim.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium))
     }
     graphicsLayer {
         val v = anim.value
@@ -315,8 +323,9 @@ fun Modifier.popIn(key: Any? = Unit, delayMillis: Int = 0): Modifier = composed 
 
 /** A new screen settles in like a sheet of paper laid down: a short fade and grow. */
 fun Modifier.paperEnter(key: Any?): Modifier = composed {
-    val anim = remember(key) { Animatable(0f) }
-    LaunchedEffect(key) { anim.animateTo(1f, tween(220)) }
+    val still = LocalReduceMotion.current
+    val anim = remember(key) { Animatable(if (still) 1f else 0f) }
+    LaunchedEffect(key) { if (!still) anim.animateTo(1f, tween(220)) }
     graphicsLayer {
         val v = anim.value
         scaleX = 0.97f + 0.03f * v
@@ -330,11 +339,14 @@ fun Modifier.paperEnter(key: Any?): Modifier = composed {
  * already open. [onDone] runs when the fold has finished.
  */
 fun Modifier.unfold(play: Boolean, onDone: () -> Unit = {}): Modifier = composed {
-    val anim = remember { Animatable(if (play) 0f else 1f) }
+    val still = LocalReduceMotion.current
+    val anim = remember { Animatable(if (play && !still) 0f else 1f) }
     LaunchedEffect(play) {
         if (play) {
-            delay(350)
-            anim.animateTo(1f, tween(650))
+            if (!still) {
+                delay(300)
+                anim.animateTo(1f, tween(MaxMotionMs))
+            }
             onDone()
         }
     }
@@ -343,6 +355,53 @@ fun Modifier.unfold(play: Boolean, onDone: () -> Unit = {}): Modifier = composed
         cameraDistance = 12f * density
         rotationX = (1f - anim.value) * -90f
         alpha = if (anim.value < 0.02f) 0f else 1f
+    }
+}
+
+/**
+ * Stands up like a pop-up book page when [key] changes: the layer swings up from its bottom
+ * edge, after [delayMillis] (so layers behind pop first). Under half a second, still with
+ * reduce motion.
+ */
+fun Modifier.popUp(key: Any?, delayMillis: Int = 0): Modifier = composed {
+    val still = LocalReduceMotion.current
+    val anim = remember(key) { Animatable(if (still) 1f else 0f) }
+    LaunchedEffect(key) {
+        if (still) return@LaunchedEffect
+        if (delayMillis > 0) delay(delayMillis.toLong())
+        anim.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+    }
+    graphicsLayer {
+        val v = anim.value
+        transformOrigin = TransformOrigin(0.5f, 1f)
+        cameraDistance = 10f * density
+        rotationX = (1f - v) * 75f
+        alpha = if (v < 0.02f) 0f else 1f
+    }
+}
+
+/**
+ * A sticker peeling off its backing and landing: it lifts from the top-left corner with a curl
+ * and settles flat. Under half a second, still with reduce motion.
+ */
+fun Modifier.peelIn(key: Any?, delayMillis: Int = 0): Modifier = composed {
+    val still = LocalReduceMotion.current
+    val anim = remember(key) { Animatable(if (still) 1f else 0f) }
+    LaunchedEffect(key) {
+        if (still) return@LaunchedEffect
+        if (delayMillis > 0) delay(delayMillis.toLong())
+        anim.animateTo(1f, tween(MaxMotionMs, easing = FastOutSlowInEasing))
+    }
+    graphicsLayer {
+        val v = anim.value
+        val k = 1f - v
+        transformOrigin = TransformOrigin(0f, 0f)
+        cameraDistance = 8f * density
+        rotationY = k * -65f
+        rotationX = k * 35f
+        rotationZ = k * -12f
+        translationY = -k * 18f * density
+        alpha = if (v < 0.02f) 0f else 1f
     }
 }
 

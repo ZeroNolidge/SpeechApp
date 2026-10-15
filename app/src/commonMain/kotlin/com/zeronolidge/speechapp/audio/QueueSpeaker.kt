@@ -1,5 +1,8 @@
 package com.zeronolidge.speechapp.audio
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,7 +22,8 @@ class QueueSpeaker(private val engine: VoiceEngine) : Speaker {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val queue = ArrayDeque<Item>()
-    private var current: Item? = null
+    // Observable, so characters can wiggle while something is being said.
+    private var current: Item? by mutableStateOf(null)
     private var watchdog: Job? = null
     private var nextId = 0
     /** A say() is waiting out its short gap before starting. */

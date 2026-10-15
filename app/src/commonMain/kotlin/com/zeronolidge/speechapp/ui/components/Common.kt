@@ -1,5 +1,9 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.ui.art.loop
+import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
+import com.zeronolidge.speechapp.ui.art.MaxMotionMs
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -176,15 +180,12 @@ fun AnswerCard(
     content: @Composable () -> Unit,
 ) {
     val pulse = rememberInfiniteTransition(label = "pulse")
-    val s by pulse.animateFloat(
-        1f, 1.08f,
-        infiniteRepeatable(tween(400), RepeatMode.Reverse),
-        label = "scale",
-    )
+    val s by pulse.loop(1f, 1.08f, 400, label = "scale")
     val fold by animateFloatAsState(if (faded) 1f else 0f, tween(300), label = "fold")
     val shake = remember { Animatable(0f) }
+    val still = LocalReduceMotion.current
     LaunchedEffect(wiggle) {
-        if (wiggle > 0) {
+        if (wiggle > 0 && !still) {
             repeat(3) {
                 shake.animateTo(9f, tween(55))
                 shake.animateTo(-9f, tween(55))
@@ -344,32 +345,39 @@ fun Emoji(text: String, size: TextUnit, modifier: Modifier = Modifier) {
     Text(text, fontSize = size, modifier = modifier, textAlign = TextAlign.Center)
 }
 
-/** Falling stars and confetti whenever [AppServices.celebrations] changes. */
+/**
+ * A quick burst of paper stars and confetti whenever [AppServices.celebrations] changes: out
+ * from the middle and gone in under half a second. Nothing with reduce motion.
+ */
 @Composable
 fun CelebrationOverlay() {
     val app = LocalApp.current
     val key = app.celebrations
-    if (key == 0) return
+    if (key == 0 || LocalReduceMotion.current) return
     val progress = remember(key) { Animatable(0f) }
     LaunchedEffect(key) {
-        progress.animateTo(1f, tween(1600, easing = LinearEasing))
+        progress.animateTo(1f, tween(MaxMotionMs, easing = LinearOutSlowInEasing))
     }
     if (progress.value >= 1f) return
     val pieces = remember(key) {
         val r = kotlin.random.Random(key)
-        List(16) {
-            Triple(r.nextFloat(), 0.6f + r.nextFloat() * 0.8f, listOf("⭐", "🌟", "🎉", "✨", "🎈").random(r))
+        List(18) { i ->
+            Triple(i * 6.2832f / 18 + r.nextFloat() * 0.3f, 0.55f + r.nextFloat() * 0.45f, listOf("⭐", "🌟", "🎉", "✨", "🎈").random(r))
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth
         val h = maxHeight
-        pieces.forEach { (x, speed, emoji) ->
-            val y = (progress.value * speed * 1.4f - 0.2f)
+        val reach = minOf(w, h) * 0.6f
+        val v = progress.value
+        pieces.forEach { (angle, dist, emoji) ->
+            val d = reach * dist * v
             Text(
                 emoji,
                 fontSize = 40.sp,
-                modifier = Modifier.offset(x = w * x - 20.dp, y = h * y),
+                modifier = Modifier
+                    .offset(x = w / 2 - 20.dp + d * kotlin.math.cos(angle), y = h / 2 - 20.dp + d * kotlin.math.sin(angle))
+                    .graphicsLayer { alpha = 1f - v * v },
             )
         }
     }

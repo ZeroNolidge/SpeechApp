@@ -21,6 +21,11 @@ private object PaperInk {
         style = android.graphics.Paint.Style.FILL
         color = PaperShadowColor.toArgb()
     }
+    val edge = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = android.graphics.Color.argb(225, 255, 255, 255)
+        strokeJoin = android.graphics.Paint.Join.ROUND
+    }
     private val effects = HashMap<Int, android.graphics.PathEffect>()
     val rect = RectF()
 
@@ -68,11 +73,17 @@ internal actual fun DrawScope.drawPaper(color: Color, extent: Float, shape: Pape
     }
 
     // Only solid paper casts a shadow; see-through things (mist, glows) don't.
-    if (shadow && color.alpha > 0.9f) {
+    if (shadow && PaperPen.shapeShadows && color.alpha > 0.9f) {
         PaperInk.shadow.pathEffect = effect
         draw(PaperInk.shadow, paperShadowOffset(extent))
     }
     PaperInk.fill.pathEffect = effect
     PaperInk.fill.color = color.toArgb()
     draw(PaperInk.fill, 0f)
+    // The thin white hand-cut edge, while baking a layer.
+    if (PaperPen.edge > 0f && color.alpha > 0.9f && extent >= PaperPen.edgeMin) {
+        PaperInk.edge.pathEffect = effect
+        PaperInk.edge.strokeWidth = PaperPen.edge
+        draw(PaperInk.edge, 0f)
+    }
 }
