@@ -74,6 +74,12 @@ import com.zeronolidge.speechapp.ui.components.PaperIconButton
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.SpeechBubble
 import com.zeronolidge.speechapp.ui.components.popIn
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import kotlinx.coroutines.delay
+import com.zeronolidge.speechapp.ui.components.ContinueAction
+import com.zeronolidge.speechapp.ui.components.ContinueHost
+import com.zeronolidge.speechapp.ui.components.ContinueSize
 import kotlin.random.Random
 
 private sealed interface Phase {
@@ -137,6 +143,8 @@ fun ChapterScreen(nav: Nav) {
         background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = (phase as? Phase.Beat)?.index ?: 9) },
         top = { Footprints(quest, phase) },
     ) {
+        // Every step's continue button is drawn by the host: same size, same bottom-right spot.
+        ContinueHost {
         when (val ph = phase) {
             Phase.Intro -> StoryScene(quest, quest.intro, species, Mood.HAPPY, onNext = ::next)
             is Phase.Twist -> if (!woken) {
@@ -155,6 +163,7 @@ fun ChapterScreen(nav: Nav) {
                 val earned = p.words.stickers.filter { it.text !in stickersBefore }
                 Goodbye(p.pieces.lastOrNull { it.id !in piecesBefore }, earned, onMap = nav.home)
             }
+        }
         }
     }
 }
@@ -236,9 +245,17 @@ private fun StoryScene(
     }
     Nudge(text, goLine)
     val walk = walkIn(scene)
+    // Safety net: about 3 seconds after the narration starts, the big continue button appears
+    // (bottom-right, as on every step) and a tap anywhere on the scene also moves on, whether or
+    // not the voice has finished.
+    var canGoOn by remember(text) { mutableStateOf(false) }
+    LaunchedEffect(text) {
+        delay(3000)
+        canGoOn = true
+    }
+    ContinueAction(delayMs = 3000, onClick = onNext)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 560.dp
-        val go = if (narrow) 84.dp else 104.dp
         val bubbleMax = maxHeight * 0.34f
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             // The words are spoken; the bubble is for grown-ups, so it never takes over the screen.
@@ -251,10 +268,14 @@ private fun StoryScene(
                     .verticalScroll(rememberScrollState()),
                 fontSize = if (narrow) 16 else 20,
             ) { app.speaker.say(text) }
-            // The ▶ gets its own space first, so it is always fully on screen; the characters
-            // share whatever room is left.
+            // The characters share the room left of the continue button's spot.
             Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).fillMaxHeight()) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(remember { MutableInteractionSource() }, indication = null, enabled = canGoOn) { onNext() },
+                ) {
                     SetPieceView(scene.piece, scene.prop, solved, Modifier.fillMaxSize())
                     Row(
                         Modifier.fillMaxSize(),
@@ -278,10 +299,7 @@ private fun StoryScene(
                         }
                     }
                 }
-                Spacer(Modifier.width(10.dp))
-                // The only way forward, so make it impossible to miss. It is there from the first moment,
-                // whatever the voice is doing.
-                GoButton(size = go, onClick = onNext)
+                Spacer(Modifier.width(ContinueSize + 12.dp))
             }
         }
     }
@@ -471,8 +489,10 @@ private fun Goodbye(piece: Cosmetic?, stickers: List<WordStat>, onMap: () -> Uni
                         stickers.take(4).forEachIndexed { i, w -> Sticker(w, 96.dp, Modifier.popIn(w.text, 600 + i * 200)) }
                     }
                 }
-                GoButton(size = 100.dp, onClick = onMap)
+                // Leaves room for the continue button, pinned bottom-right as on every step.
+                Spacer(Modifier.height(ContinueSize))
             }
         }
     }
+    ContinueAction(onClick = onMap)
 }

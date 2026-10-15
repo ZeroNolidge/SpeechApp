@@ -37,7 +37,7 @@ choices at a time. No ads, links, purchases, timers, lives, streaks or buzzers.
    door. Solving a challenge changes the picture. Before the twist, someone is fast asleep, and
    your child wakes them by calling their name.
 4. **Talking makes the story happen.** Saying "open" opens the door, and "jump" gets everyone
-   across the river. Each word is played slowly with its picture, then "3, 2, 1, your turn!" and
+   across the river. Each word is played slowly with its picture, then "Your turn!" and
    the microphone listens for about 4 seconds. It only listens for a voice, not the exact word, so
    it works with young voices and on iPhone and iPad. Voice heard: a celebration and a shiny
    sticker. Nothing heard: "Let's say it together!", and the story carries on. No microphone:

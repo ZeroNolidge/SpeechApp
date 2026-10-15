@@ -20,8 +20,16 @@ These are the owner's rules for all work:
 - **No ads, outside links, buy buttons, timers, lives, streaks or buzzer sounds.** Gentle only:
   wrong answers fold away with "try again".
 - Must keep working as a static site on GitHub Pages.
+- **Continue button:** one per step, drawn by `ContinueHost` (Guide.kt): same size
+  (`ContinueSize`), pinned bottom-right inside the screen. Steps register it with `ContinueAction`.
+  Narration shows it ~3 s after it starts (and a tap on the scene moves on), whatever the audio does.
+- **Mic permission** is asked only on the web start screen or the grown-ups page ("Allow
+  microphone"), never mid-story. `MicPermission.status` is ON / BLOCKED / NOT_ASKED; the grown-ups
+  page shows it with steps to re-enable (iPad Settings → Safari → Microphone).
 - **Speech:** spoken words make the story happen (`SpeakMoment`). The word is played slowly, then
-  "3, 2, 1, your turn!" and ~4 s of listening. Listening is **voice detection by loudness**
+  "Your turn!" and ~4 s of listening; quiet → "Let's say it together!", replay, one more listen
+  (max 2 tries), then move on. Whispers/partial words count (generous `VoiceMeter`). No mic: Rory +
+  big "I said it!" button. Listening is **voice detection by loudness**
   (`VoiceDetector` + `logic/VoiceMeter.kt`), NOT speech recognition (unreliable on iPhone/iPad and
   with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
   carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.

@@ -379,6 +379,13 @@ class VoiceMeterTest {
     }
 
     @Test
+    fun aWhisperOrPartOfAWordCounts() {
+        // A soft, short sound: about 0.2 s, a bit louder than a quiet room.
+        val levels = List(10) { 0.004f } + List(4) { 0.018f } + List(66) { 0.004f }
+        assertTrue(run(levels).heard)
+    }
+
+    @Test
     fun aClickIsNotAVoice() {
         val levels = List(10) { 0.005f } + listOf(0.3f, 0.3f) + List(68) { 0.005f }
         assertFalse(run(levels).heard)
@@ -388,7 +395,7 @@ class VoiceMeterTest {
     fun aNoisyRoomNeedsALouderVoice() {
         val m = VoiceMeter()
         repeat(6) { m.feed(0.03f, 50) }
-        assertTrue(m.threshold > 0.08f)
+        assertTrue(m.threshold > 0.06f)
         assertFalse(run(List(80) { 0.03f }).heard)
     }
 

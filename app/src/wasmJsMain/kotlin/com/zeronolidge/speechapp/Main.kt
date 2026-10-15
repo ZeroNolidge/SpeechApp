@@ -36,6 +36,8 @@ import com.zeronolidge.speechapp.ui.TalkAndLearnApp
 import com.zeronolidge.speechapp.ui.components.AppServices
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.theme.Kid
+import com.zeronolidge.speechapp.ui.platform.MicStatus
+import com.zeronolidge.speechapp.ui.platform.WebMic
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 import kotlinx.browser.document
 import org.jetbrains.compose.resources.ExperimentalResourceApi
@@ -76,6 +78,9 @@ private fun WebRoot(services: AppServices) {
     when {
         !started || !fontsReady -> StartScreen(ready = fontsReady) {
             services.speaker.say("Hi friend! Let's play!")
+            // Ask for the microphone here, at the start (a grown-up can tap Allow), so the
+            // browser never pops the question up in the middle of a story.
+            if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
             started = true
         }
         else -> TalkAndLearnApp(services)

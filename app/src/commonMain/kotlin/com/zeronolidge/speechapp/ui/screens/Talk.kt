@@ -55,7 +55,9 @@ import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.art.PaperStyle
-import com.zeronolidge.speechapp.ui.components.GoButton
+import com.zeronolidge.speechapp.ui.components.ContinueAction
+import com.zeronolidge.speechapp.ui.components.ContinueHost
+import com.zeronolidge.speechapp.ui.components.ContinueSize
 import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperButton
@@ -66,9 +68,6 @@ import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
 
 private enum class Speak { MODELLING, LISTENING, WAITING_TAP, DONE, PARROT_RECORDING, PARROT_PLAYING }
-
-/** Only ask for the microphone automatically once per run, so a "no" isn't asked again and again. */
-private var askedForMic = false
 
 /** Set when the microphone couldn't be opened, so later words go straight to "say it out loud". */
 private var micBroken = false
@@ -88,8 +87,10 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     val word = words[index % words.size]
     val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}." else null
     KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}", onBack = nav.back) {
-        SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index) {
-            index++
+        ContinueHost {
+            SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index) {
+                index++
+            }
         }
     }
 }
@@ -97,13 +98,15 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
 /**
  * A speaking moment, used inside the story and in free practice. In order:
  *  1. The picture and word, played slowly and clearly (slow, then normal).
- *  2. "3, 2, 1, your turn!" and about 4 seconds of listening, with a throbbing microphone.
- *     Listening only checks for a voice (loudness), not the exact word, so it works with young
- *     voices and on iPhones and iPads.
+ *  2. "Your turn!" and about 4 seconds of listening, with a throbbing microphone. Listening only
+ *     checks for a voice (loudness), not the exact word, so a whisper or part of the word counts.
+ *     It works with young voices and on iPhones and iPads.
  *  3. Voice heard: a celebration and a shiny sticker. Nothing heard: "Let's say it together!",
- *     the word again, and the story carries on. No microphone (or permission denied): Rory says
- *     "Say it out loud to me!" and waits for a tap on ▶.
- *  4. The big ▶ skips at any time. Every try (not a skip) puts a gem in the backpack.
+ *     the word again, and one more listen; then the story moves on either way (never more than
+ *     two tries per word). No microphone (or it's blocked): Rory says "Say it out loud to me!"
+ *     and shows a big "I said it!" button.
+ *  4. The continue button (bottom-right, as on every step) skips at any time. Every try (not a
+ *     skip) puts a gem in the backpack. The microphone is never asked for here, mid-story.
  * The microphone never blocks the story and quiet is never a fail.
  * [onDone] gets true if a voice was heard.
  */
@@ -133,8 +136,10 @@ fun SpeakMoment(
     var roryWaiting by remember(key) { mutableStateOf(false) }
     // Bumped whenever a new step starts, so callbacks from an interrupted one are ignored.
     var session by remember(key) { mutableIntStateOf(0) }
+    /** Listens so far for this word (at most two). */
+    var tries by remember(key) { mutableIntStateOf(0) }
     fun micUsable() = p.useMic && app.voice.available && micPermission.granted() && !micBroken
-    val countdown = "3, 2, 1, your turn!"
+    val yourTurn = "Your turn!"
 
     fun stopAll() {
         app.voice.cancel()
@@ -173,12 +178,12 @@ fun SpeakMoment(
     fun askOutLoud() {
         state = Speak.WAITING_TAP
         roryWaiting = true
-        app.instruct("Say it out loud to me! Then tap the big green arrow.")
+        app.instruct("Say it out loud to me! Then tap the big green I said it button.")
     }
 
     lateinit var listen: () -> Unit
 
-    /** Says [lines] (text to slow?), then the countdown and listening, or Rory's "say it out loud". */
+    /** Says [lines] (text to slow?), then "Your turn!" and listening, or Rory's "say it out loud". */
     fun speakThen(lines: List<Pair<String, Boolean>>, thenListen: Boolean) {
         if (state == Speak.DONE) return
         stopAll()
@@ -186,7 +191,7 @@ fun SpeakMoment(
         state = Speak.MODELLING
         roryWaiting = false
         val useMic = thenListen && micUsable()
-        val all = lines + if (useMic) listOf(countdown to false) else emptyList()
+        val all = lines + if (useMic) listOf(yourTurn to false) else emptyList()
         if (all.isEmpty()) {
             if (useMic) listen() else askOutLoud()
             return
@@ -211,20 +216,19 @@ fun SpeakMoment(
     listen = {
         val s = session
         state = Speak.LISTENING
+        tries++
         app.voice.listen(4000, onLevel = { level = it }) { heard ->
             if (s != session || state == Speak.DONE) return@listen
             level = 0f
             when (heard) {
                 true -> finish(heard = true, micUsed = true)
-                false -> {
-                    // Quiet: say it together, then carry on anyway.
-                    stopAll()
-                    val s2 = session
-                    state = Speak.MODELLING
-                    app.speaker.say("Let's say it together!")
-                    app.speaker.then(word.syllables, slow = true)
-                    app.speaker.then(word.text) { if (s2 == session) finish(heard = false, micUsed = true) }
-                }
+                false ->
+                    // Quiet: say it together and listen once more; after two tries, move on anyway.
+                    if (tries < 2) {
+                        speakThen(listOf("Let's say it together!" to false, word.syllables to true, word.text to false), true)
+                    } else {
+                        finish(heard = false, micUsed = true)
+                    }
                 null -> {
                     // The microphone couldn't be opened: carry on without it.
                     micBroken = true
@@ -234,11 +238,9 @@ fun SpeakMoment(
         }
     }
 
+    /** Never asks for the microphone mid-story: that happens on the start screen or the grown-ups page. */
     fun withMic(onDenied: () -> Unit, action: () -> Unit) {
-        if (micPermission.granted()) action() else {
-            askedForMic = true
-            micPermission.request { ok -> if (ok) action() else onDenied() }
-        }
+        if (micPermission.granted()) action() else onDenied()
     }
 
     fun parrotNow() {
@@ -254,16 +256,11 @@ fun SpeakMoment(
         }
     }
 
-    // Start: narration, the word played slowly, the countdown, then listen.
+    // Start: narration, the word played slowly, "Your turn!", then listen.
     LaunchedEffect(key) {
         app.rememberInstruction("${word.syllables}. ${word.text}. Your turn! Say ${word.text}!")
         val lines = listOfNotNull(intro?.let { it to false }) + model()
-        when {
-            !p.useMic || !app.voice.available || micBroken -> speakThen(lines, false)
-            micPermission.granted() -> speakThen(lines, true)
-            !askedForMic -> withMic(onDenied = { speakThen(lines, false) }) { speakThen(lines, true) }
-            else -> speakThen(lines, false)
-        }
+        speakThen(lines, micUsable())
     }
     DisposableEffect(key) { onDispose { stopAll() } }
 
@@ -307,7 +304,12 @@ fun SpeakMoment(
                         Spacer(Modifier.height(8.dp))
                         Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
                             when (state) {
-                                Speak.LISTENING, Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
+                                Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ListeningBadge(level, if (small) 56.dp else 84.dp)
+                                    Spacer(Modifier.width(10.dp))
+                                    PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
+                                }
+                                Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
                                 Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
                                 Speak.MODELLING -> Text("👂", fontSize = 52.sp)
                                 Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
@@ -329,9 +331,9 @@ fun SpeakMoment(
             }
         }
         Spacer(Modifier.height(10.dp))
-        // Big buttons: hear it, slowly, mouth, microphone (and copy-me in practice), then ▶.
-        // The ▶ always keeps its own space, so it is never pushed off a narrow phone screen;
-        // the other buttons wrap onto a second line if they don't fit.
+        // Big buttons: hear it, slowly, mouth, microphone (and copy-me in practice). The continue
+        // button is pinned bottom-right like on every step, so this row leaves room for it; the
+        // buttons wrap onto a second line if they don't fit.
         val active = state != Speak.DONE
         val size = 68.dp
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -359,12 +361,17 @@ fun SpeakMoment(
                     }
                 }
             }
-            Spacer(Modifier.width(12.dp))
-            // Always there: carry on. It pulses and is pointed at only when it's the way forward.
-            GoButton(size = 76.dp, enabled = active, hint = state == Speak.WAITING_TAP) {
-                if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
-            }
+            Spacer(Modifier.width(ContinueSize + 16.dp))
         }
+    }
+    // Always there: carry on (or skip). With no microphone it becomes a big "I said it!" button.
+    // It is pointed at only when it's the way forward, so it doesn't pull attention while listening.
+    ContinueAction(
+        enabled = state != Speak.DONE,
+        hint = state == Speak.WAITING_TAP,
+        label = if (roryWaiting) "I said it!" else null,
+    ) {
+        if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
     }
 }
 

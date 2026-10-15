@@ -2,9 +2,17 @@ package com.zeronolidge.speechapp.ui.platform
 
 import androidx.compose.runtime.Composable
 
-/** Asking for the microphone works differently on Android and in a browser. */
+/** Whether the app may use the microphone. */
+enum class MicStatus { ON, BLOCKED, NOT_ASKED }
+
+/**
+ * Asking for the microphone works differently on Android and in a browser. The app only asks
+ * from the start screen or the grown-ups page (so a grown-up taps Allow), never mid-story.
+ */
 interface MicPermission {
-    fun granted(): Boolean
+    /** Read inside composition; it updates when the answer changes. */
+    val status: MicStatus
+    fun granted(): Boolean = status == MicStatus.ON
     fun request(onResult: (Boolean) -> Unit)
 }
 

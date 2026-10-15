@@ -47,7 +47,9 @@ import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.SpeakOnOpen
+import com.zeronolidge.speechapp.ui.platform.MicStatus
 import com.zeronolidge.speechapp.ui.platform.rememberCopyText
+import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
 import com.zeronolidge.speechapp.ui.theme.Kid
 import kotlin.math.roundToInt
 
@@ -65,7 +67,7 @@ fun GrownUpsScreen(nav: Nav) {
     ScreenFrame(onHome = nav.home, top = { PaperChip("Grown-ups ⚙️", fontSize = 24.sp) }) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Card(Modifier.weight(1f)) {
-                Heading("Words ${p.heroName} has practised")
+                Heading("Words ${p.heroName} has tried")
                 WordsReport()
                 Spacer(Modifier.padding(4.dp))
                 Heading("Add your own words")
@@ -98,12 +100,7 @@ fun GrownUpsScreen(nav: Nav) {
                     Text("Use the microphone", fontSize = 18.sp, modifier = Modifier.weight(1f))
                     Switch(checked = p.useMic, onCheckedChange = { p.updateUseMic(it) })
                 }
-                Text(
-                    if (app.voice.available) "The microphone only listens for a voice (how loud), not for the exact word, so it works with young voices and on iPhone and iPad. Any try moves the story on; a voice heard earns a shiny sticker. If the microphone is off or blocked, the app asks your child to say the word out loud and tap the green arrow."
-                    else "There's no microphone here, so the app plays each word, asks your child to say it out loud, then waits for a tap on the green arrow.",
-                    fontSize = 14.sp,
-                    color = Kid.ink.copy(alpha = 0.7f),
-                )
+                MicStatusSection()
                 Heading("Progress")
                 val lap = p.chapter / Trail.size
                 Text(
@@ -213,20 +210,48 @@ private fun WordsReport() {
         return
     }
     val now = today()
-    val groups = listOf(
-        WordStatus.STILL_TRICKY to "Still tricky (often quiet on these lately, so say them together)",
-        WordStatus.GOING_WELL to "Going well (said out loud)",
-        WordStatus.JUST_STARTED to "Just started",
-        WordStatus.NOT_HEARD to "Tried, but not heard out loud yet",
+    Text(
+        "Every word your child has tried, and how many times. There's no right or wrong here: each try counts.",
+        fontSize = 14.sp,
+        color = Kid.ink.copy(alpha = 0.7f),
     )
-    groups.forEach { (status, title) ->
-        val ws = book.stickers.filter { book.status(it) == status }
-        if (ws.isNotEmpty()) {
-            Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ws.forEach { WordChip(it, now) }
-            }
-        }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        book.stickers.sortedByDescending { it.lastDay }.forEach { WordChip(it, now) }
+    }
+}
+
+/**
+ * Whether the microphone is on, with a button to allow it (a grown-up taps Allow here, never
+ * mid-story) and short steps to turn it back on if it was blocked.
+ */
+@Composable
+private fun MicStatusSection() {
+    val app = LocalApp.current
+    val mic = rememberMicPermission()
+    val status = mic.status
+    val (title, color) = when {
+        !app.voice.available -> "No microphone found on this device" to Color(0xFF8D6E63)
+        !app.progress.useMic -> "Microphone switched off above" to Color(0xFF8D6E63)
+        status == MicStatus.ON -> "Microphone is on" to Color(0xFF2E7D32)
+        status == MicStatus.BLOCKED -> "Microphone is blocked" to Color(0xFFC62828)
+        else -> "Microphone not allowed yet" to Color(0xFFEF6C00)
+    }
+    Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
+    Text(
+        "It only listens for your child's voice (how loud), not the exact word, so a whisper or part of a word counts. " +
+            "Without the microphone, the app asks your child to say the word out loud and tap the big \"I said it!\" button.",
+        fontSize = 14.sp,
+        color = Kid.ink.copy(alpha = 0.7f),
+    )
+    if (app.voice.available && app.progress.useMic && status != MicStatus.ON) {
+        Button(onClick = { mic.request { } }) { Text("Allow microphone") }
+    }
+    if (status == MicStatus.BLOCKED) {
+        Text("To turn it back on:", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Tip("iPad or iPhone: open Settings, scroll to Safari, tap Microphone, and choose Allow (or Ask). Then come back here and tap Allow microphone.")
+        Tip("In Safari itself: tap the aA button in the address bar, then Website Settings, then Microphone: Allow.")
+        Tip("Android tablet in Chrome: tap the icon to the left of the web address, then Permissions, then Microphone: Allow.")
+        Tip("Android app: open Settings, then Apps, then Talk & Learn, then Permissions, then Microphone: Allow.")
     }
 }
 
@@ -238,7 +263,7 @@ private fun WordChip(w: WordStat, now: Int) {
         else -> "$d days ago"
     }
     Text(
-        "${w.emoji} ${w.text} · $ago",
+        "${w.emoji} ${w.text} · ${if (w.tries == 1) "1 try" else "${w.tries} tries"} · $ago",
         fontSize = 15.sp,
         color = Kid.ink,
         modifier = Modifier
