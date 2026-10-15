@@ -320,11 +320,11 @@ private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Uni
     val r = c.round
     QuestionLayout(
         question = { card ->
-            val s = (card.value * 0.3f).toInt()
+            val s = (card.value * 0.4f).toInt()
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     if (r.plus) "${r.a} + ${r.b} = ?" else "${r.a} − ${r.b} = ?",
-                    fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink,
+                    fontSize = (card.value * 0.38f).coerceAtLeast(30f).sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (r.plus) {
