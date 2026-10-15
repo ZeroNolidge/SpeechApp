@@ -87,11 +87,17 @@ fun PaperButton(
     corner: Dp = PaperStyle.corner,
     circle: Boolean = false,
     enabled: Boolean = true,
+    /**
+     * For a button whose taps are handled by a parent (the map's next stop, which the map's one
+     * tap handler owns): it draws pressed while this is true and takes no taps itself.
+     */
+    pressedBy: Boolean? = null,
     onClick: () -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val ownPress by interaction.collectIsPressedAsState()
+    val pressed = pressedBy ?: ownPress
     // Every press lands with a soft paper crinkle.
     val sfx = LocalApp.current.sfx
     LaunchedEffect(pressed) { if (pressed && enabled) sfx.crinkle() }
@@ -105,7 +111,7 @@ fun PaperButton(
                 scaleY = 1f - 0.04f * press
             }
             .then(if (enabled) Modifier.raisedPaperBase(color, corner, circle) { press } else Modifier)
-            .clickable(interaction, indication = null, enabled = enabled, onClick = onClick),
+            .then(if (pressedBy == null) Modifier.clickable(interaction, indication = null, enabled = enabled, onClick = onClick) else Modifier),
         propagateMinConstraints = true,
     ) {
         Box(

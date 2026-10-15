@@ -627,3 +627,70 @@ class PipStoryTest {
         assertTrue(PipStory.turns(0).all { it.call.split(' ').size <= 2 })
     }
 }
+
+/** The map's one tap rule: area zones and the next-stop button never share a tap. */
+class MapTargetTest {
+    // Map sizes from phones to tablets, with the label and button sizes the map uses (density 1 and 2).
+    private val cases = listOf(
+        floatArrayOf(1100f, 630f, 64f, 44f, 48f), floatArrayOf(1000f, 570f, 64f, 40f, 48f),
+        floatArrayOf(760f, 660f, 64f, 40f, 48f), floatArrayOf(400f, 348f, 64f, 35f, 48f),
+        floatArrayOf(2200f, 1260f, 128f, 88f, 96f), floatArrayOf(800f, 696f, 128f, 70f, 96f),
+    )
+
+    @Test
+    fun everyStopButtonIsClearOfEveryAreaAndTapsStartTheStory() {
+        for (c in cases) {
+            val (w, h, half, lh, r) = c.toList()
+            for (stop in 0 until Trail.size) {
+                val (fx, fy) = Trail.position(stop)
+                val (sx, sy) = MapAreas.stopSpot(fx, fy, w, h, r, half, lh)
+                assertTrue(sx in 0f..w && sy in 0f..h, "stop $stop off the map at ${w}x$h")
+                // Tablet-sized maps always have room: the button touches no area's zone at all.
+                if (w / r >= 15f) assertTrue(MapAreas.clearOfZones(sx, sy, w, h, r, half, lh), "stop $stop inside a zone at ${w}x$h")
+                // Its middle and its ring start the story...
+                assertEquals(MapTarget.Stop, MapAreas.target(sx, sy, w, h, half, lh, sx, sy, r), "stop $stop centre at ${w}x$h")
+                assertEquals(MapTarget.Stop, MapAreas.target(sx + r * 0.9f, sy, w, h, half, lh, sx, sy, r), "stop $stop ring at ${w}x$h")
+                // ...and every area's picture and label still open that area, wherever the button is.
+                MapAreas.all.forEach { a ->
+                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r), "picture of ${a.land}, stop $stop at ${w}x$h")
+                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.labelX * w, a.labelY * h + lh / 2, w, h, half, lh, sx, sy, r), "label of ${a.land}, stop $stop at ${w}x$h")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun theSunflowerOpensTheMeadowEvenWhenTheNextStopIsThere() {
+        val (w, h, half, lh, r) = listOf(1000f, 570f, 64f, 40f, 48f)
+        val m = MapAreas.of(Land.MEADOW)
+        val (fx, fy) = Trail.position(2) // Meadow's first stop, just under the sunflower
+        val (sx, sy) = MapAreas.stopSpot(fx, fy, w, h, r, half, lh)
+        // The lower half of the sunflower, where the button used to sit.
+        assertEquals(MapTarget.Area(Land.MEADOW), MapAreas.target(m.markX * w, m.markY * h + 0.1f * h, w, h, half, lh, sx, sy, r))
+        // The gap between the label and the picture.
+        assertEquals(MapTarget.Area(Land.MEADOW), MapAreas.target(m.markX * w, (m.labelY * h + lh + m.markY * h) / 2, w, h, half, lh, sx, sy, r))
+    }
+}
+
+/** "Tap the B!" after saying a word: 2 or 3 letters, the sound's own letter among them, played like every quiz. */
+class TapLetterTest {
+    @Test
+    fun theSoundsLetterIsAlwaysThereAndAWrongTapIsNeverRight() {
+        val rnd = Random(7)
+        for (sound in com.zeronolidge.speechapp.data.SpeechContent.sounds) for (n in 2..3) repeat(20) {
+            val k = AnswerKey.tapLetter(sound, n, rnd)
+            assertEquals(n, k.options.size)
+            assertEquals(sound.label, k.answer)
+            assertTrue(k.answer in k.options)
+            assertEquals(k.options.size, k.options.distinct().size)
+            var s = QuizState()
+            val wrong = k.options.first { it != k.answer }
+            repeat(3) {
+                val (next, res) = s.tap(wrong == k.answer)
+                s = next
+                assertTrue(res != TapResult.RIGHT)
+            }
+            assertTrue(s.revealed)
+        }
+    }
+}

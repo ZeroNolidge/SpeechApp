@@ -63,7 +63,9 @@ These are the owner's rules for all work:
   screens (< 520dp) show 2 choices; story/challenge sit side by side over 700dp or in landscape,
   and practice games (`QuestionLayout`) put the picture left and answers in a column right over
   700dp (any way up, so iPad portrait too), and the say-a-word screen (`SpeakMoment`) puts its
-  picture card left and its buttons in a column right over 700dp. Choice tiles put the word beside the picture when the tile is short or wide. The chapter
+  picture card left and its buttons in a column right over 700dp. Story say-a-word steps on a
+  screen 768dp or wider (`LocalScreenWidth`) put the story scene left (60%) and the word card and
+  buttons right; buttons are dp-sized, so the same physical size as on a phone. Choice tiles put the word beside the picture when the tile is short or wide. The chapter
   header says "Adventure" and drops the footprints when there's no room; labels never cut off.
   In `BoxWithConstraints`, read `maxWidth`/`maxHeight` into vals at the top (nested Row/Column
   can't use them implicitly; CI fails).
@@ -121,6 +123,9 @@ These are the owner's rules for all work:
   then log (ears peek on the 3rd call, the 4th folds it open) until Pip jumps out; 2 goodnight turns
   end with Pip asleep under a blanket. 14 turns, every try works (heard: Rory's `Echo`; quiet: "Pip
   heard you!"; no mic: "I called!" button). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
+- **"Tap the B!"**: after saying a word with a speech sound (`SpeakMoment`, sound != null), he
+  finds its letter among 2 (speech step 0) or 3 (`AnswerKey.tapLetter`, `LetterTap` via
+  `AnswerRow`, so the same try-again pattern). Skipping the word with ▶ skips the letter too.
 - **Rory's echo** (`logic/Echo.kt`): when the mic hears him, Rory repeats the target word and adds
   one word ("Dog! A big dog!"). Loudness only, never speech recognition.
 - **Answers live in one place** (`logic/AnswerKey.kt`); every quiz goes through `QuizState.tap`
@@ -154,8 +159,13 @@ These are the owner's rules for all work:
   me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). **One shared list of map
   areas** (`MapAreas` in `logic/MapAreas.kt`, unit-tested) gives each land's label and landmark
   positions; labels are drawn from it and ONE tap handler on the island layer matches taps against
-  it (`MapAreas.hit`), logging `MAPTAP x,y -> LAND` (and `MAPAREAS` label positions, which the
-  smoke test taps). Tapping an open land, or the next land peeking through its mist, opens that
+  it (`MapAreas.target`): each area has ONE zone (picture, label and the gap between); a picture
+  or label always opens its area, then the next-stop button, then the gap. The stop button is
+  drawn but takes no taps itself (`PaperButton(pressedBy = ...)`), and `MapAreas.stopSpot` moves
+  it clear of every zone (always possible on tablets; unit-tested for all 16 stops). That fixed
+  the sunflower starting a story: the stop button sat under it and took the tap. Logs `MAPTAP x,y
+  -> LAND/STOP/sea`, `MAPAREAS` (labels), `MAPMARKS` (pictures + stop) and `MAPSCENE` (what each
+  area opens), which the smoke test taps and prints as an AREA LIST. Tapping an open land, or the next land peeking through its mist, opens that
   area (`Screen.LandGames`, `gamesFor(land)`: Meadow = count, add, take away, more; Forest = its
   story, "Find Pip" + talking practice). The story
   starts from the next-stop marker (ring included) or the Adventure banner. A wide

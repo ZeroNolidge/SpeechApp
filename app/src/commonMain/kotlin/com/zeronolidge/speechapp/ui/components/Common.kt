@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateListOf
 import com.zeronolidge.speechapp.audio.Sfx
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -277,6 +278,9 @@ fun countAloud(n: Int): String = (1..n).joinToString(", ") { Numbers.word(it) }
 
 /** Set by a wide two-column layout: answers go in a column instead of a row. */
 val LocalAnswersStacked = staticCompositionLocalOf { false }
+
+/** The whole screen's width (not just the space a screen part gets), for layout switches like "768 or wider". */
+val LocalScreenWidth = compositionLocalOf { 0.dp }
 
 /** What is said when the right answer is shown after the third miss. */
 fun revealLine(answerWords: String?) =

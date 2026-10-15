@@ -171,6 +171,19 @@ fun MapScreen(nav: Nav) {
         val aspect = (maxWidth / availH).coerceIn(1.15f, 1.75f)
         val mapW = minOf(maxWidth, availH * aspect)
         val mapH = mapW / aspect
+        // For checking: every area and the scene a tap on it opens, from the same rule as onElsewhere.
+        LaunchedEffect(p.chapter) {
+            val peek = if (!Trail.opensLand(p.chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(land) + 1) else null
+            Land.entries.forEach { l ->
+                val opens = if (l in Trail.reached(p.chapter) || l == peek) {
+                    "${l.title} games: " + landTiles(l).joinToString(", ") { it.label }
+                } else {
+                    "misty: wiggles, Rory shows the way to ${land.title}"
+                }
+                println("MAPSCENE ${l.name} -> $opens")
+            }
+            println("MAPSCENE STOP -> the next story chapter (${land.title}, stop ${Trail.stopOf(p.chapter) + 1}; its visitor is picked fresh each time)")
+        }
         IslandMap(
             chapter = p.chapter,
             reached = { it in Trail.reached(p.chapter) },

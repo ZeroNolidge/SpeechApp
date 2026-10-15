@@ -70,6 +70,7 @@ import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.BackpackMeter
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.components.LocalApp
+import com.zeronolidge.speechapp.ui.components.LocalScreenWidth
 import com.zeronolidge.speechapp.ui.components.NameTag
 import com.zeronolidge.speechapp.ui.components.Nudge
 import com.zeronolidge.speechapp.ui.components.PaperChip
@@ -177,6 +178,16 @@ fun ChapterScreen(nav: Nav, visit: Land? = null) {
             }
         }
         }
+    }
+}
+
+/** For the automatic layout check only ("#test=say"): a story say-a-word step, to see the tablet split. */
+@Composable
+fun SayStepCheck(nav: Nav) {
+    val p = LocalApp.current.progress
+    val quest = remember { StoryGen.make(Land.FOREST, p.storyParams(), Random(1)) }
+    ScreenFrame(onHome = nav.home, background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = 9) }) {
+        ContinueHost { WakeScene(quest, p.hero ?: Species.KID) {} }
     }
 }
 
@@ -348,7 +359,7 @@ private fun BeatScene(
     if (solvedHere) AfterDelay(index, 1800) { onNext() }
     val walk = walkIn(index)
 
-    StorySplit(story = { m ->
+    StorySplit(speaking = beat.challenge is Challenge.Say, story = { m ->
         Column(m) {
             SpeechBubble(text, Modifier.zIndex(2f).fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -399,7 +410,12 @@ private fun BeatScene(
  * word card or challenge right), stacked on a narrow portrait phone screen.
  */
 @Composable
-private fun StorySplit(story: @Composable (Modifier) -> Unit, challenge: @Composable (Modifier) -> Unit) {
+private fun StorySplit(
+    /** A say-a-word step: on a screen 768 wide or more the story gets the bigger share. */
+    speaking: Boolean = false,
+    story: @Composable (Modifier) -> Unit,
+    challenge: @Composable (Modifier) -> Unit,
+) {
     // While it's his turn to talk, the story picture dims slightly so the word card stands out.
     val dim by androidx.compose.animation.core.animateFloatAsState(if (LocalApp.current.listening) 0.22f else 0f, tween(250), label = "dim")
     val dimmed = Modifier.drawWithContent {
@@ -416,9 +432,13 @@ private fun StorySplit(story: @Composable (Modifier) -> Unit, challenge: @Compos
                 challenge(Modifier.fillMaxWidth().weight(0.66f))
             }
         } else {
+            // Saying a word on a tablet (768 or wider): the story scene on the left (60%), the word
+            // card and its buttons on the right. The buttons stay the same physical size as on a
+            // phone (they are sized in dp, never scaled to the screen).
+            val storyShare = if (speaking && LocalScreenWidth.current >= 768.dp) 0.6f else 0.36f
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                story(Modifier.weight(0.36f).fillMaxHeight().then(dimmed))
-                challenge(Modifier.weight(0.64f).fillMaxHeight())
+                story(Modifier.weight(storyShare).fillMaxHeight().then(dimmed))
+                challenge(Modifier.weight(1f - storyShare).fillMaxHeight())
             }
         }
     }
@@ -436,7 +456,7 @@ private fun WakeScene(quest: Quest, hero: Species, onAwake: () -> Unit) {
     var awake by remember { mutableStateOf(false) }
     val text = "Shh! Someone is fast asleep. It's ${v.callName}! Let's wake them up by calling their name."
     if (awake) AfterDelay("awake", 1200) { onAwake() }
-    StorySplit(story = { m ->
+    StorySplit(speaking = true, story = { m ->
         Column(m) {
             SpeechBubble(text, Modifier.zIndex(2f).fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {

@@ -28,4 +28,6 @@ sealed interface Screen {
     data object Alphabet : Screen
     data object NumberLine : Screen
     data object Pip : Screen
+    /** Test hook only: a story say-a-word step. */
+    data object SayCheck : Screen
 }

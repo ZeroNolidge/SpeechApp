@@ -1,5 +1,8 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.components.AnswerRow
+import com.zeronolidge.speechapp.logic.Key
+import com.zeronolidge.speechapp.logic.AnswerKey
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.logic.Echo
 import com.zeronolidge.speechapp.ui.art.paperOval
@@ -134,6 +137,8 @@ fun SpeakMoment(
     /** What to show instead of the word's emoji, e.g. a sleeping friend. */
     picture: (@Composable (Modifier) -> Unit)? = null,
     key: Any = word,
+    /** After saying a word with a speech sound: "Tap the B!" with 2 or 3 letters (skipped with ▶). */
+    tapLetter: Boolean = true,
     onDone: (heard: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
@@ -148,6 +153,9 @@ fun SpeakMoment(
     var session by remember(key) { mutableIntStateOf(0) }
     /** Listens so far for this word (at most two). */
     var tries by remember(key) { mutableIntStateOf(0) }
+    /** The "Tap the B!" letters, once the word has been said; and whether a voice was heard. */
+    var letterKey by remember(key) { mutableStateOf<Key<String>?>(null) }
+    var heardIt by remember(key) { mutableStateOf(false) }
     fun micUsable() = p.useMic && app.voice.available && micPermission.granted() && !micBroken
     val yourTurn = "Your turn!"
 
@@ -181,7 +189,16 @@ fun SpeakMoment(
             else -> listOf("Great talking!", "Good saying!", "I love your talking!").random()
         }
         val gemLine = if (piece != null) "Your backpack is full! Your buddy got a new ${piece.name}!" else "A gem for your backpack!"
-        app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, gemLine, afterLine).joinToString(" "), onDone = next)
+        // Then find the sound's letter, the same way as every quiz (letters from the answer key).
+        fun afterTry() {
+            if (tapLetter && sound != null) {
+                heardIt = heard
+                letterKey = AnswerKey.tapLetter(sound, if (p.speechStep == 0) 2 else 3)
+            } else {
+                next()
+            }
+        }
+        app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, gemLine, afterLine).joinToString(" "), onDone = { afterTry() })
         if (piece != null) app.showGift(piece)
     }
 
@@ -370,7 +387,10 @@ fun SpeakMoment(
                 }
             }
         }
-        if (wide) {
+        val letters = letterKey
+        if (letters != null && sound != null) {
+            LetterTap(letters, sound, key, Modifier.fillMaxSize()) { onDone(heardIt) }
+        } else if (wide) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) { card() }
                 Column(
@@ -404,6 +424,40 @@ fun SpeakMoment(
         label = if (roryWaiting) "I said it!" else null,
     ) {
         if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
+    }
+}
+
+/**
+ * "Tap the B!": right after saying a word, he finds the sound's letter among 2 or 3. Taps go
+ * through [AnswerRow], so it's the same try-again pattern as every quiz (wiggle and "Try again!",
+ * then Rory's hint with the right one glowing, then the answer is shown and it moves on).
+ */
+@Composable
+private fun LetterTap(letters: Key<String>, sound: SpeechSound, roundKey: Any, modifier: Modifier, onDone: () -> Unit) {
+    val app = LocalApp.current
+    val ask = "Tap the ${sound.label}!"
+    LaunchedEffect(roundKey) { app.instruct("Now find the letter. $ask") }
+    BoxWithConstraints(modifier) {
+        val n = letters.options.size
+        val w = maxWidth
+        val h = maxHeight
+        val card = minOf(150.dp, (w - 24.dp * (n - 1) - 8.dp) / n, h * 0.42f)
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+        ) {
+            PaperChip("👆 $ask", fontSize = 30.sp, maxLines = 1)
+            AnswerRow(
+                letters, Progress.AREA_LETTERS, roundKey,
+                Modifier.fillMaxWidth(), Modifier.size(card),
+                onSolved = { onDone() },
+                describe = { it },
+                hint = "Listen: ${sound.modelSound}. ${sound.label} says ${sound.modelSound}. Find the ${sound.label}!",
+            ) { l ->
+                Text(l, fontSize = (card.value * 0.5f).sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E88E5))
+            }
+        }
     }
 }
 

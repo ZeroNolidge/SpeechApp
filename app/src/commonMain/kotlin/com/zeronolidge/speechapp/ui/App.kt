@@ -24,6 +24,8 @@ import com.zeronolidge.speechapp.ui.components.PaperIconButton
 import com.zeronolidge.speechapp.ui.components.PointingHand
 import com.zeronolidge.speechapp.ui.components.popIn
 import androidx.compose.runtime.Composable
+import com.zeronolidge.speechapp.ui.components.LocalScreenWidth
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,6 +67,7 @@ import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
 import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
 import com.zeronolidge.speechapp.ui.screens.PipStoryScreen
+import com.zeronolidge.speechapp.ui.screens.SayStepCheck
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeMenu
 import com.zeronolidge.speechapp.ui.screens.LandGamesScreen
@@ -84,12 +87,17 @@ fun TalkAndLearnApp(
     SpeechAppTheme {
         CompositionLocalProvider(LocalApp provides services, LocalReduceMotion provides rememberReduceMotion()) {
             var origin by remember { mutableStateOf(Offset.Zero) }
+            var screenW by remember { mutableStateOf(0.dp) }
+            val density = LocalDensity.current
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(Kid.background)
                     .safeDrawingPadding()
-                    .onGloballyPositioned { origin = it.positionInWindow() }
+                    .onGloballyPositioned {
+                        origin = it.positionInWindow()
+                        screenW = with(density) { it.size.width.toDp() }
+                    }
                     // No tap ever does nothing: a tap that nothing tappable took (on scenery, a
                     // picture, empty paper) gets a little paper puff and a soft pop. Watched last
                     // (the Final pass), so buttons, tiles and the map handle their own taps first.
@@ -104,7 +112,7 @@ fun TalkAndLearnApp(
                         }
                     },
             ) {
-                Screens(start)
+                CompositionLocalProvider(LocalScreenWidth provides screenW) { Screens(start) }
                 CelebrationOverlay()
                 GiftOverlay()
                 PuffOverlay(origin)
@@ -203,6 +211,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         Screen.Alphabet -> AlphabetScreen(nav)
         Screen.NumberLine -> NumberLineScreen(nav)
         Screen.Pip -> PipStoryScreen(nav)
+        Screen.SayCheck -> SayStepCheck(nav)
     }
 }
 

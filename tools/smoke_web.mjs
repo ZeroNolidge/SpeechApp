@@ -102,6 +102,41 @@ if (started) {
             };
             await tapArea('MEADOW');
             await tapArea('FOREST');
+            // The reported bug: with the next stop at Number Meadow (chapter 3), tapping the
+            // sunflower started that story. Every tap on the island now goes through one rule;
+            // tap the sunflower's lower half, the gap above it and the stop button.
+            await page.evaluate(() => localStorage.setItem('talkandlearn.chapter', '2'));
+            await page.reload({ waitUntil: 'load' });
+            await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+            await wait(3000);
+            await page.mouse.click(640, 400);
+            await wait(4000);
+            await shot('map-meadow-stop');
+            for (const t of logs.filter((t) => t.startsWith('MAPSCENE'))) console.log('AREA LIST ' + t.slice(9));
+            const marksLine = [...logs].reverse().find((t) => t.startsWith('MAPMARKS'));
+            const marks = {};
+            if (marksLine) for (const part of marksLine.split(' ').slice(1)) {
+                const [name, xy] = part.split('@');
+                const [x, y] = xy.split(',').map(Number);
+                marks[name] = { x, y };
+            }
+            console.log('Map pictures and stop: ' + JSON.stringify(marks));
+            const tapAt = async (what, x, y, expect) => {
+                const before = logs.length;
+                await page.mouse.click(x, y);
+                await wait(3000);
+                const hit = logs.slice(before).find((t) => t.startsWith('MAPTAP'));
+                check(`CHECK map tap ${what}: ${hit && hit.endsWith('-> ' + expect) ? 'ok' : 'FAIL'} (${hit})`);
+                await page.mouse.click(54, 54); // 🏠 back to the map
+                await wait(3000);
+            };
+            if (marks.MEADOW && marks.STOP && areas.MEADOW) {
+                await tapAt('sunflower (lower half)', marks.MEADOW.x, marks.MEADOW.y + 20, 'MEADOW');
+                await tapAt('Meadow gap (label to picture)', marks.MEADOW.x, Math.round((areas.MEADOW.y + marks.MEADOW.y) / 2), 'MEADOW');
+                await tapAt('next-stop button', marks.STOP.x, marks.STOP.y, 'STOP');
+            } else {
+                check('CHECK map tap sunflower: FAIL (positions not logged)');
+            }
             await page.mouse.click(640, 752);
             await wait(1500);
             await shot('story-1s');
@@ -128,11 +163,18 @@ if (started) {
             await open('#test=ADD', 400, 860, 'phone-add');
             await open('#test=land-MEADOW', 1180, 820, 'meadow-games');
             await open('#test=talk', 1180, 820, 'talk-ipad-landscape');
+            // Let the word play out (the fake microphone hums, so a voice is "heard"): next comes
+            // "Tap the P!" with 2 or 3 letters.
+            await wait(22000);
+            await shot('talk-letters');
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');
             await open('#test=pip', 1180, 820, 'pip-ipad-landscape');
             await open('#test=pip', 400, 860, 'pip-phone');
+            await open('#test=say', 1180, 820, 'say-ipad-landscape');
+            await open('#test=say', 820, 1180, 'say-ipad-portrait');
+            await open('#test=say', 400, 860, 'say-phone');
             // Offline: once the service worker has saved every file, switch the network off,
             // reload, and the app must still start.
             await page.setViewport({ width: 1280, height: 800 });

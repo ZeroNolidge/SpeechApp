@@ -149,20 +149,23 @@ fun gamesFor(land: Land): List<PracticeKind> = when (land) {
  * counting and adding games, Letter Lagoon the letter games, and so on. Big picture tiles, a few
  * at a time; the talking forest opens the sounds.
  */
+data class LandTile(val emoji: String, val label: String, val spoken: String, val color: Color, val target: Screen)
+
+/** What an area of the map opens: the talking forest has its story, Pip and talking; every other area its own games. */
+fun landTiles(land: Land): List<LandTile> = if (land == Land.FOREST) {
+    listOf(
+        LandTile("📖", "Story", "A forest story!", Kid.talk, Screen.Chapter(Land.FOREST)),
+        LandTile("🐶", "Find Pip", "Let's find Pip the puppy!", Kid.talk, Screen.Pip),
+        LandTile("🗣️", "Talk", "Let's practise talking!", Kid.talk, Screen.TalkMenu),
+    )
+} else {
+    gamesFor(land).map { LandTile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
+}
+
 @Composable
 fun LandGamesScreen(land: Land, nav: Nav) {
     val app = LocalApp.current
-    data class Tile(val emoji: String, val label: String, val spoken: String, val color: Color, val target: Screen)
-    // The talking forest: its story and the talking practice. Every other area: its own games.
-    val tiles = if (land == Land.FOREST) {
-        listOf(
-            Tile("📖", "Story", "A forest story!", Kid.talk, Screen.Chapter(Land.FOREST)),
-            Tile("🐶", "Find Pip", "Let's find Pip the puppy!", Kid.talk, Screen.Pip),
-            Tile("🗣️", "Talk", "Let's practise talking!", Kid.talk, Screen.TalkMenu),
-        )
-    } else {
-        gamesFor(land).map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
-    }
+    val tiles = landTiles(land)
     KidScreen("${land.emoji} ${land.shortName}", nav.home, "${land.title}! Pick a game. Tap a picture to play.") {
         PagedChoices(tiles, perPage = if (tiles.size == 4) 4 else 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { t, m ->
             ChoiceTile(t.emoji, t.label, t.color, m, onClick = {

@@ -1,7 +1,10 @@
 package com.zeronolidge.speechapp.logic
 
 import com.zeronolidge.speechapp.data.LetterInfo
+import com.zeronolidge.speechapp.data.SpeechContent
+import com.zeronolidge.speechapp.data.SpeechSound
 import com.zeronolidge.speechapp.data.Word
+import kotlin.random.Random
 
 /** A quiz's answer tiles and the one correct tile. */
 data class Key<T>(val options: List<T>, val answer: T)
@@ -24,6 +27,15 @@ object AnswerKey {
     /** Options are positions, so identical pictures are still separate tiles. */
     fun oddOne(c: Challenge.OddOne): Key<Int> = Key(c.round.items.indices.toList(), c.round.items.indexOf(c.round.odd))
     fun purse(c: Challenge.Coins): Key<Int>? = if (c.round.mode == CoinMode.PURSE) Key(c.round.purses.options, c.round.price) else null
+
+    /**
+     * "Tap the B!" right after he says a word with that sound: the sound's letter and one or two
+     * other letters ([count] tiles, 2 or 3 in all).
+     */
+    fun tapLetter(sound: SpeechSound, count: Int, rnd: Random = Random): Key<String> {
+        val others = SpeechContent.sounds.map { it.label }.filter { it != sound.label }.distinct().shuffled(rnd)
+        return Key((others.take(count.coerceIn(2, 3) - 1) + sound.label).shuffled(rnd), sound.label)
+    }
 
     fun of(c: Challenge): Key<*>? = when (c) {
         is Challenge.Count -> count(c)

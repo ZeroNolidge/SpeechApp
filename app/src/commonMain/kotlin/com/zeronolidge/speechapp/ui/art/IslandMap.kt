@@ -3,6 +3,8 @@ package com.zeronolidge.speechapp.ui.art
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.platform.LocalDensity
 import com.zeronolidge.speechapp.logic.MapAreas
+import com.zeronolidge.speechapp.logic.MapTarget
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.setValue
@@ -139,6 +141,7 @@ fun IslandMap(
     val pan = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     // The area under a finger right now (its label sinks), and the last logged label positions.
     var pressedLand by remember { mutableStateOf<Land?>(null) }
+    var pressedStop by remember { mutableStateOf(false) }
     var lastAreaLog by remember { mutableStateOf("") }
     var islandOrigin by remember { mutableStateOf(Offset.Zero) }
     val app = LocalApp.current
@@ -181,7 +184,21 @@ fun IslandMap(
         // map areas (the same positions the labels are drawn at), and the result is logged.
         val label = (unit.value * 0.055f).coerceIn(20f, 30f)
         val onArea by rememberUpdatedState(onElsewhere)
+        val onStopTap by rememberUpdatedState(onStop)
         val dens = LocalDensity.current.density
+        // The next stop: same physical size on every screen, placed clear of every area's tap zone.
+        val node = 96.dp
+        val stopPx = with(LocalDensity.current) {
+            val (fx, fy) = Trail.position(current)
+            val wPx = w.toPx()
+            val hPx = h.toPx()
+            val labelH = (label * 1.45f + 6f).dp.toPx()
+            remember(current, wPx, hPx, labelH) {
+                val (x, y) = MapAreas.stopSpot(fx, fy, wPx, hPx, (node / 2).toPx(), 64.dp.toPx(), labelH)
+                Offset(x, y)
+            }
+        }
+        val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
         Box(
             Modifier
                 .fillMaxSize()
@@ -192,27 +209,44 @@ fun IslandMap(
                     val line = MapAreas.all.joinToString(" ") { a ->
                         "${a.land}@${(o.x + a.labelX * c.size.width).toInt()},${(o.y + a.labelY * c.size.height + label * dens * 0.6f).toInt()}"
                     }
+                    // ...and where each area's picture and the next-stop button are.
+                    val marks = MapAreas.all.joinToString(" ") { a ->
+                        "${a.land}@${(o.x + a.markX * c.size.width).toInt()},${(o.y + a.markY * c.size.height).toInt()}"
+                    } + " STOP@${(o.x + stopPx.x).toInt()},${(o.y + stopPx.y).toInt()}"
                     islandOrigin = o
-                    if (line != lastAreaLog) {
-                        lastAreaLog = line
+                    if (line + marks != lastAreaLog) {
+                        lastAreaLog = line + marks
                         println("MAPAREAS $line")
+                        println("MAPMARKS $marks")
                     }
                 }
-                .pointerInput(Unit) {
-                    fun areaAt(p: Offset): Land? = MapAreas.hit(
+                .pointerInput(stopPx, label) {
+                    // Everything on the island goes through MapAreas.target: each area's one zone
+                    // (picture, label and the gap between) and the next-stop button.
+                    fun targetAt(p: Offset): MapTarget = MapAreas.target(
                         p.x, p.y, size.width.toFloat(), size.height.toFloat(),
                         labelHalfW = 64.dp.toPx(), labelH = (label * 1.45f + 6f).dp.toPx(),
+                        stopX = stopPx.x, stopY = stopPx.y, stopR = (node / 2).toPx(),
                     )
                     detectTapGestures(
                         onPress = { p ->
-                            pressedLand = areaAt(p)
+                            when (val t = targetAt(p)) {
+                                is MapTarget.Area -> pressedLand = t.land
+                                MapTarget.Stop -> pressedStop = true
+                                MapTarget.Sea -> {}
+                            }
                             tryAwaitRelease()
                             pressedLand = null
+                            pressedStop = false
                         },
                         onTap = { p ->
-                            val land = areaAt(p)
-                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${land ?: "sea"}")
-                            if (land != null) onArea(land) else app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
+                            val t = targetAt(p)
+                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Sea -> "sea" }}")
+                            when (t) {
+                                is MapTarget.Area -> onArea(t.land)
+                                MapTarget.Stop -> onStopTap()
+                                MapTarget.Sea -> app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
+                            }
                         },
                     )
                 },
@@ -273,7 +307,7 @@ fun IslandMap(
                 }
             }
             Canvas(Modifier.fillMaxSize()) {
-                if (hintFrom != null && hint.value in 0.001f..0.999f) sparklePath(at(hintFrom), Trail.position(current).let { (x, y) -> p(x, y) }, hint.value, still)
+                if (hintFrom != null && hint.value in 0.001f..0.999f) sparklePath(at(hintFrom), Offset(stopPx.x, stopPx.y), hint.value, still)
                 birds(slow, flap)
             }
             // A soft wash so the scenery sits back and the raised stop button wins.
@@ -319,7 +353,8 @@ fun IslandMap(
             if (from != null && hint.value in 0.001f..0.999f) {
                 val t = hint.value
                 val walk = if (still) 1f else ((1 - cos((t / 0.6f).coerceAtMost(1f) * PI)) / 2).toFloat()
-                val (sx, sy) = Trail.position(current)
+                val sx = stopDp.x / w
+                val sy = stopDp.y / h
                 val rx = from.mapX + (sx - from.mapX) * walk
                 val ry = from.mapY + (sy - from.mapY) * walk
                 val rh = unit * 0.16f
@@ -370,12 +405,13 @@ fun IslandMap(
             }
 
             // The next stop: a big raised paper button that unfolds when it is new, ringed in
-            // tomato red (the colour kept for things to tap). Same physical size on every screen.
-            val (cx, cy) = Trail.position(current)
-            val node = 96.dp
+            // tomato red (the colour kept for things to tap). Its taps (ring and all) are handled
+            // by the island's one tap handler above; it only draws itself pressed.
+            val cx = stopDp.x / w
+            val cy = stopDp.y / h
             Box(
                 Modifier
-                    .offset(x = w * cx - node / 2, y = h * cy - node / 2)
+                    .offset(x = stopDp.x - node / 2, y = stopDp.y - node / 2)
                     .size(node)
                     .zIndex(2f)
                     .unfold(unfoldNew, onUnfolded),
@@ -388,12 +424,9 @@ fun IslandMap(
                             scaleX = pulse
                             scaleY = pulse
                         }
-                        .border(6.dp, PaperColors.tomato, CircleShape)
-                        // The whole marker, ring and all, starts the adventure (not just the arrow).
-                        .clip(CircleShape)
-                        .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onStop),
+                        .border(6.dp, PaperColors.tomato, CircleShape),
                 )
-                PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, onClick = onStop) {
+                PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, pressedBy = pressedStop, onClick = onStop) {
                     ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
                 }
             }
