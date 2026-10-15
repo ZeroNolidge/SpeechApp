@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import com.zeronolidge.speechapp.logic.Species
 import androidx.compose.foundation.layout.Spacer
@@ -225,22 +226,31 @@ fun IslandMap(
             // A soft wash so the scenery sits back and the raised stop button wins.
             Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash, Offset(-3000f, -3000f), Size(size.width + 6000f, size.height + 6000f)) }
 
-            // Tapping a land: an open one opens, a misty one shows the way.
+            // Each land's picture (its landmark) and its label make ONE big tap target: a single
+            // area reaching from the top of the label down past the landmark, so a tap anywhere on
+            // either (or between them) opens that same land. An open land opens its games; a misty
+            // one shows the way. Pressing makes the label sink a little, so the tap visibly lands.
+            val label = (unit.value * 0.055f).coerceIn(20f, 30f)
+            val presses = remember { Land.entries.associateWith { MutableInteractionSource() } }
+            // The big areas first, then all the labels on top (so no area covers another's label).
             Land.entries.forEach { land ->
+                val press = presses.getValue(land)
                 val r = unit * 0.13f
+                val left = minOf(w * land.mapX - r, w * labelX(land) - r * 0.9f).coerceAtLeast(0.dp)
+                val right = maxOf(w * land.mapX + r, w * labelX(land) + r * 0.9f)
+                val top = (h * labelY(land) - 6.dp).coerceAtLeast(0.dp)
+                val bottom = h * land.mapY + r
                 Box(
                     Modifier
-                        .offset(x = w * land.mapX - r, y = h * land.mapY - r)
-                        .size(r * 2)
-                        .clip(CircleShape)
-                        .clickable { onElsewhere(land) },
+                        .offset(x = left, y = top)
+                        .size(right - left, bottom - top)
+                        .clip(RoundedCornerShape(r * 0.5f))
+                        .clickable(press, indication = null) { onElsewhere(land) },
                 )
             }
-            // Every land wears a label: its picture (for him) and a short name (for grown-ups), on
-            // a paper chip above its landmark. Open lands are bright; misty ones are paler. Tapping
-            // a label is the same as tapping its land.
-            val label = (unit.value * 0.055f).coerceIn(20f, 30f)
             Land.entries.forEach { land ->
+                val press = presses.getValue(land)
+                val pressed by press.collectIsPressedAsState()
                 val open = reached(land)
                 val fade = when {
                     land == newLand -> 0.65f + 0.35f * clearing.value
@@ -251,9 +261,14 @@ fun IslandMap(
                 Box(
                     Modifier
                         .centeredAt(w * labelX(land), h * labelY(land), w)
-                        .graphicsLayer { alpha = fade }
+                        .graphicsLayer {
+                            alpha = fade
+                            val k = if (pressed) 0.93f else 1f
+                            scaleX = k
+                            scaleY = k
+                        }
                         .paperCard(PaperStyle.chip, 999.dp)
-                        .clickable(remember { MutableInteractionSource() }, indication = null) { onElsewhere(land) }
+                        .clickable(press, indication = null) { onElsewhere(land) }
                         .padding(horizontal = 10.dp, vertical = 1.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

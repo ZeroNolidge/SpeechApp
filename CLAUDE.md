@@ -132,8 +132,9 @@ These are the owner's rules for all work:
   A land's second stop sits a third of the way to the next land. The map hand points at the stop
   from the side away from the buddy (👉/👈), never over a label. Tapping a
   misty land wiggles it and Rory walks along a sparkly trail from there to the next stop ("Follow
-  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Tapping an open
-  land's label, picture or landmark opens that area's own games (`Screen.LandGames`,
+  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Each land's label and landmark
+  are ONE tap target (an area from the label's top to below the landmark; the label sinks on
+  press). Tapping an open land opens that area's own games (`Screen.LandGames`,
   `gamesFor(land)`: Meadow = count, add, take away, more; Forest = the sounds menu). The story
   starts from the next-stop marker (ring included) or the Adventure banner. A wide
   "▶ Adventure!" banner (tappable all over, presses down like every `PaperButton`) starts the next chapter. The island keeps a 1.75:1 shape.
