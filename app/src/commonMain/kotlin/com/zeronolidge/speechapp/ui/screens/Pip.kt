@@ -7,12 +7,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +52,7 @@ import com.zeronolidge.speechapp.ui.art.paperRoundRect
 import com.zeronolidge.speechapp.ui.art.star
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
+import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
@@ -184,15 +187,18 @@ fun PipStoryScreen(nav: Nav) {
                 }
                 val current = turns.getOrNull(index)?.spot
                 val stage = turns.getOrNull(index)?.stage ?: 0
-                // Hiding spots, far (small, high) to near (big, low).
-                PipHidingSpot(PipSpot.BUSH, w * 0.70f, h * 0.30f, minOf(w, h) * 0.26f, current == PipSpot.BUSH, stage, PipSpot.BUSH in opened, rustle)
-                PipHidingSpot(PipSpot.ROCK, w * 0.48f, h * 0.40f, minOf(w, h) * 0.32f, current == PipSpot.ROCK, stage, PipSpot.ROCK in opened, rustle)
-                PipHidingSpot(PipSpot.LOG, w * 0.26f, h * 0.52f, minOf(w, h) * 0.40f, current == PipSpot.LOG, stage, PipSpot.LOG in opened, rustle)
+                // All three stand on the ground band (the lower half), far (small) to near (big).
+                val unit = minOf(w, h * 1.4f)
+                val logX = w * 0.52f
+                val logY = h * 0.70f
+                PipHidingSpot(PipSpot.BUSH, w * 0.80f, h * 0.52f, unit * 0.22f, current == PipSpot.BUSH, stage, PipSpot.BUSH in opened, rustle)
+                PipHidingSpot(PipSpot.ROCK, w * 0.34f, h * 0.56f, unit * 0.26f, current == PipSpot.ROCK, stage, PipSpot.ROCK in opened, rustle)
+                PipHidingSpot(PipSpot.LOG, logX, logY, unit * 0.32f, current == PipSpot.LOG, stage, PipSpot.LOG in opened, rustle)
                 if (pipOut) {
-                    val pipH = minOf(w, h) * 0.34f
+                    val pipH = unit * 0.30f
                     Box(
                         Modifier
-                            .offset(x = w * 0.36f, y = h * 0.62f - pipH * 0.4f)
+                            .offset(x = logX - pipH * 0.4f, y = logY - pipH * 0.75f)
                             .size(pipH * 0.8f, pipH)
                             .popIn("pip"),
                     ) {
@@ -207,17 +213,19 @@ fun PipStoryScreen(nav: Nav) {
                     }
                 }
                 // The buddy and Rory, bottom-left. Rory cups his ear while listening.
-                Row(Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * 0.42f), verticalAlignment = Alignment.Bottom) {
+                // Never into the bottom-right corner the green arrow uses; Rory only where he fits.
+                val narrow = w < 520.dp
+                Row(Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * if (narrow) 0.30f else 0.36f).widthIn(max = (w - ContinueReserve).coerceAtLeast(0.dp)), verticalAlignment = Alignment.Bottom) {
                     val species = p.hero ?: Species.KID
-                    HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.height(h * 0.40f), if (pipOut) Mood.CHEER else Mood.HAPPY, talking = phase == PipPhase.REACT)
-                    Critter(
-                        Species.ROBOT, Modifier.height(h * 0.30f), Color(0xFFFFCC80),
+                    HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight(), if (pipOut) Mood.CHEER else Mood.HAPPY, talking = phase == PipPhase.REACT)
+                    if (!narrow) Critter(
+                        Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80),
                         mood = if (phase == PipPhase.LISTEN) Mood.LISTEN else Mood.HAPPY,
                         talking = phase != PipPhase.LISTEN,
                     )
                 }
                 if (phase == PipPhase.LISTEN) VoiceRing(level, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-                if (line.isNotEmpty()) PaperChip(line, Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.55f), fontSize = 18.sp)
+                if (line.isNotEmpty()) PaperChip(line, Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = w * 0.6f), fontSize = 24.sp)
             }
             // Always a way on: "I called!" without a microphone, a skip while listening, and
             // the big green arrow back at the end.

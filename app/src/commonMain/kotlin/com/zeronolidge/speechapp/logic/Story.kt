@@ -64,14 +64,14 @@ enum class SayKind {
 
 /** A cartoon friend who needs help in the story. */
 data class Friend(val name: String, val species: Species, val color: Long = species.defaultColor) {
-    /** What the child calls out, e.g. "Pip" for Pip the Penguin. */
+    /** What the child calls out, e.g. "Penny" for Penny Penguin. */
     val callName: String get() = name.substringBefore(' ')
 }
 
 object Friends {
     val all = listOf(
         Friend("Benny Bunny", Species.BUNNY),
-        Friend("Pip the Penguin", Species.PENGUIN),
+        Friend("Penny Penguin", Species.PENGUIN),
         Friend("Freddie Frog", Species.FROG),
         Friend("Millie Mouse", Species.MOUSE),
         Friend("Bruno Bear", Species.BEAR),

@@ -33,7 +33,7 @@ choices at a time. No ads, links, purchases, timers, lives, streaks or buzzers.
    | 🏰 Cloud Castle | A bit of everything |
 
 3. **Story chapters.** Each chapter is one of 8 illustrated stories with a random friend (Benny
-   Bunny, Pip the Penguin…). Obstacles are drawn as scenes: a river, a broken bridge, a locked
+   Bunny, Penny Penguin…). Obstacles are drawn as scenes: a river, a broken bridge, a locked
    door. Solving a challenge changes the picture. Before the twist, someone is fast asleep, and
    your child wakes them by calling their name.
 4. **Talking makes the story happen.** Saying "open" opens the door, and "jump" gets everyone
