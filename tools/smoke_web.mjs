@@ -15,14 +15,20 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 800 });
 let errors = 0;
+// Crashes (a Kotlin exception) and failed CHECK lines fail the build: a page that stays on
+// its splash still "starts" as far as the loading message is concerned.
+let crashes = 0;
+let failedChecks = 0;
 const logs = [];
+const check = (line) => { if (line.includes(': FAIL')) failedChecks++; console.log(line); };
 page.on('console', (m) => {
     if (m.type() === 'error') errors++;
+    if (m.type() === 'error' && /Exception|Error:/.test(m.text())) crashes++;
     logs.push(m.text());
     // Map-area positions are long; keep the log readable.
     if (!m.text().startsWith('MAPAREAS')) console.log(`[console.${m.type()}] ${m.text()}`);
 });
-page.on('pageerror', (e) => { errors++; console.log(`[pageerror] ${e.stack || e.message}`); });
+page.on('pageerror', (e) => { errors++; crashes++; console.log(`[pageerror] ${e.stack || e.message}`); });
 page.on('requestfailed', (r) => console.log(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`));
 
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
@@ -84,12 +90,12 @@ if (started) {
             console.log('Map label positions: ' + JSON.stringify(areas));
             const tapArea = async (name) => {
                 const a = areas[name];
-                if (!a) { console.log(`CHECK map tap ${name}: FAIL (no position logged)`); return; }
+                if (!a) { check(`CHECK map tap ${name}: FAIL (no position logged)`); return; }
                 const before = logs.length;
                 await page.mouse.click(a.x, a.y);
                 await wait(3000);
                 const hit = logs.slice(before).find((t) => t.startsWith('MAPTAP'));
-                console.log(`CHECK map tap ${name}: ${hit && hit.endsWith('-> ' + name) ? 'ok' : 'FAIL'} (${hit})`);
+                check(`CHECK map tap ${name}: ${hit && hit.endsWith('-> ' + name) ? 'ok' : 'FAIL'} (${hit})`);
                 await shot('tap-' + name.toLowerCase());
                 await page.mouse.click(54, 54); // 🏠 back to the map
                 await wait(3000);
@@ -140,7 +146,7 @@ if (started) {
                 await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
                 offline = true;
             } catch (e) {}
-            console.log(`CHECK offline start: ${offline ? 'ok' : 'FAIL'}`);
+            check(`CHECK offline start: ${offline ? 'ok' : 'FAIL'}`);
             if (offline) {
                 await wait(2500);
                 await page.mouse.click(640, 400);
@@ -154,5 +160,5 @@ if (started) {
     }
 }
 await browser.close();
-console.log(`Console errors: ${errors}`);
-process.exit(started ? 0 : 1);
+console.log(`Console errors: ${errors}, crashes: ${crashes}, failed checks: ${failedChecks}`);
+process.exit(started && crashes === 0 && failedChecks === 0 ? 0 : 1);

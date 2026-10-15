@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import com.zeronolidge.speechapp.state.WebPrefs
 import com.zeronolidge.speechapp.ui.TalkAndLearnApp
 import com.zeronolidge.speechapp.ui.components.AppServices
 import com.zeronolidge.speechapp.ui.components.GoButton
+import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.theme.Kid
 import com.zeronolidge.speechapp.ui.platform.MicStatus
 import com.zeronolidge.speechapp.ui.Screen
@@ -99,7 +101,8 @@ private fun WebRoot(services: AppServices) {
     // Browsers only let a page talk after the first tap, so start with a big "play" button.
     var started by remember { mutableStateOf(false) }
     when {
-        !started || !fontsReady -> StartScreen(ready = fontsReady) {
+        // The start screen's ▶ is a paper button, which reads the app's services (its crinkle).
+        !started || !fontsReady -> CompositionLocalProvider(LocalApp provides services) { StartScreen(ready = fontsReady) {
             // First launch: the next screen ("Can Rory hear you?") asks for the microphone. After
             // that, if the browser has forgotten the answer, ask again here at the start, so the
             // question never pops up in the middle of a story.
@@ -108,7 +111,7 @@ private fun WebRoot(services: AppServices) {
                 if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
             }
             started = true
-        }
+        } }
         else -> TalkAndLearnApp(services, start = remember { testStart() })
     }
 }
