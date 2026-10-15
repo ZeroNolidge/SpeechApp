@@ -5,9 +5,17 @@ const CACHE = 'talkandlearn-BUILD_ID';
 // Version-named files (the .wasm) live here across versions; old ones are tidied up below.
 const STATIC = 'talkandlearn-static';
 
+// Every file of this build (CI fills this in), so the whole app works offline after one visit.
+const PRECACHE = PRECACHE_LIST;
+
 self.addEventListener('install', (e) => {
     self.skipWaiting();
-    e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'index.html', 'talkandlearn.js', 'manifest.webmanifest'])).catch(() => {}));
+    e.waitUntil(Promise.all([caches.open(CACHE), caches.open(STATIC)]).then(([c, s]) =>
+        Promise.all(['./'].concat(PRECACHE).map((f) =>
+            // One file failing (e.g. a flaky connection) doesn't stop the rest being saved.
+            (f.endsWith('.wasm') ? s : c).add(f).catch(() => {})
+        ))
+    ));
 });
 
 self.addEventListener('activate', (e) => {

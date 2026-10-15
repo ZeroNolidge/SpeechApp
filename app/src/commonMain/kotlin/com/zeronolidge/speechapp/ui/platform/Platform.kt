@@ -30,3 +30,16 @@ expect fun rememberCopyText(): (String) -> Boolean
 /** True when the device asks for less motion (iPad/browser "Reduce motion", Android "Remove animations"). */
 @Composable
 expect fun rememberReduceMotion(): Boolean
+
+/** Playing offline, "Add to Home Screen" and keeping saved progress safe. */
+expect object AppHome {
+    /** True for the web version (the Android app is installed and offline already). */
+    val isWeb: Boolean
+    /** Every file has been saved on this device, so the app works without internet. */
+    fun offlineReady(): Boolean
+    /** The browser can offer a one-tap install (Chrome/Android). */
+    fun canInstall(): Boolean
+    fun install()
+    /** The browser agreed not to clear this app's saved progress. */
+    fun storageProtected(): Boolean
+}

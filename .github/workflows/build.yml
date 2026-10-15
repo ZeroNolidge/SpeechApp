@@ -83,6 +83,17 @@ jobs:
           cp "$RUNNER_TEMP/emoji.ttf" app/src/wasmJsMain/composeResources/font/noto_color_emoji.ttf
       - name: Build the web app
         run: ./gradlew --no-daemon :app:wasmJsBrowserDistribution
+      - name: Stamp the service worker with this build and the list of files to save offline
+        run: |
+          cd app/build/dist/wasmJs/productionExecutable
+          sed -i "s/BUILD_ID/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" sw.js
+          python3 - <<'PY'
+          import json, os
+          files = sorted(os.path.relpath(os.path.join(d, f), '.') for d, _, fs in os.walk('.') for f in fs if f != 'sw.js')
+          s = open('sw.js').read().replace('PRECACHE_LIST', json.dumps(files))
+          open('sw.js', 'w').write(s)
+          print(len(files), 'files to save offline')
+          PY
       - name: Check the web app starts in a real browser
         # Loads the build in headless Chrome and fails (so nothing broken gets published) if the
         # app never gets past "Loading…". Startup errors are printed here.
@@ -94,8 +105,6 @@ jobs:
           npm install --silent --no-audit --no-fund puppeteer-core@23
           sleep 1
           node smoke_web.mjs http://localhost:8123/ --shots
-      - name: Stamp the service worker with this build
-        run: sed -i "s/BUILD_ID/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" app/build/dist/wasmJs/productionExecutable/sw.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app/build/dist/wasmJs/productionExecutable

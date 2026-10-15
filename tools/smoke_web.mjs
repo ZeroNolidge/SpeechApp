@@ -125,6 +125,27 @@ if (started) {
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');
+            // Offline: once the service worker has saved every file, switch the network off,
+            // reload, and the app must still start.
+            await page.setViewport({ width: 1280, height: 800 });
+            await page.goto(url, { waitUntil: 'load' });
+            await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+            await wait(8000);
+            await page.setOfflineMode(true);
+            await page.reload({ waitUntil: 'load' });
+            let offline = false;
+            try {
+                await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+                offline = true;
+            } catch (e) {}
+            console.log(`CHECK offline start: ${offline ? 'ok' : 'FAIL'}`);
+            if (offline) {
+                await wait(2500);
+                await page.mouse.click(640, 400);
+                await wait(3000);
+                await shot('offline');
+            }
+            await page.setOfflineMode(false);
         } catch (e) {
             console.log(`Screenshots stopped: ${e.message}`);
         }

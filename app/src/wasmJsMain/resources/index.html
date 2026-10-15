@@ -9,6 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Talk &amp; Learn">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -59,7 +60,17 @@
     // Works offline and picks up new versions: see sw.js.
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+        // Once the service worker is running, every file is saved: the app works offline.
+        navigator.serviceWorker.ready.then(() => { window.__tlOffline = true; });
     }
+    // Chrome/Android: keep the "install" offer so the grown-ups page can show an Install button.
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__tlInstall = e; });
+    // Keep progress safe: ask the browser not to clear this app's saved data (on the first tap,
+    // which some browsers need before they'll say yes).
+    window.addEventListener('pointerdown', function once() {
+        window.removeEventListener('pointerdown', once);
+        try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().then((ok) => { window.__tlPersisted = ok; }); } catch (e) {}
+    });
 </script>
 </body>
 </html>

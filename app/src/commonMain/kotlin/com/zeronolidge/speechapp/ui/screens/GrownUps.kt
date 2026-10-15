@@ -50,6 +50,7 @@ import com.zeronolidge.speechapp.ui.components.SpeakOnOpen
 import com.zeronolidge.speechapp.ui.platform.MicStatus
 import com.zeronolidge.speechapp.ui.platform.rememberCopyText
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
+import com.zeronolidge.speechapp.ui.platform.AppHome
 import com.zeronolidge.speechapp.ui.theme.Kid
 import kotlin.math.roundToInt
 
@@ -111,7 +112,9 @@ fun GrownUpsScreen(nav: Nav) {
                     fontSize = 16.sp,
                 )
                 Spacer(Modifier.padding(4.dp))
-                Heading("Back up progress")
+                Heading("Play offline and add to the home screen")
+                HomeScreenSection()
+                Heading("Keep progress safe")
                 BackupSection()
                 Spacer(Modifier.padding(4.dp))
                 OutlinedButton(onClick = { confirmReset = true }) { Text("Reset all progress") }
@@ -163,7 +166,7 @@ private fun BackupSection() {
         Button(onClick = {
             code = p.exportCode()
             message = if (copy(code)) "Backup code made and copied." else "Backup code made. Select it and copy it."
-        }) { Text("Make backup code") }
+        }) { Text("Save a backup code") }
         if (code.isNotEmpty()) OutlinedButton(onClick = { message = if (copy(code)) "Copied." else "Select the code and copy it." }) { Text("Copy") }
     }
     if (code.isNotEmpty()) {
@@ -176,7 +179,7 @@ private fun BackupSection() {
         maxLines = 3,
         modifier = Modifier.fillMaxWidth(),
     )
-    Button(enabled = paste.isNotBlank(), onClick = { confirmRestore = true }) { Text("Restore") }
+    Button(enabled = paste.isNotBlank(), onClick = { confirmRestore = true }) { Text("Restore from code") }
     if (message.isNotEmpty()) Text(message, fontSize = 14.sp, color = Kid.ink)
     if (confirmRestore) {
         AlertDialog(
@@ -197,6 +200,27 @@ private fun BackupSection() {
             dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
         )
     }
+}
+
+/** Offline play, installing the web app full screen, and whether saved progress is protected. */
+@Composable
+private fun HomeScreenSection() {
+    if (!AppHome.isWeb) {
+        Text("The app works without internet and keeps progress on this tablet.", fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f))
+        return
+    }
+    Text(
+        if (AppHome.offlineReady()) "Ready to play without internet." else "Saving the app for offline play (stay online for a minute).",
+        fontSize = 16.sp, fontWeight = FontWeight.Bold,
+        color = if (AppHome.offlineReady()) Color(0xFF2E7D32) else Color(0xFFEF6C00),
+    )
+    Text(
+        if (AppHome.storageProtected()) "This browser has agreed to keep the saved progress." else "Make a backup code below now and then, in case the browser clears its data.",
+        fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f),
+    )
+    if (AppHome.canInstall()) Button(onClick = { AppHome.install() }) { Text("📲 Add to home screen") }
+    Tip("iPad or iPhone (Safari): tap the Share button, then \"Add to Home Screen\". It opens full screen, with no browser bar, and works offline.")
+    Tip("Android (Chrome): tap the three-dots menu, then \"Install app\" or \"Add to Home screen\".")
 }
 
 /** Words grouped by how they're going, with when each was last practised. No scores. */
