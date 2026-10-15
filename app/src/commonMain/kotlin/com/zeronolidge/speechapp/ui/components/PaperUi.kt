@@ -14,6 +14,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.clickable
 import com.zeronolidge.speechapp.ui.art.paperPath
 import androidx.compose.ui.graphics.Path
@@ -91,6 +92,9 @@ fun PaperButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    // Every press lands with a soft paper crinkle.
+    val sfx = LocalApp.current.sfx
+    LaunchedEffect(pressed) { if (pressed && enabled) sfx.crinkle() }
     val press by animateFloatAsState(if (pressed) 1f else 0f, tween(90), label = "press")
     Box(
         modifier
@@ -273,6 +277,9 @@ fun ScreenFrame(
 ) {
     Box(modifier.fillMaxSize()) {
         background()
+        // While it's his turn to talk, the scenery dims slightly (never the buttons or the word).
+        val dim by animateFloatAsState(if (LocalApp.current.listening) 0.22f else 0f, tween(250), label = "dim")
+        Box(Modifier.fillMaxSize().drawBehind { if (dim > 0f) drawRect(Color.Black.copy(alpha = dim)) })
         Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(
                 Modifier.fillMaxWidth().height(CornerButtonSize + 8.dp),

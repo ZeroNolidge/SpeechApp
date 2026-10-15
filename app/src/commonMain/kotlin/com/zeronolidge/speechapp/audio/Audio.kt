@@ -75,3 +75,14 @@ interface Parrot {
     fun recordThenPlay(seconds: Int = 3, onPlaying: () -> Unit, onDone: () -> Unit)
     fun stop()
 }
+
+/** Tiny paper sounds for taps: a soft crinkle when a button is pressed, a pop for other taps. */
+interface Sfx {
+    fun crinkle()
+    fun pop()
+
+    object Silent : Sfx {
+        override fun crinkle() {}
+        override fun pop() {}
+    }
+}

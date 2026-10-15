@@ -57,6 +57,9 @@ import com.zeronolidge.speechapp.logic.LetterMode
 import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.logic.Reading
 import com.zeronolidge.speechapp.logic.TileLook
+import com.zeronolidge.speechapp.logic.AnswerKey
+import com.zeronolidge.speechapp.logic.QuizState
+import com.zeronolidge.speechapp.logic.TapResult
 import com.zeronolidge.speechapp.logic.tileLook
 import com.zeronolidge.speechapp.logic.RobotLevel
 import com.zeronolidge.speechapp.logic.RobotSim
@@ -67,7 +70,6 @@ import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.components.AnswerRow
 import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.PaperArrowButton
-import com.zeronolidge.speechapp.ui.components.Misses
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
@@ -306,7 +308,7 @@ private fun CountView(c: Challenge.Count, area: String, wand: Int, miss: () -> U
         },
         answers = { card ->
             AnswerRow(
-                c.round.choice.options, c.round.choice.answer, area, c,
+                AnswerKey.count(c), area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done, describe = { Numbers.word(it) }, onMiss = miss, wandTick = wand,
                 hint = "Count with me: ${countAloud(c.round.count)}!",
@@ -339,7 +341,7 @@ private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Uni
         },
         answers = { card ->
             AnswerRow(
-                r.choice.options, r.choice.answer, area, c,
+                AnswerKey.math(c), area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done, describe = { Numbers.word(it) }, onMiss = miss, wandTick = wand,
                 hint = when {
@@ -356,9 +358,10 @@ private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Uni
 private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val r = c.round
     val app = LocalApp.current
-    var solved by remember(c) { mutableStateOf(false) }
-    var faded by remember(c) { mutableStateOf(setOf<Boolean>()) }
-    val misses = remember(c) { Misses() }
+    val key = AnswerKey.more(c)
+    // The round's state and every tap go through the one tested rule (QuizState in logic/Quiz.kt).
+    var quiz by remember(c) { mutableStateOf(QuizState()) }
+    var wanded by remember(c) { mutableStateOf(setOf<Boolean>()) }
     var wiggleLeft by remember(c) { mutableIntStateOf(0) }
     var wiggleRight by remember(c) { mutableIntStateOf(0) }
     val shake = remember(c) { Animatable(0f) }
@@ -373,18 +376,17 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
         }
     }
     LaunchedEffect(c, wand) {
-        if (wand > 0 && !solved) faded = setOf(!r.moreIsLeft)
+        if (wand > 0 && !quiz.solved) wanded = setOf(!key.answer)
     }
     val moreLine = "${Numbers.word(maxOf(r.left, r.right))} is more than ${Numbers.word(minOf(r.left, r.right))}."
-    var revealed by remember(c) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        TryAgainSlot(if (solved) 0 else misses.stage)
+        TryAgainSlot(if (quiz.solved) 0 else quiz.misses.coerceAtMost(2))
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
-                val right = isLeft == r.moreIsLeft
+                val right = isLeft == key.answer
                 val wiggling = (isLeft && wiggleLeft > 0) || (!isLeft && wiggleRight > 0)
                 // The shared rule (logic/Quiz.kt): only the side with more can turn green or glow.
-                val look = tileLook(right, misses.count, solvedByTap = solved && !revealed, revealed = revealed, wanded = isLeft in faded)
+                val look = quiz.look(right, wanded = isLeft in wanded)
                 val grey = look == TileLook.GREY
                 PaperButton(
                     when (look) {
@@ -399,33 +401,36 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
                         .padding(bottom = 10.dp)
                         .alpha(if (grey) 0.45f else 1f)
                         .rotate(if (wiggling && !right) shake.value else 0f),
-                    enabled = !solved && !grey,
+                    enabled = !quiz.solved && !grey,
                     onClick = {
-                        if (right) {
-                            solved = true
-                            app.reward(area, "${Praise.great.random()} $moreLine", onDone = { done(false) })
-                        } else {
-                            if (isLeft) wiggleLeft++ else wiggleRight++
-                            miss()
-                            when (misses.add()) {
-                                1 -> app.speaker.say("Try again!")
-                                // Second miss: Rory counts each side out loud while the right side glows.
-                                2 -> app.speaker.say(
+                        val (next, result) = quiz.tap(right)
+                        quiz = next
+                        when (result) {
+                            TapResult.RIGHT -> app.reward(area, "${Praise.great.random()} $moreLine", onDone = { done(false) })
+                            TapResult.TRY_AGAIN -> {
+                                if (isLeft) wiggleLeft++ else wiggleRight++
+                                miss()
+                                app.speaker.say("Try again!")
+                            }
+                            // Second miss: Rory counts each side out loud while the right side glows.
+                            TapResult.HINT -> {
+                                if (isLeft) wiggleLeft++ else wiggleRight++
+                                miss()
+                                app.speaker.say(
                                     "Count with me! This side: ${countAloud(r.left)}. That side: ${countAloud(r.right)}. Which side has more? Tap the shining one!",
                                 )
-                                // Third miss: grey out this side, show the other, move on.
-                                else -> {
-                                    solved = true
-                                    revealed = true
-                                    faded = setOf(!r.moreIsLeft)
-                                    app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = { done(true) })
-                                }
                             }
+                            // Third miss: this side greys out, the other is shown, move on.
+                            TapResult.SHOWN -> {
+                                miss()
+                                app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = { done(true) })
+                            }
+                            TapResult.IGNORED -> {}
                         }
                     },
                 ) {
                     EmojiGroup(r.emoji, n, Modifier.padding(10.dp), size = 40)
-                    if (solved) {
+                    if (quiz.solved) {
                         Text("$n", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink, modifier = Modifier.align(Alignment.TopEnd))
                     }
                 }
@@ -455,7 +460,7 @@ private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () ->
         },
         answers = { card ->
             AnswerRow(
-                c.round.choice.options, c.round.choice.answer, area, c,
+                AnswerKey.letter(c), area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done,
                 describe = { l -> if (mode == LetterMode.FIRST_SOUND) "${l.upper}, ${l.sound}" else "${l.upper}" },
@@ -535,7 +540,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
             Box(Modifier.heightIn(min = card + 8.dp + TryAgainHeight), contentAlignment = Alignment.Center) {
                 if (blended) {
                     AnswerRow(
-                        c.round.choice.options, c.round.choice.answer, area, c,
+                        AnswerKey.soundOut(c), area, c,
                         cardModifier = Modifier.size(card),
                         onSolved = done, describe = { it.text }, onMiss = miss, wandTick = wand,
                         hint = "Listen: ${Reading.sounds(word).joinToString("... ")}... $word!",
@@ -557,7 +562,7 @@ private fun WhichWordView(c: Challenge.WhichWord, area: String, wand: Int, miss:
         },
         answers = { card ->
             AnswerRow(
-                c.round.choice.options, c.round.choice.answer, area, c,
+                AnswerKey.whichWord(c), area, c,
                 Modifier.fillMaxWidth(), Modifier.width(card * 1.3f).height(card * 0.8f),
                 onSolved = done, describe = { it.text }, onMiss = miss, wandTick = wand,
                 hint = c.round.word.text.let { w -> "Listen: ${Reading.sounds(w).joinToString("... ")}... $w! It starts with ${Reading.sounds(w).firstOrNull() ?: w}." },
@@ -592,7 +597,7 @@ private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () 
         },
         answers = { card ->
             AnswerRow(
-                r.choice.options, r.choice.answer, area, c,
+                AnswerKey.pattern(c), area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done, onMiss = miss, wandTick = wand,
                 hint = r.shown.map { Things.nameOf(it) }.takeIf { names -> "things" !in names }
@@ -610,7 +615,7 @@ private fun OddOneView(c: Challenge.OddOne, area: String, wand: Int, miss: () ->
         val card = minOf(maxWidth / 5.2f, (maxHeight - TryAgainHeight) / 1.6f).coerceIn(64.dp, 112.dp)
         // Options are positions, so identical pictures are still separate cards.
         AnswerRow(
-            r.items.indices.toList(), r.items.indexOf(r.odd), area, c,
+            AnswerKey.oddOne(c), area, c,
             Modifier.fillMaxWidth(), Modifier.size(card),
             onSolved = done, onMiss = miss, wandTick = wand,
             hint = if (r.items.distinct().size == 2) "Three are the same. Find the one that looks different!" else "Three of them go together. Which one doesn't belong?",
@@ -944,7 +949,7 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
         answers = { card ->
             when (r.mode) {
                 CoinMode.PURSE -> AnswerRow(
-                    r.purses.options, r.price, area, c,
+                    AnswerKey.purse(c)!!, area, c,
                     Modifier.fillMaxWidth(), Modifier.size(card * 1.2f, card),
                     onSolved = done,
                     describe = { "${Numbers.word(it)} ${if (it == 1) "coin" else "coins"}" },

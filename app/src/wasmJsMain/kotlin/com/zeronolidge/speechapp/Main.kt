@@ -56,6 +56,7 @@ fun main() {
         voice = VoiceDetector(WebMicLevels()),
         parrot = WebParrot(),
         progress = progress,
+        sfx = com.zeronolidge.speechapp.audio.WebSfx(),
     )
     hideLoading()
     ComposeViewport(document.body!!) { WebRoot(services) }

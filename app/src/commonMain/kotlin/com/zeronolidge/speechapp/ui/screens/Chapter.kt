@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.drawWithContent
 import com.zeronolidge.speechapp.logic.Challenge
 import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.Feeling
@@ -399,18 +400,24 @@ private fun BeatScene(
  */
 @Composable
 private fun StorySplit(story: @Composable (Modifier) -> Unit, challenge: @Composable (Modifier) -> Unit) {
+    // While it's his turn to talk, the story picture dims slightly so the word card stands out.
+    val dim by androidx.compose.animation.core.animateFloatAsState(if (LocalApp.current.listening) 0.22f else 0f, tween(250), label = "dim")
+    val dimmed = Modifier.drawWithContent {
+        drawContent()
+        if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Wide screens (over 700, e.g. an iPad either way up) and any landscape screen: scene on the
         // left, choices on the right. Narrow portrait phones: stacked.
         val sideBySide = maxWidth > 700.dp || maxWidth > maxHeight
         if (!sideBySide) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                story(Modifier.fillMaxWidth().weight(0.34f))
+                story(Modifier.fillMaxWidth().weight(0.34f).then(dimmed))
                 challenge(Modifier.fillMaxWidth().weight(0.66f))
             }
         } else {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                story(Modifier.weight(0.36f).fillMaxHeight())
+                story(Modifier.weight(0.36f).fillMaxHeight().then(dimmed))
                 challenge(Modifier.weight(0.64f).fillMaxHeight())
             }
         }

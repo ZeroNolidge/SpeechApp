@@ -6,6 +6,9 @@ import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.logic.TileLook
+import com.zeronolidge.speechapp.logic.Key
+import com.zeronolidge.speechapp.logic.QuizState
+import com.zeronolidge.speechapp.logic.TapResult
 import com.zeronolidge.speechapp.logic.tileLook
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.MaxMotionMs
@@ -45,6 +48,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
+import com.zeronolidge.speechapp.audio.Sfx
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -76,7 +81,23 @@ class AppServices(
     val voice: VoiceDetector,
     val parrot: Parrot,
     val progress: Progress,
+    /** Paper tap sounds. */
+    val sfx: Sfx = Sfx.Silent,
 ) {
+    /** True while it's his turn to talk: the scene dims a little so Rory and the word stand out. */
+    var listening by mutableStateOf(false)
+
+    /** Taps that landed on nothing tappable: each shows a little paper puff (x, y in window pixels, id). */
+    val puffs = mutableStateListOf<Triple<Float, Float, Int>>()
+    private var puffId = 0
+
+    /** A little paper puff and pop where a tap landed on something that isn't a button, so no tap ever does nothing. */
+    fun puff(x: Float, y: Float) {
+        sfx.pop()
+        puffs.add(Triple(x, y, ++puffId))
+        if (puffs.size > 6) puffs.removeAt(0)
+    }
+
     /** Bumped every time a star is earned; the celebration overlay watches it. */
     var celebrations by mutableIntStateOf(0)
         private set
@@ -227,20 +248,6 @@ fun AnswerCard(
  *  3rd miss: the wrong cards grey out, the right one is shown and said, and the game moves on
  *  by itself. A wrong answer is never cheered.
  */
-class Misses {
-    var count by mutableIntStateOf(0)
-        private set
-
-    fun add() = ++count
-
-    /** What the slot above the answers shows: 0 nothing, 1 "Try again!", 2 Rory's hint. */
-    val stage get() = count.coerceAtMost(2)
-
-    /** The right answer glows while Rory gives the hint. */
-    val glow get() = count == 2
-
-    val showAnswer get() = count >= 3
-}
 
 /** Height kept free above the answers for "Try again!" or Rory's hint, so nothing jumps. */
 val TryAgainHeight = 58.dp
@@ -276,14 +283,14 @@ fun revealLine(answerWords: String?) =
     "It's this one" + (answerWords?.let { ": $it" } ?: "") + ". Good trying! Let's keep going."
 
 /**
- * Shows answer options and handles taps the same way everywhere (see [Misses]). Only the right
+ * Shows answer options and handles taps the same way everywhere (see [QuizState]). Only the right
  * answer is cheered and earns a star. [onSolved] gets `revealed = true` when the answer was shown
  * after three misses, so the story doesn't cheer.
  */
 @Composable
 fun <T> AnswerRow(
-    options: List<T>,
-    answer: T,
+    /** The tiles and the one correct tile, always from the answer key (logic/AnswerKey.kt). */
+    key: Key<T>,
     area: String,
     roundKey: Any,
     modifier: Modifier = Modifier,
@@ -300,31 +307,32 @@ fun <T> AnswerRow(
     content: @Composable (T) -> Unit,
 ) {
     val app = LocalApp.current
-    val misses = remember(roundKey) { Misses() }
-    var faded by remember(roundKey) { mutableStateOf(setOf<T>()) }
+    val options = key.options
+    val answer = key.answer
+    // The round's state and every tap go through the one tested rule (QuizState in logic/Quiz.kt).
+    var quiz by remember(roundKey) { mutableStateOf(QuizState()) }
+    var wanded by remember(roundKey) { mutableStateOf(setOf<T>()) }
     var wiggles by remember(roundKey) { mutableStateOf(mapOf<T, Int>()) }
-    var solved by remember(roundKey) { mutableStateOf(false) }
-    var revealed by remember(roundKey) { mutableStateOf(false) }
     var advanced by remember(roundKey) { mutableStateOf(false) }
     val advance = {
         if (!advanced) {
             advanced = true
-            onSolved(revealed)
+            onSolved(quiz.revealed)
         }
     }
     LaunchedEffect(roundKey, wandTick) {
-        if (wandTick > 0 && !solved) {
-            val wrong = options.filter { it != answer && it !in faded }
-            if (wrong.isNotEmpty()) faded = faded + wrong.random()
+        if (wandTick > 0 && !quiz.solved) {
+            val wrong = options.filter { it != answer && it !in wanded }
+            if (wrong.isNotEmpty()) wanded = wanded + wrong.random()
         }
     }
     // Normally the next round starts when the voice finishes; this is a backstop.
-    if (solved) AfterDelay(roundKey, 6000) { advance() }
+    if (quiz.solved) AfterDelay(roundKey, 6000) { advance() }
     val answerWords = describe?.invoke(answer)
     val cards: @Composable () -> Unit = {
         options.forEach { opt ->
             // One shared rule (logic/Quiz.kt, unit-tested): only the correct answer can be green.
-            val look = tileLook(opt == answer, misses.count, solvedByTap = solved && !revealed, revealed = revealed, wanded = opt in faded)
+            val look = quiz.look(opt == answer, wanded = opt in wanded)
             AnswerCard(
                 modifier = cardModifier,
                 faded = look == TileLook.GREY,
@@ -332,37 +340,39 @@ fun <T> AnswerRow(
                 glow = look == TileLook.GLOW,
                 wiggle = wiggles[opt] ?: 0,
                 onClick = {
+                    if (opt in wanded) return@AnswerCard
+                    val said = describe?.invoke(opt)?.let { "$it! " } ?: ""
                     // A tap is checked against the right answer before anything is cheered.
-                    if (!solved && opt !in faded) {
-                        val said = describe?.invoke(opt)?.let { "$it! " } ?: ""
-                        if (opt == answer) {
-                            solved = true
-                            app.reward(area, said + Praise.great.random(), onDone = advance)
-                        } else {
+                    val (next, result) = quiz.tap(opt == answer)
+                    quiz = next
+                    when (result) {
+                        TapResult.RIGHT -> app.reward(area, said + Praise.great.random(), onDone = advance)
+                        TapResult.TRY_AGAIN -> {
                             wiggles = wiggles + (opt to (wiggles[opt] ?: 0) + 1)
                             onMiss()
-                            when (misses.add()) {
-                                1 -> app.speaker.say(said + "Try again!")
-                                // Second miss: Rory says a hint while the right one glows.
-                                2 -> app.speaker.say(
-                                    said + (hint ?: "Here's a clue. The right one is shining" + (answerWords?.let { ": $it" } ?: "") + ".") + " Tap the shining one!",
-                                )
-                                // Third miss: grey out the wrong ones, show the right one, move on.
-                                else -> {
-                                solved = true
-                                revealed = true
-                                faded = options.filter { it != answer }.toSet()
-                                app.speaker.say(revealLine(answerWords), onDone = advance)
-                                }
-                            }
+                            app.speaker.say(said + "Try again!")
                         }
+                        // Second miss: Rory says a hint while the right one glows.
+                        TapResult.HINT -> {
+                            wiggles = wiggles + (opt to (wiggles[opt] ?: 0) + 1)
+                            onMiss()
+                            app.speaker.say(
+                                said + (hint ?: "Here's a clue. The right one is shining" + (answerWords?.let { ": $it" } ?: "") + ".") + " Tap the shining one!",
+                            )
+                        }
+                        // Third miss: the wrong ones grey out, the right one is shown, move on.
+                        TapResult.SHOWN -> {
+                            onMiss()
+                            app.speaker.say(revealLine(answerWords), onDone = advance)
+                        }
+                        TapResult.IGNORED -> {}
                     }
                 },
             ) { content(opt) }
         }
     }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        TryAgainSlot(if (solved) 0 else misses.stage)
+        TryAgainSlot(if (quiz.solved) 0 else quiz.misses.coerceAtMost(2))
         if (LocalAnswersStacked.current) {
             Column(verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) { cards() }
         } else {

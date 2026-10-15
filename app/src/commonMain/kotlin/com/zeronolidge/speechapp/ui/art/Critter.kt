@@ -44,7 +44,8 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class Mood { HAPPY, CHEER, THINK, SAD, SLEEP }
+/** LISTEN: a hand cupped by the ear, for when it's his turn to talk. */
+enum class Mood { HAPPY, CHEER, THINK, SAD, SLEEP, LISTEN }
 
 /** What a character is wearing. Any part can be null. */
 data class Outfit(
@@ -207,6 +208,7 @@ private class PuppetNode(var spec: PuppetSpec, var motion: PuppetMotion) : Modif
                 Mood.THINK -> -8f
                 Mood.SAD -> 5f
                 Mood.SLEEP -> 10f
+                Mood.LISTEN -> 6f
                 else -> 0f
             }
             rotate(tilt + wig * 4f, o(50f, if (boxy) 86f else 90f)) {
@@ -231,6 +233,8 @@ private fun armAngles(mood: Mood): Pair<Float, Float> = when (mood) {
     Mood.CHEER -> 150f to -150f
     Mood.THINK -> 12f to -120f
     Mood.SAD, Mood.SLEEP -> 4f to -4f
+    // The right hand comes up beside the head, cupped by the ear.
+    Mood.LISTEN -> 14f to -158f
     Mood.HAPPY -> 14f to -14f
 }
 

@@ -512,3 +512,80 @@ class MapAreasTest {
         assertEquals(Land.FOREST, MapAreas.hit(f.labelX * 1280f, f.labelY * 760f + 20f, 1280f, 760f, 70f, 40f))
     }
 }
+
+/** Plays every kind of quiz against the answer key, with a right tap and with wrong taps. */
+class PlayEveryQuizTest {
+    private val rnd = Random(42)
+
+    private fun allQuizzes(): List<Challenge> = buildList {
+        repeat(150) {
+            add(Challenge.Count(Numbers.count(10, rnd)))
+            add(Challenge.Math(Numbers.math(true, 10, rnd)))
+            add(Challenge.Math(Numbers.math(false, 10, rnd)))
+            add(Challenge.More(Numbers.compare(8, rnd)))
+            LetterMode.entries.forEach { add(Challenge.Letter(Letters.make(it, rnd, tricky = it.ordinal % 2 == 0))) }
+            add(Challenge.SoundOut(Reading.make(ReadingContent.cvcWords, rnd)))
+            add(Challenge.WhichWord(Reading.make(ReadingContent.cvcWords, rnd)))
+            add(Challenge.Pattern(Patterns.make(it % (Patterns.maxLevel() + 1), rnd)))
+            add(Challenge.OddOne(OddOneOut.make(it % 2, rnd)))
+            add(Challenge.Coins(Coins.make(it, rnd)))
+        }
+    }
+
+    @Test
+    fun theStoredAnswerIsReallyTheRightOne() {
+        allQuizzes().forEach { c ->
+            val k = AnswerKey.of(c) ?: return@forEach
+            assertTrue(k.answer in k.options, "answer not among the tiles: $c")
+            assertEquals(k.options.size, k.options.distinct().size, "duplicate tiles: $c")
+            when (c) {
+                is Challenge.Count -> assertEquals(c.round.count, k.answer)
+                is Challenge.Math -> assertEquals(if (c.round.plus) c.round.a + c.round.b else c.round.a - c.round.b, k.answer)
+                is Challenge.More -> assertEquals(c.round.left > c.round.right, k.answer)
+                is Challenge.Letter -> assertEquals(c.round.target, k.answer)
+                is Challenge.SoundOut -> assertEquals(c.round.word, k.answer)
+                is Challenge.WhichWord -> assertEquals(c.round.word, k.answer)
+                is Challenge.Pattern -> assertEquals(c.round.unit[c.round.shown.size % c.round.unit.size], k.answer)
+                is Challenge.OddOne -> assertEquals(1, c.round.items.count { it == c.round.items[k.answer as Int] })
+                is Challenge.Coins -> assertEquals(c.round.price, k.answer)
+                else -> {}
+            }
+        }
+    }
+
+    @Test
+    fun aRightTapIsRightAndAWrongTapIsNeverMarkedRight() {
+        allQuizzes().forEach { c ->
+            val k = AnswerKey.of(c) ?: return@forEach
+            // A right tap: solved, and only the correct tile is green.
+            val (afterRight, r) = QuizState().tap(true)
+            assertEquals(TapResult.RIGHT, r)
+            k.options.forEach { o -> assertEquals(o == k.answer, afterRight.look(o == k.answer) == TileLook.RIGHT, "$c") }
+            // Wrong taps on every wrong tile in turn: never RIGHT, never green, and the right tile
+            // glows on the 2nd miss and is shown after the 3rd.
+            val wrong = k.options.filter { it != k.answer }
+            var s = QuizState()
+            val results = (0 until 3).map { i ->
+                val tapped = wrong[i % wrong.size]
+                val (next, res) = s.tap(tapped == k.answer)
+                s = next
+                k.options.forEach { o -> if (o != k.answer) assertTrue(s.look(false) != TileLook.RIGHT, "wrong tile green: $c") }
+                assertTrue(res != TapResult.RIGHT, "wrong tap marked right: $c")
+                res
+            }
+            assertEquals(listOf(TapResult.TRY_AGAIN, TapResult.HINT, TapResult.SHOWN), results)
+            assertEquals(TileLook.GLOW, s.look(true))
+            assertEquals(TapResult.IGNORED, s.tap(true).second)
+        }
+    }
+}
+
+class EchoTest {
+    @Test
+    fun roryRepeatsTheTargetWordAndAddsOne() {
+        assertEquals("Dog! A big dog!", Echo.line("dog", 0))
+        assertEquals("Grandma! Hi, Grandma!", Echo.line("Grandma"))
+        assertEquals("Big red ball! Yay!", Echo.line("big red ball"))
+        assertTrue(Echo.line("cat", 3).startsWith("Cat! A "))
+    }
+}

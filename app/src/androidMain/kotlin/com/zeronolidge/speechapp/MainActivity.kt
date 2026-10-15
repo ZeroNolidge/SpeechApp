@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
             voice = VoiceDetector(AndroidMicLevels()),
             parrot = AndroidParrot(this),
             progress = progress,
+            sfx = com.zeronolidge.speechapp.audio.AndroidSfx(),
         )
         setContent { TalkAndLearnApp(services) }
     }

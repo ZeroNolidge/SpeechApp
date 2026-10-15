@@ -1,6 +1,12 @@
 package com.zeronolidge.speechapp.ui.screens
 
 import com.zeronolidge.speechapp.ui.art.loop
+import com.zeronolidge.speechapp.logic.Echo
+import com.zeronolidge.speechapp.ui.art.paperOval
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -169,7 +175,8 @@ fun SpeakMoment(
         // Gems are for trying to say words, not for getting things right.
         val piece = p.addGem()
         val praise = when {
-            heard -> "I heard you! Great saying ${word.text}! You got a shiny sticker!"
+            // Rory says the target word back and adds one word ("Dog! A big dog!").
+            heard -> "${Echo.line(word.text, stat.tries)} I heard you! You got a shiny sticker!"
             micUsed -> "Great job saying it together!"
             else -> listOf("Great talking!", "Good saying!", "I love your talking!").random()
         }
@@ -266,7 +273,9 @@ fun SpeakMoment(
         val lines = listOfNotNull(intro?.let { it to false }) + model()
         speakThen(lines, micUsable())
     }
-    DisposableEffect(key) { onDispose { stopAll() } }
+    DisposableEffect(key) { onDispose { stopAll(); app.listening = false } }
+    // His turn to talk: the scene behind dims slightly.
+    LaunchedEffect(state) { app.listening = state == Speak.LISTENING }
 
     // The word card and its big icon buttons: on a phone the buttons sit in a row under the card;
     // on any screen wider than 700 (an iPad either way up) the card is on the left and the buttons
@@ -335,7 +344,7 @@ fun SpeakMoment(
                             Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
                                 when (state) {
                                     Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                        ListeningBadge(level, if (small) 56.dp else 84.dp)
+                                        RoryListens(level, if (small) 64.dp else 96.dp)
                                         Spacer(Modifier.width(10.dp))
                                         PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
                                     }
@@ -398,7 +407,40 @@ fun SpeakMoment(
     }
 }
 
-/** A big red microphone that throbs with the child's voice, so they can see it's their turn. */
+/**
+ * His turn to talk: Rory cups a glowing paper ear, and a paper ring around him grows with the
+ * loudness of his voice, so he can see he's being listened to.
+ */
+@Composable
+private fun RoryListens(level: Float, size: Dp) {
+    val t = rememberInfiniteTransition(label = "listen")
+    val glow by t.loop(0.55f, 1f, 600, label = "earGlow")
+    val voice by animateFloatAsState(level, tween(90), label = "voice")
+    Box(Modifier.size(size * 1.35f), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val base = size.toPx() * 0.5f
+            // The paper ring that grows with his voice.
+            val r = base * (0.95f + 0.5f * voice)
+            drawCircle(Color(0xFFFFF3C4), r)
+            drawCircle(Color.White, r, style = Stroke(4.dp.toPx()))
+            drawCircle(Color(0xFFFFC94A).copy(alpha = 0.5f), r * 0.86f, style = Stroke(3.dp.toPx()))
+        }
+        Critter(Species.ROBOT, Modifier.fillMaxHeight(0.82f), Color(0xFFFFCC80), mood = Mood.LISTEN)
+        // The glowing paper ear, by Rory's cupped hand.
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.toPx() * 1.35f
+            val h = s * 0.82f
+            val w = h * 100f / 140f
+            val left = (s - w) / 2
+            val ear = Offset(left + w * 0.86f, (s - h) / 2 + h * 0.5f)
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.55f * glow), w * 0.2f * (1f + 0.3f * voice), ear)
+            paperOval(Color(0xFFFFCC80), Offset(ear.x - w * 0.07f, ear.y - w * 0.11f), Size(w * 0.14f, w * 0.22f))
+            paperOval(Color(0xFFFF9E80), Offset(ear.x - w * 0.035f, ear.y - w * 0.065f), Size(w * 0.07f, w * 0.13f))
+        }
+    }
+}
+
+/** A big red microphone that throbs with the child's voice (for the copy-me parrot). */
 @Composable
 private fun ListeningBadge(level: Float, size: Dp) {
     val t = rememberInfiniteTransition(label = "listen")

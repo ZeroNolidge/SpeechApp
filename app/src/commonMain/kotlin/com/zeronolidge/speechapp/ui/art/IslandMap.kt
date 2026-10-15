@@ -70,6 +70,7 @@ import androidx.compose.ui.zIndex
 import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Trail
 import com.zeronolidge.speechapp.ui.components.ArrowIcon
+import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.unfold
 import kotlin.math.PI
@@ -139,6 +140,8 @@ fun IslandMap(
     // The area under a finger right now (its label sinks), and the last logged label positions.
     var pressedLand by remember { mutableStateOf<Land?>(null) }
     var lastAreaLog by remember { mutableStateOf("") }
+    var islandOrigin by remember { mutableStateOf(Offset.Zero) }
+    val app = LocalApp.current
 
     BoxWithConstraints(
         modifier.pointerInput(still) {
@@ -189,6 +192,7 @@ fun IslandMap(
                     val line = MapAreas.all.joinToString(" ") { a ->
                         "${a.land}@${(o.x + a.labelX * c.size.width).toInt()},${(o.y + a.labelY * c.size.height + label * dens * 0.6f).toInt()}"
                     }
+                    islandOrigin = o
                     if (line != lastAreaLog) {
                         lastAreaLog = line
                         println("MAPAREAS $line")
@@ -208,7 +212,7 @@ fun IslandMap(
                         onTap = { p ->
                             val land = areaAt(p)
                             println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${land ?: "sea"}")
-                            if (land != null) onArea(land)
+                            if (land != null) onArea(land) else app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
                         },
                     )
                 },

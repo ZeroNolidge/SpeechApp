@@ -24,6 +24,18 @@ import com.zeronolidge.speechapp.ui.components.PaperIconButton
 import com.zeronolidge.speechapp.ui.components.PointingHand
 import com.zeronolidge.speechapp.ui.components.popIn
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
@@ -70,10 +82,61 @@ fun TalkAndLearnApp(
 ) {
     SpeechAppTheme {
         CompositionLocalProvider(LocalApp provides services, LocalReduceMotion provides rememberReduceMotion()) {
-            Box(Modifier.fillMaxSize().background(Kid.background).safeDrawingPadding()) {
+            var origin by remember { mutableStateOf(Offset.Zero) }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Kid.background)
+                    .safeDrawingPadding()
+                    .onGloballyPositioned { origin = it.positionInWindow() }
+                    // No tap ever does nothing: a tap that nothing tappable took (on scenery, a
+                    // picture, empty paper) gets a little paper puff and a soft pop. Watched last
+                    // (the Final pass), so buttons, tiles and the map handle their own taps first.
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val e = awaitPointerEvent(PointerEventPass.Final)
+                                e.changes.forEach { c ->
+                                    if (c.changedToUp()) services.puff(origin.x + c.position.x, origin.y + c.position.y)
+                                }
+                            }
+                        }
+                    },
+            ) {
                 Screens(start)
                 CelebrationOverlay()
                 GiftOverlay()
+                PuffOverlay(origin)
+            }
+        }
+    }
+}
+
+/** The little paper puffs where taps landed on nothing tappable: a burst of paper bits, gone in 0.35 s. */
+@Composable
+private fun PuffOverlay(origin: Offset) {
+    val app = LocalApp.current
+    val still = LocalReduceMotion.current
+    app.puffs.toList().forEach { (x, y, id) ->
+        key(id) {
+            val t = remember { Animatable(if (still) 1f else 0f) }
+            LaunchedEffect(Unit) {
+                if (!still) t.animateTo(1f, tween(350))
+                app.puffs.removeAll { it.third == id }
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                val c = Offset(x - origin.x, y - origin.y)
+                val v = t.value
+                val colors = listOf(Color(0xFFFFD54F), Color(0xFF81D4FA), Color(0xFFA5D6A7), Color(0xFFF8BBD0), Color(0xFFFFFFFF))
+                for (i in 0 until 7) {
+                    val a = i * 0.8976f + id
+                    val d = 16.dp.toPx() + 34.dp.toPx() * v
+                    drawCircle(
+                        colors[i % colors.size].copy(alpha = (1f - v).coerceIn(0f, 1f)),
+                        radius = 6.dp.toPx() * (1f - 0.4f * v),
+                        center = Offset(c.x + d * kotlin.math.cos(a), c.y + d * kotlin.math.sin(a)),
+                    )
+                }
             }
         }
     }

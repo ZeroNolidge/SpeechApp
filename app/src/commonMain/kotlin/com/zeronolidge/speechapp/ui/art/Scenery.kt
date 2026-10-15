@@ -4,6 +4,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -128,7 +130,7 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
         val fs = (h.value * 0.11f).coerceIn(18f, 40f)
         Box(Modifier.fillMaxSize().popUp(scene, 110)) {
             decor.forEach { (emoji, x, y) ->
-                Text(emoji, fontSize = fs.sp, modifier = Modifier.offset(x = w * x, y = h * (0.55f + y * 0.08f)))
+                WigglyDecor(emoji, fs, Modifier.offset(x = w * x, y = h * (0.55f + y * 0.08f)))
             }
         }
         BakedLayer(listOf("ground", land), Modifier.popUp(scene, 140), depth = 4.dp) { ground(land, pal) }
@@ -492,6 +494,27 @@ private fun DrawScope.stall(base: Offset, s: Float, pal: LandPalette) {
         paperRect(col, Offset(left, base.y - s * 1.05f), Size(s * 0.28f, s * 0.25f))
         paperArc(col, 0f, 180f, true, Offset(left, base.y - s * 0.92f), Size(s * 0.28f, s * 0.2f))
     }
+}
+
+/** A flower, shell or bolt in the scenery: tap it and it wiggles with a soft pop. */
+@Composable
+private fun WigglyDecor(emoji: String, size: Float, modifier: Modifier) {
+    val app = com.zeronolidge.speechapp.ui.components.LocalApp.current
+    val still = LocalReduceMotion.current
+    val wiggle = remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Text(
+        emoji,
+        fontSize = size.sp,
+        modifier = modifier
+            .graphicsLayer { rotationZ = wiggle.value }
+            .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+                app.sfx.pop()
+                if (!still) scope.launch {
+                    for (a in listOf(14f, -12f, 8f, -5f, 0f)) wiggle.animateTo(a, androidx.compose.animation.core.tween(60))
+                }
+            },
+    )
 }
 
 /** Small round badge of a land, for the world map. */
