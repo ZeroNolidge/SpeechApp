@@ -2,6 +2,8 @@
 // Network first, so the app is always the latest version when online; falls back to the
 // cached copy when offline. CI replaces BUILD_ID on every deploy so new versions take over.
 const CACHE = 'talkandlearn-BUILD_ID';
+// Version-named files (the .wasm) live here across versions; old ones are tidied up below.
+const STATIC = 'talkandlearn-static';
 
 self.addEventListener('install', (e) => {
     self.skipWaiting();
@@ -11,14 +13,33 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
     e.waitUntil(
         caches.keys()
-            .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+            .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== STATIC).map((k) => caches.delete(k))))
+            // Keep only the .wasm files this version uses.
+            .then(() => fetch('./talkandlearn.js').then((r) => r.text()).then((js) => caches.open(STATIC).then((c) =>
+                c.keys().then((reqs) => Promise.all(reqs.filter((r) => !js.includes(new URL(r.url).pathname.split('/').pop())).map((r) => c.delete(r))))
+            )).catch(() => {}))
             .then(() => self.clients.claim())
     );
 });
 
 self.addEventListener('fetch', (e) => {
     const req = e.request;
-    if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+    const url = new URL(req.url);
+    if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+    // The big .wasm files have a new name for every version and never change, so use the saved
+    // copy straight away (only fetch when it's a new version). Saves ~12 MB on every launch.
+    if (url.pathname.endsWith('.wasm')) {
+        e.respondWith(
+            caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+                if (res.ok) {
+                    const copy = res.clone();
+                    caches.open(STATIC).then((c) => c.put(req, copy));
+                }
+                return res;
+            }))
+        );
+        return;
+    }
     e.respondWith(
         fetch(req)
             .then((res) => {
