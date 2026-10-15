@@ -1,6 +1,14 @@
 package com.zeronolidge.speechapp.ui.art
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.platform.LocalDensity
+import com.zeronolidge.speechapp.logic.MapAreas
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.rememberCoroutineScope
@@ -128,6 +136,9 @@ fun IslandMap(
     // the island with its stops, the clouds in front fastest. It springs back on letting go.
     val scope = rememberCoroutineScope()
     val pan = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    // The area under a finger right now (its label sinks), and the last logged label positions.
+    var pressedLand by remember { mutableStateOf<Land?>(null) }
+    var lastAreaLog by remember { mutableStateOf("") }
 
     BoxWithConstraints(
         modifier.pointerInput(still) {
@@ -163,7 +174,45 @@ fun IslandMap(
         }
 
         // Layer 2, the island and everything on it, moving together so the stops stay put on it.
-        Box(Modifier.fillMaxSize().drift(1f)) {
+        // One tap handler for every area: the tap point is matched against the shared list of
+        // map areas (the same positions the labels are drawn at), and the result is logged.
+        val label = (unit.value * 0.055f).coerceIn(20f, 30f)
+        val onArea by rememberUpdatedState(onElsewhere)
+        val dens = LocalDensity.current.density
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drift(1f)
+                .onGloballyPositioned { c ->
+                    // For checking: where each area's label is on screen (the smoke test taps these).
+                    val o = c.positionInWindow()
+                    val line = MapAreas.all.joinToString(" ") { a ->
+                        "${a.land}@${(o.x + a.labelX * c.size.width).toInt()},${(o.y + a.labelY * c.size.height + label * dens * 0.6f).toInt()}"
+                    }
+                    if (line != lastAreaLog) {
+                        lastAreaLog = line
+                        println("MAPAREAS $line")
+                    }
+                }
+                .pointerInput(Unit) {
+                    fun areaAt(p: Offset): Land? = MapAreas.hit(
+                        p.x, p.y, size.width.toFloat(), size.height.toFloat(),
+                        labelHalfW = 64.dp.toPx(), labelH = (label * 1.45f + 6f).dp.toPx(),
+                    )
+                    detectTapGestures(
+                        onPress = { p ->
+                            pressedLand = areaAt(p)
+                            tryAwaitRelease()
+                            pressedLand = null
+                        },
+                        onTap = { p ->
+                            val land = areaAt(p)
+                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${land ?: "sea"}")
+                            if (land != null) onArea(land)
+                        },
+                    )
+                },
+        ) {
             BakedLayer(listOf("map-island", current, lap), depth = 4.dp) {
                 island()
                 riverBase()
@@ -226,31 +275,11 @@ fun IslandMap(
             // A soft wash so the scenery sits back and the raised stop button wins.
             Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash, Offset(-3000f, -3000f), Size(size.width + 6000f, size.height + 6000f)) }
 
-            // Each land's picture (its landmark) and its label make ONE big tap target: a single
-            // area reaching from the top of the label down past the landmark, so a tap anywhere on
-            // either (or between them) opens that same land. An open land opens its games; a misty
-            // one shows the way. Pressing makes the label sink a little, so the tap visibly lands.
-            val label = (unit.value * 0.055f).coerceIn(20f, 30f)
-            val presses = remember { Land.entries.associateWith { MutableInteractionSource() } }
-            // The big areas first, then all the labels on top (so no area covers another's label).
+            // Labels are drawn from the one shared list of map areas (logic/MapAreas.kt); taps on the
+            // island are matched against the same list (see the tap handler on this layer), so a
+            // label or picture always opens its own area. The pressed area's label sinks a little.
             Land.entries.forEach { land ->
-                val press = presses.getValue(land)
-                val r = unit * 0.13f
-                val left = minOf(w * land.mapX - r, w * labelX(land) - r * 0.9f).coerceAtLeast(0.dp)
-                val right = maxOf(w * land.mapX + r, w * labelX(land) + r * 0.9f)
-                val top = (h * labelY(land) - 6.dp).coerceAtLeast(0.dp)
-                val bottom = h * land.mapY + r
-                Box(
-                    Modifier
-                        .offset(x = left, y = top)
-                        .size(right - left, bottom - top)
-                        .clip(RoundedCornerShape(r * 0.5f))
-                        .clickable(press, indication = null) { onElsewhere(land) },
-                )
-            }
-            Land.entries.forEach { land ->
-                val press = presses.getValue(land)
-                val pressed by press.collectIsPressedAsState()
+                val area = MapAreas.of(land)
                 val open = reached(land)
                 val fade = when {
                     land == newLand -> 0.65f + 0.35f * clearing.value
@@ -260,15 +289,14 @@ fun IslandMap(
                 }
                 Box(
                     Modifier
-                        .centeredAt(w * labelX(land), h * labelY(land), w)
+                        .centeredAt(w * area.labelX, h * area.labelY, w)
                         .graphicsLayer {
                             alpha = fade
-                            val k = if (pressed) 0.93f else 1f
+                            val k = if (pressedLand == land) 0.92f else 1f
                             scaleX = k
                             scaleY = k
                         }
                         .paperCard(PaperStyle.chip, 999.dp)
-                        .clickable(press, indication = null) { onElsewhere(land) }
                         .padding(horizontal = 10.dp, vertical = 1.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -388,11 +416,6 @@ fun IslandMap(
 }
 
 // ---------------------------------------------------------------- helpers
-
-/** Where a land's label sits: above its landmark, except the castle (top right, under the 🔊
- * button), whose label sits to its left. */
-private fun labelX(land: Land) = if (land == Land.CLOUDS) land.mapX - 0.17f else land.mapX
-private fun labelY(land: Land) = if (land == Land.CLOUDS) land.mapY - 0.06f else (land.mapY - 0.155f).coerceAtLeast(0.005f)
 
 /** Places this thing with its top centred on ([x], [y]), kept inside [maxX] (the map's width). */
 private fun Modifier.centeredAt(x: Dp, y: Dp, maxX: Dp) = layout { m, c ->

@@ -62,7 +62,8 @@ These are the owner's rules for all work:
   a row of fixed-size things: give it its own space first and let the rest take `weight`. Narrow
   screens (< 520dp) show 2 choices; story/challenge sit side by side over 700dp or in landscape,
   and practice games (`QuestionLayout`) put the picture left and answers in a column right over
-  700dp (any way up, so iPad portrait too). Choice tiles put the word beside the picture when the tile is short or wide. The chapter
+  700dp (any way up, so iPad portrait too), and the say-a-word screen (`SpeakMoment`) puts its
+  picture card left and its buttons in a column right over 700dp. Choice tiles put the word beside the picture when the tile is short or wide. The chapter
   header says "Adventure" and drops the footprints when there's no room; labels never cut off.
   In `BoxWithConstraints`, read `maxWidth`/`maxHeight` into vals at the top (nested Row/Column
   can't use them implicitly; CI fails).
@@ -132,10 +133,13 @@ These are the owner's rules for all work:
   A land's second stop sits a third of the way to the next land. The map hand points at the stop
   from the side away from the buddy (👉/👈), never over a label. Tapping a
   misty land wiggles it and Rory walks along a sparkly trail from there to the next stop ("Follow
-  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Each land's label and landmark
-  are ONE tap target (an area from the label's top to below the landmark; the label sinks on
-  press). Tapping an open land opens that area's own games (`Screen.LandGames`,
-  `gamesFor(land)`: Meadow = count, add, take away, more; Forest = the sounds menu). The story
+  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). **One shared list of map
+  areas** (`MapAreas` in `logic/MapAreas.kt`, unit-tested) gives each land's label and landmark
+  positions; labels are drawn from it and ONE tap handler on the island layer matches taps against
+  it (`MapAreas.hit`), logging `MAPTAP x,y -> LAND` (and `MAPAREAS` label positions, which the
+  smoke test taps). Tapping an open land, or the next land peeking through its mist, opens that
+  area (`Screen.LandGames`, `gamesFor(land)`: Meadow = count, add, take away, more; Forest = its
+  story + talking practice). The story
   starts from the next-stop marker (ring included) or the Adventure banner. A wide
   "▶ Adventure!" banner (tappable all over, presses down like every `PaperButton`) starts the next chapter. The island keeps a 1.75:1 shape.
 
@@ -194,9 +198,10 @@ Kotlin Multiplatform module `app` with three source sets:
 - **Seeing the web app without a device:** the CI smoke test (`tools/smoke_web.mjs --shots`) prints
   small screenshots (first launch, map, story, next step) as `SHOT <name> <base64 jpeg>` lines in
   the web job log. Fetch the log with `get_job_logs` (return_content, ~400 tail lines; a subagent can
-  decode the saved output into JPEGs) and look at them. It also opens a game at iPad portrait,
-  iPad landscape and phone sizes (`#test=ADD`, `#test=land-MEADOW` URL hooks in `Main.kt`) to
-  check the two-column switch for real. GitHub Pages itself is blocked from here.
+  decode the saved output into JPEGs) and look at them. It also taps the Meadow and Forest
+  labels (printing `CHECK map tap ...: ok/FAIL`) and opens screens at iPad portrait, iPad landscape
+  and phone sizes (`#test=ADD`, `#test=talk`, `#test=land-MEADOW` URL hooks in `Main.kt`) to check
+  the two-column switch for real. GitHub Pages itself is blocked from here.
 - The service worker is network-first, so the PWA updates on the next launch when online.
   Speech can't play until the first tap, hence the start screen.
 - **Signing:** release builds use a permanent key from repo secrets `SIGNING_KEYSTORE`

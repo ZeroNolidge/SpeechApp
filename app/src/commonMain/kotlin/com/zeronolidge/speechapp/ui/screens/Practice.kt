@@ -152,16 +152,21 @@ fun gamesFor(land: Land): List<PracticeKind> = when (land) {
 @Composable
 fun LandGamesScreen(land: Land, nav: Nav) {
     val app = LocalApp.current
-    if (land == Land.FOREST) {
-        TalkMenu(nav)
-        return
+    data class Tile(val emoji: String, val label: String, val spoken: String, val color: Color, val target: Screen)
+    // The talking forest: its story and the talking practice. Every other area: its own games.
+    val tiles = if (land == Land.FOREST) {
+        listOf(
+            Tile("📖", "Story", "A forest story!", Kid.talk, Screen.Chapter(Land.FOREST)),
+            Tile("🗣️", "Talk", "Let's practise talking!", Kid.talk, Screen.TalkMenu),
+        )
+    } else {
+        gamesFor(land).map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
     }
-    val games = gamesFor(land)
     KidScreen("${land.emoji} ${land.shortName}", nav.home, "${land.title}! Pick a game. Tap a picture to play.") {
-        PagedChoices(games, perPage = if (games.size == 4) 4 else 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { kind, m ->
-            ChoiceTile(kind.emoji, kind.label, kind.color, m, onClick = {
-                app.speaker.say(kind.spoken)
-                nav.go(Screen.PracticeGame(kind))
+        PagedChoices(tiles, perPage = if (tiles.size == 4) 4 else 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { t, m ->
+            ChoiceTile(t.emoji, t.label, t.color, m, onClick = {
+                app.speaker.say(t.spoken)
+                nav.go(t.target)
             })
         }
     }

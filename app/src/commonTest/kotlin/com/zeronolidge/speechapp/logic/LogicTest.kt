@@ -486,3 +486,29 @@ class QuizLookTest {
         assertEquals(TileLook.RIGHT, tileLook(isAnswer = true, misses = 1, solvedByTap = true, revealed = false, wanded = false))
     }
 }
+
+class MapAreasTest {
+    private val sizes = listOf(1280f to 760f, 1000f to 620f, 820f to 700f, 360f to 300f)
+
+    @Test
+    fun tappingAnAreasLabelOrPictureOpensThatSameArea() {
+        for ((w, h) in sizes) {
+            val half = 70f
+            val lh = 40f
+            MapAreas.all.forEach { a ->
+                // The middle of its label chip...
+                assertEquals(a.land, MapAreas.hit(a.labelX * w, a.labelY * h + lh / 2, w, h, half, lh), "label of ${a.land} at ${w}x$h")
+                // ...and the middle of its landmark picture.
+                assertEquals(a.land, MapAreas.hit(a.markX * w, a.markY * h, w, h, half, lh), "picture of ${a.land} at ${w}x$h")
+            }
+        }
+    }
+
+    @Test
+    fun meadowAndForestAreTheirOwnAreas() {
+        val m = MapAreas.of(Land.MEADOW)
+        assertEquals(Land.MEADOW, MapAreas.hit(m.labelX * 1280f, m.labelY * 760f + 20f, 1280f, 760f, 70f, 40f))
+        val f = MapAreas.of(Land.FOREST)
+        assertEquals(Land.FOREST, MapAreas.hit(f.labelX * 1280f, f.labelY * 760f + 20f, 1280f, 760f, 70f, 40f))
+    }
+}

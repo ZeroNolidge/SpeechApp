@@ -15,9 +15,12 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 800 });
 let errors = 0;
+const logs = [];
 page.on('console', (m) => {
     if (m.type() === 'error') errors++;
-    console.log(`[console.${m.type()}] ${m.text()}`);
+    logs.push(m.text());
+    // Map-area positions are long; keep the log readable.
+    if (!m.text().startsWith('MAPAREAS')) console.log(`[console.${m.type()}] ${m.text()}`);
 });
 page.on('pageerror', (e) => { errors++; console.log(`[pageerror] ${e.stack || e.message}`); });
 page.on('requestfailed', (r) => console.log(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`));
@@ -69,6 +72,30 @@ if (started) {
             await page.mouse.click(640, 400);
             await wait(4000);
             await shot('map');
+            // Map taps, for real: read where each area's label is drawn (the app logs it from the
+            // same list it uses for taps), tap Meadow's and Forest's labels, and check what opens.
+            const areas = {};
+            const line = [...logs].reverse().find((t) => t.startsWith('MAPAREAS'));
+            if (line) for (const part of line.split(' ').slice(1)) {
+                const [name, xy] = part.split('@');
+                const [x, y] = xy.split(',').map(Number);
+                areas[name] = { x, y };
+            }
+            console.log('Map label positions: ' + JSON.stringify(areas));
+            const tapArea = async (name) => {
+                const a = areas[name];
+                if (!a) { console.log(`CHECK map tap ${name}: FAIL (no position logged)`); return; }
+                const before = logs.length;
+                await page.mouse.click(a.x, a.y);
+                await wait(3000);
+                const hit = logs.slice(before).find((t) => t.startsWith('MAPTAP'));
+                console.log(`CHECK map tap ${name}: ${hit && hit.endsWith('-> ' + name) ? 'ok' : 'FAIL'} (${hit})`);
+                await shot('tap-' + name.toLowerCase());
+                await page.mouse.click(54, 54); // 🏠 back to the map
+                await wait(3000);
+            };
+            await tapArea('MEADOW');
+            await tapArea('FOREST');
             await page.mouse.click(640, 752);
             await wait(1500);
             await shot('story-1s');
@@ -94,6 +121,10 @@ if (started) {
             await open('#test=ADD', 1180, 820, 'ipad-landscape-add');
             await open('#test=ADD', 400, 860, 'phone-add');
             await open('#test=land-MEADOW', 1180, 820, 'meadow-games');
+            await open('#test=talk', 1180, 820, 'talk-ipad-landscape');
+            await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
+            await open('#test=talk', 400, 860, 'talk-phone');
+            await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');
         } catch (e) {
             console.log(`Screenshots stopped: ${e.message}`);
         }

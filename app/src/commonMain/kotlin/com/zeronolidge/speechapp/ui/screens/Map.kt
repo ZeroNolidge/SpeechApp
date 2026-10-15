@@ -178,10 +178,12 @@ fun MapScreen(nav: Nav) {
             onUnfolded = { p.markUnfoldSeen() },
             onStop = startChapter,
             onElsewhere = { l ->
+                // The next area along the trail is already peeking out of its mist: it opens too.
+                val peek = if (!Trail.opensLand(p.chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(land) + 1) else null
                 when {
-                    // An open area (its label, picture or landmark): open its own games.
+                    // An open area (its label, picture or landmark): open that same area.
                     // The story itself starts from the yellow stop button or the Adventure banner.
-                    l in Trail.reached(p.chapter) -> {
+                    l in Trail.reached(p.chapter) || l == peek -> {
                         app.speaker.say("${l.title}!")
                         nav.go(Screen.LandGames(l))
                     }

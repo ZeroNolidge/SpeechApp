@@ -40,6 +40,7 @@ import com.zeronolidge.speechapp.ui.platform.MicStatus
 import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.screens.PracticeKind
 import com.zeronolidge.speechapp.logic.Land
+import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.ui.platform.WebMic
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
 import kotlinx.browser.document
@@ -69,8 +70,11 @@ private fun locationHash(): String = js("(() => { try { return window.location.h
 private fun testStart(): Screen? {
     val v = locationHash().removePrefix("#test=").takeIf { locationHash().startsWith("#test=") } ?: return null
     return runCatching {
-        if (v.startsWith("land-")) Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
-        else Screen.PracticeGame(PracticeKind.valueOf(v))
+        when {
+            v.startsWith("land-") -> Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
+            v == "talk" -> Screen.TalkPractice(SpeechContent.sounds.first())
+            else -> Screen.PracticeGame(PracticeKind.valueOf(v))
+        }
     }.getOrNull()
 }
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -267,104 +268,123 @@ fun SpeakMoment(
     }
     DisposableEffect(key) { onDispose { stopAll() } }
 
-    // The word card on top, then one row of big icon buttons. Works the same on a phone and a tablet.
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        val t = rememberInfiniteTransition(label = "model")
-        val beat by t.loop(1f, 1.08f, 500, label = "beat")
-        val pulse by animateFloatAsState(
-            when (state) {
-                Speak.LISTENING -> 1f + level * 0.25f
-                Speak.MODELLING -> beat
-                else -> 1f
-            },
-            label = "pulse",
-        )
-        // The picture card: tap it to hear the word again.
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val small = maxHeight < 240.dp
-            val roryHeight = minOf(maxHeight * 0.7f, 150.dp)
-            PaperButton(
-                PaperStyle.chip,
-                Modifier.fillMaxSize().padding(bottom = 8.dp),
-                enabled = state != Speak.DONE,
-                onClick = { speakThen(model(), true) },
-            ) {
-                Row(
-                    Modifier.fillMaxSize().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+    // The word card and its big icon buttons: on a phone the buttons sit in a row under the card;
+    // on any screen wider than 700 (an iPad either way up) the card is on the left and the buttons
+    // are in a column on the right, above the continue button's corner.
+    BoxWithConstraints(modifier) {
+        val wide = maxWidth > 700.dp
+        val active = state != Speak.DONE
+        val size = 68.dp
+        val icons: @Composable () -> Unit = {
+            RoundIcon("🔊", PaperColorsUi.hear, size = size, enabled = active) { speakThen(model(), true) }
+            RoundIcon("🐢", Color(0xFFC8E6C9), size = size, enabled = active) {
+                speakThen(listOf(word.syllables to true, word.text to true), true)
+            }
+            if (sound != null) {
+                RoundIcon("👄", Color(0xFFFFCDD2), size = size, enabled = active) {
+                    speakThen(listOf(sound.tip to false, sound.modelSound to true), true)
+                }
+            }
+            RoundIcon("🎤", Color(0xFFFFE0B2), size = size, enabled = active) {
+                micBroken = false
+                withMic(onDenied = { speakThen(emptyList(), false) }) { speakThen(emptyList(), true) }
+            }
+            if (showParrot && p.useMic) {
+                RoundIcon("🦜", Color(0xFFB2EBF2), size = size, enabled = active) {
+                    withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
+                }
+            }
+        }
+        val card: @Composable ColumnScope.() -> Unit = {
+            val t = rememberInfiniteTransition(label = "model")
+            val beat by t.loop(1f, 1.08f, 500, label = "beat")
+            val pulse by animateFloatAsState(
+                when (state) {
+                    Speak.LISTENING -> 1f + level * 0.25f
+                    Speak.MODELLING -> beat
+                    else -> 1f
+                },
+                label = "pulse",
+            )
+            // The picture card: tap it to hear the word again.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val small = maxHeight < 240.dp
+                val roryHeight = minOf(maxHeight * 0.7f, 150.dp)
+                PaperButton(
+                    PaperStyle.chip,
+                    Modifier.fillMaxSize().padding(bottom = 8.dp),
+                    enabled = state != Speak.DONE,
+                    onClick = { speakThen(model(), true) },
                 ) {
-                    Box(Modifier.weight(1f).fillMaxHeight().scale(pulse), contentAlignment = Alignment.Center) {
-                        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 110.sp)
-                    }
-                    Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            highlighted(word.text, sound?.id),
-                            fontSize = if (small) 30.sp else if (word.text.length > 12) 36.sp else 50.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = PaperStyle.ink,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
-                            when (state) {
-                                Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                    ListeningBadge(level, if (small) 56.dp else 84.dp)
-                                    Spacer(Modifier.width(10.dp))
-                                    PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
+                    Row(
+                        Modifier.fillMaxSize().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        Box(Modifier.weight(1f).fillMaxHeight().scale(pulse), contentAlignment = Alignment.Center) {
+                            if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 110.sp)
+                        }
+                        Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                highlighted(word.text, sound?.id),
+                                fontSize = if (small) 30.sp else if (word.text.length > 12) 36.sp else 50.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = PaperStyle.ink,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
+                                when (state) {
+                                    Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                        ListeningBadge(level, if (small) 56.dp else 84.dp)
+                                        Spacer(Modifier.width(10.dp))
+                                        PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
+                                    }
+                                    Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
+                                    Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
+                                    Speak.MODELLING -> Text("👂", fontSize = 52.sp)
+                                    Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
+                                    Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
                                 }
-                                Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
-                                Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
-                                Speak.MODELLING -> Text("👂", fontSize = 52.sp)
-                                Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
-                                Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
                             }
                         }
                     }
                 }
-            }
-            // No microphone: Rory pops up big and asks for the word out loud, then waits for ▶.
-            if (roryWaiting) {
-                Row(
-                    Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Critter(Species.ROBOT, Modifier.height(roryHeight), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
-                    PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
+                // No microphone: Rory pops up big and asks for the word out loud, then waits for ▶.
+                if (roryWaiting) {
+                    Row(
+                        Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Critter(Species.ROBOT, Modifier.height(roryHeight), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
+                        PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
+                    }
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        // Big buttons: hear it, slowly, mouth, microphone (and copy-me in practice). The continue
-        // button is pinned bottom-right like on every step, so this row leaves room for it; the
-        // buttons wrap onto a second line if they don't fit.
-        val active = state != Speak.DONE
-        val size = 68.dp
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            FlowRow(
-                Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                RoundIcon("🔊", PaperColorsUi.hear, size = size, enabled = active) { speakThen(model(), true) }
-                RoundIcon("🐢", Color(0xFFC8E6C9), size = size, enabled = active) {
-                    speakThen(listOf(word.syllables to true, word.text to true), true)
-                }
-                if (sound != null) {
-                    RoundIcon("👄", Color(0xFFFFCDD2), size = size, enabled = active) {
-                        speakThen(listOf(sound.tip to false, sound.modelSound to true), true)
-                    }
-                }
-                RoundIcon("🎤", Color(0xFFFFE0B2), size = size, enabled = active) {
-                    micBroken = false
-                    withMic(onDenied = { speakThen(emptyList(), false) }) { speakThen(emptyList(), true) }
-                }
-                if (showParrot && p.useMic) {
-                    RoundIcon("🦜", Color(0xFFB2EBF2), size = size, enabled = active) {
-                        withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
-                    }
+        if (wide) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) { card() }
+                Column(
+                    Modifier.width(ContinueReserve).fillMaxHeight().padding(bottom = ContinueSize + 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) { icons() }
+            }
+        } else {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                card()
+                Spacer(Modifier.height(10.dp))
+                // The continue button is pinned bottom-right like on every step, so this row leaves
+                // room for it; the buttons wrap onto a second line if they don't fit.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    FlowRow(
+                        Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) { icons() }
+                    Spacer(Modifier.width(ContinueReserve))
                 }
             }
-            Spacer(Modifier.width(ContinueReserve))
         }
     }
     // Always there: carry on (or skip). With no microphone it becomes a big "I said it!" button.
