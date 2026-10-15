@@ -17,6 +17,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -212,7 +213,7 @@ fun IslandMap(
             // A soft wash so the scenery sits back and the raised stop button wins.
             Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash, Offset(-3000f, -3000f), Size(size.width + 6000f, size.height + 6000f)) }
 
-            // Tapping anywhere near a land says something helpful.
+            // Tapping a land: an open one opens, a misty one shows the way.
             Land.entries.forEach { land ->
                 val r = unit * 0.13f
                 Box(
@@ -221,6 +222,22 @@ fun IslandMap(
                         .size(r * 2)
                         .clip(CircleShape)
                         .clickable { onElsewhere(land) },
+                )
+            }
+            // Open lands wear a picture label (its emoji on a paper chip), which appears as the
+            // mist clears. Tapping the label opens the land too.
+            val label = (unit.value * 0.06f).coerceIn(22f, 34f)
+            Land.entries.filter { reached(it) }.forEach { land ->
+                val show = if (land == newLand) clearing.value else 1f
+                Text(
+                    land.emoji,
+                    fontSize = label.sp,
+                    modifier = Modifier
+                        .offset(x = w * land.mapX - (label * 0.9f).dp, y = h * (land.mapY - 0.15f).coerceAtLeast(0.01f))
+                        .graphicsLayer { alpha = show }
+                        .paperCard(PaperStyle.chip, 999.dp)
+                        .clickable(remember { MutableInteractionSource() }, indication = null) { onElsewhere(land) }
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
                 )
             }
         }
@@ -273,7 +290,10 @@ fun IslandMap(
                             scaleX = pulse
                             scaleY = pulse
                         }
-                        .border(6.dp, PaperColors.tomato, CircleShape),
+                        .border(6.dp, PaperColors.tomato, CircleShape)
+                        // The whole marker, ring and all, starts the adventure (not just the arrow).
+                        .clip(CircleShape)
+                        .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onStop),
                 )
                 PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, onClick = onStop) {
                     ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))

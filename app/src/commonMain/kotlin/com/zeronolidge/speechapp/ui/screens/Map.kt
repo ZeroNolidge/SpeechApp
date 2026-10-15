@@ -145,7 +145,7 @@ fun MapScreen(nav: Nav) {
     val startChapter = {
         app.speaker.say("${land.title}! Let's go!")
         p.markUnfoldSeen()
-        nav.go(Screen.Chapter)
+        nav.go(Screen.Chapter())
     }
     // The island keeps its shape and fits the screen; the sea fills any space around it.
     // The corner buttons sit on top, in the same spots as on every screen.
@@ -178,8 +178,13 @@ fun MapScreen(nav: Nav) {
             onStop = startChapter,
             onElsewhere = { l ->
                 when {
-                    l == land -> app.speaker.say("Let's go! $hintLine")
-                    l in Trail.reached(p.chapter) -> app.speaker.say("We've been there! The next adventure is where the hand is pointing.")
+                    // The next stop's area: tapping anywhere on it starts the adventure.
+                    l == land -> startChapter()
+                    // An area already reached: open it for a new story there.
+                    l in Trail.reached(p.chapter) -> {
+                        app.speaker.say("${l.title}! Let's play there again!")
+                        nav.go(Screen.Chapter(l))
+                    }
                     else -> {
                         // A misty place: it wiggles, Rory pops up, and sparkles show the way.
                         hintFrom = l

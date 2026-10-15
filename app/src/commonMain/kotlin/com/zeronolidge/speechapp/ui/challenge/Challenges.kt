@@ -68,10 +68,12 @@ import com.zeronolidge.speechapp.ui.components.PaperArrowButton
 import com.zeronolidge.speechapp.ui.components.Misses
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.heightIn
 import com.zeronolidge.speechapp.ui.components.LocalAnswersStacked
 import com.zeronolidge.speechapp.ui.components.TryAgainHeight
 import com.zeronolidge.speechapp.ui.components.TryAgainSlot
+import com.zeronolidge.speechapp.ui.components.countAloud
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.PaperChip
@@ -163,7 +165,8 @@ fun ChallengeView(
     val miss: () -> Unit = { misses++ }
     val done: (Boolean) -> Unit = { revealed -> onDone(misses == 0 && !revealed, revealed) }
     val area = areaOf(challenge)
-    Box(modifier) {
+    // A fresh start for every puzzle: no "Try again!", Rory hint, glow or faded cards carry over.
+    Box(modifier) { key(challenge) {
         when (challenge) {
             is Challenge.Say -> SpeakMoment(
                 challenge.word, challenge.sound, Modifier.fillMaxSize(), intro = intro,
@@ -180,7 +183,7 @@ fun ChallengeView(
             is Challenge.Robot -> RobotView(challenge, area, powers.map, miss, done)
             is Challenge.Coins -> CoinsView(challenge, area, miss, done)
         }
-    }
+    } }
 }
 
 /**
@@ -198,7 +201,7 @@ private fun QuestionLayout(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth
         val h = maxHeight
-        if (allowSide && w > 700.dp && w > h * 1.2f) {
+        if (allowSide && w > 700.dp) {
             // Three cards stacked, plus the "Try again!" slot, must fit the height.
             val card = minOf(w / 6f, (h - TryAgainHeight - 60.dp) / 3.2f).coerceIn(64.dp, 112.dp)
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -302,6 +305,7 @@ private fun CountView(c: Challenge.Count, area: String, wand: Int, miss: () -> U
                 c.round.choice.options, c.round.choice.answer, area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done, describe = { Numbers.word(it) }, onMiss = miss, wandTick = wand,
+                hint = "Count with me: ${countAloud(c.round.count)}!",
             ) { NumberText(it, card) }
         },
     )
@@ -334,6 +338,11 @@ private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Uni
                 r.choice.options, r.choice.answer, area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done, describe = { Numbers.word(it) }, onMiss = miss, wandTick = wand,
+                hint = when {
+                    r.plus -> "Count them all with me: ${countAloud(r.answer)}!"
+                    r.answer == 0 -> "Take them all away. None are left!"
+                    else -> "Count the ones that are left: ${countAloud(r.answer)}!"
+                },
             ) { NumberText(it, card) }
         },
     )
@@ -365,7 +374,7 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
     val moreLine = "${Numbers.word(maxOf(r.left, r.right))} is more than ${Numbers.word(minOf(r.left, r.right))}."
     var revealed by remember(c) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        TryAgainSlot(misses.tryAgain && !solved)
+        TryAgainSlot(if (solved) 0 else misses.stage)
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
                 val right = isLeft == r.moreIsLeft
@@ -374,7 +383,7 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
                 PaperButton(
                     when {
                         solved && right && !revealed -> Kid.good
-                        revealed && right -> Kid.highlight
+                        (revealed || (misses.glow && !solved)) && right -> Kid.highlight
                         grey -> Color(0xFFDCDCDC)
                         else -> PaperColorsUi.choice
                     },
@@ -392,14 +401,19 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
                         } else {
                             if (isLeft) wiggleLeft++ else wiggleRight++
                             miss()
-                            if (misses.add() == 1) {
-                                app.speaker.say("Try again!")
-                            } else {
-                                // Second miss: grey out this side, light up the other, move on.
-                                solved = true
-                                revealed = true
-                                faded = setOf(!r.moreIsLeft)
-                                app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = { done(true) })
+                            when (misses.add()) {
+                                1 -> app.speaker.say("Try again!")
+                                // Second miss: Rory counts each side out loud while the right side glows.
+                                2 -> app.speaker.say(
+                                    "Count with me! This side: ${countAloud(r.left)}. That side: ${countAloud(r.right)}. Which side has more? Tap the shining one!",
+                                )
+                                // Third miss: grey out this side, show the other, move on.
+                                else -> {
+                                    solved = true
+                                    revealed = true
+                                    faded = setOf(!r.moreIsLeft)
+                                    app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = { done(true) })
+                                }
                             }
                         }
                     },
@@ -440,6 +454,7 @@ private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () ->
                 onSolved = done,
                 describe = { l -> if (mode == LetterMode.FIRST_SOUND) "${l.upper}, ${l.sound}" else "${l.upper}" },
                 onMiss = miss, wandTick = wand,
+                hint = "Listen: ${t.sound}, ${t.sound}, ${t.word.text}! ${t.upper} says ${t.sound}.",
             ) { l ->
                 Text(
                     when (mode) {
@@ -517,6 +532,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
                         c.round.choice.options, c.round.choice.answer, area, c,
                         cardModifier = Modifier.size(card),
                         onSolved = done, describe = { it.text }, onMiss = miss, wandTick = wand,
+                        hint = "Listen: ${Reading.sounds(word).joinToString("... ")}... $word!",
                     ) { w -> Text(w.emoji, fontSize = (card.value * 0.55f).sp) }
                 } else {
                     Text("Tap 🐢 to blend!", fontSize = 24.sp, color = Kid.ink.copy(alpha = 0.6f))
@@ -538,6 +554,7 @@ private fun WhichWordView(c: Challenge.WhichWord, area: String, wand: Int, miss:
                 c.round.choice.options, c.round.choice.answer, area, c,
                 Modifier.fillMaxWidth(), Modifier.width(card * 1.3f).height(card * 0.8f),
                 onSolved = done, describe = { it.text }, onMiss = miss, wandTick = wand,
+                hint = c.round.word.text.let { w -> "Listen: ${Reading.sounds(w).joinToString("... ")}... $w! It starts with ${Reading.sounds(w).firstOrNull() ?: w}." },
             ) { w -> Text(w.text, fontSize = (card.value * 0.38f).sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink) }
         },
     )
@@ -572,6 +589,9 @@ private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () 
                 r.choice.options, r.choice.answer, area, c,
                 Modifier.fillMaxWidth(), Modifier.size(card),
                 onSolved = done, onMiss = miss, wandTick = wand,
+                hint = r.shown.map { Things.nameOf(it) }.takeIf { names -> "things" !in names }
+                    ?.let { names -> "Say it with me: ${names.joinToString(", ")}... What comes next?" }
+                    ?: "Look at the pattern again. It goes round and round. What comes next?",
             ) { Text(it, fontSize = (card.value * 0.5f).sp) }
         },
     )
@@ -587,6 +607,7 @@ private fun OddOneView(c: Challenge.OddOne, area: String, wand: Int, miss: () ->
             r.items.indices.toList(), r.items.indexOf(r.odd), area, c,
             Modifier.fillMaxWidth(), Modifier.size(card),
             onSolved = done, onMiss = miss, wandTick = wand,
+            hint = if (r.items.distinct().size == 2) "Three are the same. Find the one that looks different!" else "Three of them go together. Which one doesn't belong?",
         ) { i -> Text(r.items[i], fontSize = (card.value * 0.55f).sp) }
     }
 }
@@ -647,12 +668,17 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
 
     /**
      * The same gentle pattern as every other question: after the 1st failed run "try again"
-     * (said and shown), after the 2nd the robot is shown the way and the story moves on.
+     * (said and shown), after the 2nd Rory says the first good move while it glows, after the
+     * 3rd the robot is shown the way and the story moves on.
      */
     fun afterFailure() {
         reset()
         if (failures == 1) {
             app.speaker.say("Try again! Let's fix the plan.")
+        } else if (failures == 2) {
+            program.clear()
+            hint = RobotSim.solve(level)?.firstOrNull()
+            app.speaker.say(hint?.let { "Here's a clue: start with ${it.spoken}! It's shining." } ?: "Let's try again!")
         } else {
             // Show the way: fill in a working plan and let the robot go.
             program.clear()
@@ -734,7 +760,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
             Modifier.weight(1.1f).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            TryAgainSlot(failures == 1 && !running && !won, Modifier.fillMaxWidth())
+            TryAgainSlot(if (running || won || shownWay) 0 else failures.coerceAtMost(2), Modifier.fillMaxWidth())
             ProgramStrip(program, runningStep, Modifier.weight(1f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 palette.forEach { cmd ->
@@ -917,6 +943,7 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                     onSolved = done,
                     describe = { "${Numbers.word(it)} ${if (it == 1) "coin" else "coins"}" },
                     onMiss = miss,
+                    hint = "We need ${Numbers.word(r.price)}. Count the coins with me: ${countAloud(r.price)}!",
                 ) { n -> CoinPile(n, card * 0.22f) }
                 CoinMode.PAY -> {
                     var paid by remember(c) { mutableIntStateOf(0) }

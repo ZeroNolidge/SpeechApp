@@ -120,7 +120,7 @@ private fun Screens() {
 private fun ShowScreen(s: Screen, nav: Nav) {
     when (s) {
         Screen.Map -> MapScreen(nav)
-        Screen.Chapter -> ChapterScreen(nav)
+        is Screen.Chapter -> ChapterScreen(nav, s.visit)
         Screen.Closet -> ClosetScreen(nav)
         Screen.Stickers -> StickerBookScreen(nav)
         Screen.Gate -> ParentGateScreen(nav)

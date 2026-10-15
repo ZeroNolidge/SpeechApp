@@ -440,3 +440,24 @@ class BackupTest {
         assertEquals("hello world", Base64Lite.decode("aGVsbG8gd29ybGQ=")!!.decodeToString())
     }
 }
+
+class TrailOrderTest {
+    @Test
+    fun adventureReachesEveryLandInOrder() {
+        // Two chapters in the forest, then Number Meadow, then the rest, one land at a time.
+        assertEquals(Land.FOREST, Trail.landOf(0))
+        assertEquals(Land.FOREST, Trail.landOf(1))
+        assertEquals(Land.MEADOW, Trail.landOf(2))
+        assertFalse(Land.MEADOW in Trail.reached(1))
+        assertTrue(Land.MEADOW in Trail.reached(2))
+        assertTrue(Trail.opensLand(2))
+        var seen = listOf<Land>()
+        for (c in 0 until Trail.size) {
+            val l = Trail.landOf(c)
+            if (seen.lastOrNull() != l) seen = seen + l
+            // Every land on the way is reached (open) when its chapter comes up.
+            assertTrue(l in Trail.reached(c))
+        }
+        assertEquals(Trail.lands, seen)
+    }
+}

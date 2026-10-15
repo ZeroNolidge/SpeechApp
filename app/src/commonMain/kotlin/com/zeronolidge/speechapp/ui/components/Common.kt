@@ -1,6 +1,10 @@
 package com.zeronolidge.speechapp.ui.components
 
 import com.zeronolidge.speechapp.ui.art.loop
+import com.zeronolidge.speechapp.ui.art.Critter
+import com.zeronolidge.speechapp.ui.art.Mood
+import com.zeronolidge.speechapp.logic.Species
+import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.MaxMotionMs
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -216,8 +220,10 @@ fun AnswerCard(
 /**
  * How every question handles a wrong tap, the same everywhere:
  *  1st miss: the card wiggles, and "Try again!" is said and shown.
- *  2nd miss: the wrong cards grey out, the right one lights up and is said, then the game moves
- *  on by itself. A wrong answer is never cheered.
+ *  2nd miss: Rory pops up and says a hint out loud (e.g. "Count with me: one, two, three"),
+ *  while the right answer glows.
+ *  3rd miss: the wrong cards grey out, the right one is shown and said, and the game moves on
+ *  by itself. A wrong answer is never cheered.
  */
 class Misses {
     var count by mutableIntStateOf(0)
@@ -225,34 +231,52 @@ class Misses {
 
     fun add() = ++count
 
-    /** Show the written "Try again!" after the first miss. */
-    val tryAgain get() = count == 1
+    /** What the slot above the answers shows: 0 nothing, 1 "Try again!", 2 Rory's hint. */
+    val stage get() = count.coerceAtMost(2)
 
-    val showAnswer get() = count >= 2
+    /** The right answer glows while Rory gives the hint. */
+    val glow get() = count == 2
+
+    val showAnswer get() = count >= 3
 }
 
-/** Height kept free above the answers for the written "Try again!", so nothing jumps. */
-val TryAgainHeight = 46.dp
+/** Height kept free above the answers for "Try again!" or Rory's hint, so nothing jumps. */
+val TryAgainHeight = 58.dp
 
-/** The written "Try again!" after a first miss, in its own reserved slot (never over a card). */
+/**
+ * The slot above the answers (never over a card): the written "Try again!" after a first miss
+ * ([stage] 1), or Rory with a listening ear while he says the hint ([stage] 2). Empty for a new
+ * puzzle.
+ */
 @Composable
-fun TryAgainSlot(visible: Boolean, modifier: Modifier = Modifier) {
+fun TryAgainSlot(stage: Int, modifier: Modifier = Modifier) {
     Box(modifier.height(TryAgainHeight), contentAlignment = Alignment.Center) {
-        if (visible) PaperChip("🙂 Try again!", Modifier.popIn("again"), fontSize = 22.sp, maxLines = 1)
+        when (stage) {
+            1 -> PaperChip("🙂 Try again!", Modifier.popIn("again"), fontSize = 22.sp, maxLines = 1)
+            2 -> Row(Modifier.popIn("rory-hint"), verticalAlignment = Alignment.CenterVertically) {
+                Critter(Species.ROBOT, Modifier.height(TryAgainHeight), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
+                Spacer(Modifier.width(6.dp))
+                PaperChip("👂 Listen!", fontSize = 22.sp, maxLines = 1)
+            }
+            else -> {}
+        }
     }
 }
+
+/** Counting out loud: "one, two, three". */
+fun countAloud(n: Int): String = (1..n).joinToString(", ") { Numbers.word(it) }
 
 /** Set by a wide two-column layout: answers go in a column instead of a row. */
 val LocalAnswersStacked = staticCompositionLocalOf { false }
 
-/** What is said when the right answer is shown after the second miss. */
+/** What is said when the right answer is shown after the third miss. */
 fun revealLine(answerWords: String?) =
     "It's this one" + (answerWords?.let { ": $it" } ?: "") + ". Good trying! Let's keep going."
 
 /**
  * Shows answer options and handles taps the same way everywhere (see [Misses]). Only the right
  * answer is cheered and earns a star. [onSolved] gets `revealed = true` when the answer was shown
- * after two misses, so the story doesn't cheer.
+ * after three misses, so the story doesn't cheer.
  */
 @Composable
 fun <T> AnswerRow(
@@ -269,6 +293,8 @@ fun <T> AnswerRow(
     onMiss: () -> Unit = {},
     /** Each time this goes up, the magic wand makes one wrong answer vanish. */
     wandTick: Int = 0,
+    /** What Rory says on the second miss, e.g. "Count with me: one, two, three!". */
+    hint: String? = null,
     content: @Composable (T) -> Unit,
 ) {
     val app = LocalApp.current
@@ -299,7 +325,7 @@ fun <T> AnswerRow(
                 modifier = cardModifier,
                 faded = opt in faded,
                 correct = solved && !revealed && opt == answer,
-                glow = revealed && opt == answer,
+                glow = (revealed || (misses.glow && !solved)) && opt == answer,
                 wiggle = wiggles[opt] ?: 0,
                 onClick = {
                     // A tap is checked against the right answer before anything is cheered.
@@ -311,14 +337,19 @@ fun <T> AnswerRow(
                         } else {
                             wiggles = wiggles + (opt to (wiggles[opt] ?: 0) + 1)
                             onMiss()
-                            if (misses.add() == 1) {
-                                app.speaker.say(said + "Try again!")
-                            } else {
-                                // Second miss: grey out the wrong ones, light up the right one, move on.
+                            when (misses.add()) {
+                                1 -> app.speaker.say(said + "Try again!")
+                                // Second miss: Rory says a hint while the right one glows.
+                                2 -> app.speaker.say(
+                                    said + (hint ?: "Here's a clue. The right one is shining" + (answerWords?.let { ": $it" } ?: "") + ".") + " Tap the shining one!",
+                                )
+                                // Third miss: grey out the wrong ones, show the right one, move on.
+                                else -> {
                                 solved = true
                                 revealed = true
                                 faded = options.filter { it != answer }.toSet()
                                 app.speaker.say(revealLine(answerWords), onDone = advance)
+                                }
                             }
                         }
                     }
@@ -327,7 +358,7 @@ fun <T> AnswerRow(
         }
     }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        TryAgainSlot(misses.tryAgain && !solved)
+        TryAgainSlot(if (solved) 0 else misses.stage)
         if (LocalAnswersStacked.current) {
             Column(verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) { cards() }
         } else {

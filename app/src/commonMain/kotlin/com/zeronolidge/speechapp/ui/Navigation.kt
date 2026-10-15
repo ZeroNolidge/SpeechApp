@@ -1,13 +1,17 @@
 package com.zeronolidge.speechapp.ui
 
 import com.zeronolidge.speechapp.data.SpeechSound
+import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.ui.screens.PracticeKind
 
 /** Every place the app can go. The app keeps a simple back stack of these; 🏠 always returns to the map. */
 sealed interface Screen {
     data object Map : Screen
-    /** The next chapter on the trail. */
-    data object Chapter : Screen
+    /**
+     * A chapter: the next one on the trail, or (with [visit]) a fresh story in an area the trail
+     * has already reached, which doesn't move the trail on.
+     */
+    data class Chapter(val visit: Land? = null) : Screen
     data object Closet : Screen
     data object Stickers : Screen
     /** The grown-up check in front of the grown-ups page. */

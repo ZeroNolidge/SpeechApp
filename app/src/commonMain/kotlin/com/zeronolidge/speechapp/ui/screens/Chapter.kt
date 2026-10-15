@@ -42,6 +42,7 @@ import com.zeronolidge.speechapp.logic.Challenge
 import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.Feeling
 import com.zeronolidge.speechapp.logic.Friend
+import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Patterns
 import com.zeronolidge.speechapp.logic.Power
 import com.zeronolidge.speechapp.logic.Quest
@@ -102,11 +103,13 @@ private sealed interface Phase {
  * paper piece for the buddy and the stickers earned on the way.
  */
 @Composable
-fun ChapterScreen(nav: Nav) {
+fun ChapterScreen(nav: Nav, visit: Land? = null) {
     val app = LocalApp.current
     val p = app.progress
     val chapter = remember { p.chapter }
-    val land = remember { Trail.landOf(chapter) }
+    val land = remember { visit ?: Trail.landOf(chapter) }
+    // Visiting an area already reached is a bonus story: it doesn't move the trail on.
+    val bonus = remember { land != Trail.landOf(chapter) }
     val quest = remember { StoryGen.make(land, p.storyParams(), Random(Random.nextLong()), mixed = false) }
     var phase by remember { mutableStateOf<Phase>(Phase.Intro) }
     var cheer by remember { mutableStateOf(false) }
@@ -163,7 +166,7 @@ fun ChapterScreen(nav: Nav) {
             }
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
-                    if (p.chapter == chapter) p.finishChapter()
+                    if (!bonus && p.chapter == chapter) p.finishChapter()
                 }
                 StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = ::next)
             }

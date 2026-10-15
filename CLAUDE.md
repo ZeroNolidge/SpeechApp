@@ -43,9 +43,12 @@ These are the owner's rules for all work:
 - **Wrong answers, one pattern everywhere** (`Misses`, `AnswerRow`, `TryAgainSlot` in
   `Common.kt`; `MoreView` and `RobotView` follow it too): every tap is checked against the answer
   first. 1st miss: wiggle + "Try again!" spoken and written (in a reserved slot above the
-  answers). 2nd miss: wrong tiles grey out, the right one lights up and is spoken, then it moves on
-  by itself. A shown answer reports `revealed = true` (`ChallengeView.onDone(firstTry, revealed)`)
-  so the story doesn't cheer and no star is given. Never celebrate a wrong answer.
+  answers). 2nd miss: Rory pops up in that slot and says a game-specific hint out loud (`hint`:
+  "Count with me: one, two, three", "Listen: buh, buh, ball") while the right answer glows. 3rd
+  miss: wrong tiles grey out, the right one is shown and spoken, then it moves on by itself. A
+  shown answer reports `revealed = true` (`ChallengeView.onDone(firstTry, revealed)`) so the story
+  doesn't cheer and no star is given. Never celebrate a wrong answer. Every puzzle starts clean
+  (`key(challenge)` in `ChallengeView`, `key(roundNo)` in practice): no leftover bubble or glow.
 - **Growth without numbers:** no levels, XP or star counts. Gems are for words he *tried* to say
   (not right answers); they fill the 🎒 backpack (`Progress.addGem`), and a full backpack gives a
   paper piece. Practice shows ~3 games that rotate daily (🔄 for others).
@@ -56,7 +59,7 @@ These are the owner's rules for all work:
   a row of fixed-size things: give it its own space first and let the rest take `weight`. Narrow
   screens (< 520dp) show 2 choices; story/challenge sit side by side over 700dp or in landscape,
   and practice games (`QuestionLayout`) put the picture left and answers in a column right over
-  700dp. Choice tiles put the word beside the picture when the tile is short or wide. The chapter
+  700dp (any way up, so iPad portrait too). Choice tiles put the word beside the picture when the tile is short or wide. The chapter
   header says "Adventure" and drops the footprints when there's no room; labels never cut off.
   In `BoxWithConstraints`, read `maxWidth`/`maxHeight` into vals at the top (nested Row/Column
   can't use them implicitly; CI fails).
@@ -121,7 +124,9 @@ These are the owner's rules for all work:
   (`Progress.exportCode` / `importCode`, format in `logic/Backup.kt`) so a cleared browser or a new
   tablet doesn't start over.
 - **Map:** tapping a misty land wiggles it, Rory pops up ("Visit X first!") and sparkles run to the
-  next stop. A big "▶ Adventure!" button starts the next chapter. The island keeps a 1.75:1 shape.
+  next stop. Open lands have no mist and wear a picture label (their emoji on a chip). Tapping the
+  next stop's land (or its marker, ring included) starts the next chapter; tapping a land already
+  passed opens a bonus story there (`Screen.Chapter(visit)`), which doesn't move the trail on. A big "▶ Adventure!" button starts the next chapter. The island keeps a 1.75:1 shape.
 
 ## Work in progress / agreed next steps
 
