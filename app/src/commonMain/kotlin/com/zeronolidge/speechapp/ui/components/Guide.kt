@@ -221,8 +221,10 @@ fun ContinueAction(
         }
         return
     }
+    // Read here, during composition, so the button registers the moment the delay is over.
+    val visible = shown && enabled
     SideEffect {
-        if (shown && enabled) {
+        if (visible) {
             if (slot.owner !== token) slot.touched = false
             slot.owner = token
             slot.onClick = stable
