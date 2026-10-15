@@ -229,7 +229,8 @@ object Trail {
 
     /**
      * Where stop [stop] sits on the map (0 to 1). The first stop in a land sits just in front of
-     * its landmark; the second sits halfway along the path to the next land.
+     * its landmark; the second sits a third of the way along the path to the next land, so it
+     * still clearly belongs to its own land (not inside the next land's mist).
      */
     fun position(stop: Int): Pair<Float, Float> {
         val i = lands.indexOf(landAt(stop))
@@ -238,6 +239,7 @@ object Trail {
         if (stop % STOPS_PER_LAND == 0) return first
         val next = lands.getOrNull(i + 1) ?: return lands[i].mapX + 0.04f to lands[i].mapY + 0.26f
         val n = front(next)
-        return (first.first + n.first) / 2 to (first.second + n.second) / 2
+        val k = 0.35f
+        return first.first + (n.first - first.first) * k to first.second + (n.second - first.second) * k
     }
 }

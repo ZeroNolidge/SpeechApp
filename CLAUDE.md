@@ -125,7 +125,10 @@ These are the owner's rules for all work:
   (`Progress.exportCode` / `importCode`, format in `logic/Backup.kt`) so a cleared browser or a new
   tablet doesn't start over.
 - **Map:** every land wears a label chip above its landmark: picture + one-word name
-  (`Land.shortName`), bright when open, paler under mist. Open lands are never misty. Tapping a
+  (`Land.shortName`), bright when open, paler under mist (the castle's sits to its left, clear of
+  the 🔊). Open lands are never misty; on a land's last stop the next land peeks through half-mist.
+  A land's second stop sits a third of the way to the next land. The map hand points at the stop
+  from the side away from the buddy (👉/👈), never over a label. Tapping a
   misty land wiggles it and Rory walks along a sparkly trail from there to the next stop ("Follow
   me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Tapping the
   next stop's land (or its marker, ring included) starts the next chapter; tapping a land already

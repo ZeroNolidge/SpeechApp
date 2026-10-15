@@ -90,8 +90,11 @@ fun IslandMap(
     modifier: Modifier = Modifier,
     /** Drawn next to the current stop, like a "you are here" marker. */
     hero: @Composable (Modifier) -> Unit = {},
-    /** Drawn above the current stop, e.g. a pointing hand. */
-    pointer: @Composable (Modifier, Dp) -> Unit = { _, _ -> },
+    /**
+     * Drawn beside the current stop, e.g. a pointing hand; `fromLeft` says which side it sits on
+     * (the side away from the buddy), so it never covers a label above the stop.
+     */
+    pointer: @Composable (Modifier, Dp, Boolean) -> Unit = { _, _, _ -> },
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -105,6 +108,8 @@ fun IslandMap(
     val lap = chapter / Trail.size
     // A land the trail has just reached: its mist clears as the new stop unfolds.
     val newLand = if (unfoldNew && Trail.opensLand(chapter)) Trail.landOf(chapter) else null
+    // On a land's last stop, the next land starts to show through its mist.
+    val peekLand = if (!Trail.opensLand(chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(Trail.landOf(chapter)) + 1) else null
     val clearing = remember(newLand) { Animatable(if (newLand != null && !still) 0f else 1f) }
     LaunchedEffect(newLand) { if (newLand != null) clearing.animateTo(1f, tween(MaxMotionMs)) }
 
@@ -191,6 +196,8 @@ fun IslandMap(
             Land.entries.forEach { land ->
                 val strength = when {
                     land == newLand -> 1f - clearing.value
+                    // The land the trail reaches next starts to peek through its mist.
+                    land == peekLand -> 0.5f
                     !reached(land) -> 1f
                     else -> 0f
                 }
@@ -238,11 +245,12 @@ fun IslandMap(
                 val fade = when {
                     land == newLand -> 0.65f + 0.35f * clearing.value
                     open -> 1f
+                    land == peekLand -> 0.85f
                     else -> 0.65f
                 }
                 Box(
                     Modifier
-                        .centeredAt(w * land.mapX, h * (land.mapY - 0.155f).coerceAtLeast(0.005f), w)
+                        .centeredAt(w * labelX(land), h * labelY(land), w)
                         .graphicsLayer { alpha = fade }
                         .paperCard(PaperStyle.chip, 999.dp)
                         .clickable(remember { MutableInteractionSource() }, indication = null) { onElsewhere(land) }
@@ -352,15 +360,24 @@ fun IslandMap(
             val hand = node * 0.55f
             pointer(
                 Modifier
-                    .offset(x = w * cx - hand / 2, y = h * cy - node / 2 - hand * 1.3f)
+                    .offset(
+                        x = if (heroOnRight) w * cx - node / 2 - hand * 1.35f else w * cx + node / 2 + hand * 0.1f,
+                        y = h * cy - hand * 0.65f,
+                    )
                     .zIndex(4f),
                 hand,
+                heroOnRight,
             )
         }
     }
 }
 
 // ---------------------------------------------------------------- helpers
+
+/** Where a land's label sits: above its landmark, except the castle (top right, under the 🔊
+ * button), whose label sits to its left. */
+private fun labelX(land: Land) = if (land == Land.CLOUDS) land.mapX - 0.17f else land.mapX
+private fun labelY(land: Land) = if (land == Land.CLOUDS) land.mapY - 0.06f else (land.mapY - 0.155f).coerceAtLeast(0.005f)
 
 /** Places this thing with its top centred on ([x], [y]), kept inside [maxX] (the map's width). */
 private fun Modifier.centeredAt(x: Dp, y: Dp, maxX: Dp) = layout { m, c ->

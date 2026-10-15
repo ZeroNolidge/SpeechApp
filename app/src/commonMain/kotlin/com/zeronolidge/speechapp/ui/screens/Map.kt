@@ -198,7 +198,7 @@ fun MapScreen(nav: Nav) {
             hintKey = hintKey,
             modifier = Modifier.size(mapW, mapH).align(Alignment.Center).offset(y = (top - bottom) / 2),
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
-            pointer = { m, size -> if (showHand) PointingHand(m, size = size, pointDown = true) },
+            pointer = { m, size, fromLeft -> if (showHand) PointingHand(m, size = size, pointRight = fromLeft, pointLeft = !fromLeft) },
         )
         MapCorners(nav, startChapter)
     }

@@ -83,19 +83,21 @@ fun GoButton(
 
 /** A hand that bobs up and down, pointing at whatever is above it. */
 @Composable
-fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boolean = false, pointRight: Boolean = false) {
+fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boolean = false, pointRight: Boolean = false, pointLeft: Boolean = false) {
     val t = rememberInfiniteTransition(label = "hand")
     val bob by t.loop(0f, 1f, 450, label = "bob")
     val shift = size * 0.25f * bob
     Text(
         when {
             pointRight -> "👉"
+            pointLeft -> "👈"
             pointDown -> "👇"
             else -> "👆"
         },
         fontSize = size.value.sp,
         modifier = when {
             pointRight -> modifier.offset(x = shift)
+            pointLeft -> modifier.offset(x = -shift)
             pointDown -> modifier.offset(y = shift)
             else -> modifier.offset(y = -shift)
         },

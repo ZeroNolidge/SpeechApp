@@ -59,9 +59,9 @@ if (started) {
             await page.evaluate(() => {
                 localStorage.setItem('talkandlearn.micAsked', 'true');
                 localStorage.setItem('talkandlearn.hero', 'KID');
-                // Chapter 3: the forest is done and Number Meadow is open, with its label.
-                localStorage.setItem('talkandlearn.chapter', '2');
-                localStorage.setItem('talkandlearn.unfoldedSeen', '2');
+                // Chapter 2: the last forest stop, with Number Meadow peeking through its mist.
+                localStorage.setItem('talkandlearn.chapter', '1');
+                localStorage.setItem('talkandlearn.unfoldedSeen', '1');
             });
             await page.reload({ waitUntil: 'load' });
             await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
