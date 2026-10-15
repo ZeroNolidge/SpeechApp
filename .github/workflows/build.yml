@@ -93,7 +93,7 @@ jobs:
           npm init -y >/dev/null
           npm install --silent --no-audit --no-fund puppeteer-core@23
           sleep 1
-          node smoke_web.mjs http://localhost:8123/
+          node smoke_web.mjs http://localhost:8123/ --shots
       - name: Stamp the service worker with this build
         run: sed -i "s/BUILD_ID/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" app/build/dist/wasmJs/productionExecutable/sw.js
       - uses: actions/upload-pages-artifact@v3
