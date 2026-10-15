@@ -114,7 +114,7 @@ fun PracticeMenu(nav: Nav) {
                     Box(Modifier.weight(1f).popIn(start to i, i * 60), contentAlignment = Alignment.Center) {
                         ChoiceTile(
                             t.emoji, t.label, t.color,
-                            Modifier.fillMaxWidth().widthIn(max = 240.dp).heightIn(min = 120.dp, max = 260.dp).fillMaxHeight(),
+                            Modifier.fillMaxWidth().widthIn(max = 240.dp).heightIn(min = 120.dp, max = 340.dp).fillMaxHeight(),
                             onClick = {
                                 app.speaker.say(t.spoken)
                                 nav.go(t.target)
