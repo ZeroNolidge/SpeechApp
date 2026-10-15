@@ -175,6 +175,10 @@ Kotlin Multiplatform module `app` with three source sets:
   Gradle 8.11.1, compileSdk 36. Release lint is off (it crashes on Kotlin 2.2 with this AGP).
 - CI logs are long. The useful part of a failed Gradle step is usually about 100 lines above the
   end of `get_job_logs` output; the artifact log zip host is blocked from the container.
+- **Seeing the web app without a device:** the CI smoke test (`tools/smoke_web.mjs --shots`) prints
+  small screenshots (first launch, map, story, next step) as `SHOT <name> <base64 jpeg>` lines in
+  the web job log. Fetch the log with `get_job_logs` (return_content, ~400 tail lines; a subagent can
+  decode the saved output into JPEGs) and look at them. GitHub Pages itself is blocked from here.
 - The service worker is network-first, so the PWA updates on the next launch when online.
   Speech can't play until the first tap, hence the start screen.
 - **Signing:** release builds use a permanent key from repo secrets `SIGNING_KEYSTORE`
