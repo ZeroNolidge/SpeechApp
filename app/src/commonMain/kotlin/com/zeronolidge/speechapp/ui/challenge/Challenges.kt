@@ -205,7 +205,9 @@ private fun QuestionLayout(
             // Three cards stacked, plus the "Try again!" slot, must fit the height.
             val card = minOf(w / 6f, (h - TryAgainHeight - 60.dp) / 3.2f).coerceIn(64.dp, 112.dp)
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1.3f).fillMaxHeight(), contentAlignment = Alignment.Center) { question(card) }
+                // The picture side has the room, so its pictures are drawn bigger than the cards.
+                val big = minOf(card * 1.6f, w * 0.5f / 3f, h / 3f).coerceAtLeast(card)
+                Box(Modifier.weight(1.3f).fillMaxHeight(), contentAlignment = Alignment.Center) { question(big) }
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                     CompositionLocalProvider(LocalAnswersStacked provides true) { answers(card) }
                 }
