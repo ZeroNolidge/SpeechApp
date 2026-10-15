@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,6 +131,16 @@ fun MapScreen(nav: Nav) {
     val species = p.hero ?: Species.KID
     var hintFrom by remember { mutableStateOf<Land?>(null) }
     var hintKey by remember { mutableStateOf(0) }
+    // The pointing hand hides as soon as anything is tapped, and comes back after a quiet while.
+    var taps by remember { mutableStateOf(0) }
+    var showHand by remember { mutableStateOf(true) }
+    LaunchedEffect(taps) {
+        if (taps > 0) {
+            showHand = false
+            kotlinx.coroutines.delay(8000)
+            showHand = true
+        }
+    }
     val startChapter = {
         app.speaker.say("${land.title}! Let's go!")
         p.markUnfoldSeen()
@@ -136,7 +148,19 @@ fun MapScreen(nav: Nav) {
     }
     // The island keeps its shape and fits the screen; the sea fills any space around it.
     // The corner buttons sit on top, in the same spots as on every screen.
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF3FA9E0))) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF3FA9E0))
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (e.changes.any { it.pressed && !it.previousPressed }) taps++
+                    }
+                }
+            },
+    ) {
         val top = 60.dp
         val bottom = if (mapNarrow(maxWidth)) 176.dp else 90.dp
         val availH = maxHeight - top - bottom
@@ -167,7 +191,7 @@ fun MapScreen(nav: Nav) {
             hintKey = hintKey,
             modifier = Modifier.size(mapW, mapH).align(Alignment.Center).offset(y = (top - bottom) / 2),
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
-            pointer = { m, size -> PointingHand(m, size = size, pointDown = true) },
+            pointer = { m, size -> if (showHand) PointingHand(m, size = size, pointDown = true) },
         )
         if (hintKey > 0) RoryHint(hintKey, land)
         MapCorners(nav, startChapter)

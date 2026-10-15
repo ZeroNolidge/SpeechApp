@@ -66,6 +66,11 @@ import com.zeronolidge.speechapp.ui.components.AnswerRow
 import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.PaperArrowButton
 import com.zeronolidge.speechapp.ui.components.Misses
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.heightIn
+import com.zeronolidge.speechapp.ui.components.LocalAnswersStacked
+import com.zeronolidge.speechapp.ui.components.TryAgainHeight
+import com.zeronolidge.speechapp.ui.components.TryAgainSlot
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.PaperChip
@@ -131,7 +136,8 @@ class PowerTicks {
 }
 
 /**
- * Shows one challenge. [onDone] gets true if it was solved without any wrong answers.
+ * Shows one challenge. [onDone] gets `firstTry` (solved without any wrong answers) and
+ * `revealed` (the answer was shown after two misses, so nothing should cheer).
  * The prompt is queued after whatever is being said, so story narration comes first.
  */
 @Composable
@@ -141,7 +147,7 @@ fun ChallengeView(
     /** Story narration said just before the challenge's own question. */
     intro: String? = null,
     powers: PowerTicks = remember(challenge) { PowerTicks() },
-    onDone: (firstTry: Boolean) -> Unit,
+    onDone: (firstTry: Boolean, revealed: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
     var misses by remember(challenge) { mutableIntStateOf(0) }
@@ -154,14 +160,14 @@ fun ChallengeView(
         }
     }
     val miss: () -> Unit = { misses++ }
-    val done: () -> Unit = { onDone(misses == 0) }
+    val done: (Boolean) -> Unit = { revealed -> onDone(misses == 0 && !revealed, revealed) }
     val area = areaOf(challenge)
     Box(modifier) {
         when (challenge) {
             is Challenge.Say -> SpeakMoment(
                 challenge.word, challenge.sound, Modifier.fillMaxSize(), intro = intro,
                 afterLine = challenge.doing?.let { "Now we can $it!" },
-            ) { onDone(true) }
+            ) { onDone(true, false) }
             is Challenge.Count -> CountView(challenge, area, powers.wand, miss, done)
             is Challenge.Math -> MathView(challenge, area, powers.wand, miss, done)
             is Challenge.More -> MoreView(challenge, area, powers.wand, miss, done)
@@ -176,22 +182,41 @@ fun ChallengeView(
     }
 }
 
-/** Lays out a question area above a row of answer cards, scaled to fit. */
+/**
+ * Lays out a question area and the answer cards, scaled to fit: the picture above a row of
+ * answers, or on a wide screen (over 700) the picture on the left and the answers in a column on
+ * the right.
+ */
 @Composable
 private fun QuestionLayout(
+    /** Off for answers that only work as a row (the market's coins and jar). */
+    allowSide: Boolean = true,
     question: @Composable (cardSize: Dp) -> Unit,
     answers: @Composable (cardSize: Dp) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Same physical size on every screen: never smaller than a thumb, never blown up on a tablet.
-        val card = minOf(maxWidth / 4.4f, maxHeight / 2.6f).coerceIn(64.dp, 112.dp)
-        Column(
-            Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { question(card) }
-            answers(card)
+        val w = maxWidth
+        val h = maxHeight
+        if (allowSide && w > 700.dp && w > h * 1.2f) {
+            // Three cards stacked, plus the "Try again!" slot, must fit the height.
+            val card = minOf(w / 6f, (h - TryAgainHeight - 60.dp) / 3.2f).coerceIn(64.dp, 112.dp)
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1.3f).fillMaxHeight(), contentAlignment = Alignment.Center) { question(card) }
+                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                    CompositionLocalProvider(LocalAnswersStacked provides true) { answers(card) }
+                }
+            }
+        } else {
+            // Same physical size on every screen: never smaller than a thumb, never blown up on a tablet.
+            val card = minOf(w / 4.4f, h / 2.6f).coerceIn(64.dp, 112.dp)
+            Column(
+                Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { question(card) }
+                answers(card)
+            }
         }
     }
 }
@@ -254,7 +279,7 @@ fun EmojiGroup(
 }
 
 @Composable
-private fun CountView(c: Challenge.Count, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun CountView(c: Challenge.Count, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     var counted by remember(c) { mutableStateOf(listOf<Int>()) }
     QuestionLayout(
@@ -282,7 +307,7 @@ private fun CountView(c: Challenge.Count, area: String, wand: Int, miss: () -> U
 }
 
 @Composable
-private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val r = c.round
     QuestionLayout(
         question = { card ->
@@ -314,7 +339,7 @@ private fun MathView(c: Challenge.Math, area: String, wand: Int, miss: () -> Uni
 }
 
 @Composable
-private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val r = c.round
     val app = LocalApp.current
     var solved by remember(c) { mutableStateOf(false) }
@@ -336,43 +361,51 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
         if (wand > 0 && !solved) faded = setOf(!r.moreIsLeft)
     }
     val moreLine = "${Numbers.word(maxOf(r.left, r.right))} is more than ${Numbers.word(minOf(r.left, r.right))}."
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
-            val right = isLeft == r.moreIsLeft
-            val wiggling = (isLeft && wiggleLeft > 0) || (!isLeft && wiggleRight > 0)
-            PaperButton(
-                when {
-                    solved && right -> Kid.good
-                    !solved && right && misses.showAnswer -> Kid.highlight
-                    else -> PaperColorsUi.choice
-                },
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(bottom = 10.dp)
-                    .rotate(if (wiggling && !right) shake.value else 0f),
-                enabled = !solved && isLeft !in faded,
-                onClick = {
-                    if (right) {
-                        solved = true
-                        app.reward(area, "${Praise.great.random()} $moreLine", onDone = done)
-                    } else {
-                        if (isLeft) wiggleLeft++ else wiggleRight++
-                        miss()
-                        when (misses.add()) {
-                            1 -> app.speaker.say("Try again!")
-                            2 -> app.speaker.say("This side is shining! It has more. Tap it!")
-                            else -> {
+    var revealed by remember(c) { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        TryAgainSlot(misses.tryAgain && !solved)
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            listOf(true to r.left, false to r.right).forEach { (isLeft, n) ->
+                val right = isLeft == r.moreIsLeft
+                val wiggling = (isLeft && wiggleLeft > 0) || (!isLeft && wiggleRight > 0)
+                val grey = isLeft in faded
+                PaperButton(
+                    when {
+                        solved && right && !revealed -> Kid.good
+                        revealed && right -> Kid.highlight
+                        grey -> Color(0xFFDCDCDC)
+                        else -> PaperColorsUi.choice
+                    },
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(bottom = 10.dp)
+                        .alpha(if (grey) 0.45f else 1f)
+                        .rotate(if (wiggling && !right) shake.value else 0f),
+                    enabled = !solved && !grey,
+                    onClick = {
+                        if (right) {
+                            solved = true
+                            app.reward(area, "${Praise.great.random()} $moreLine", onDone = { done(false) })
+                        } else {
+                            if (isLeft) wiggleLeft++ else wiggleRight++
+                            miss()
+                            if (misses.add() == 1) {
+                                app.speaker.say("Try again!")
+                            } else {
+                                // Second miss: grey out this side, light up the other, move on.
                                 solved = true
-                                app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = done)
+                                revealed = true
+                                faded = setOf(!r.moreIsLeft)
+                                app.speaker.say("This side has more. $moreLine Good trying! Let's keep going.", onDone = { done(true) })
                             }
                         }
+                    },
+                ) {
+                    EmojiGroup(r.emoji, n, Modifier.padding(10.dp), size = 40)
+                    if (solved) {
+                        Text("$n", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink, modifier = Modifier.align(Alignment.TopEnd))
                     }
-                },
-            ) {
-                EmojiGroup(r.emoji, n, Modifier.padding(10.dp), size = 40)
-                if (solved) {
-                    Text("$n", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink, modifier = Modifier.align(Alignment.TopEnd))
                 }
             }
         }
@@ -380,7 +413,7 @@ private fun MoreView(c: Challenge.More, area: String, wand: Int, miss: () -> Uni
 }
 
 @Composable
-private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     val t = c.round.target
     val mode = c.round.mode
@@ -422,7 +455,7 @@ private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () ->
 }
 
 @Composable
-private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val word = c.round.word.text
@@ -476,7 +509,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
             }
         },
         answers = { card ->
-            Box(Modifier.height(card + 8.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.heightIn(min = card + 8.dp + TryAgainHeight), contentAlignment = Alignment.Center) {
                 if (blended) {
                     AnswerRow(
                         c.round.choice.options, c.round.choice.answer, area, c,
@@ -492,7 +525,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
 }
 
 @Composable
-private fun WhichWordView(c: Challenge.WhichWord, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun WhichWordView(c: Challenge.WhichWord, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     QuestionLayout(
         question = { card ->
@@ -509,7 +542,7 @@ private fun WhichWordView(c: Challenge.WhichWord, area: String, wand: Int, miss:
 }
 
 @Composable
-private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val r = c.round
     QuestionLayout(
         question = { _ ->
@@ -543,10 +576,10 @@ private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () 
 }
 
 @Composable
-private fun OddOneView(c: Challenge.OddOne, area: String, wand: Int, miss: () -> Unit, done: () -> Unit) {
+private fun OddOneView(c: Challenge.OddOne, area: String, wand: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val r = c.round
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val card = minOf(maxWidth / 5.2f, maxHeight / 1.6f).coerceIn(64.dp, 112.dp)
+        val card = minOf(maxWidth / 5.2f, (maxHeight - TryAgainHeight) / 1.6f).coerceIn(64.dp, 112.dp)
         // Options are positions, so identical pictures are still separate cards.
         AnswerRow(
             r.items.indices.toList(), r.items.indexOf(r.odd), area, c,
@@ -565,7 +598,7 @@ private const val MAX_PROGRAM = 10
  * just like a Cubetto.
  */
 @Composable
-private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -> Unit, done: () -> Unit) {
+private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val level = c.level
@@ -577,6 +610,8 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
     var hint by remember(c) { mutableStateOf<Cmd?>(null) }
     var failures by remember(c) { mutableIntStateOf(0) }
     var autoGo by remember(c) { mutableStateOf(false) }
+    // The plan was shown after two failed runs: the robot still goes, but nobody cheers.
+    var shownWay by remember(c) { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     val running = runningStep >= 0
     val wobble = remember { Animatable(0f) }
@@ -609,25 +644,20 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
     }
 
     /**
-     * The same gentle pattern as every other question: after the 1st failed run "try again",
-     * after the 2nd the next good move lights up, after the 3rd the robot is shown the way.
+     * The same gentle pattern as every other question: after the 1st failed run "try again"
+     * (said and shown), after the 2nd the robot is shown the way and the story moves on.
      */
     fun afterFailure() {
         reset()
-        when (failures) {
-            1 -> app.speaker.say("Let's fix the plan and try again!")
-            2 -> {
-                program.clear()
-                hint = RobotSim.solve(level)?.firstOrNull()
-                app.speaker.say(hint?.let { "Try this one first: ${it.spoken}! It's shining." } ?: "Let's try again!")
-            }
-            else -> {
-                // Show the way: fill in a working plan and let the robot go.
-                program.clear()
-                RobotSim.solve(level)?.let { program.addAll(it.take(MAX_PROGRAM)) }
-                app.speaker.say("Here's a plan that works. Watch the robot go!")
-                autoGo = true
-            }
+        if (failures == 1) {
+            app.speaker.say("Try again! Let's fix the plan.")
+        } else {
+            // Show the way: fill in a working plan and let the robot go.
+            program.clear()
+            RobotSim.solve(level)?.let { program.addAll(it.take(MAX_PROGRAM)) }
+            shownWay = true
+            app.speaker.say("Here's a plan that works. Watch the robot go!")
+            autoGo = true
         }
     }
 
@@ -670,7 +700,11 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
             runningStep = -1
             if (state.pos == level.goal) {
                 won = true
-                app.reward(area, "Hooray! The robot made it! You did it!", onDone = done)
+                if (shownWay) {
+                    app.speaker.say("The robot made it. Good trying! Let's keep going.", onDone = { done(true) })
+                } else {
+                    app.reward(area, "Hooray! The robot made it! You did it!", onDone = { done(false) })
+                }
             } else {
                 miss()
                 failures++
@@ -698,6 +732,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
             Modifier.weight(1.1f).fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            TryAgainSlot(failures == 1 && !running && !won, Modifier.fillMaxWidth())
             ProgramStrip(program, runningStep, Modifier.weight(1f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 palette.forEach { cmd ->
@@ -854,11 +889,12 @@ private fun CoinPile(n: Int, coin: Dp, modifier: Modifier = Modifier) {
  * that holds just the right number of coins.
  */
 @Composable
-private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: () -> Unit) {
+private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: (revealed: Boolean) -> Unit) {
     val app = LocalApp.current
     val r = c.round
     val name = Things.nameOf(r.item)
     QuestionLayout(
+        allowSide = r.mode == CoinMode.PURSE,
         question = { card ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(r.item, fontSize = (card.value * 0.6f).sp)
@@ -894,7 +930,7 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                                     if (paid < r.price) {
                                         paid++
                                         if (paid == r.price) {
-                                            app.reward(area, "${Numbers.word(paid)}! That's just right. Here are your $name!", onDone = done)
+                                            app.reward(area, "${Numbers.word(paid)}! That's just right. Here are your $name!", onDone = { done(false) })
                                         } else {
                                             app.speaker.say(Numbers.word(paid))
                                         }

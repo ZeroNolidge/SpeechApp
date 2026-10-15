@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -118,7 +119,7 @@ fun PracticeMenu(nav: Nav) {
                                 app.speaker.say(t.spoken)
                                 nav.go(t.target)
                             },
-                        ) { Text(t.emoji, fontSize = 72.sp) }
+                        )
                     }
                 }
                 RoundIcon("🔄", PaperColorsUi.choice, size = 72.dp) {
@@ -165,7 +166,8 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
         }
     }
     KidScreen(kind.emoji, nav.home, kind.spoken, onBack = nav.back) {
-        ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry ->
+        // key: a new round always starts fresh, even if it happens to look like the last one.
+        key(roundNo) { ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry, _ ->
             when (kind) {
                 PracticeKind.NEXT -> {
                     // Every few right-first-time answers, the patterns get trickier.
@@ -181,7 +183,7 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
             }
             last = (challenge as? Challenge.SoundOut)?.round?.word?.text ?: (challenge as? Challenge.WhichWord)?.round?.word?.text
             roundNo++
-        }
+        } }
     }
 }
 
@@ -193,7 +195,7 @@ fun TalkMenu(nav: Nav) {
             ChoiceTile(sound.emoji, sound.label, Kid.talk, m, onClick = {
                 app.speaker.say(sound.modelSound)
                 nav.go(Screen.TalkPractice(sound))
-            }) { Text(sound.emoji, fontSize = 72.sp) }
+            })
         }
     }
 }

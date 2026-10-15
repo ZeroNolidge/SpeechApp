@@ -58,6 +58,7 @@ import com.zeronolidge.speechapp.ui.art.PaperStyle
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueSize
+import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperButton
@@ -361,7 +362,7 @@ fun SpeakMoment(
                     }
                 }
             }
-            Spacer(Modifier.width(ContinueSize + 16.dp))
+            Spacer(Modifier.width(ContinueReserve))
         }
     }
     // Always there: carry on (or skip). With no microphone it becomes a big "I said it!" button.

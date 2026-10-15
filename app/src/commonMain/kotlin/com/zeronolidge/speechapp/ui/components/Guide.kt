@@ -44,6 +44,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.delay
 
 /**
@@ -79,14 +82,22 @@ fun GoButton(
 
 /** A hand that bobs up and down, pointing at whatever is above it. */
 @Composable
-fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boolean = false) {
+fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boolean = false, pointRight: Boolean = false) {
     val t = rememberInfiniteTransition(label = "hand")
     val bob by t.animateFloat(0f, 1f, infiniteRepeatable(tween(450), RepeatMode.Reverse), label = "bob")
     val shift = size * 0.25f * bob
     Text(
-        if (pointDown) "👇" else "👆",
+        when {
+            pointRight -> "👉"
+            pointDown -> "👇"
+            else -> "👆"
+        },
         fontSize = size.value.sp,
-        modifier = modifier.offset(y = if (pointDown) shift else -shift),
+        modifier = when {
+            pointRight -> modifier.offset(x = shift)
+            pointDown -> modifier.offset(y = shift)
+            else -> modifier.offset(y = -shift)
+        },
     )
 }
 
@@ -108,11 +119,18 @@ fun Nudge(key: Any, text: String, everyMs: Long = 9000, times: Int = 3) {
 /** The continue button's size, the same on every step. */
 val ContinueSize = 96.dp
 
+/** Room a step leaves at its bottom-right for the continue button and the hand beside it. */
+val ContinueReserve = ContinueSize + 76.dp
+
 /** Where the current step's continue action lives, so the button can always be drawn in one spot. */
 class ContinueSlot {
     internal var onClick by mutableStateOf<(() -> Unit)?>(null)
     internal var label by mutableStateOf<String?>(null)
     internal var hint by mutableStateOf(true)
+    /** Narration steps: a tap anywhere on the step (not on a button) also continues. */
+    internal var tapAnywhere by mutableStateOf(false)
+    /** The child has tapped something since this step started: the hand hides. */
+    internal var touched by mutableStateOf(false)
     internal var owner: Any? = null
 }
 
@@ -126,12 +144,29 @@ val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
 @Composable
 fun ContinueHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val slot = remember { ContinueSlot() }
-    Box(modifier.fillMaxSize()) {
+    val action = slot.onClick
+    Box(
+        modifier
+            .fillMaxSize()
+            // Notice any tap (without taking it away from what was tapped), so the hand hides.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (e.changes.any { it.pressed }) slot.touched = true
+                    }
+                }
+            },
+    ) {
+        // Behind the step: on narration, a tap on any empty part of the screen continues.
+        if (action != null && slot.tapAnywhere) {
+            Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, indication = null) { action() })
+        }
         CompositionLocalProvider(LocalContinue provides slot) { content() }
-        val action = slot.onClick
         if (action != null) {
-            Column(Modifier.align(Alignment.BottomEnd).zIndex(5f), horizontalAlignment = Alignment.End) {
-                if (slot.hint) PointingHand(Modifier.padding(end = ContinueSize / 2 - 24.dp), size = 48.dp, pointDown = true)
+            // The hand sits beside the button (in the step's reserved corner), never over anything else.
+            Row(Modifier.align(Alignment.BottomEnd).zIndex(5f), verticalAlignment = Alignment.CenterVertically) {
+                if (slot.hint && !slot.touched) PointingHand(Modifier.padding(end = 6.dp), size = 52.dp, pointRight = true)
                 val label = slot.label
                 if (label == null) {
                     GoButton(Modifier.popIn("go"), size = ContinueSize, hint = false, onClick = action)
@@ -161,6 +196,8 @@ fun ContinueAction(
     hint: Boolean = true,
     label: String? = null,
     delayMs: Long = 0,
+    /** Narration steps: a tap anywhere on the screen (not on a button) also continues. */
+    tapAnywhere: Boolean = false,
     onClick: () -> Unit,
 ) {
     val slot = LocalContinue.current
@@ -185,10 +222,12 @@ fun ContinueAction(
     }
     SideEffect {
         if (shown && enabled) {
+            if (slot.owner !== token) slot.touched = false
             slot.owner = token
             slot.onClick = stable
             slot.label = label
             slot.hint = hint
+            slot.tapAnywhere = tapAnywhere
         } else if (slot.owner === token) {
             slot.onClick = null
         }

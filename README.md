@@ -46,7 +46,8 @@ choices at a time. No ads, links, purchases, timers, lives, streaks or buzzers.
    trying, not for being right). A full backpack gives the buddy a new paper piece (party hat,
    fairy wings, hero cape, a pet…), and there's a "welcome back" present on the first visit of a
    new day. No levels or scores. Try pieces on in the closet (tap your buddy, top-left of the map).
-   Wrong answers are gentle: a wiggle and "try again", then the right answer glows, then it's shown.
+   Wrong answers are gentle: a wiggle and "Try again!" (said and shown), then the wrong ones grey
+   out, the right answer lights up and is said, and the game moves on. A wrong answer is never cheered.
 6. **Sticker book.** Every word practised becomes a sticker in 📒. Shiny stickers are words the
    microphone heard clearly.
 

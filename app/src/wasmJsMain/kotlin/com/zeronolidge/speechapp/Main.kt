@@ -77,10 +77,13 @@ private fun WebRoot(services: AppServices) {
     var started by remember { mutableStateOf(false) }
     when {
         !started || !fontsReady -> StartScreen(ready = fontsReady) {
-            services.speaker.say("Hi friend! Let's play!")
-            // Ask for the microphone here, at the start (a grown-up can tap Allow), so the
-            // browser never pops the question up in the middle of a story.
-            if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
+            // First launch: the next screen ("Can Rory hear you?") asks for the microphone. After
+            // that, if the browser has forgotten the answer, ask again here at the start, so the
+            // question never pops up in the middle of a story.
+            if (services.progress.micAsked) {
+                services.speaker.say("Hi friend! Let's play!")
+                if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
+            }
             started = true
         }
         else -> TalkAndLearnApp(services)

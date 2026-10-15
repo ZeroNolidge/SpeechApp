@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -195,6 +196,7 @@ fun AnswerCard(
         when {
             correct -> Kid.good
             glow -> Kid.highlight
+            faded -> Color(0xFFDCDCDC)
             else -> PaperColorsUi.choice
         },
         modifier
@@ -211,10 +213,10 @@ fun AnswerCard(
 }
 
 /**
- * How every multiple-choice question handles a wrong tap, the same everywhere:
- *  1st miss: the card wiggles and "Try again!".
- *  2nd miss: the right answer glows and is said out loud.
- *  3rd miss: the right answer is shown, and the story moves on.
+ * How every question handles a wrong tap, the same everywhere:
+ *  1st miss: the card wiggles, and "Try again!" is said and shown.
+ *  2nd miss: the wrong cards grey out, the right one lights up and is said, then the game moves
+ *  on by itself. A wrong answer is never cheered.
  */
 class Misses {
     var count by mutableIntStateOf(0)
@@ -222,13 +224,34 @@ class Misses {
 
     fun add() = ++count
 
+    /** Show the written "Try again!" after the first miss. */
+    val tryAgain get() = count == 1
+
     val showAnswer get() = count >= 2
 }
 
+/** Height kept free above the answers for the written "Try again!", so nothing jumps. */
+val TryAgainHeight = 46.dp
+
+/** The written "Try again!" after a first miss, in its own reserved slot (never over a card). */
+@Composable
+fun TryAgainSlot(visible: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier.height(TryAgainHeight), contentAlignment = Alignment.Center) {
+        if (visible) PaperChip("🙂 Try again!", Modifier.popIn("again"), fontSize = 22.sp, maxLines = 1)
+    }
+}
+
+/** Set by a wide two-column layout: answers go in a column instead of a row. */
+val LocalAnswersStacked = staticCompositionLocalOf { false }
+
+/** What is said when the right answer is shown after the second miss. */
+fun revealLine(answerWords: String?) =
+    "It's this one" + (answerWords?.let { ": $it" } ?: "") + ". Good trying! Let's keep going."
+
 /**
- * Shows answer options and handles taps the same way everywhere (see [Misses]): wrong answers
- * wiggle, then the right one glows and is said, then it's shown and the story moves on.
- * The right answer earns a star.
+ * Shows answer options and handles taps the same way everywhere (see [Misses]). Only the right
+ * answer is cheered and earns a star. [onSolved] gets `revealed = true` when the answer was shown
+ * after two misses, so the story doesn't cheer.
  */
 @Composable
 fun <T> AnswerRow(
@@ -238,7 +261,7 @@ fun <T> AnswerRow(
     roundKey: Any,
     modifier: Modifier = Modifier,
     cardModifier: Modifier = Modifier,
-    onSolved: () -> Unit,
+    onSolved: (revealed: Boolean) -> Unit,
     /** Optional words for an option, said back to the child when they tap it. */
     describe: ((T) -> String)? = null,
     /** Called on each wrong tap, so stories can tell whether it was right first time. */
@@ -252,11 +275,12 @@ fun <T> AnswerRow(
     var faded by remember(roundKey) { mutableStateOf(setOf<T>()) }
     var wiggles by remember(roundKey) { mutableStateOf(mapOf<T, Int>()) }
     var solved by remember(roundKey) { mutableStateOf(false) }
+    var revealed by remember(roundKey) { mutableStateOf(false) }
     var advanced by remember(roundKey) { mutableStateOf(false) }
     val advance = {
         if (!advanced) {
             advanced = true
-            onSolved()
+            onSolved(revealed)
         }
     }
     LaunchedEffect(roundKey, wandTick) {
@@ -268,20 +292,17 @@ fun <T> AnswerRow(
     // Normally the next round starts when the voice finishes; this is a backstop.
     if (solved) AfterDelay(roundKey, 6000) { advance() }
     val answerWords = describe?.invoke(answer)
-    Row(
-        modifier,
-        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val cards: @Composable () -> Unit = {
         options.forEach { opt ->
             AnswerCard(
                 modifier = cardModifier,
                 faded = opt in faded,
-                correct = solved && opt == answer,
-                glow = !solved && misses.showAnswer && opt == answer,
+                correct = solved && !revealed && opt == answer,
+                glow = revealed && opt == answer,
                 wiggle = wiggles[opt] ?: 0,
                 onClick = {
-                    if (!solved) {
+                    // A tap is checked against the right answer before anything is cheered.
+                    if (!solved && opt !in faded) {
                         val said = describe?.invoke(opt)?.let { "$it! " } ?: ""
                         if (opt == answer) {
                             solved = true
@@ -289,18 +310,31 @@ fun <T> AnswerRow(
                         } else {
                             wiggles = wiggles + (opt to (wiggles[opt] ?: 0) + 1)
                             onMiss()
-                            when (misses.add()) {
-                                1 -> app.speaker.say(said + "Try again!")
-                                2 -> app.speaker.say(said + "Here's the right one, shining!" + (answerWords?.let { " $it!" } ?: "") + " Tap it!")
-                                else -> {
-                                    solved = true
-                                    app.speaker.say("It's this one" + (answerWords?.let { ": $it" } ?: "") + ". Good trying! Let's keep going.", onDone = advance)
-                                }
+                            if (misses.add() == 1) {
+                                app.speaker.say(said + "Try again!")
+                            } else {
+                                // Second miss: grey out the wrong ones, light up the right one, move on.
+                                solved = true
+                                revealed = true
+                                faded = options.filter { it != answer }.toSet()
+                                app.speaker.say(revealLine(answerWords), onDone = advance)
                             }
                         }
                     }
                 },
             ) { content(opt) }
+        }
+    }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        TryAgainSlot(misses.tryAgain && !solved)
+        if (LocalAnswersStacked.current) {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) { cards() }
+        } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) { cards() }
         }
     }
 }

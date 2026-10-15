@@ -5,6 +5,11 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.clickable
 import com.zeronolidge.speechapp.ui.art.paperPath
 import androidx.compose.ui.graphics.Path
@@ -202,11 +207,25 @@ fun BackButton(onBack: () -> Unit) {
     PaperIconButton("⬅️", PaperColorsUi.back, size = 72.dp) { app.speaker.stop(); onBack() }
 }
 
-/** "Hear it again": always the top-right corner. Says the screen's instruction again. */
+/**
+ * "Hear it again": always the top-right corner. Says the screen's instruction again. If speech
+ * didn't start or finish in time, it pulses in its own spot (so it never covers anything) until
+ * it's tapped.
+ */
 @Composable
 fun HearAgainButton() {
     val app = LocalApp.current
-    PaperIconButton("🔊", PaperColorsUi.hear) { app.repeatInstruction() }
+    val trouble = app.audioTrouble
+    val t = rememberInfiniteTransition(label = "hear")
+    val pulse by t.animateFloat(1f, 1.12f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "hearPulse")
+    PaperIconButton(
+        "🔊",
+        if (trouble) Color(0xFFFFB300) else PaperColorsUi.hear,
+        modifier = Modifier.scale(if (trouble) pulse else 1f),
+    ) {
+        app.audioTrouble = false
+        app.repeatInstruction()
+    }
 }
 
 /** The colours of the shared controls, picked from the paper palette. */
@@ -238,6 +257,8 @@ fun ScreenFrame(
     background: @Composable BoxScope.() -> Unit = { PlainBackdrop() },
     left: (@Composable () -> Unit)? = null,
     top: @Composable RowScope.() -> Unit = {},
+    /** The grown-up check has nothing to hear: its numbers are for reading, never spoken. */
+    showHear: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -259,7 +280,7 @@ fun ScreenFrame(
                 Spacer(Modifier.width(14.dp))
                 Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, content = top)
                 Spacer(Modifier.width(14.dp))
-                HearAgainButton()
+                if (showHear) HearAgainButton() else Spacer(Modifier.width(CornerButtonSize))
             }
             Spacer(Modifier.height(10.dp))
             Column(Modifier.weight(1f).fillMaxWidth(), content = content)
@@ -385,7 +406,10 @@ fun <T> PagedChoices(
     }
 }
 
-/** A big choice tile: a picture with an optional word chip underneath. */
+/**
+ * A big choice tile: a picture with an optional word chip. Tall tiles put the word underneath;
+ * short or wide ones (a phone on its side) put it beside the picture, so the word always shows.
+ */
 @Composable
 fun ChoiceTile(
     emoji: String,
@@ -397,20 +421,41 @@ fun ChoiceTile(
     picture: (@Composable () -> Unit)? = null,
 ) {
     PaperButton(if (selected) Kid.highlight else color, modifier, onClick = onClick) {
-        Column(
-            Modifier.fillMaxSize().padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                if (picture != null) picture() else Text(emoji, fontSize = 64.sp)
-            }
-            if (label != null) {
-                BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    // Fit the words to the tile instead of wrapping them a letter at a time.
-                    PaperChip(label, fontSize = fittingFontSize(label, maxWidth - 16.dp), maxLines = 2, horizontalPadding = 8.dp)
+        BoxWithConstraints(Modifier.fillMaxSize().padding(10.dp), contentAlignment = Alignment.Center) {
+            val w = maxWidth
+            val h = maxHeight
+            val beside = label != null && (h < 170.dp || w > h * 1.3f)
+            if (beside && label != null) {
+                Row(
+                    Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                ) {
+                    Box(Modifier.weight(0.42f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        if (picture != null) picture() else Text(emoji, fontSize = tileEmojiSize(w * 0.42f, h))
+                    }
+                    Box(Modifier.weight(0.58f), contentAlignment = Alignment.Center) {
+                        PaperChip(label, fontSize = fittingFontSize(label, w * 0.58f - 16.dp), maxLines = 2, horizontalPadding = 8.dp)
+                    }
+                }
+            } else {
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        if (picture != null) picture() else Text(emoji, fontSize = tileEmojiSize(w, if (label != null) h - 56.dp else h))
+                    }
+                    if (label != null) {
+                        // Fit the words to the tile instead of wrapping them a letter at a time.
+                        PaperChip(label, fontSize = fittingFontSize(label, w - 16.dp), maxLines = 2, horizontalPadding = 8.dp)
+                    }
                 }
             }
         }
     }
 }
+
+/** An emoji as big as the space allows, within reason. */
+private fun tileEmojiSize(w: Dp, h: Dp): TextUnit = (minOf(w, h).value * 0.6f).coerceIn(28f, 80f).sp

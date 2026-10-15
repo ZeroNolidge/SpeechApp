@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -80,6 +81,7 @@ import kotlinx.coroutines.delay
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueSize
+import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import kotlin.random.Random
 
 private sealed interface Phase {
@@ -126,7 +128,7 @@ fun ChapterScreen(nav: Nav) {
         }
     }
 
-    fun solved(c: Challenge, firstTry: Boolean) {
+    fun solved(c: Challenge, firstTry: Boolean, revealed: Boolean) {
         when (c) {
             is Challenge.Robot -> p.setLevel("story_robot", p.level("story_robot") + 1)
             is Challenge.Pattern -> if (firstTry) {
@@ -135,7 +137,8 @@ fun ChapterScreen(nav: Nav) {
             }
             else -> {}
         }
-        cheer = true
+        // Only a right answer is cheered; when the answer was shown, the story just carries on.
+        cheer = !revealed
     }
 
     ScreenFrame(
@@ -152,7 +155,9 @@ fun ChapterScreen(nav: Nav) {
             } else {
                 StoryScene(quest, quest.twist, species, Mood.HAPPY, visitor = quest.visitor, onNext = ::next)
             }
-            is Phase.Beat -> BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft -> solved(c, ft) }, onNext = ::next)
+            is Phase.Beat -> key(ph.index) {
+                BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft, rv -> solved(c, ft, rv) }, onNext = ::next)
+            }
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
                     if (p.chapter == chapter) p.finishChapter()
@@ -177,31 +182,48 @@ private fun RowScope.Footprints(quest: Quest, phase: Phase) {
         is Phase.Twist -> phase.before
         else -> quest.beats.size
     }
-    // The place this chapter happens, for grown-ups (the child follows the pictures).
-    PaperChip("${quest.land.emoji} ${quest.land.title}", fontSize = 18.sp)
-    Spacer(Modifier.weight(1f))
-    Row(
-        Modifier.paperCard(PaperStyle.chip, 999.dp).padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        quest.beats.indices.forEach { i ->
-            Box(
-                Modifier
-                    .padding(horizontal = 3.dp)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            i < current -> Color(0xFF5BBF4A)
-                            i == current -> Color(0xFFFFD93D)
-                            else -> Color(0xFFECE3D0)
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) { Text(if (i < current) "✔️" else "👣", fontSize = 17.sp, color = Color.White) }
+    // The header says "Adventure"; the footprints show how far along the chapter is. Both shrink
+    // to fit, and on a narrow phone the footprints step aside so no word is ever cut off.
+    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+        val room = maxWidth
+        val n = quest.beats.size
+        val chipW = if (room >= 360.dp) 170.dp else 120.dp
+        // Footprint size that fits beside the chip: each dot plus its gap, the arrow and the goal.
+        val dot = ((room - chipW - 16.dp - 64.dp) / (n + 1) - 6.dp).coerceAtMost(32.dp)
+        val showSteps = dot >= 18.dp
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            PaperChip(
+                if (room >= 360.dp) "🗺️ Adventure" else "Adventure",
+                fontSize = if (room >= 360.dp) 20.sp else 16.sp,
+                maxLines = 1,
+            )
+            if (showSteps) {
+                Spacer(Modifier.weight(1f))
+                Row(
+                    Modifier.paperCard(PaperStyle.chip, 999.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    quest.beats.indices.forEach { i ->
+                        Box(
+                            Modifier
+                                .padding(horizontal = 3.dp)
+                                .size(dot)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        i < current -> Color(0xFF5BBF4A)
+                                        i == current -> Color(0xFFFFD93D)
+                                        else -> Color(0xFFECE3D0)
+                                    },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(if (i < current) "✔️" else "👣", fontSize = (dot.value * 0.53f).sp, color = Color.White) }
+                    }
+                    ArrowIcon(16.dp, Modifier.padding(horizontal = 4.dp), color = PaperStyle.ink)
+                    Text(quest.goal, fontSize = (dot.value * 0.85f).sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
+                }
+            }
         }
-        ArrowIcon(18.dp, Modifier.padding(horizontal = 6.dp), color = PaperStyle.ink)
-        Text(quest.goal, fontSize = 28.sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
     }
 }
 
@@ -248,12 +270,7 @@ private fun StoryScene(
     // Safety net: about 3 seconds after the narration starts, the big continue button appears
     // (bottom-right, as on every step) and a tap anywhere on the scene also moves on, whether or
     // not the voice has finished.
-    var canGoOn by remember(text) { mutableStateOf(false) }
-    LaunchedEffect(text) {
-        delay(3000)
-        canGoOn = true
-    }
-    ContinueAction(delayMs = 3000, onClick = onNext)
+    ContinueAction(delayMs = 3000, tapAnywhere = true, onClick = onNext)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < 560.dp
         val bubbleMax = maxHeight * 0.34f
@@ -270,12 +287,7 @@ private fun StoryScene(
             ) { app.speaker.say(text) }
             // The characters share the room left of the continue button's spot.
             Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable(remember { MutableInteractionSource() }, indication = null, enabled = canGoOn) { onNext() },
-                ) {
+                Box(Modifier.weight(1f).fillMaxHeight()) {
                     SetPieceView(scene.piece, scene.prop, solved, Modifier.fillMaxSize())
                     Row(
                         Modifier.fillMaxSize(),
@@ -299,7 +311,7 @@ private fun StoryScene(
                         }
                     }
                 }
-                Spacer(Modifier.width(ContinueSize + 12.dp))
+                Spacer(Modifier.width(ContinueReserve))
             }
         }
     }
@@ -312,7 +324,7 @@ private fun BeatScene(
     index: Int,
     hero: Species,
     cheer: Boolean,
-    onSolved: (Challenge, Boolean) -> Unit,
+    onSolved: (Challenge, Boolean, Boolean) -> Unit,
     onNext: () -> Unit,
 ) {
     val app = LocalApp.current
@@ -362,10 +374,10 @@ private fun BeatScene(
     }, challenge = { m ->
         // Challenge side, on a big paper card.
         Box(m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
-            ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers) { firstTry ->
+            ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers) { firstTry, revealed ->
                 if (!solvedHere) {
                     solvedHere = true
-                    onSolved(beat.challenge, firstTry)
+                    onSolved(beat.challenge, firstTry, revealed)
                 }
             }
         }
@@ -373,14 +385,15 @@ private fun BeatScene(
 }
 
 /**
- * The story picture and the challenge: side by side on a tablet or in landscape (story left,
+ * The story picture and the challenge: side by side on a wide screen or in landscape (story left,
  * word card or challenge right), stacked on a narrow portrait phone screen.
  */
 @Composable
 private fun StorySplit(story: @Composable (Modifier) -> Unit, challenge: @Composable (Modifier) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Tablets (768 wide and up) and any landscape screen: side by side. Narrow portrait phones: stacked.
-        val sideBySide = maxWidth >= 768.dp || maxWidth > maxHeight
+        // Wide screens (over 700, e.g. an iPad either way up) and any landscape screen: scene on the
+        // left, choices on the right. Narrow portrait phones: stacked.
+        val sideBySide = maxWidth > 700.dp || maxWidth > maxHeight
         if (!sideBySide) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 story(Modifier.fillMaxWidth().weight(0.34f))

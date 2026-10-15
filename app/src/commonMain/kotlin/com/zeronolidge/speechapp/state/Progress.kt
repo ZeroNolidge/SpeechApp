@@ -246,6 +246,15 @@ class Progress(private val prefs: Prefs) {
         prefs.edit().putBoolean("useMic", v).apply()
     }
 
+    /** The "Can Rory hear you?" screen has been shown (it appears once, on first launch). */
+    var micAsked by mutableStateOf(prefs.getBoolean("micAsked", false))
+        private set
+
+    fun markMicAsked() {
+        micAsked = true
+        prefs.edit().putBoolean("micAsked", true).apply()
+    }
+
     fun toggleFocusSound(id: String) {
         focusSounds = if (id in focusSounds) focusSounds - id else focusSounds + id
         prefs.edit().putStringSet("focus", focusSounds).apply()

@@ -38,7 +38,7 @@ fun ParentGateScreen(nav: Nav) {
     var code by remember { mutableStateOf(newCode()) }
     var entered by remember { mutableStateOf(listOf<Int>()) }
     SpeakOnOpen("This part is for grown-ups. Ask a grown-up to help, or tap the house to go back to the map.")
-    ScreenFrame(onHome = nav.home) {
+    ScreenFrame(onHome = nav.home, showHear = false) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
             PaperChip("Grown-ups: tap ${code.joinToString(", ") { Numbers.word(it) }}", fontSize = 26.sp)
             Text("🔵".repeat(entered.size) + "⚪".repeat(3 - entered.size), fontSize = 30.sp, color = PaperStyle.ink)

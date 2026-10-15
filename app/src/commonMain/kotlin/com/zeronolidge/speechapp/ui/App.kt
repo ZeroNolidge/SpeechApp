@@ -26,6 +26,11 @@ import com.zeronolidge.speechapp.ui.components.popIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -40,6 +45,9 @@ import com.zeronolidge.speechapp.ui.screens.ClosetScreen
 import com.zeronolidge.speechapp.ui.screens.GrownUpsScreen
 import com.zeronolidge.speechapp.ui.screens.HeroPickScreen
 import com.zeronolidge.speechapp.ui.screens.MapScreen
+import com.zeronolidge.speechapp.ui.screens.MicHelloScreen
+import com.zeronolidge.speechapp.ui.platform.MicStatus
+import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
 import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
@@ -59,7 +67,6 @@ fun TalkAndLearnApp(services: AppServices) {
                 Screens()
                 CelebrationOverlay()
                 GiftOverlay()
-                AudioTroubleButton()
             }
         }
     }
@@ -81,6 +88,18 @@ private fun Screens() {
         )
     }
     PlatformBackHandler(enabled = stack.size > 1) { nav.back() }
+
+    // First launch, after the first tap: "Can Rory hear you?" asks for the microphone up front,
+    // once, so the question never pops up in the middle of a story.
+    val mic = rememberMicPermission()
+    if (!app.progress.micAsked) {
+        if (!app.progress.useMic || mic.status != MicStatus.NOT_ASKED) {
+            LaunchedEffect(Unit) { app.progress.markMicAsked() }
+        } else {
+            MicHelloScreen(onDone = {})
+            return
+        }
+    }
 
     // First launch: pick a buddy before anything else.
     if (app.progress.hero == null) {
@@ -115,32 +134,27 @@ private fun ShowScreen(s: Screen, nav: Nav) {
 }
 
 /**
- * If speech didn't start or finish in time, a big pulsing speaker appears at the bottom. Tapping
- * it says the instructions again and hides it. The story never waits for it.
+ * A new paper piece pops up on a card over whatever is on screen. It closes by itself after
+ * 4 seconds, or straight away on a tap anywhere.
  */
-@Composable
-private fun AudioTroubleButton() {
-    val app = LocalApp.current
-    if (!app.audioTrouble) return
-    Box(Modifier.fillMaxSize().padding(bottom = 24.dp), contentAlignment = Alignment.BottomCenter) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            PaperIconButton("🔊", PaperColorsUi.hear, size = 120.dp, modifier = Modifier.popIn("trouble")) {
-                app.audioTrouble = false
-                app.repeatInstruction()
-            }
-            PointingHand(size = 56.dp)
-        }
-    }
-}
-
-/** A new paper piece pops up on a card over whatever is on screen. Tap it to close. */
 @Composable
 private fun GiftOverlay() {
     val app = LocalApp.current
     val piece = app.gift ?: return
     val p = app.progress
     val species = p.hero ?: Species.KID
-    Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
+    LaunchedEffect(piece) {
+        delay(4000)
+        if (app.gift == piece) app.closeGift()
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0x55000000))
+            .clickable(remember { MutableInteractionSource() }, indication = null) { app.closeGift() }
+            .padding(40.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         PaperButton(
             PaperStyle.chip,
             Modifier.fillMaxWidth(0.5f).fillMaxHeight(0.8f).widthIn(min = 260.dp).popIn(piece),

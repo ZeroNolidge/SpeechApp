@@ -16,15 +16,22 @@ These are the owner's rules for all work:
   page, with big ◀ ▶) instead of grids. No double-taps and no long-presses.
 - **No dead ends.** 🏠 is top-left on every screen (`ScreenFrame`) and always goes to the map.
   Grown-up controls (settings, reset) sit behind `ParentGateScreen`: three numbers written as
-  words, never spoken.
+  words, never spoken, and no 🔊 button there (`ScreenFrame(showHear = false)`).
+- **Reward pop-ups** (`GiftOverlay`, e.g. "Hero cape") close by themselves after 4 s or on any tap.
 - **No ads, outside links, buy buttons, timers, lives, streaks or buzzer sounds.** Gentle only:
   wrong answers fold away with "try again".
 - Must keep working as a static site on GitHub Pages.
 - **Continue button:** one per step, drawn by `ContinueHost` (Guide.kt): same size
   (`ContinueSize`), pinned bottom-right inside the screen. Steps register it with `ContinueAction`.
-  Narration shows it ~3 s after it starts (and a tap on the scene moves on), whatever the audio does.
-- **Mic permission** is asked only on the web start screen or the grown-ups page ("Allow
-  microphone"), never mid-story. `MicPermission.status` is ON / BLOCKED / NOT_ASKED; the grown-ups
+  Narration shows it ~3 s after it starts and, from then on, a tap anywhere empty moves on
+  (`ContinueAction(delayMs = 3000, tapAnywhere = true)`), whatever the audio does. Steps leave
+  `ContinueReserve` free at the bottom-right for the button and the 👉 hand beside it.
+- **Hands and hints never cover tiles, keys or headers:** they sit in empty space beside the
+  target and hide as soon as anything is tapped (the continue hand, the map hand, which comes
+  back after 8 s of quiet).
+- **Mic permission** is asked up front, once, on the first-launch "Can Rory hear you?" screen
+  (`MicHelloScreen`, after a tap; `Progress.micAsked`), later on the web start tap if the browser
+  forgot, or from the grown-ups page ("Allow microphone"). Never mid-story. `MicPermission.status` is ON / BLOCKED / NOT_ASKED; the grown-ups
   page shows it with steps to re-enable (iPad Settings → Safari → Microphone).
 - **Speech:** spoken words make the story happen (`SpeakMoment`). The word is played slowly, then
   "Your turn!" and ~4 s of listening; quiet → "Let's say it together!", replay, one more listen
@@ -33,17 +40,24 @@ These are the owner's rules for all work:
   (`VoiceDetector` + `logic/VoiceMeter.kt`), NOT speech recognition (unreliable on iPhone/iPad and
   with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
   carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.
-- **Wrong answers, one pattern everywhere** (`Misses` in `Common.kt`): 1st miss wiggle + "Try
-  again!", 2nd miss the right answer glows and is spoken, 3rd miss show it and move on.
+- **Wrong answers, one pattern everywhere** (`Misses`, `AnswerRow`, `TryAgainSlot` in
+  `Common.kt`; `MoreView` and `RobotView` follow it too): every tap is checked against the answer
+  first. 1st miss: wiggle + "Try again!" spoken and written (in a reserved slot above the
+  answers). 2nd miss: wrong tiles grey out, the right one lights up and is spoken, then it moves on
+  by itself. A shown answer reports `revealed = true` (`ChallengeView.onDone(firstTry, revealed)`)
+  so the story doesn't cheer and no star is given. Never celebrate a wrong answer.
 - **Growth without numbers:** no levels, XP or star counts. Gems are for words he *tried* to say
   (not right answers); they fill the 🎒 backpack (`Progress.addGem`), and a full backpack gives a
   paper piece. Practice shows ~3 games that rotate daily (🔄 for others).
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
-  limit on each). If speech doesn't finish in time the flow carries on and a big replay 🔊 appears
-  (`AudioTroubleButton`). Chrome sometimes never fires `onend`; that used to freeze the story.
+  limit on each). If speech doesn't finish in time the flow carries on and the top-right 🔊 pulses
+  in its own spot until tapped (`HearAgainButton`, `app.audioTrouble`); no overlay covers anything. Chrome sometimes never fires `onend`; that used to freeze the story.
 - **Layout must hold at 360px wide.** Never put a fixed-size button (especially ▶) at the end of
   a row of fixed-size things: give it its own space first and let the rest take `weight`. Narrow
-  screens (< 520dp) show 2 choices; story/challenge sit side by side from 768dp or in landscape.
+  screens (< 520dp) show 2 choices; story/challenge sit side by side over 700dp or in landscape,
+  and practice games (`QuestionLayout`) put the picture left and answers in a column right over
+  700dp. Choice tiles put the word beside the picture when the tile is short or wide. The chapter
+  header says "Adventure" and drops the footprints when there's no room; labels never cut off.
   In `BoxWithConstraints`, read `maxWidth`/`maxHeight` into vals at the top (nested Row/Column
   can't use them implicitly; CI fails).
 - Back: ⬅️ next to 🏠 only where back differs from home (inside Practice, buddy picker from closet).
