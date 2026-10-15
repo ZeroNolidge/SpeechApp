@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -186,10 +187,10 @@ fun MapScreen(nav: Nav) {
                         nav.go(Screen.Chapter(l))
                     }
                     else -> {
-                        // A misty place: it wiggles, Rory pops up, and sparkles show the way.
+                        // A misty place: it wiggles, and Rory walks along a sparkly trail to the next stop.
                         hintFrom = l
                         hintKey++
-                        app.speaker.say("Beep boop! Visit ${land.title} first! Follow the sparkles!")
+                        app.speaker.say("Beep boop! Not yet! Follow me to ${land.title}!")
                     }
                 }
             },
@@ -199,7 +200,6 @@ fun MapScreen(nav: Nav) {
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size -> if (showHand) PointingHand(m, size = size, pointDown = true) },
         )
-        if (hintKey > 0) RoryHint(hintKey, land)
         MapCorners(nav, startChapter)
     }
 }
@@ -217,10 +217,15 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
         }
         // The bottom row: grown-ups' gear, the big Adventure button, then stickers and practice.
         // Every button has its own space. On a narrow phone, Adventure gets a row of its own above.
-        val adventure = @Composable {
-            // Tomato red: the one warm accent, kept for things he can tap.
-            PaperButton(PaperColorsUi.home, Modifier.height(76.dp), corner = 999.dp, onClick = onAdventure) {
-                Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+        // One wide banner, tappable all over (arrow, word and the paper around them), that presses
+        // down under a finger. Tomato red: the one warm accent, kept for things he can tap.
+        val adventure = @Composable { m: Modifier ->
+            PaperButton(PaperColorsUi.home, m.height(84.dp), corner = 999.dp, onClick = onAdventure) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
                     ArrowIcon(30.dp, color = Color.White)
                     Spacer(Modifier.width(10.dp))
                     Text(
@@ -232,7 +237,7 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             if (narrow) {
-                adventure()
+                adventure(Modifier.fillMaxWidth())
                 Spacer(Modifier.height(14.dp))
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -241,11 +246,15 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
                     app.speaker.say("This part is for grown-ups.")
                     nav.go(Screen.Gate)
                 }
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(24.dp))
                 if (!narrow) {
-                    adventure()
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        adventure(Modifier.fillMaxWidth().widthIn(max = 460.dp))
+                    }
+                } else {
                     Spacer(Modifier.weight(1f))
                 }
+                Spacer(Modifier.width(24.dp))
                 PaperIconButton("📒", Color(0xFFB2EBF2)) { app.speaker.say("Your sticker book!"); nav.go(Screen.Stickers) }
                 Spacer(Modifier.width(18.dp))
                 PaperIconButton("🎯", Color(0xFFF8BBD0)) { app.speaker.say("Practice games!"); nav.go(Screen.Practice) }
@@ -257,20 +266,3 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
 /** Below this width, the Adventure button gets its own row above the other bottom buttons. */
 private fun mapNarrow(width: Dp) = width < 600.dp
 
-/** Rory the robot pops up in the corner to give a hint, then hops away. */
-@Composable
-private fun RoryHint(key: Int, next: Land) {
-    var show by remember(key) { mutableStateOf(true) }
-    LaunchedEffect(key) {
-        kotlinx.coroutines.delay(4500)
-        show = false
-    }
-    if (!show) return
-    Box(Modifier.fillMaxSize().padding(start = 16.dp, bottom = 170.dp), contentAlignment = Alignment.BottomStart) {
-        Row(Modifier.popIn(key), verticalAlignment = Alignment.Top) {
-            Critter(Species.ROBOT, Modifier.height(130.dp), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
-            // Rory's speech bubble: "go there first", pointing by picture.
-            PaperChip("👉 ${next.emoji} ✨", fontSize = 30.sp)
-        }
-    }
-}

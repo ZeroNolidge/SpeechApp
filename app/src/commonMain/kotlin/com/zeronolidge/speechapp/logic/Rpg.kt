@@ -185,6 +185,9 @@ enum class Land(
     CAVES("Word Caves", "🕯️", listOf(Subject.READING), Power.LANTERN, 0xFF5C6BC0, 0xFF8D6E63, listOf("💎", "🕯️", "🦇", "🍄"), 0.33f, 0.24f),
     CLOUDS("Cloud Castle", "🏰", Subject.entries.toList(), Power.FLY, 0xFFE3F2FD, 0xFFFFFFFF, listOf("☁️", "🌈", "⭐", "🏰"), 0.88f, 0.16f);
 
+    /** A one-word name for the map label (for grown-ups; the picture is for the child). */
+    val shortName: String get() = if (this == MARKET) "Market" else title.substringAfterLast(' ')
+
     /** How to point at this land for a child who can't read: by its picture, not its name. */
     val hint: String get() = when (this) {
         FOREST -> "the big trees"

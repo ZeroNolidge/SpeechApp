@@ -31,7 +31,8 @@ These are the owner's rules for all work:
   back after 8 s of quiet).
 - **Mic permission** is asked up front, once, on the first-launch "Can Rory hear you?" screen
   (`MicHelloScreen`, after a tap; `Progress.micAsked`), later on the web start tap if the browser
-  forgot, or from the grown-ups page ("Allow microphone"). Never mid-story. `MicPermission.status` is ON / BLOCKED / NOT_ASKED; the grown-ups
+  forgot, or from the grown-ups page ("🎤 Turn on listening", shown whenever listening is off,
+  including after "Not now"). Never mid-story. `MicPermission.status` is ON / BLOCKED / NOT_ASKED; the grown-ups
   page shows it with steps to re-enable (iPad Settings → Safari → Microphone).
 - **Speech:** spoken words make the story happen (`SpeakMoment`). The word is played slowly, then
   "Your turn!" and ~4 s of listening; quiet → "Let's say it together!", replay, one more listen
@@ -123,10 +124,13 @@ These are the owner's rules for all work:
   scores), up to 3 of the grown-up's own words with a picture, and a **backup code**
   (`Progress.exportCode` / `importCode`, format in `logic/Backup.kt`) so a cleared browser or a new
   tablet doesn't start over.
-- **Map:** tapping a misty land wiggles it, Rory pops up ("Visit X first!") and sparkles run to the
-  next stop. Open lands have no mist and wear a picture label (their emoji on a chip). Tapping the
+- **Map:** every land wears a label chip above its landmark: picture + one-word name
+  (`Land.shortName`), bright when open, paler under mist. Open lands are never misty. Tapping a
+  misty land wiggles it and Rory walks along a sparkly trail from there to the next stop ("Follow
+  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). Tapping the
   next stop's land (or its marker, ring included) starts the next chapter; tapping a land already
-  passed opens a bonus story there (`Screen.Chapter(visit)`), which doesn't move the trail on. A big "▶ Adventure!" button starts the next chapter. The island keeps a 1.75:1 shape.
+  passed opens a bonus story there (`Screen.Chapter(visit)`), which doesn't move the trail on. A wide
+  "▶ Adventure!" banner (tappable all over, presses down like every `PaperButton`) starts the next chapter. The island keeps a 1.75:1 shape.
 
 ## Work in progress / agreed next steps
 

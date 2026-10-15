@@ -91,10 +91,15 @@ fun PaperButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val press by animateFloatAsState(if (pressed) 1f else 0f, tween(70), label = "press")
+    val press by animateFloatAsState(if (pressed) 1f else 0f, tween(90), label = "press")
     Box(
         modifier
             .alpha(if (enabled) 1f else 0.4f)
+            // Pressing squashes the whole cut-out down a touch, so every tap visibly lands.
+            .graphicsLayer {
+                scaleX = 1f - 0.04f * press
+                scaleY = 1f - 0.04f * press
+            }
             .then(if (enabled) Modifier.raisedPaperBase(color, corner, circle) { press } else Modifier)
             .clickable(interaction, indication = null, enabled = enabled, onClick = onClick),
         propagateMinConstraints = true,

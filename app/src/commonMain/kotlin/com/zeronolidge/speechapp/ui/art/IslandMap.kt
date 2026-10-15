@@ -19,6 +19,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import com.zeronolidge.speechapp.logic.Species
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -108,8 +112,9 @@ fun IslandMap(
     LaunchedEffect(hintKey) {
         if (hintKey > 0) {
             hint.snapTo(0f)
-            // Sparkles make three quick runs to the next stop (each under half a second).
-            hint.animateTo(1f, tween(if (still) 1 else 1500, easing = LinearEasing))
+            // Rory walks from the tapped place to the next stop along a sparkly trail, then waits
+            // there a moment. (With reduce motion he simply stands at the next stop.)
+            hint.animateTo(1f, tween(3200, easing = LinearEasing))
         }
     }
 
@@ -191,7 +196,7 @@ fun IslandMap(
                 }
                 if (strength > 0.01f) {
                     val box = unit * 0.34f
-                    val wiggle = if (land == hintFrom && hint.value in 0.001f..0.2f) sin(hint.value * 110f) * (1f - hint.value / 0.2f) else 0f
+                    val wiggle = if (!still && land == hintFrom && hint.value in 0.001f..0.12f) sin(hint.value * 180f) * (1f - hint.value / 0.12f) else 0f
                     Box(
                         Modifier
                             .offset(x = w * land.mapX - box / 2, y = h * land.mapY - box / 2)
@@ -224,21 +229,59 @@ fun IslandMap(
                         .clickable { onElsewhere(land) },
                 )
             }
-            // Open lands wear a picture label (its emoji on a paper chip), which appears as the
-            // mist clears. Tapping the label opens the land too.
-            val label = (unit.value * 0.06f).coerceIn(22f, 34f)
-            Land.entries.filter { reached(it) }.forEach { land ->
-                val show = if (land == newLand) clearing.value else 1f
-                Text(
-                    land.emoji,
-                    fontSize = label.sp,
-                    modifier = Modifier
-                        .offset(x = w * land.mapX - (label * 0.9f).dp, y = h * (land.mapY - 0.15f).coerceAtLeast(0.01f))
-                        .graphicsLayer { alpha = show }
+            // Every land wears a label: its picture (for him) and a short name (for grown-ups), on
+            // a paper chip above its landmark. Open lands are bright; misty ones are paler. Tapping
+            // a label is the same as tapping its land.
+            val label = (unit.value * 0.055f).coerceIn(20f, 30f)
+            Land.entries.forEach { land ->
+                val open = reached(land)
+                val fade = when {
+                    land == newLand -> 0.65f + 0.35f * clearing.value
+                    open -> 1f
+                    else -> 0.65f
+                }
+                Box(
+                    Modifier
+                        .centeredAt(w * land.mapX, h * (land.mapY - 0.155f).coerceAtLeast(0.005f), w)
+                        .graphicsLayer { alpha = fade }
                         .paperCard(PaperStyle.chip, 999.dp)
                         .clickable(remember { MutableInteractionSource() }, indication = null) { onElsewhere(land) }
-                        .padding(horizontal = 10.dp, vertical = 2.dp),
-                )
+                        .padding(horizontal = 10.dp, vertical = 1.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(land.emoji, fontSize = label.sp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            land.shortName, fontSize = (label * 0.6f).sp, maxLines = 1, softWrap = false,
+                            fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink,
+                        )
+                    }
+                }
+            }
+
+            // Rory walks from a misty place to the next stop, along the sparkly trail.
+            val from = hintFrom
+            if (from != null && hint.value in 0.001f..0.999f) {
+                val t = hint.value
+                val walk = if (still) 1f else ((1 - cos((t / 0.6f).coerceAtMost(1f) * PI)) / 2).toFloat()
+                val (sx, sy) = Trail.position(current)
+                val rx = from.mapX + (sx - from.mapX) * walk
+                val ry = from.mapY + (sy - from.mapY) * walk
+                val rh = unit * 0.16f
+                val step = if (still || walk >= 1f) 0f else sin(t * 60f)
+                Box(
+                    Modifier
+                        .offset(x = w * rx + 52.dp, y = h * ry - rh)
+                        .size(rh * 0.72f, rh)
+                        .zIndex(3f)
+                        .graphicsLayer {
+                            alpha = ((1f - t) / 0.12f).coerceIn(0f, 1f)
+                            rotationZ = step * 6f
+                            translationY = -kotlin.math.abs(step) * size.height * 0.06f
+                        },
+                ) {
+                    Critter(Species.ROBOT, Modifier.fillMaxSize(), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true, mirrored = sx < from.mapX)
+                }
             }
         }
 
@@ -318,6 +361,15 @@ fun IslandMap(
 }
 
 // ---------------------------------------------------------------- helpers
+
+/** Places this thing with its top centred on ([x], [y]), kept inside [maxX] (the map's width). */
+private fun Modifier.centeredAt(x: Dp, y: Dp, maxX: Dp) = layout { m, c ->
+    val p = m.measure(c.copy(minWidth = 0, minHeight = 0))
+    layout(p.width, p.height) {
+        val left = (x.roundToPx() - p.width / 2).coerceIn(0, (maxX.roundToPx() - p.width).coerceAtLeast(0))
+        p.place(left, y.roundToPx())
+    }
+}
 
 private fun DrawScope.p(fx: Float, fy: Float) = Offset(size.width * fx, size.height * fy)
 private val DrawScope.u get() = size.minDimension
@@ -817,21 +869,21 @@ private fun DrawScope.frontCloud() {
 
 /** Sparkles that travel from [from] to [to] (twice), showing the way to the next stop. */
 private fun DrawScope.sparklePath(from: Offset, to: Offset, t: Float, still: Boolean) {
-    // A faint dotted guide line, then a trail of big sparkles running along it.
+    // A dotted guide line all the way, and a trail of sparkles following Rory as he walks
+    // (the first 60% of the hint); everything fades at the end.
     val fadeAll = if (t > 0.85f) (1f - t) / 0.15f else 1f
     drawLine(
-        Color.White.copy(alpha = 0.6f * fadeAll), from, to, u * 0.008f, cap = StrokeCap.Round,
+        Color.White.copy(alpha = 0.7f * fadeAll), from, to, u * 0.008f, cap = StrokeCap.Round,
         pathEffect = PathEffect.dashPathEffect(floatArrayOf(u * 0.01f, u * 0.02f)),
     )
-    if (still) return
-    val head = (t * 3.3f) % 1.1f
-    for (k in 0 until 8) {
-        val f = head - k * 0.06f
-        if (f < 0f || f > 1f) continue
+    val head = if (still) 1f else ((1 - cos((t / 0.6f).coerceAtMost(1f) * PI)) / 2).toFloat()
+    for (k in 0 until 10) {
+        val f = head - k * 0.07f
+        if (f < 0f) continue
         val q = from + (to - from) * f
-        val lift = sin(f * PI * 3).toFloat() * u * 0.02f
-        val fade = (1f - k / 8f) * fadeAll
-        star(Offset(q.x, q.y - lift), u * (0.04f - k * 0.003f), Color(0xFFFFD54F).copy(alpha = fade.coerceIn(0f, 1f)))
+        val lift = sin(f * PI * 3 + t * 20).toFloat() * u * 0.015f
+        val fade = (1f - k / 10f) * fadeAll
+        star(Offset(q.x, q.y - lift), u * (0.035f - k * 0.002f), Color(0xFFFFD54F).copy(alpha = fade.coerceIn(0f, 1f)))
     }
 }
 

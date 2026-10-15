@@ -234,6 +234,7 @@ private fun MicStatusSection() {
         !app.progress.useMic -> "Microphone switched off above" to Color(0xFF8D6E63)
         status == MicStatus.ON -> "Microphone is on" to Color(0xFF2E7D32)
         status == MicStatus.BLOCKED -> "Microphone is blocked" to Color(0xFFC62828)
+        app.progress.micAsked -> "Listening is off for now (\"Not now\" was tapped on the \"Can Rory hear you?\" screen)" to Color(0xFFEF6C00)
         else -> "Microphone not allowed yet" to Color(0xFFEF6C00)
     }
     Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
@@ -243,12 +244,17 @@ private fun MicStatusSection() {
         fontSize = 14.sp,
         color = Kid.ink.copy(alpha = 0.7f),
     )
-    if (app.voice.available && app.progress.useMic && status != MicStatus.ON) {
-        Button(onClick = { mic.request { } }) { Text("Allow microphone") }
+    // One clear way to switch listening on later, whether it was "Not now", switched off above,
+    // or never asked.
+    if (app.voice.available && (!app.progress.useMic || status != MicStatus.ON)) {
+        Button(onClick = {
+            app.progress.updateUseMic(true)
+            if (status != MicStatus.ON) mic.request { ok -> if (ok) app.speaker.say("Yay! Rory can hear you now!") }
+        }) { Text("🎤 Turn on listening", fontSize = 18.sp) }
     }
     if (status == MicStatus.BLOCKED) {
         Text("To turn it back on:", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Tip("iPad or iPhone: open Settings, scroll to Safari, tap Microphone, and choose Allow (or Ask). Then come back here and tap Allow microphone.")
+        Tip("iPad or iPhone: open Settings, scroll to Safari, tap Microphone, and choose Allow (or Ask). Then come back here and tap Turn on listening.")
         Tip("In Safari itself: tap the aA button in the address bar, then Website Settings, then Microphone: Allow.")
         Tip("Android tablet in Chrome: tap the icon to the left of the web address, then Permissions, then Microphone: Allow.")
         Tip("Android app: open Settings, then Apps, then Talk & Learn, then Permissions, then Microphone: Allow.")
