@@ -114,13 +114,14 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
         BakedLayer(listOf("sky", land), depth = 0.dp, edge = false) { sky(land, pal) }
         if (land != Land.CAVES) {
             // One baked strip of clouds, slid along and wrapped around.
-            listOf(0f, -1f).forEach { k ->
-                BakedLayer(
-                    listOf("clouds", land),
-                    Modifier.graphicsLayer { translationX = (drift + k) * size.width },
-                    depth = 1.5.dp, grain = false,
-                ) { cloudStrip(pal) }
-            }
+            BakedLayer(
+                listOf("clouds", land), depth = 1.5.dp, grain = false,
+                live = { b ->
+                    val x = drift * size.width
+                    drawBaked(b, x)
+                    drawBaked(b, x - size.width)
+                },
+            ) { cloudStrip(pal) }
         }
         BakedLayer(listOf("far", land, seed), Modifier.popUp(scene, 0), depth = 2.dp) { far(land, pal, seed) }
         BakedLayer(listOf("near", land, seed), Modifier.popUp(scene, 70), depth = 3.dp) { near(land, pal, seed) }

@@ -67,9 +67,11 @@ if (started) {
             await wait(4000);
             await shot('map');
             await page.mouse.click(640, 752);
-            await wait(2500);
+            await wait(1500);
+            await shot('story-1s');
+            await wait(3000);
             await shot('story');
-            await wait(2000);
+            await wait(1000);
             await page.mouse.click(300, 520);
             await wait(3500);
             await shot('challenge');

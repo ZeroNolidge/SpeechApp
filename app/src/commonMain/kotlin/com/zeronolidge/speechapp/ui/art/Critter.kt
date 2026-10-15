@@ -181,7 +181,7 @@ private class PuppetNode(var spec: PuppetSpec, var motion: PuppetMotion) : Modif
             val u = size.width / W
             bakePaper(
                 size.width, size.height, 6.dp.toPx(), 3.dp.toPx(), 1.2.dp.toPx(), 9.dp.toPx(),
-                grain = true, maxPx = 720f, shapeShadows = true,
+                grain = true, maxPx = 520f, shapeShadows = true,
             ) { drawPuppetPart(p, u, s.species, s.color, s.outfit, s.mood, s.scarf) }
         }
     }

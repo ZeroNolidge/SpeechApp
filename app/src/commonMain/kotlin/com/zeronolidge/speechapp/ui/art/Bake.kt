@@ -144,7 +144,7 @@ internal fun DrawScope.bakePaper(
         CanvasDrawScope().draw(this, layoutDirection, Canvas(out), Size(bw.toFloat(), bh.toFloat())) {
             val d = depth * scale
             // A soft shadow lit from the top left: a few faint copies, further and fainter.
-            listOf(1.35f to 0.08f, 1f to 0.11f, 0.65f to 0.11f).forEach { (k, a) ->
+            listOf(1.2f to 0.12f, 0.7f to 0.14f).forEach { (k, a) ->
                 drawImage(content, Offset(d * 0.6f * k, d * k), alpha = a, colorFilter = shadowTint)
             }
             drawImage(content)
@@ -242,12 +242,14 @@ fun BakedLayer(
     depth: Dp = 3.dp,
     grain: Boolean = true,
     edge: Boolean = true,
-    maxPx: Float = 1400f,
+    maxPx: Float = 1000f,
+    /** How to put the baked image on screen each frame, if not simply as it is. */
+    live: (DrawScope.(Baked) -> Unit)? = null,
     draw: DrawScope.() -> Unit,
 ) {
     Spacer(
         modifier.fillMaxSize() then BakedPaperElement(
-            spec = key, depth = depth, edge = edge, grain = grain, maxPx = maxPx, draw = draw,
+            spec = key, depth = depth, edge = edge, grain = grain, maxPx = maxPx, live = live, draw = draw,
         ),
     )
 }
