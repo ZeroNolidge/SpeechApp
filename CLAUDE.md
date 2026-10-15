@@ -33,6 +33,12 @@ These are the owner's rules for all work:
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
   limit on each). If speech doesn't finish in time the flow carries on and a big replay 🔊 appears
   (`AudioTroubleButton`). Chrome sometimes never fires `onend`; that used to freeze the story.
+- **Layout must hold at 360px wide.** Never put a fixed-size button (especially ▶) at the end of
+  a row of fixed-size things: give it its own space first and let the rest take `weight`. Narrow
+  screens (< 520dp) show 2 choices; story/challenge sit side by side from 768dp or in landscape.
+  In `BoxWithConstraints`, read `maxWidth`/`maxHeight` into vals at the top (nested Row/Column
+  can't use them implicitly; CI fails).
+- Back: ⬅️ next to 🏠 only where back differs from home (inside Practice, buddy picker from closet).
 - Only use symbols that are emoji (they're in the web emoji font) or in Sniglet. Plain symbols like
   → ➜ ✓ ⌫ ▲ ● show as boxes on the web. Draw arrows if needed.
 - Not a substitute for a speech-language pathologist; keep that note on the grown-ups page.
