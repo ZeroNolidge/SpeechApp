@@ -256,7 +256,12 @@ class Progress(private val prefs: Prefs) {
     }
 
     fun toggleFocusSound(id: String) {
-        focusSounds = if (id in focusSounds) focusSounds - id else focusSounds + id
+        // One or two target sounds: picking a third swaps out the earliest pick.
+        focusSounds = when {
+            id in focusSounds -> focusSounds - id
+            focusSounds.size >= MAX_FOCUS -> focusSounds.drop(1).toSet() + id
+            else -> focusSounds + id
+        }
         prefs.edit().putStringSet("focus", focusSounds).apply()
     }
 
@@ -366,7 +371,8 @@ class Progress(private val prefs: Prefs) {
         const val AREA_ROBOT = "robot"
         val areas = listOf(AREA_SPEECH, AREA_LETTERS, AREA_READING, AREA_NUMBERS, AREA_COINS, AREA_PATTERNS, AREA_ROBOT)
         const val MAX_SPEECH_STEP = 2
-        const val MAX_CUSTOM = 3
+        const val MAX_CUSTOM = 8
+        const val MAX_FOCUS = 2
         const val BACKPACK_SIZE = 4
         private const val SET_SEP = "\u001F"
     }

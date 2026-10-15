@@ -186,7 +186,12 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
         when (kind) {
             PracticeKind.BIG_SMALL -> Challenge.Letter(Letters.make(LetterMode.BIG_TO_SMALL, rnd, tricky))
             PracticeKind.SMALL_BIG -> Challenge.Letter(Letters.make(LetterMode.SMALL_TO_BIG, rnd, tricky))
-            PracticeKind.FIRST_SOUND -> Challenge.Letter(Letters.make(LetterMode.FIRST_SOUND, rnd, tricky))
+            PracticeKind.FIRST_SOUND -> {
+                // Mostly the letters of his target sounds and own words.
+                val mine = Letters.targetsFor(p.focusSounds, p.customWords.map { it.first })
+                val target = if (mine.isNotEmpty() && rnd.nextInt(3) != 0) mine.random(rnd) else null
+                Challenge.Letter(Letters.make(LetterMode.FIRST_SOUND, rnd, tricky, target))
+            }
             PracticeKind.SOUND_OUT -> Challenge.SoundOut(Reading.make(ReadingContent.cvcWords, rnd, ReadingContent.cvcWords.firstOrNull { it.text == last }))
             PracticeKind.WHICH_WORD -> Challenge.WhichWord(Reading.make(ReadingContent.cvcWords, rnd, ReadingContent.cvcWords.firstOrNull { it.text == last }))
             PracticeKind.COUNT -> Challenge.Count(Numbers.count(if (big) 10 else 6, rnd))

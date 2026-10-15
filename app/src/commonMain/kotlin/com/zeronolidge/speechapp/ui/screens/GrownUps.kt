@@ -55,7 +55,11 @@ import com.zeronolidge.speechapp.ui.theme.Kid
 import kotlin.math.roundToInt
 
 /** Pictures a grown-up can pick for their own words. */
-private val ownWordPictures = listOf("🧑", "👩", "👨", "👵", "👴", "👶", "🐶", "🐱", "🧸", "🚗", "⚽", "🦖", "🍕", "⭐")
+private val ownWordPictures = listOf(
+    "🧑", "👩", "👨", "👵", "👴", "👶", "🐶", "🐱", // family and pets
+    "🧸", "🚗", "⚽", "🦖", "🚂", "🎈", "🚲", // toys
+    "🍕", "🍌", "🍎", "🍪", "🧀", "🍓", "⭐", // foods and more
+)
 
 /** Behind the grown-up check: settings, the words the child has tried, and the grown-up's own words. */
 @Composable
@@ -83,9 +87,9 @@ fun GrownUpsScreen(nav: Nav) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Speech sounds to focus on", fontSize = 18.sp)
+                Text("Target sounds (pick 1 or 2)", fontSize = 18.sp)
                 Text(
-                    if (p.focusSounds.isEmpty()) "None picked, so stories use every sound." else "Stories use the sounds you picked.",
+                    if (p.focusSounds.isEmpty()) "None picked, so stories use every sound." else "Most practice words use the sounds you picked.",
                     fontSize = 14.sp,
                     color = Kid.ink.copy(alpha = 0.7f),
                 )
@@ -312,7 +316,7 @@ private fun OwnWords() {
     var text by remember { mutableStateOf("") }
     var pic by remember { mutableStateOf(ownWordPictures.first()) }
     Text(
-        "Family names or favourite things. They come up often in the stories. Up to ${Progress.MAX_CUSTOM}.",
+        "Family names, toys, foods: words he loves. Stories and games use them (and his target sounds) most of the time. Up to ${Progress.MAX_CUSTOM}.",
         fontSize = 14.sp,
         color = Kid.ink.copy(alpha = 0.7f),
     )

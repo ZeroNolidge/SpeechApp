@@ -203,6 +203,21 @@ object StoryGen {
      * regularly. [count] is how many speaking moments the chapter has.
      */
     fun sayKinds(p: StoryParams, count: Int): ArrayDeque<SayKind> {
+        // With the grown-up's own words or target sounds set, most speaking turns use them:
+        // OWN for his own words, PRACTICE for words with his target sounds.
+        if (p.customWords.isNotEmpty() || p.focusSounds.isNotEmpty()) {
+            val own = if (p.customWords.isNotEmpty()) SayKind.OWN else SayKind.PRACTICE
+            val review = p.words.dueForReview(p.today, 1).isNotEmpty()
+            val all = buildList {
+                add(SayKind.STORY)
+                add(own)
+                add(SayKind.PRACTICE)
+                add(if (review) SayKind.REVIEW else own)
+                add(own)
+                add(SayKind.PRACTICE)
+            }
+            return ArrayDeque(if (count == 1) listOf(listOf(own, SayKind.PRACTICE, own, SayKind.STORY)[p.chapter % 4]) else all.take(count))
+        }
         val all = buildList {
             add(SayKind.STORY)
             if (p.words.dueForReview(p.today, 1).isNotEmpty()) add(SayKind.REVIEW)
@@ -287,7 +302,11 @@ object StoryGen {
             }
             Subject.LETTERS -> {
                 val mode = LetterMode.entries.random(rnd)
-                var round = Letters.make(mode, rnd, tricky = p.lettersSolved > 15)
+                // The first-sound puzzle mostly uses the letters of his target sounds and own words.
+                val mine = Letters.targetsFor(p.focusSounds, p.customWords.map { it.first })
+                    .filter { "L" + it.lower !in used }
+                val target = if (mode == LetterMode.FIRST_SOUND && mine.isNotEmpty() && rnd.nextInt(3) != 0) mine.random(rnd) else null
+                var round = Letters.make(mode, rnd, tricky = p.lettersSolved > 15, target = target)
                 while ("L" + round.target.lower in used) round = Letters.make(mode, rnd, tricky = p.lettersSolved > 15)
                 used += "L" + round.target.lower
                 Challenge.Letter(round)

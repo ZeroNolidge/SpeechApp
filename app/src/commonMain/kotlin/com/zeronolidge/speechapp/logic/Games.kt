@@ -162,8 +162,15 @@ object Letters {
     /** Pairs that look alike are good practice once the basics are known. */
     private val confusable = listOf("bdpq", "mnwu", "ilt", "ceo", "hn", "vwy")
 
-    fun make(mode: LetterMode, rnd: Random, tricky: Boolean = false): LetterRound {
-        val target = LetterContent.letters.random(rnd)
+    /** The letters his target sounds and own words start with ("sh" and "Sam" both give S). */
+    fun targetsFor(focusSounds: Set<String>, ownWords: List<String>): List<LetterInfo> =
+        (focusSounds.mapNotNull { it.firstOrNull() } + ownWords.mapNotNull { it.trim().firstOrNull() })
+            .filter { it.isLetter() }
+            .map { LetterContent.of(it.lowercaseChar()) }
+            .distinct()
+
+    fun make(mode: LetterMode, rnd: Random, tricky: Boolean = false, target: LetterInfo? = null): LetterRound {
+        val target = target ?: LetterContent.letters.random(rnd)
         val similar = confusable.firstOrNull { target.lower in it }
             ?.map { LetterContent.of(it) }.orEmpty()
         val pool = if (tricky && similar.size >= 2) similar + LetterContent.letters.shuffled(rnd).take(2)

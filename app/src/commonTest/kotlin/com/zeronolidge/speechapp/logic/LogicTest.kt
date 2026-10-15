@@ -589,3 +589,25 @@ class EchoTest {
         assertTrue(Echo.line("cat", 3).startsWith("Cat! A "))
     }
 }
+
+class PersonalWordsTest {
+    @Test
+    fun ownWordsAndTargetSoundsAreUsedMostOfTheTime() {
+        val p = StoryParams("Sam", 1, focusSounds = setOf("s"), customWords = listOf("Grandma" to "👵", "pizza" to "🍕", "Rex" to "🐶"))
+        var personal = 0
+        var total = 0
+        repeat(40) {
+            val q = StoryGen.make(Land.FOREST, p.copy(chapter = it), Random(it))
+            q.beats.map { b -> b.challenge as Challenge.Say }.forEach { s ->
+                total++
+                if (s.kind == SayKind.OWN || (s.kind == SayKind.PRACTICE && s.sound?.id == "s")) personal++
+            }
+        }
+        assertTrue(personal * 2 > total, "only $personal of $total turns used his words or sounds")
+    }
+
+    @Test
+    fun firstSoundPuzzlesUseHisLetters() {
+        assertEquals(listOf('s', 'g'), Letters.targetsFor(setOf("sh"), listOf("Grandma")).map { it.lower })
+    }
+}
