@@ -63,6 +63,8 @@ import com.zeronolidge.speechapp.logic.StepResult
 import com.zeronolidge.speechapp.logic.Subject
 import com.zeronolidge.speechapp.state.Progress
 import com.zeronolidge.speechapp.ui.components.AnswerRow
+import com.zeronolidge.speechapp.ui.components.ArrowIcon
+import com.zeronolidge.speechapp.ui.components.PaperArrowButton
 import com.zeronolidge.speechapp.ui.components.Misses
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
@@ -730,7 +732,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                     program.removeAt(program.lastIndex)
                     app.speaker.say("Undo.")
                 }
-                RoundIcon("▶", Kid.good, size = 84.dp, enabled = !running && !won) { go() }
+                PaperArrowButton(Kid.good, size = 84.dp, arrowColor = Color.White, enabled = !running && !won) { go() }
             }
         }
     }
@@ -900,7 +902,7 @@ private fun CoinsView(c: Challenge.Coins, area: String, miss: () -> Unit, done: 
                                 }) { Coin(card * 0.46f) }
                             }
                         }
-                        Text("▶", fontSize = 30.sp)
+                        ArrowIcon(30.dp, color = Kid.ink)
                         // The stall keeper's jar fills up.
                         Box(
                             Modifier.size(card * 1.3f, card).paperCard(Color(0xFFB3E5FC), 22.dp).padding(8.dp),

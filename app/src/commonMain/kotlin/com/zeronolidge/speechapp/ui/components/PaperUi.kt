@@ -6,6 +6,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import com.zeronolidge.speechapp.ui.art.paperPath
+import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -144,6 +147,44 @@ fun PaperIconButton(
 ) {
     PaperButton(color, modifier.size(size), circle = true, enabled = enabled, onClick = onClick) {
         Text(emoji, fontSize = (size.value * 0.46f).sp)
+    }
+}
+
+/**
+ * A play / forward arrow (or back, with [pointLeft]) drawn as a paper triangle. Browsers show the
+ * ▶ character as a little blue emoji tile, so arrows are always drawn instead.
+ */
+@Composable
+fun ArrowIcon(size: Dp, modifier: Modifier = Modifier, color: Color = Color.White, pointLeft: Boolean = false) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        // Nudged towards the point so it looks centred in a round button.
+        val tri = Path().apply {
+            if (pointLeft) {
+                moveTo(w * 0.22f, h * 0.5f); lineTo(w * 0.86f, h * 0.12f); lineTo(w * 0.86f, h * 0.88f)
+            } else {
+                moveTo(w * 0.78f, h * 0.5f); lineTo(w * 0.14f, h * 0.12f); lineTo(w * 0.14f, h * 0.88f)
+            }
+            close()
+        }
+        paperPath(tri, color)
+    }
+}
+
+/** A round raised paper button with a drawn arrow, for "go", "more" and "back a page". */
+@Composable
+fun PaperArrowButton(
+    color: Color,
+    size: Dp = CornerButtonSize,
+    pointLeft: Boolean = false,
+    arrowColor: Color = PaperStyle.ink,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    PaperButton(color, modifier.size(size), circle = true, enabled = enabled, onClick = onClick) {
+        ArrowIcon(size * 0.42f, color = arrowColor, pointLeft = pointLeft)
     }
 }
 
@@ -318,7 +359,7 @@ fun <T> PagedChoices(
         if (page >= pages) page = pages - 1
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(CornerButtonSize), contentAlignment = Alignment.Center) {
-                if (page > 0) PaperIconButton("◀", PaperColorsUi.choice, size = 72.dp) { page--; app.speaker.say("Back!") }
+                if (page > 0) PaperArrowButton(PaperColorsUi.choice, size = 72.dp, pointLeft = true) { page--; app.speaker.say("Back!") }
             }
             Spacer(Modifier.width(gap))
             Row(
@@ -338,7 +379,7 @@ fun <T> PagedChoices(
             }
             Spacer(Modifier.width(gap))
             Box(Modifier.width(CornerButtonSize), contentAlignment = Alignment.Center) {
-                if (page < pages - 1) PaperIconButton("▶", PaperColorsUi.choice, size = 72.dp) { page++; app.speaker.say("More!") }
+                if (page < pages - 1) PaperArrowButton(PaperColorsUi.choice, size = 72.dp) { page++; app.speaker.say("More!") }
             }
         }
     }

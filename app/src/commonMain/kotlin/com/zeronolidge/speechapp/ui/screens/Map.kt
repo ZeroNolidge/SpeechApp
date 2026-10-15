@@ -42,6 +42,7 @@ import com.zeronolidge.speechapp.ui.art.IslandMap
 import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.ui.art.PaperStyle
 import com.zeronolidge.speechapp.ui.art.Scenery
+import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.ChoiceTile
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.components.HearAgainButton
@@ -139,8 +140,11 @@ fun MapScreen(nav: Nav) {
         val top = 60.dp
         val bottom = if (mapNarrow(maxWidth)) 176.dp else 90.dp
         val availH = maxHeight - top - bottom
-        val mapW = minOf(maxWidth, availH * 1.75f)
-        val mapH = mapW / 1.75f
+        // Wide screens keep the island's usual shape; upright screens let it grow taller
+        // instead of leaving big empty bands of sea.
+        val aspect = (maxWidth / availH).coerceIn(1.15f, 1.75f)
+        val mapW = minOf(maxWidth, availH * aspect)
+        val mapH = mapW / aspect
         IslandMap(
             chapter = p.chapter,
             reached = { it in Trail.reached(p.chapter) },
@@ -186,7 +190,7 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
         val adventure = @Composable {
             PaperButton(Color(0xFFFFD54F), Modifier.height(76.dp), corner = 999.dp, onClick = onAdventure) {
                 Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("▶", fontSize = 32.sp)
+                    ArrowIcon(30.dp, color = Color(0xFF2E7D32))
                     Spacer(Modifier.width(10.dp))
                     Text(
                         "Adventure!", fontSize = 26.sp, color = PaperStyle.ink, maxLines = 1, softWrap = false,

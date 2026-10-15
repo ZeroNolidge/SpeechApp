@@ -124,14 +124,16 @@ fun Modifier.raisedPaperFace(color: Color, corner: Dp = PaperStyle.corner, circl
 
 /** Scenery sits back: a soft wash and paper grain over the background, but never over text or buttons. */
 @Composable
-fun SceneryWash(modifier: Modifier = Modifier.fillMaxSize()) {
-    Canvas(modifier) { drawRect(PaperStyle.sceneryWash) }
-    PaperGrain(modifier)
+fun SceneryWash(modifier: Modifier = Modifier.fillMaxSize(), overflow: Float = 0f) {
+    Canvas(modifier) {
+        drawRect(PaperStyle.sceneryWash, Offset(-overflow, -overflow), Size(size.width + overflow * 2, size.height + overflow * 2))
+    }
+    PaperGrain(modifier, overflow)
 }
 
 /** A fine paper-grain texture for backgrounds, so the app feels like paper. */
 @Composable
-fun PaperGrain(modifier: Modifier = Modifier.fillMaxSize()) {
+fun PaperGrain(modifier: Modifier = Modifier.fillMaxSize(), overflow: Float = 0f) {
     val brush = remember {
         val n = 160
         val rnd = Random(7)
@@ -152,7 +154,7 @@ fun PaperGrain(modifier: Modifier = Modifier.fillMaxSize()) {
         }
         ShaderBrush(ImageShader(bmp, TileMode.Repeated, TileMode.Repeated))
     }
-    Canvas(modifier) { drawRect(brush) }
+    Canvas(modifier) { drawRect(brush, Offset(-overflow, -overflow), Size(size.width + overflow * 2, size.height + overflow * 2)) }
 }
 
 /** The warm, bright paper colours used across the app. */

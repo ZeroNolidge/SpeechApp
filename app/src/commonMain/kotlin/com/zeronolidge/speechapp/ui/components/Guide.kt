@@ -55,7 +55,7 @@ fun GoButton(
             enabled = enabled,
             onClick = onClick,
         ) {
-            Text("▶", fontSize = (size.value * 0.45f).sp, color = Color.White, modifier = Modifier.offset(x = size * 0.04f))
+            ArrowIcon(size * 0.44f)
         }
         if (enabled && hint) PointingHand(Modifier.offset(y = 4.dp), size = size * 0.5f)
     }

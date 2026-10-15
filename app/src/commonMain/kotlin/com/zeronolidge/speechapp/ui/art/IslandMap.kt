@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Trail
+import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.unfold
 import kotlin.math.PI
@@ -122,8 +123,9 @@ fun IslandMap(
             caves(Land.CAVES, fast)
             castle(Land.CLOUDS, mid)
         }
-        // Scenery sits back; the trail stops below stand out.
-        SceneryWash()
+        // Scenery sits back; the trail stops below stand out. The wash reaches past the map's edges
+        // so the sea around it matches and there's no visible rectangle.
+        SceneryWash(overflow = 3000f)
         Canvas(Modifier.fillMaxSize()) {
             Land.entries.forEach { land ->
                 // The tapped misty land gives a quick wiggle.
@@ -188,7 +190,7 @@ fun IslandMap(
                     .border(6.dp, Color(0xFFFFD600), CircleShape),
             )
             PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, onClick = onStop) {
-                Text("▶", fontSize = (node.value * 0.36f).sp, color = Color(0xFF2E7D32), modifier = Modifier.offset(x = node * 0.03f))
+                ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
             }
         }
         val heroOnRight = cx < 0.5f

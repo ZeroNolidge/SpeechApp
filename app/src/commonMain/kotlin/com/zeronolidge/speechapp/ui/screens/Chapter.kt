@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.zeronolidge.speechapp.logic.Challenge
 import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.Feeling
@@ -62,6 +63,7 @@ import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.ui.challenge.ChallengeView
 import com.zeronolidge.speechapp.ui.challenge.PowerTicks
 import com.zeronolidge.speechapp.ui.components.AfterDelay
+import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.BackpackMeter
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.components.LocalApp
@@ -189,7 +191,7 @@ private fun RowScope.Footprints(quest: Quest, phase: Phase) {
                 contentAlignment = Alignment.Center,
             ) { Text(if (i < current) "✔️" else "👣", fontSize = 17.sp, color = Color.White) }
         }
-        Text("▶", fontSize = 18.sp, modifier = Modifier.padding(horizontal = 6.dp))
+        ArrowIcon(18.dp, Modifier.padding(horizontal = 6.dp), color = PaperStyle.ink)
         Text(quest.goal, fontSize = 28.sp, modifier = Modifier.alpha(if (current >= quest.beats.size) 1f else 0.5f))
     }
 }
@@ -243,6 +245,7 @@ private fun StoryScene(
             SpeechBubble(
                 text,
                 Modifier
+                    .zIndex(2f)
                     .fillMaxWidth(if (narrow) 1f else 0.8f)
                     .heightIn(max = bubbleMax)
                     .verticalScroll(rememberScrollState()),
@@ -307,7 +310,7 @@ private fun BeatScene(
 
     StorySplit(story = { m ->
         Column(m) {
-            SpeechBubble(text, Modifier.fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
+            SpeechBubble(text, Modifier.zIndex(2f).fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 SetPieceView(beat.scene.piece, beat.scene.prop, solvedHere, Modifier.fillMaxSize())
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
@@ -388,7 +391,7 @@ private fun WakeScene(quest: Quest, hero: Species, onAwake: () -> Unit) {
     if (awake) AfterDelay("awake", 1200) { onAwake() }
     StorySplit(story = { m ->
         Column(m) {
-            SpeechBubble(text, Modifier.fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
+            SpeechBubble(text, Modifier.zIndex(2f).fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 SetPieceView(quest.twist.piece, null, false, Modifier.fillMaxSize())
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {

@@ -109,7 +109,7 @@ fun StickerBookScreen(nav: Nav) {
                 val species = p.hero ?: Species.KID
                 Critter(species, Modifier.fillMaxHeight(0.6f), p.heroColor(species), p.outfit, Mood.THINK)
                 Spacer(Modifier.height(12.dp))
-                PaperChip("🗣️ ▶ ⭐", fontSize = 40.sp)
+                PaperChip("🗣️ ⭐", fontSize = 40.sp)
             }
         } else {
             BoxWithConstraints(Modifier.fillMaxSize().paperCard(Color(0xFFFFFAF0), 30.dp)) {
