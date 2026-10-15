@@ -60,7 +60,7 @@ class QueueSpeaker(private val engine: VoiceEngine) : Speaker {
             delay(timeLimitMs(item.text, r))
             ended(item.id, ok = false)
         }
-        engine.speakOne(item.text, r) { ended(item.id, ok = true) }
+        engine.speakOne(item.text, r) { spoken -> ended(item.id, ok = spoken) }
     }
 
     private fun ended(id: Int, ok: Boolean) {

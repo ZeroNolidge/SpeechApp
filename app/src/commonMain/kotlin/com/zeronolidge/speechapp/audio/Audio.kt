@@ -35,8 +35,11 @@ interface Speaker {
  * and time-outs on top, the same way on every platform.
  */
 interface VoiceEngine {
-    /** Speaks [text] at [rate] (1.0 is normal). [onEnd] runs once on the main thread when it ends or fails. */
-    fun speakOne(text: String, rate: Float, onEnd: () -> Unit)
+    /**
+     * Speaks [text] at [rate] (1.0 is normal). [onEnd] runs once on the main thread when it ends:
+     * true if it was spoken, false if it never started (within a couple of seconds) or failed.
+     */
+    fun speakOne(text: String, rate: Float, onEnd: (spoken: Boolean) -> Unit)
     /** Stops talking now. A pending [onEnd] may still arrive; callers ignore it. */
     fun cancel()
     fun shutdown()

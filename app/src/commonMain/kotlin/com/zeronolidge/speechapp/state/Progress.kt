@@ -110,8 +110,16 @@ class Progress(private val prefs: Prefs) {
 
     // ---------- The trail ----------
 
-    /** Chapters finished so far, which is also the number of the next chapter to play. */
-    var chapter by mutableIntStateOf(prefs.getInt("chapter", prefs.getInt("quests", 0)))
+    /** Where the child is on the trail: the number of the next chapter to play. */
+    var chapter by mutableIntStateOf(prefs.getInt("chapter", 0))
+        private set
+
+    /**
+     * Chapters actually finished, for the grown-ups page. Counted separately from [chapter]: an
+     * earlier version started the trail from the old "quests" count, so quests played before the
+     * trail existed are taken off for anyone who updated.
+     */
+    var chaptersDone by mutableIntStateOf(prefs.getInt("chaptersDone", (chapter - prefs.getInt("quests", 0)).coerceAtLeast(0)))
         private set
 
     /** The last chapter whose stop has already been shown unfolding on the map. */
@@ -120,7 +128,8 @@ class Progress(private val prefs: Prefs) {
 
     fun finishChapter() {
         chapter++
-        prefs.edit().putInt("chapter", chapter).apply()
+        chaptersDone++
+        prefs.edit().putInt("chapter", chapter).putInt("chaptersDone", chaptersDone).apply()
     }
 
     fun markUnfoldSeen() {
@@ -259,7 +268,7 @@ class Progress(private val prefs: Prefs) {
 
     // ---------- Backup ----------
 
-    private val intKeys get() = listOf("stars", "chapter", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack") +
+    private val intKeys get() = listOf("stars", "chapter", "chaptersDone", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack") +
         areas.map { "area_$it" } + listOf("patterns", "story_robot", "robot_easy", "robot_turn").map { "level_$it" }
     private val stringKeys get() = listOf("hero", "childName", "customWords") + Slot.entries.map { "equip_${it.name}" }
     private val setKeys = listOf("owned", "words", "focus")
@@ -303,6 +312,7 @@ class Progress(private val prefs: Prefs) {
         equipped = readEquipped()
         backpack = prefs.getInt("backpack", 0)
         chapter = prefs.getInt("chapter", 0)
+        chaptersDone = prefs.getInt("chaptersDone", 0)
         unfoldedSeen = prefs.getInt("unfoldedSeen", 0)
         words = WordBook.decode(prefs.getStringSet("words", emptySet())!!)
         speechStep = prefs.getInt("speechStep", 0)
@@ -328,6 +338,7 @@ class Progress(private val prefs: Prefs) {
         owned = Catalog.starters
         equipped = readEquipped()
         chapter = 0
+        chaptersDone = 0
         unfoldedSeen = 0
         words = WordBook()
         speechStep = 0

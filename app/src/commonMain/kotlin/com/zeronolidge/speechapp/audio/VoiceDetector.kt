@@ -31,7 +31,7 @@ class VoiceDetector(private val mic: MicLevels) {
         }
         // If the microphone never starts sending (a stuck permission prompt, say), give up kindly.
         guard = scope.launch {
-            delay(windowMs + 6000L)
+            delay(windowMs + 3000L)
             done(null)
         }
         mic.start(

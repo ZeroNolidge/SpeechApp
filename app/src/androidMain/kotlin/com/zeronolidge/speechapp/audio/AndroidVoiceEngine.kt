@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class AndroidVoiceEngine(context: Context) : VoiceEngine {
     private val main = Handler(Looper.getMainLooper())
     private val ids = AtomicInteger()
-    private val callbacks = ConcurrentHashMap<String, () -> Unit>()
+    private val callbacks = ConcurrentHashMap<String, (Boolean) -> Unit>()
+    private val started = ConcurrentHashMap.newKeySet<String>()
     private var ready = false
     private var failed = false
     private var pending: (() -> Unit)? = null
@@ -25,12 +26,14 @@ class AndroidVoiceEngine(context: Context) : VoiceEngine {
 
     init {
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) = finish(utteranceId)
+            override fun onStart(utteranceId: String?) {
+                utteranceId?.let { started.add(it) }
+            }
+            override fun onDone(utteranceId: String?) = finish(utteranceId, true)
             @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) = finish(utteranceId)
-            override fun onError(utteranceId: String?, errorCode: Int) = finish(utteranceId)
-            override fun onStop(utteranceId: String?, interrupted: Boolean) = finish(utteranceId)
+            override fun onError(utteranceId: String?) = finish(utteranceId, false)
+            override fun onError(utteranceId: String?, errorCode: Int) = finish(utteranceId, false)
+            override fun onStop(utteranceId: String?, interrupted: Boolean) = finish(utteranceId, true)
         })
     }
 
@@ -48,19 +51,20 @@ class AndroidVoiceEngine(context: Context) : VoiceEngine {
             // No speech engine: finish everything straight away so the app keeps moving.
             failed = true
             pending = null
-            callbacks.values.forEach { main.post(it) }
+            callbacks.values.forEach { cb -> main.post { cb(false) } }
             callbacks.clear()
         }
     }
 
-    private fun finish(id: String?) {
+    private fun finish(id: String?, spoken: Boolean) {
         val cb = id?.let { callbacks.remove(it) } ?: return
-        main.post(cb)
+        started.remove(id)
+        main.post { cb(spoken) }
     }
 
-    override fun speakOne(text: String, rate: Float, onEnd: () -> Unit) {
+    override fun speakOne(text: String, rate: Float, onEnd: (Boolean) -> Unit) {
         if (failed) {
-            main.post(onEnd)
+            main.post { onEnd(false) }
             return
         }
         val id = "u${ids.incrementAndGet()}"
@@ -71,10 +75,13 @@ class AndroidVoiceEngine(context: Context) : VoiceEngine {
             Unit
         }
         if (ready) action() else pending = action
+        // If it hasn't started within a few seconds, it isn't going to: report it now.
+        main.postDelayed({ if (id !in started && callbacks.containsKey(id)) finish(id, false) }, 3500)
     }
 
     override fun cancel() {
         callbacks.clear()
+        started.clear()
         pending = null
         if (ready) tts.stop()
     }

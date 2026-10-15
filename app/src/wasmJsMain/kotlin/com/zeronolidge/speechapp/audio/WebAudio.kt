@@ -5,10 +5,10 @@ import kotlin.js.js
 
 // ---------------------------------------------------------------- talking (Web Speech synthesis)
 
-private fun jsSpeakOne(text: String, rate: Double, onEnd: () -> Unit): Unit = js(
+private fun jsSpeakOne(text: String, rate: Double, onEnd: (Boolean) -> Unit): Unit = js(
     """(() => {
         const s = window.speechSynthesis;
-        if (!s) { onEnd(); return; }
+        if (!s) { onEnd(false); return; }
         const u = new SpeechSynthesisUtterance(text);
         u.rate = rate; u.pitch = 1.1; u.lang = 'en-US';
         const vs = s.getVoices();
@@ -19,14 +19,25 @@ private fun jsSpeakOne(text: String, rate: Double, onEnd: () -> Unit): Unit = js
         // Keep a reference so the browser doesn't drop the utterance (and its callbacks) early.
         window.__tlUtterances = window.__tlUtterances || [];
         window.__tlUtterances.push(u);
-        let done = false;
-        const fin = () => {
+        let done = false, started = false;
+        const fin = (ok) => {
             if (done) return;
             done = true;
             window.__tlUtterances = window.__tlUtterances.filter(x => x !== u);
-            onEnd();
+            onEnd(ok);
         };
-        u.onend = fin; u.onerror = fin;
+        u.onstart = () => { started = true; };
+        u.onend = () => fin(true);
+        u.onerror = (e) => fin(started || (e && e.error === 'interrupted'));
+        // If the voice hasn't started within a couple of seconds, it isn't going to: say so now
+        // instead of making everyone wait.
+        window.__tlLatest = u;
+        setTimeout(() => {
+            if (started || done) return;
+            // Only cancel if nothing newer has started speaking since.
+            if (window.__tlLatest === u) { try { s.cancel(); } catch (e) {} }
+            fin(false);
+        }, 2500);
         // Chrome can leave the synthesizer paused (e.g. after switching tabs); wake it first.
         try { s.resume(); } catch (e) {}
         s.speak(u);
@@ -37,7 +48,7 @@ private fun jsCancelSpeech(): Unit = js("(() => { if (window.speechSynthesis) wi
 
 /** The browser's own voice. [QueueSpeaker] handles the queue and time limits on top. */
 class WebVoiceEngine : VoiceEngine {
-    override fun speakOne(text: String, rate: Float, onEnd: () -> Unit) =
+    override fun speakOne(text: String, rate: Float, onEnd: (Boolean) -> Unit) =
         jsSpeakOne(text, rate.toDouble().coerceIn(0.3, 2.0), onEnd)
 
     override fun cancel() = jsCancelSpeech()

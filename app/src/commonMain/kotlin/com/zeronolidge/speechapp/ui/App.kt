@@ -104,7 +104,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         Screen.Stickers -> StickerBookScreen(nav)
         Screen.Gate -> ParentGateScreen(nav)
         Screen.GrownUps -> GrownUpsScreen(nav)
-        Screen.HeroPick -> HeroPickScreen(onPicked = nav.home, onHome = nav.home)
+        Screen.HeroPick -> HeroPickScreen(onPicked = nav.home, onHome = nav.home, onBack = nav.back)
         Screen.Practice -> PracticeMenu(nav)
         is Screen.PracticeGame -> PracticeGameScreen(s.kind, nav)
         Screen.TalkMenu -> TalkMenu(nav)

@@ -5,6 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -231,32 +234,50 @@ private fun StoryScene(
     }
     Nudge(text, goLine)
     val walk = walkIn(scene)
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        SpeechBubble(text, Modifier.fillMaxWidth(0.8f), fontSize = 20) { app.speaker.say(text) }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            SetPieceView(scene.piece, scene.prop, solved, Modifier.fillMaxSize())
-            Row(
-                Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                HeroWithPet(
-                    hero, p.heroColor(hero), p.outfit, p.pet,
-                    Modifier
-                        .fillMaxHeight(0.62f)
-                        .width(150.dp)
-                        .graphicsLayer { translationX = walk * size.width * 2f },
-                    heroMood,
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxHeight(0.58f)) {
-                    Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), scene.feeling.mood(), mirrored = true)
-                    NameTag(quest.friend.name)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val narrow = maxWidth < 560.dp
+        val go = if (narrow) 84.dp else 104.dp
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // The words are spoken; the bubble is for grown-ups, so it never takes over the screen.
+            SpeechBubble(
+                text,
+                Modifier
+                    .fillMaxWidth(if (narrow) 1f else 0.8f)
+                    .heightIn(max = maxHeight * 0.34f)
+                    .verticalScroll(rememberScrollState()),
+                fontSize = if (narrow) 16 else 20,
+            ) { app.speaker.say(text) }
+            // The ▶ gets its own space first, so it is always fully on screen; the characters
+            // share whatever room is left.
+            Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    SetPieceView(scene.piece, scene.prop, solved, Modifier.fillMaxSize())
+                    Row(
+                        Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        HeroWithPet(
+                            hero, p.heroColor(hero), p.outfit, p.pet,
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(0.62f)
+                                .graphicsLayer { translationX = walk * size.width * 2f },
+                            heroMood,
+                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).fillMaxHeight(0.58f)) {
+                            Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), scene.feeling.mood(), mirrored = true)
+                            NameTag(quest.friend.name)
+                        }
+                        if (visitor != null) {
+                            Critter(visitor.species, Modifier.weight(0.8f).fillMaxHeight(0.5f).popIn(visitor), Color(visitor.color), Outfit(), Mood.HAPPY, mirrored = true)
+                        }
+                    }
                 }
-                if (visitor != null) {
-                    Critter(visitor.species, Modifier.fillMaxHeight(0.5f).popIn(visitor), Color(visitor.color), Outfit(), Mood.HAPPY, mirrored = true)
-                }
-                // The only way forward, so make it impossible to miss.
-                GoButton(Modifier.align(Alignment.CenterVertically), size = 104.dp, onClick = onNext)
+                Spacer(Modifier.width(10.dp))
+                // The only way forward, so make it impossible to miss. It is there from the first moment,
+                // whatever the voice is doing.
+                GoButton(size = go, onClick = onNext)
             }
         }
     }
@@ -330,13 +351,15 @@ private fun BeatScene(
 }
 
 /**
- * The story picture and the challenge: side by side on a tablet (story left, challenge right),
- * stacked on a narrow phone screen.
+ * The story picture and the challenge: side by side on a tablet or in landscape (story left,
+ * word card or challenge right), stacked on a narrow portrait phone screen.
  */
 @Composable
 private fun StorySplit(story: @Composable (Modifier) -> Unit, challenge: @Composable (Modifier) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth < 600.dp) {
+        // Tablets (768 wide and up) and any landscape screen: side by side. Narrow portrait phones: stacked.
+        val sideBySide = maxWidth >= 768.dp || maxWidth > maxHeight
+        if (!sideBySide) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 story(Modifier.fillMaxWidth().weight(0.34f))
                 challenge(Modifier.fillMaxWidth().weight(0.66f))

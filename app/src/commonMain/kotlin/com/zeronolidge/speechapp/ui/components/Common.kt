@@ -134,13 +134,16 @@ val LocalApp = staticCompositionLocalOf<AppServices> { error("AppServices not pr
 @Composable
 fun KidScreen(
     title: String,
-    onBack: () -> Unit,
+    onHome: () -> Unit,
     spoken: String,
+    /** Set where back goes somewhere other than the map (e.g. from a game back to the games). */
+    onBack: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     SpeakOnOpen(spoken)
     ScreenFrame(
-        onHome = onBack,
+        onHome = onHome,
+        onBack = onBack,
         top = { PaperChip(title, fontSize = 26.sp) },
         content = content,
     )

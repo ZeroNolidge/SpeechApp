@@ -99,7 +99,7 @@ fun IslandMap(
     LaunchedEffect(hintKey) {
         if (hintKey > 0) {
             hint.snapTo(0f)
-            hint.animateTo(1f, tween(2600, easing = LinearEasing))
+            hint.animateTo(1f, tween(3600, easing = LinearEasing))
         }
     }
 
@@ -127,7 +127,7 @@ fun IslandMap(
         Canvas(Modifier.fillMaxSize()) {
             Land.entries.forEach { land ->
                 // The tapped misty land gives a quick wiggle.
-                val wiggle = if (land == hintFrom && hint.value in 0.001f..0.3f) sin(hint.value * 60f) * u * 0.012f * (1f - hint.value / 0.3f) else 0f
+                val wiggle = if (land == hintFrom && hint.value in 0.001f..0.25f) sin(hint.value * 90f) * u * 0.03f * (1f - hint.value / 0.25f) else 0f
                 withTransform({ translate(wiggle, 0f) }) {
                     when {
                         land == newLand -> mist(land, slow, 1f - clearing.value)
@@ -668,16 +668,22 @@ private fun DrawScope.castle(land: Land, mid: Float) {
     }
 }
 
-/** Sparkles that travel from [from] to [to], showing the way to the next stop. */
+/** Sparkles that travel from [from] to [to] (twice), showing the way to the next stop. */
 private fun DrawScope.sparklePath(from: Offset, to: Offset, t: Float) {
-    val head = (t * 1.3f).coerceAtMost(1f)
-    for (k in 0 until 7) {
-        val f = head - k * 0.07f
-        if (f < 0f) continue
+    // A faint dotted guide line, then a trail of big sparkles running along it.
+    val fadeAll = if (t > 0.85f) (1f - t) / 0.15f else 1f
+    drawLine(
+        Color.White.copy(alpha = 0.6f * fadeAll), from, to, u * 0.008f, cap = StrokeCap.Round,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(u * 0.01f, u * 0.02f)),
+    )
+    val head = (t * 2.2f) % 1.1f
+    for (k in 0 until 8) {
+        val f = head - k * 0.06f
+        if (f < 0f || f > 1f) continue
         val q = from + (to - from) * f
-        val lift = sin(f * PI * 3).toFloat() * u * 0.015f
-        val fade = (1f - k / 7f) * (if (t > 0.85f) (1f - t) / 0.15f else 1f)
-        star(Offset(q.x, q.y - lift), u * (0.022f - k * 0.002f), Color(0xFFFFD54F).copy(alpha = fade.coerceIn(0f, 1f)))
+        val lift = sin(f * PI * 3).toFloat() * u * 0.02f
+        val fade = (1f - k / 8f) * fadeAll
+        star(Offset(q.x, q.y - lift), u * (0.04f - k * 0.003f), Color(0xFFFFD54F).copy(alpha = fade.coerceIn(0f, 1f)))
     }
 }
 

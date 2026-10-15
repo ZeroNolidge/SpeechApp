@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -56,6 +59,7 @@ import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperButton
+import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.RoundIcon
 import com.zeronolidge.speechapp.ui.components.popIn
@@ -83,7 +87,7 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     var index by remember { mutableIntStateOf(0) }
     val word = words[index % words.size]
     val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}." else null
-    KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}") {
+    KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}", onBack = nav.back) {
         SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index) {
             index++
         }
@@ -103,6 +107,7 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
  * The microphone never blocks the story and quiet is never a fail.
  * [onDone] gets true if a voice was heard.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SpeakMoment(
     word: Word,
@@ -304,27 +309,35 @@ fun SpeakMoment(
                                 Speak.LISTENING, Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
                                 Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
                                 Speak.MODELLING -> Text("👂", fontSize = 52.sp)
-                                Speak.WAITING_TAP ->
-                                    if (roryWaiting) Critter(Species.ROBOT, Modifier.fillMaxHeight(), Color(0xFFFFCC80), mood = Mood.CHEER)
-                                    else Text("🗣️", fontSize = 52.sp)
+                                Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
                                 Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.popIn(it.text)) }
                             }
                         }
                     }
                 }
             }
+            // No microphone: Rory pops up big and asks for the word out loud, then waits for ▶.
+            if (roryWaiting) {
+                Row(
+                    Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Critter(Species.ROBOT, Modifier.height(minOf(maxHeight * 0.7f, 150.dp)), Color(0xFFFFCC80), mood = Mood.CHEER)
+                    PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
+                }
+            }
         }
         Spacer(Modifier.height(10.dp))
-        // One row of big buttons: hear it, slowly, mouth, microphone (and copy-me in practice), then ▶.
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val count = 3 + (if (sound != null) 1 else 0) + (if (showParrot && p.useMic) 1 else 0)
-            val gap = 12.dp
-            val size = ((maxWidth - gap * count) / (count + 1)).coerceIn(64.dp, 88.dp)
-            val active = state != Speak.DONE
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.Top,
+        // Big buttons: hear it, slowly, mouth, microphone (and copy-me in practice), then ▶.
+        // The ▶ always keeps its own space, so it is never pushed off a narrow phone screen;
+        // the other buttons wrap onto a second line if they don't fit.
+        val active = state != Speak.DONE
+        val size = 68.dp
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            FlowRow(
+                Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 RoundIcon("🔊", PaperColorsUi.hear, size = size, enabled = active) { speakThen(model(), true) }
                 RoundIcon("🐢", Color(0xFFC8E6C9), size = size, enabled = active) {
@@ -344,10 +357,11 @@ fun SpeakMoment(
                         withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
                     }
                 }
-                // Always there: carry on. It pulses and is pointed at only when it's the way forward.
-                GoButton(size = size, enabled = active, hint = state == Speak.WAITING_TAP) {
-                    if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
-                }
+            }
+            Spacer(Modifier.width(12.dp))
+            // Always there: carry on. It pulses and is pointed at only when it's the way forward.
+            GoButton(size = 76.dp, enabled = active, hint = state == Speak.WAITING_TAP) {
+                if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
             }
         }
     }

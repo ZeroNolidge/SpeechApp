@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.logic.Cosmetic
@@ -58,12 +59,13 @@ import com.zeronolidge.speechapp.ui.components.popIn
 
 /** Pick a buddy: three at a time, then the big green arrow. Shown on first launch (and from the closet). */
 @Composable
-fun HeroPickScreen(onPicked: () -> Unit, onHome: (() -> Unit)? = null) {
+fun HeroPickScreen(onPicked: () -> Unit, onHome: (() -> Unit)? = null, onBack: (() -> Unit)? = null) {
     val app = LocalApp.current
     var picked by remember { mutableStateOf<Species?>(null) }
     SpeakOnOpen("Hi friend! Every adventure needs a buddy. Tap a friend to pick your buddy!")
     ScreenFrame(
         onHome = onHome,
+        onBack = onBack,
         background = { Scenery(Land.MEADOW, Modifier.fillMaxSize(), seed = 3) },
     ) {
         PagedChoices(heroSpecies, perPage = 3, modifier = Modifier.weight(1f).fillMaxWidth()) { sp, m ->
@@ -135,7 +137,7 @@ fun MapScreen(nav: Nav) {
     // The corner buttons sit on top, in the same spots as on every screen.
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF3FA9E0))) {
         val top = 60.dp
-        val bottom = 84.dp
+        val bottom = if (mapNarrow(maxWidth)) 176.dp else 90.dp
         val availH = maxHeight - top - bottom
         val mapW = minOf(maxWidth, availH * 1.75f)
         val mapH = mapW / 1.75f
@@ -163,7 +165,7 @@ fun MapScreen(nav: Nav) {
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size -> PointingHand(m, size = size, pointDown = true) },
         )
-        if (hintKey > 0) RoryHint(hintKey)
+        if (hintKey > 0) RoryHint(hintKey, land)
         MapCorners(nav, startChapter)
     }
 }
@@ -172,45 +174,68 @@ fun MapScreen(nav: Nav) {
 @Composable
 private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
     val app = LocalApp.current
-    Box(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        val narrow = mapNarrow(maxWidth)
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             HeroBadge { app.speaker.say("Your buddy's closet!"); nav.go(Screen.Closet) }
             Spacer(Modifier.weight(1f))
             HearAgainButton()
         }
-        // A big, flat-out-obvious way to start the next chapter.
-        PaperButton(Color(0xFFFFD54F), Modifier.align(Alignment.BottomCenter).height(76.dp), corner = 999.dp, onClick = onAdventure) {
-            Row(Modifier.padding(horizontal = 26.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("▶", fontSize = 34.sp)
-                Spacer(Modifier.width(12.dp))
-                Text("Adventure!", fontSize = 28.sp, color = PaperStyle.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)
+        // The bottom row: grown-ups' gear, the big Adventure button, then stickers and practice.
+        // Every button has its own space. On a narrow phone, Adventure gets a row of its own above.
+        val adventure = @Composable {
+            PaperButton(Color(0xFFFFD54F), Modifier.height(76.dp), corner = 999.dp, onClick = onAdventure) {
+                Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("▶", fontSize = 32.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Adventure!", fontSize = 26.sp, color = PaperStyle.ink, maxLines = 1, softWrap = false,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+                    )
+                }
             }
         }
-        Row(
-            Modifier.align(Alignment.BottomEnd),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            PaperIconButton("📒", Color(0xFFB2EBF2)) { app.speaker.say("Your sticker book!"); nav.go(Screen.Stickers) }
-            PaperIconButton("🎯", Color(0xFFF8BBD0)) { app.speaker.say("Practice games!"); nav.go(Screen.Practice) }
-        }
-        // Grown-ups only: a small gear that opens a grown-up check.
-        PaperIconButton("⚙️", Color(0xFFCFD8DC), size = 64.dp, modifier = Modifier.align(Alignment.BottomStart)) {
-            app.speaker.say("This part is for grown-ups.")
-            nav.go(Screen.Gate)
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (narrow) {
+                adventure()
+                Spacer(Modifier.height(14.dp))
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Grown-ups only: a small gear that opens a grown-up check.
+                PaperIconButton("⚙️", Color(0xFFCFD8DC), size = 64.dp) {
+                    app.speaker.say("This part is for grown-ups.")
+                    nav.go(Screen.Gate)
+                }
+                Spacer(Modifier.weight(1f))
+                if (!narrow) {
+                    adventure()
+                    Spacer(Modifier.weight(1f))
+                }
+                PaperIconButton("📒", Color(0xFFB2EBF2)) { app.speaker.say("Your sticker book!"); nav.go(Screen.Stickers) }
+                Spacer(Modifier.width(18.dp))
+                PaperIconButton("🎯", Color(0xFFF8BBD0)) { app.speaker.say("Practice games!"); nav.go(Screen.Practice) }
+            }
         }
     }
 }
 
+/** Below this width, the Adventure button gets its own row above the other bottom buttons. */
+private fun mapNarrow(width: Dp) = width < 600.dp
+
 /** Rory the robot pops up in the corner to give a hint, then hops away. */
 @Composable
-private fun RoryHint(key: Int) {
+private fun RoryHint(key: Int, next: Land) {
     var show by remember(key) { mutableStateOf(true) }
     LaunchedEffect(key) {
-        kotlinx.coroutines.delay(4000)
+        kotlinx.coroutines.delay(4500)
         show = false
     }
     if (!show) return
-    Box(Modifier.fillMaxSize().padding(start = 20.dp, bottom = 96.dp), contentAlignment = Alignment.BottomStart) {
-        Critter(Species.ROBOT, Modifier.height(130.dp).popIn(key), Color(0xFFFFCC80), mood = Mood.CHEER)
+    Box(Modifier.fillMaxSize().padding(start = 16.dp, bottom = 170.dp), contentAlignment = Alignment.BottomStart) {
+        Row(Modifier.popIn(key), verticalAlignment = Alignment.Top) {
+            Critter(Species.ROBOT, Modifier.height(130.dp), Color(0xFFFFCC80), mood = Mood.CHEER)
+            // Rory's speech bubble: "go there first", pointing by picture.
+            PaperChip("👉 ${next.emoji} ✨", fontSize = 30.sp)
+        }
     }
 }

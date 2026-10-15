@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -104,6 +105,8 @@ fun PaperChip(
     fontSize: TextUnit = 22.sp,
     color: Color = PaperStyle.chip,
     textColor: Color = PaperStyle.ink,
+    maxLines: Int = Int.MAX_VALUE,
+    horizontalPadding: Dp = 14.dp,
 ) {
     Text(
         text,
@@ -111,10 +114,22 @@ fun PaperChip(
         fontWeight = FontWeight.ExtraBold,
         color = textColor,
         textAlign = TextAlign.Center,
+        maxLines = maxLines,
         modifier = modifier
             .paperCard(color, 999.dp)
-            .padding(horizontal = 14.dp, vertical = 4.dp),
+            .padding(horizontal = horizontalPadding, vertical = 4.dp),
     )
+}
+
+/**
+ * A text size that lets [label] fit in [width] without breaking a word across lines
+ * (at most two lines, split at spaces), from [max] down to 12.
+ */
+fun fittingFontSize(label: String, width: Dp, max: Float = 20f): TextUnit {
+    val longestWord = label.split(' ').maxOfOrNull { it.length } ?: 1
+    // Sniglet's letters are roughly 0.62 of the font size wide.
+    val fits = width.value / (longestWord.coerceAtLeast(3) * 0.62f)
+    return fits.coerceIn(12f, max).sp
 }
 
 /** An emoji icon on a raised paper button. */
@@ -139,6 +154,13 @@ fun HomeButton(onHome: () -> Unit) {
     PaperIconButton("🏠", PaperColorsUi.home) { app.speaker.stop(); onHome() }
 }
 
+/** Back one screen: sits right next to 🏠, only where "back" goes somewhere other than the map. */
+@Composable
+fun BackButton(onBack: () -> Unit) {
+    val app = LocalApp.current
+    PaperIconButton("⬅️", PaperColorsUi.back, size = 72.dp) { app.speaker.stop(); onBack() }
+}
+
 /** "Hear it again": always the top-right corner. Says the screen's instruction again. */
 @Composable
 fun HearAgainButton() {
@@ -149,6 +171,7 @@ fun HearAgainButton() {
 /** The colours of the shared controls, picked from the paper palette. */
 object PaperColorsUi {
     val home = Color(0xFFFF8A65)
+    val back = Color(0xFFFFE0B2)
     val hear = Color(0xFFFFD54F)
     val go = Color(0xFF43A047)
     val choice = Color(0xFFFFFAF0)
@@ -169,6 +192,8 @@ fun SpeakOnOpen(text: String, key: Any = text) {
 fun ScreenFrame(
     onHome: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    /** Shows a ⬅️ next to 🏠 that goes back one screen. */
+    onBack: (() -> Unit)? = null,
     background: @Composable BoxScope.() -> Unit = { PlainBackdrop() },
     left: (@Composable () -> Unit)? = null,
     top: @Composable RowScope.() -> Unit = {},
@@ -185,6 +210,10 @@ fun ScreenFrame(
                     left != null -> left()
                     onHome != null -> HomeButton(onHome)
                     else -> Spacer(Modifier.width(CornerButtonSize))
+                }
+                if (onBack != null) {
+                    Spacer(Modifier.width(12.dp))
+                    BackButton(onBack)
                 }
                 Spacer(Modifier.width(14.dp))
                 Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, content = top)
@@ -280,31 +309,37 @@ fun <T> PagedChoices(
 ) {
     val app = LocalApp.current
     var page by remember(key) { mutableIntStateOf(0) }
-    val pages = ((items.size + perPage - 1) / perPage).coerceAtLeast(1)
-    if (page >= pages) page = pages - 1
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(CornerButtonSize), contentAlignment = Alignment.Center) {
-            if (page > 0) PaperIconButton("◀", PaperColorsUi.choice, size = 72.dp) { page--; app.speaker.say("Back!") }
-        }
-        Spacer(Modifier.width(spacing))
-        Row(
-            Modifier.weight(1f).fillMaxHeight(),
-            horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val shown = items.drop(page * perPage).take(perPage)
-            shown.forEachIndexed { i, it ->
-                Box(Modifier.weight(1f).popIn(page to i, i * 60), contentAlignment = Alignment.Center) {
-                    // Big, but not blown up on a tablet: buttons stay the same physical size.
-                    item(it, Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 260.dp).widthIn(max = 240.dp).fillMaxHeight())
-                }
+    BoxWithConstraints(modifier) {
+        // On a narrow phone, two big choices at a time instead of squeezing in more.
+        val narrow = maxWidth < 520.dp
+        val count = if (narrow) minOf(perPage, 2) else perPage
+        val gap = if (narrow) minOf(spacing, 12.dp) else spacing
+        val pages = ((items.size + count - 1) / count).coerceAtLeast(1)
+        if (page >= pages) page = pages - 1
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(CornerButtonSize), contentAlignment = Alignment.Center) {
+                if (page > 0) PaperIconButton("◀", PaperColorsUi.choice, size = 72.dp) { page--; app.speaker.say("Back!") }
             }
-            // Keep tiles the same size on a short last page.
-            repeat(perPage - shown.size) { Spacer(Modifier.weight(1f)) }
-        }
-        Spacer(Modifier.width(spacing))
-        Box(Modifier.width(CornerButtonSize), contentAlignment = Alignment.Center) {
-            if (page < pages - 1) PaperIconButton("▶", PaperColorsUi.choice, size = 72.dp) { page++; app.speaker.say("More!") }
+            Spacer(Modifier.width(gap))
+            Row(
+                Modifier.weight(1f).fillMaxHeight(),
+                horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val shown = items.drop(page * count).take(count)
+                shown.forEachIndexed { i, it ->
+                    Box(Modifier.weight(1f).popIn(page to i, i * 60), contentAlignment = Alignment.Center) {
+                        // Big, but not blown up on a tablet: buttons stay the same physical size.
+                        item(it, Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 260.dp).widthIn(max = 240.dp).fillMaxHeight())
+                    }
+                }
+                // Keep tiles the same size on a short last page.
+                repeat(count - shown.size) { Spacer(Modifier.weight(1f)) }
+            }
+            Spacer(Modifier.width(gap))
+            Box(Modifier.width(CornerButtonSize), contentAlignment = Alignment.Center) {
+                if (page < pages - 1) PaperIconButton("▶", PaperColorsUi.choice, size = 72.dp) { page++; app.speaker.say("More!") }
+            }
         }
     }
 }
@@ -329,7 +364,12 @@ fun ChoiceTile(
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (picture != null) picture() else Text(emoji, fontSize = 64.sp)
             }
-            if (label != null) PaperChip(label, fontSize = 20.sp)
+            if (label != null) {
+                BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    // Fit the words to the tile instead of wrapping them a letter at a time.
+                    PaperChip(label, fontSize = fittingFontSize(label, maxWidth - 16.dp), maxLines = 2, horizontalPadding = 8.dp)
+                }
+            }
         }
     }
 }

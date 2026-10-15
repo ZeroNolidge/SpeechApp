@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -97,28 +98,32 @@ fun PracticeMenu(nav: Nav) {
     ) + PracticeKind.entries.map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
     // A short set of three games that changes every day; 🔄 swaps in three others.
     var start by remember { mutableIntStateOf((today() * 3).mod(tiles.size)) }
-    val shown = (0 until 3).map { tiles[(start + it) % tiles.size] }
     KidScreen("🎯", nav.home, "Practice games! Tap a game to play. Tap the round arrows for different games.") {
-        Row(
-            Modifier.fillMaxSize().padding(vertical = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            shown.forEachIndexed { i, t ->
-                Box(Modifier.weight(1f).popIn(start to i, i * 60), contentAlignment = Alignment.Center) {
-                    ChoiceTile(
-                        t.emoji, t.label, t.color,
-                        Modifier.fillMaxWidth().widthIn(max = 240.dp).heightIn(min = 120.dp, max = 260.dp).fillMaxHeight(),
-                        onClick = {
-                            app.speaker.say(t.spoken)
-                            nav.go(t.target)
-                        },
-                    ) { Text(t.emoji, fontSize = 72.sp) }
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Three games on a tablet; two on a narrow phone so the tiles and their words stay big.
+            val count = if (maxWidth < 520.dp) 2 else 3
+            val shown = (0 until count).map { tiles[(start + it) % tiles.size] }
+            Row(
+                Modifier.fillMaxSize().padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (count == 2) 14.dp else 24.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                shown.forEachIndexed { i, t ->
+                    Box(Modifier.weight(1f).popIn(start to i, i * 60), contentAlignment = Alignment.Center) {
+                        ChoiceTile(
+                            t.emoji, t.label, t.color,
+                            Modifier.fillMaxWidth().widthIn(max = 240.dp).heightIn(min = 120.dp, max = 260.dp).fillMaxHeight(),
+                            onClick = {
+                                app.speaker.say(t.spoken)
+                                nav.go(t.target)
+                            },
+                        ) { Text(t.emoji, fontSize = 72.sp) }
+                    }
                 }
-            }
-            RoundIcon("🔄", PaperColorsUi.choice, size = 80.dp) {
-                start = (start + 3) % tiles.size
-                app.speaker.say("New games!")
+                RoundIcon("🔄", PaperColorsUi.choice, size = 72.dp) {
+                    start = (start + count) % tiles.size
+                    app.speaker.say("New games!")
+                }
             }
         }
     }
@@ -158,7 +163,7 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
             PracticeKind.COINS -> Challenge.Coins(Coins.make(p.chapter, rnd))
         }
     }
-    KidScreen(kind.emoji, nav.home, kind.spoken) {
+    KidScreen(kind.emoji, nav.home, kind.spoken, onBack = nav.back) {
         ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry ->
             when (kind) {
                 PracticeKind.NEXT -> {
@@ -182,7 +187,7 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
 @Composable
 fun TalkMenu(nav: Nav) {
     val app = LocalApp.current
-    KidScreen("🗣️", nav.home, "Pick a sound to practice. Tap the arrow to see more sounds.") {
+    KidScreen("🗣️", nav.home, "Pick a sound to practice. Tap the arrow to see more sounds.", onBack = nav.back) {
         PagedChoices(SpeechContent.sounds, perPage = 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { sound, m ->
             ChoiceTile(sound.emoji, sound.label, Kid.talk, m, onClick = {
                 app.speaker.say(sound.modelSound)
@@ -202,7 +207,7 @@ fun AlphabetScreen(nav: Nav) {
     val letters = LetterContent.letters
     var i by remember { mutableIntStateOf(0) }
     val l = letters[i]
-    KidScreen("🔠", nav.home, "Tap the arrows to see the letters. Tap the letter to hear it.") {
+    KidScreen("🔠", nav.home, "Tap the arrows to see the letters. Tap the letter to hear it.", onBack = nav.back) {
         Explorer(
             onPrev = if (i > 0) ({ i--; app.speaker.say(letterIntro(letters[i])) }) else null,
             onNext = { i = (i + 1) % letters.size; app.speaker.say(letterIntro(letters[i])) },
@@ -224,7 +229,7 @@ fun AlphabetScreen(nav: Nav) {
 fun NumberLineScreen(nav: Nav) {
     val app = LocalApp.current
     var n by remember { mutableIntStateOf(1) }
-    KidScreen("🔟", nav.home, "Tap the arrows to count up and down. Tap the number to hear it.") {
+    KidScreen("🔟", nav.home, "Tap the arrows to count up and down. Tap the number to hear it.", onBack = nav.back) {
         Explorer(
             onPrev = if (n > 1) ({ n--; app.speaker.say(Numbers.word(n)) }) else null,
             onNext = { n = if (n >= 20) 1 else n + 1; app.speaker.say(Numbers.word(n)) },

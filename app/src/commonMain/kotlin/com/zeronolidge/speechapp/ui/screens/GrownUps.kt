@@ -107,7 +107,9 @@ fun GrownUpsScreen(nav: Nav) {
                 Heading("Progress")
                 val lap = p.chapter / Trail.size
                 Text(
-                    "${p.chapter} chapters finished" + (if (lap > 0) " (${lap} trips around the island)" else "") +
+                    "${p.chaptersDone} ${if (p.chaptersDone == 1) "chapter" else "chapters"} finished" +
+                        " · now at stop ${Trail.stopOf(p.chapter) + 1} of ${Trail.size}" +
+                        (if (lap > 0) " (trip ${lap + 1} around the island)" else "") +
                         " · ${p.pieces.size - 1} paper pieces · ${p.words.stickers.size} stickers",
                     fontSize = 16.sp,
                 )
