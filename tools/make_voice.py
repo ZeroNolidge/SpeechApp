@@ -34,6 +34,7 @@ The text is matched exactly as in logic/ClipText.kt: keep the two in step.
 import argparse
 import concurrent.futures
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -247,7 +248,17 @@ def speak_once(key, text, voice, model):
             if attempt < 5:
                 time.sleep(2 ** attempt)
                 continue
-            raise SystemExit("Couldn't reach OpenAI (%s). Check the internet connection and run it again." % e.reason)
+            raise NetError(str(e.reason))
+        except (OSError, http.client.HTTPException) as e:
+            # The connection dropped while the clip was downloading (Wi-Fi blip, timeout): try again.
+            if attempt < 5:
+                time.sleep(2 ** attempt)
+                continue
+            raise NetError("%s: %s" % (type(e).__name__, e))
+
+
+class NetError(Exception):
+    pass
 
 
 HINTS = {
@@ -353,24 +364,54 @@ def main():
 
     def make(k):
         audio = speak(key, overrides.get(k, lines[k]), voice, state)
-        with open(os.path.join(OUT, clips[k]), "wb") as f:
+        path = os.path.join(OUT, clips[k])
+        # Write to a temporary name first, so a stopped run never leaves half a clip behind.
+        with open(path + ".part", "wb") as f:
             f.write(audio)
+        os.replace(path + ".part", path)
         return k
 
     print("Working... making %d clips. A count shows every 10 clips (about every 10-20 seconds)." % len(todo))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        for _ in pool.map(make, todo):
-            done += 1
-            if done % 10 == 0 or done == len(todo):
-                print("  %d / %d" % (done, len(todo)))
+    skipped = []
+
+    def save_manifest():
+        # Only clips that really exist go in the manifest, so a stopped run still leaves a working set.
+        made = {k: f for k, f in clips.items() if os.path.exists(os.path.join(OUT, f))}
+        json.dump({"voice": voice, "model": state["model"], "clips": made}, open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
+        write_letters_page(made)
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(make, k): k for k in todo}
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    fut.result()
+                except BaseException as e:
+                    if not isinstance(e, NetError):
+                        # A real stop (key refused, no credit, Ctrl+C): don't start the rest.
+                        for f in futures:
+                            f.cancel()
+                        raise
+                    skipped.append(futures[fut])
+                    print("  (skipped one line for now, the connection dropped: %s)" % e)
+                    if len(skipped) >= 20:
+                        for f in futures:
+                            f.cancel()
+                        raise SystemExit("The internet connection keeps dropping. Check it, then run the same command again; it carries on where it stopped.")
+                done += 1
+                if done % 10 == 0 or done == len(todo):
+                    print("  %d / %d" % (done, len(todo)))
+    finally:
+        save_manifest()
 
     # Clips for lines that are gone from the app are removed, so the offline cache stays small.
     keep = set(clips.values()) | {"manifest.json", "letters.html"}
     for f in os.listdir(OUT):
         if f.endswith(".mp3") and f not in keep:
             os.remove(os.path.join(OUT, f))
-    json.dump({"voice": voice, "model": state["model"], "clips": clips}, open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
-    write_letters_page(clips)
+    if skipped:
+        print("%d lines were skipped because the connection dropped. Run the same command again to make just those." % len(skipped))
+        return
     print("Done. Commit and push app/src/wasmJsMain/resources/audio/ (and tools/voice_overrides.json if you used --say).")
 
 
