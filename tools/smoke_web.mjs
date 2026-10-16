@@ -198,6 +198,16 @@ if (started) {
             await page.mouse.click(1180 - 70, 820 - 60);
             await wait(9000);
             await shot('talk-letters');
+            // Full size (not halved), at a Samsung tablet's landscape size, while Rory listens:
+            // so the listening look can be checked properly.
+            await page.setViewport({ width: 1280, height: 800 });
+            await page.goto(url + '#test=talk', { waitUntil: 'load' });
+            await page.reload({ waitUntil: 'load' });
+            await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+            await wait(3000);
+            await page.mouse.click(640, 400);
+            await wait(4500);
+            console.log(`SHOT tablet-listening-full ${await page.screenshot({ type: 'jpeg', quality: 80, encoding: 'base64' })}`);
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');
