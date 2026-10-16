@@ -543,17 +543,15 @@ private fun RoryListens(level: Float, size: Dp) {
             // from the side of his head.
             val ear = Offset(left + w * 0.98f, (s - h) / 2 + h * 0.3f)
             drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.42f * (1f + 0.3f * voice), ear)
-            // The cupped hand behind the ear.
-            paperCircle(Color(0xFFFFB74D), w * 0.16f, Offset(ear.x + w * 0.15f, ear.y + w * 0.08f))
-            // The ear itself: a tall rounded shape with the curl inside, like a drawn ear (a C
-            // that opens towards Rory's face) and a little lobe at the bottom.
+            // The ear itself: a tall rounded shape with a lobe at the bottom and the curl inside,
+            // a C that opens towards Rory's face, the way a child draws an ear.
             paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.15f, ear.y - w * 0.24f), Size(w * 0.3f, w * 0.48f))
+            paperCircle(Color(0xFFFFD54F), w * 0.09f, Offset(ear.x - w * 0.03f, ear.y + w * 0.22f))
             drawArc(
-                Color(0xFFE65100), startAngle = 200f, sweepAngle = 250f, useCenter = false,
-                topLeft = Offset(ear.x - w * 0.08f, ear.y - w * 0.15f), size = Size(w * 0.16f, w * 0.24f),
-                style = Stroke(w * 0.035f, cap = StrokeCap.Round),
+                Color(0xFFE65100), startAngle = -100f, sweepAngle = 200f, useCenter = false,
+                topLeft = Offset(ear.x - w * 0.09f, ear.y - w * 0.15f), size = Size(w * 0.16f, w * 0.28f),
+                style = Stroke(w * 0.04f, cap = StrokeCap.Round),
             )
-            paperCircle(Color(0xFFFF8A65), w * 0.035f, Offset(ear.x - w * 0.01f, ear.y + w * 0.13f))
         }
     }
 }
