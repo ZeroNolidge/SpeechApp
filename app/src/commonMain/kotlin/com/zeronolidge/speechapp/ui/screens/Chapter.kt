@@ -70,6 +70,7 @@ import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.BackpackMeter
 import com.zeronolidge.speechapp.ui.components.GoButton
 import com.zeronolidge.speechapp.ui.components.LocalApp
+import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import com.zeronolidge.speechapp.ui.components.LocalScreenWidth
 import com.zeronolidge.speechapp.ui.components.NameTag
 import com.zeronolidge.speechapp.ui.components.Nudge
@@ -319,16 +320,17 @@ private fun StoryScene(
                             Modifier
                                 .weight(1f)
                                 .fillMaxHeight(0.62f)
-                                .graphicsLayer { translationX = walk * size.width * 2f },
+                                .graphicsLayer { translationX = walk * size.width * 2f }
+                                .wiggleOnTap(),
                             heroMood,
                             talking = true,
                         )
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).fillMaxHeight(0.58f)) {
-                            Critter(quest.friend.species, Modifier.weight(1f), Color(quest.friend.color), Outfit(), scene.feeling.mood(), mirrored = true)
+                            Critter(quest.friend.species, Modifier.weight(1f).wiggleOnTap(), Color(quest.friend.color), Outfit(), scene.feeling.mood(), mirrored = true)
                             NameTag(quest.friend.name)
                         }
                         if (visitor != null) {
-                            Critter(visitor.species, Modifier.weight(0.8f).fillMaxHeight(0.5f).popIn(visitor), Color(visitor.color), Outfit(), Mood.HAPPY, mirrored = true)
+                            Critter(visitor.species, Modifier.weight(0.8f).fillMaxHeight(0.5f).popIn(visitor).wiggleOnTap(), Color(visitor.color), Outfit(), Mood.HAPPY, mirrored = true)
                         }
                     }
                 }
@@ -370,11 +372,12 @@ private fun BeatScene(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight(0.55f)
-                            .graphicsLayer { translationX = walk * size.width * 2f },
+                            .graphicsLayer { translationX = walk * size.width * 2f }
+                                .wiggleOnTap(),
                         if (cheer) Mood.CHEER else Mood.HAPPY,
                     )
                     Critter(
-                        quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.45f),
+                        quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.45f).wiggleOnTap(),
                         Color(quest.friend.color), Outfit(),
                         if (cheer) Mood.CHEER else beat.scene.feeling.mood(), mirrored = true,
                     )
@@ -393,8 +396,10 @@ private fun BeatScene(
             }
         }
     }, challenge = { m ->
-        // Challenge side, on a big paper card.
-        Box(m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
+        // Challenge side, on a big paper card. A say-a-word step brings its own panels (the word
+        // card, and its buttons in a panel of their own), so it isn't wrapped again.
+        val speakingStep = beat.challenge is Challenge.Say
+        Box(if (speakingStep) m else m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
             ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers) { firstTry, revealed ->
                 if (!solvedHere) {
                     solvedHere = true
@@ -462,13 +467,13 @@ private fun WakeScene(quest: Quest, hero: Species, onAwake: () -> Unit) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 SetPieceView(quest.twist.piece, null, false, Modifier.fillMaxSize())
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
-                    HeroWithPet(hero, p.heroColor(hero), p.outfit, p.pet, Modifier.weight(1f).fillMaxHeight(0.55f), Mood.HAPPY)
-                    Critter(quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.45f), Color(quest.friend.color), Outfit(), Mood.HAPPY, mirrored = true)
+                    HeroWithPet(hero, p.heroColor(hero), p.outfit, p.pet, Modifier.weight(1f).fillMaxHeight(0.55f).wiggleOnTap(), Mood.HAPPY)
+                    Critter(quest.friend.species, Modifier.weight(0.8f).fillMaxHeight(0.45f).wiggleOnTap(), Color(quest.friend.color), Outfit(), Mood.HAPPY, mirrored = true)
                 }
             }
         }
     }, challenge = { m ->
-        Box(m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
+        Box(m) {
             SpeakMoment(
                 Word(v.callName, v.species.emoji), null, Modifier.fillMaxSize(),
                 intro = text,

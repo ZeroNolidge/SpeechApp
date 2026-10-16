@@ -1,11 +1,15 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.theme.LetterFont
 import com.zeronolidge.speechapp.ui.components.AnswerRow
 import com.zeronolidge.speechapp.logic.Key
 import com.zeronolidge.speechapp.logic.AnswerKey
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.logic.Echo
 import com.zeronolidge.speechapp.ui.art.paperOval
+import com.zeronolidge.speechapp.ui.art.paperCircle
+import com.zeronolidge.speechapp.ui.art.paperCard
+import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -353,10 +357,10 @@ fun SpeakMoment(
                         softWrap = false,
                     )
                     Spacer(Modifier.height(8.dp))
-                    Box(Modifier.height(if (small) 64.dp else 96.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.height(if (small) 84.dp else 124.dp), contentAlignment = Alignment.Center) {
                         when (state) {
                             Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                RoryListens(level, if (small) 64.dp else 96.dp)
+                                RoryListens(level, if (small) 62.dp else 92.dp)
                                 // "Your turn!" is spoken anyway; the chip only goes where it fits.
                                 if (textW >= (if (small) 200.dp else 260.dp)) {
                                     Spacer(Modifier.width(10.dp))
@@ -383,9 +387,7 @@ fun SpeakMoment(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            Box(Modifier.weight(1f).fillMaxWidth().scale(pulse), contentAlignment = Alignment.Center) {
-                                if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 96.sp)
-                            }
+                            WordPicture(word, picture, pulse, Modifier.weight(1f).fillMaxWidth())
                             wordAndState()
                         }
                     } else {
@@ -394,9 +396,7 @@ fun SpeakMoment(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            Box(Modifier.weight(1f).fillMaxHeight().scale(pulse), contentAlignment = Alignment.Center) {
-                                if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = if (small) 64.sp else 110.sp)
-                            }
+                            WordPicture(word, picture, pulse, Modifier.weight(1f).fillMaxHeight())
                             Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) { wordAndState() }
                         }
                     }
@@ -407,7 +407,8 @@ fun SpeakMoment(
                         Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        Critter(Species.ROBOT, Modifier.height(roryHeight), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
+                        // His turn without a microphone: Rory still cups his glowing ear to listen.
+                        RoryListens(0f, minOf(roryHeight * 0.72f, 110.dp))
                         PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
                     }
                 }
@@ -417,23 +418,35 @@ fun SpeakMoment(
         if (letters != null && sound != null) {
             LetterTap(letters, sound, key, Modifier.fillMaxSize()) { onDone(heardIt) }
         } else if (wide) {
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) { card() }
-                Column(
-                    Modifier.width(ContinueReserve).fillMaxHeight().padding(bottom = ContinueSize + 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) { icons() }
+            // Wide: the picture card takes about 60%, then a gap, then the buttons in their own
+            // panel on the right (above the continue button's corner). Buttons keep their size.
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.weight(0.6f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) { card() }
+                Box(
+                    Modifier
+                        .weight(0.4f)
+                        .fillMaxHeight()
+                        .padding(bottom = ContinueSize + 20.dp)
+                        .paperCard(ButtonPanelColor, 24.dp)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                    ) { icons() }
+                }
             }
         } else {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                 card()
-                Spacer(Modifier.height(10.dp))
-                // The continue button is pinned bottom-right like on every step, so this row leaves
-                // room for it; the buttons wrap onto a second line if they don't fit.
+                Spacer(Modifier.height(12.dp))
+                // The buttons sit in their own panel under the card. The continue button is pinned
+                // bottom-right like on every step, so the panel leaves room for it; the buttons wrap
+                // onto a second line if they don't fit.
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                     FlowRow(
-                        Modifier.weight(1f),
+                        Modifier.weight(1f).paperCard(ButtonPanelColor, 20.dp).padding(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) { icons() }
@@ -481,15 +494,27 @@ private fun LetterTap(letters: Key<String>, sound: SpeechSound, roundKey: Any, m
                 describe = { it },
                 hint = "Listen: ${sound.modelSound}. ${sound.label} says ${sound.modelSound}. Find the ${sound.label}!",
             ) { l ->
-                Text(l, fontSize = (card.value * 0.5f).sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E88E5))
+                Text(l, fontSize = (card.value * 0.5f).sp, fontWeight = FontWeight.ExtraBold, fontFamily = LetterFont, color = Color(0xFF1E88E5))
             }
         }
     }
 }
 
+/** The panel the word's round buttons sit in, on their own, apart from the picture card. */
+private val ButtonPanelColor = Color(0xF2FFFAF0)
+
+/** The word's picture, as big as its space allows; a tap gives it a little wiggle. */
+@Composable
+private fun WordPicture(word: Word, picture: (@Composable (Modifier) -> Unit)?, pulse: Float, modifier: Modifier) {
+    BoxWithConstraints(modifier.scale(pulse).wiggleOnTap(), contentAlignment = Alignment.Center) {
+        val room = minOf(maxWidth, maxHeight)
+        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = (room.value * 0.62f).coerceIn(40f, 200f).sp)
+    }
+}
+
 /**
- * His turn to talk: Rory cups a glowing paper ear, and a paper ring around him grows with the
- * loudness of his voice, so he can see he's being listened to.
+ * His turn to talk: Rory cups his hand to a big, glowing paper ear by his head, and a paper ring
+ * around him grows with the loudness of his voice, so he can see he's being listened to.
  */
 @Composable
 private fun RoryListens(level: Float, size: Dp) {
@@ -501,21 +526,23 @@ private fun RoryListens(level: Float, size: Dp) {
             val base = size.toPx() * 0.5f
             // The paper ring that grows with his voice.
             val r = base * (0.95f + 0.5f * voice)
-            drawCircle(Color(0xFFFFF3C4), r)
+            paperCircle(Color(0xFFFFF3C4), r, center)
             drawCircle(Color.White, r, style = Stroke(4.dp.toPx()))
-            drawCircle(Color(0xFFFFC94A).copy(alpha = 0.5f), r * 0.86f, style = Stroke(3.dp.toPx()))
+            drawCircle(Color(0xFFFFC94A).copy(alpha = 0.6f), r * 0.86f, style = Stroke(3.dp.toPx()))
         }
-        Critter(Species.ROBOT, Modifier.fillMaxHeight(0.82f), Color(0xFFFFCC80), mood = Mood.LISTEN)
-        // The glowing paper ear, by Rory's cupped hand.
+        Critter(Species.ROBOT, Modifier.fillMaxHeight(0.8f), Color(0xFFFFCC80), mood = Mood.LISTEN)
+        // The ear, at the side of Rory's head where his hand is raised: a soft gold glow, a big
+        // paper ear and the cupped hand behind it.
         Canvas(Modifier.fillMaxSize()) {
             val s = size.toPx() * 1.35f
-            val h = s * 0.82f
+            val h = s * 0.8f
             val w = h * 100f / 140f
             val left = (s - w) / 2
-            val ear = Offset(left + w * 0.86f, (s - h) / 2 + h * 0.5f)
-            drawCircle(Color(0xFFFFE082).copy(alpha = 0.55f * glow), w * 0.2f * (1f + 0.3f * voice), ear)
-            paperOval(Color(0xFFFFCC80), Offset(ear.x - w * 0.07f, ear.y - w * 0.11f), Size(w * 0.14f, w * 0.22f))
-            paperOval(Color(0xFFFF9E80), Offset(ear.x - w * 0.035f, ear.y - w * 0.065f), Size(w * 0.07f, w * 0.13f))
+            val ear = Offset(left + w * 0.9f, (s - h) / 2 + h * 0.3f)
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.3f * (1f + 0.35f * voice), ear)
+            paperCircle(Color(0xFFFFB74D), w * 0.13f, Offset(ear.x + w * 0.08f, ear.y + w * 0.03f))
+            paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.1f, ear.y - w * 0.16f), Size(w * 0.2f, w * 0.32f))
+            paperOval(Color(0xFFFF8A65), Offset(ear.x - w * 0.05f, ear.y - w * 0.09f), Size(w * 0.1f, w * 0.18f))
         }
     }
 }

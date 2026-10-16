@@ -51,6 +51,7 @@ import com.zeronolidge.speechapp.data.Praise
 import com.zeronolidge.speechapp.data.Things
 import com.zeronolidge.speechapp.logic.Cell
 import com.zeronolidge.speechapp.logic.Challenge
+import com.zeronolidge.speechapp.logic.Letters
 import com.zeronolidge.speechapp.logic.Cmd
 import com.zeronolidge.speechapp.logic.Dir
 import com.zeronolidge.speechapp.logic.LetterMode
@@ -89,9 +90,11 @@ import com.zeronolidge.speechapp.ui.art.paperPath
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import com.zeronolidge.speechapp.ui.components.LocalApp
+import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import com.zeronolidge.speechapp.ui.components.RoundIcon
 import com.zeronolidge.speechapp.ui.screens.SpeakMoment
 import com.zeronolidge.speechapp.ui.theme.Kid
+import com.zeronolidge.speechapp.ui.theme.LetterFont
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -211,7 +214,7 @@ private fun QuestionLayout(
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 // The picture side has the room, so its pictures are drawn bigger than the cards.
                 val big = minOf(card * 1.6f, w * 0.5f / 3f, h / 3f).coerceAtLeast(card)
-                Box(Modifier.weight(1.3f).fillMaxHeight(), contentAlignment = Alignment.Center) { question(big) }
+                Box(Modifier.weight(1.3f).fillMaxHeight().wiggleOnTap(), contentAlignment = Alignment.Center) { question(big) }
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                     CompositionLocalProvider(LocalAnswersStacked provides true) { answers(card) }
                 }
@@ -224,7 +227,7 @@ private fun QuestionLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly,
             ) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { question(card) }
+                Box(Modifier.weight(1f).fillMaxWidth().wiggleOnTap(), contentAlignment = Alignment.Center) { question(card) }
                 answers(card)
             }
         }
@@ -446,14 +449,12 @@ private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () ->
     val mode = c.round.mode
     QuestionLayout(
         question = { card ->
+            val letter = Letters.questionText(mode, t)
             Text(
-                when (mode) {
-                    LetterMode.BIG_TO_SMALL -> "${t.upper}"
-                    LetterMode.SMALL_TO_BIG -> "${t.lower}"
-                    LetterMode.FIRST_SOUND -> t.word.emoji
-                },
+                letter ?: t.word.emoji,
                 fontSize = (card.value * 0.8f).sp,
                 fontWeight = FontWeight.ExtraBold,
+                fontFamily = if (letter != null) LetterFont else null,
                 color = Color(0xFF1E88E5),
                 modifier = Modifier.clickable { app.speaker.say(promptFor(c)) },
             )
@@ -468,13 +469,10 @@ private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () ->
                 hint = "Listen: ${t.sound}, ${t.sound}, ${t.word.text}! ${t.upper} says ${t.sound}.",
             ) { l ->
                 Text(
-                    when (mode) {
-                        LetterMode.BIG_TO_SMALL -> "${l.lower}"
-                        LetterMode.SMALL_TO_BIG -> "${l.upper}"
-                        LetterMode.FIRST_SOUND -> "${l.upper}${l.lower}"
-                    },
+                    Letters.tileText(mode, l),
                     fontSize = (card.value * 0.5f).sp,
                     fontWeight = FontWeight.ExtraBold,
+                    fontFamily = LetterFont,
                     color = Kid.ink,
                 )
             }

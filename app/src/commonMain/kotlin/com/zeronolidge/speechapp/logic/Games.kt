@@ -169,6 +169,30 @@ object Letters {
             .map { LetterContent.of(it.lowercaseChar()) }
             .distinct()
 
+    /**
+     * The letter a round asks for: his own letters (from [targetsFor]) first, three rounds in
+     * four, so the grown-up's target sounds and words come up most; otherwise any letter (null).
+     */
+    fun pickTarget(mine: List<LetterInfo>, rnd: Random): LetterInfo? =
+        if (mine.isNotEmpty() && rnd.nextInt(4) != 0) mine.random(rnd) else null
+
+    /**
+     * What a letter tile shows: always a letter, one case per round. Big A asks for little a,
+     * little a asks for big A, and the first-sound puzzle shows both on every tile ("Aa").
+     */
+    fun tileText(mode: LetterMode, l: LetterInfo): String = when (mode) {
+        LetterMode.BIG_TO_SMALL -> "${l.lower}"
+        LetterMode.SMALL_TO_BIG -> "${l.upper}"
+        LetterMode.FIRST_SOUND -> "${l.upper}${l.lower}"
+    }
+
+    /** The letter shown as the question, or null when the question is a picture (first sound). */
+    fun questionText(mode: LetterMode, t: LetterInfo): String? = when (mode) {
+        LetterMode.BIG_TO_SMALL -> "${t.upper}"
+        LetterMode.SMALL_TO_BIG -> "${t.lower}"
+        LetterMode.FIRST_SOUND -> null
+    }
+
     fun make(mode: LetterMode, rnd: Random, tricky: Boolean = false, target: LetterInfo? = null): LetterRound {
         val target = target ?: LetterContent.letters.random(rnd)
         val similar = confusable.firstOrNull { target.lower in it }

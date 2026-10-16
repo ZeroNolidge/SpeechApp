@@ -139,10 +139,10 @@ private fun PuffOverlay(origin: Offset) {
                 val colors = listOf(Color(0xFFFFD54F), Color(0xFF81D4FA), Color(0xFFA5D6A7), Color(0xFFF8BBD0), Color(0xFFFFFFFF))
                 for (i in 0 until 7) {
                     val a = i * 0.8976f + id
-                    val d = 16.dp.toPx() + 34.dp.toPx() * v
+                    val d = 18.dp.toPx() + 42.dp.toPx() * v
                     drawCircle(
                         colors[i % colors.size].copy(alpha = (1f - v).coerceIn(0f, 1f)),
-                        radius = 6.dp.toPx() * (1f - 0.4f * v),
+                        radius = 8.dp.toPx() * (1f - 0.4f * v),
                         center = Offset(c.x + d * kotlin.math.cos(a), c.y + d * kotlin.math.sin(a)),
                     )
                 }

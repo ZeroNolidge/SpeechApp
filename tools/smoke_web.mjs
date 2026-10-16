@@ -65,6 +65,33 @@ if (started) {
         };
         try {
             await shot('first-launch');
+            // A fresh start: only the Forest reached. The stop button and the buddy should be at
+            // the Forest (with its golden glow), and the Meadow still under mist.
+            await page.evaluate(() => {
+                localStorage.setItem('talkandlearn.micAsked', 'true');
+                localStorage.setItem('talkandlearn.hero', 'KID');
+                localStorage.setItem('talkandlearn.chapter', '0');
+                localStorage.setItem('talkandlearn.unfoldedSeen', '0');
+            });
+            await page.reload({ waitUntil: 'load' });
+            await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+            await wait(3000);
+            await page.mouse.click(640, 400);
+            await wait(4000);
+            await shot('map-fresh');
+            {
+                const marks = [...logs].reverse().find((t) => t.startsWith('MAPMARKS'));
+                const pos = {};
+                if (marks) for (const part of marks.split(' ').slice(1)) {
+                    const [name, xy] = part.split('@');
+                    const [x, y] = xy.split(',').map(Number);
+                    pos[name] = { x, y };
+                }
+                const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+                const ok = pos.STOP && pos.FOREST && pos.MEADOW && d(pos.STOP, pos.FOREST) < d(pos.STOP, pos.MEADOW);
+                check(`CHECK fresh start: stop button at the Forest: ${ok ? 'ok' : 'FAIL'} (${JSON.stringify(pos.STOP)} forest ${JSON.stringify(pos.FOREST)} meadow ${JSON.stringify(pos.MEADOW)})`);
+                for (const t of logs.filter((t) => t.startsWith('MAPSCENE MEADOW'))) console.log('FRESH ' + t);
+            }
             await page.evaluate(() => {
                 localStorage.setItem('talkandlearn.micAsked', 'true');
                 localStorage.setItem('talkandlearn.hero', 'KID');
@@ -176,6 +203,8 @@ if (started) {
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');
             await open('#test=pip', 1180, 820, 'pip-ipad-landscape');
             await open('#test=pip', 400, 860, 'pip-phone');
+            await wait(9000);
+            await shot('pip-phone-called');
             await open('#test=say', 1180, 820, 'say-ipad-landscape');
             await open('#test=say', 820, 1180, 'say-ipad-portrait');
             await open('#test=say', 400, 860, 'say-phone');

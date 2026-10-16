@@ -302,10 +302,10 @@ object StoryGen {
             }
             Subject.LETTERS -> {
                 val mode = LetterMode.entries.random(rnd)
-                // The first-sound puzzle mostly uses the letters of his target sounds and own words.
+                // Letter puzzles mostly use the letters of his target sounds and own words.
                 val mine = Letters.targetsFor(p.focusSounds, p.customWords.map { it.first })
                     .filter { "L" + it.lower !in used }
-                val target = if (mode == LetterMode.FIRST_SOUND && mine.isNotEmpty() && rnd.nextInt(3) != 0) mine.random(rnd) else null
+                val target = Letters.pickTarget(mine, rnd)
                 var round = Letters.make(mode, rnd, tricky = p.lettersSolved > 15, target = target)
                 while ("L" + round.target.lower in used) round = Letters.make(mode, rnd, tricky = p.lettersSolved > 15)
                 used += "L" + round.target.lower

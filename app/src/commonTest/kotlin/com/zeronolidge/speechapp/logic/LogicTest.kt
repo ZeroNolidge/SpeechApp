@@ -614,17 +614,62 @@ class PersonalWordsTest {
 
 class PipStoryTest {
     @Test
-    fun pipHasTenToTwentyShortTurnsAndEndsAsleep() {
+    fun pipHasEightToTwelveTurnsAndEndsAsleep() {
         (0..2).forEach { step ->
-            val t = PipStory.turns(step)
-            assertTrue(t.size in 10..20, "${t.size} turns")
-            // Each hiding spot gets its calls in order, far to near, and the last one opens.
-            assertEquals(PipSpot.entries.toList(), t.mapNotNull { it.spot }.distinct())
-            assertTrue(t.first { it.spot == PipSpot.LOG && it.stage == PipStory.CALLS_PER_SPOT - 1 }.reaction.contains("jumps out"))
-            assertTrue(t.last().reaction.contains("asleep"))
-            assertTrue(t.all { it.call.isNotBlank() && it.prompt.contains(it.call) })
+            for (lures in listOf(emptyList(), listOf("Grandma", "ball"), listOf("a", "b", "c", "d"))) {
+                val t = PipStory.turns(step, lures)
+                assertTrue(t.size in 8..12, "${t.size} turns")
+                // Each hiding spot gets its calls in order, far to near, and the last one opens.
+                assertEquals(PipSpot.entries.toList(), t.mapNotNull { it.spot }.distinct())
+                assertTrue(t.first { it.spot == PipSpot.LOG && it.stage == PipStory.CALLS_PER_SPOT - 1 }.reaction.contains("jumps out"))
+                assertTrue(t.last().reaction.contains("asleep"))
+                assertTrue(t.all { it.call.isNotBlank() && it.prompt.contains(it.call) })
+            }
         }
         assertTrue(PipStory.turns(0).all { it.call.split(' ').size <= 2 })
+    }
+
+    @Test
+    fun hisOwnWordsComeFirst() {
+        val t = PipStory.turns(1, listOf("Grandma", "ball"))
+        assertEquals(listOf("Grandma!", "ball!"), t.filter { it.stage == 1 && it.spot != null }.map { it.call }.take(2))
+        assertTrue(t.first { it.call == "Grandma!" }.prompt.contains("Grandma"))
+    }
+}
+
+/** Every letter round shows only letters, in one case per round, and the right tile matches the question. */
+class LetterRoundsTest {
+    @Test
+    fun onlyLettersOneCasePerRound() {
+        val rnd = Random(3)
+        LetterMode.entries.forEach { mode ->
+            repeat(400) { i ->
+                val target = if (i % 3 == 0) LetterContent.letters[i % 26] else null
+                val r = Letters.make(mode, rnd, tricky = i % 2 == 0, target = target)
+                val tiles = r.choice.options.map { Letters.tileText(mode, it) }
+                assertTrue(tiles.all { t -> t.isNotEmpty() && t.all { it.isLetter() } }, "non-letter tile in $mode: $tiles")
+                assertEquals(tiles.size, tiles.distinct().size)
+                when (mode) {
+                    LetterMode.BIG_TO_SMALL -> assertTrue(tiles.all { t -> t.all { it.isLowerCase() } }, "$tiles")
+                    LetterMode.SMALL_TO_BIG -> assertTrue(tiles.all { t -> t.all { it.isUpperCase() } }, "$tiles")
+                    LetterMode.FIRST_SOUND -> assertTrue(tiles.all { t -> t.length == 2 && t[0].isUpperCase() && t[1].isLowerCase() }, "$tiles")
+                }
+                // Big A asks for little a (and the other way round): the right tile is the same letter.
+                val q = Letters.questionText(mode, r.target)
+                val right = Letters.tileText(mode, r.choice.answer)
+                if (q != null) assertEquals(q.lowercase(), right.lowercase())
+                assertEquals(r.target, r.choice.answer)
+            }
+        }
+    }
+
+    @Test
+    fun hisLettersComeFirst() {
+        val mine = Letters.targetsFor(setOf("s"), listOf("Grandma"))
+        val rnd = Random(5)
+        val picks = List(400) { Letters.pickTarget(mine, rnd) }
+        assertTrue(picks.count { it != null } > 250)
+        assertTrue(picks.filterNotNull().all { it in mine })
     }
 }
 
@@ -643,13 +688,21 @@ class MapTargetTest {
             val (w, h, half, lh, r) = c.toList()
             for (stop in 0 until Trail.size) {
                 val (fx, fy) = Trail.position(stop)
-                val (sx, sy) = MapAreas.stopSpot(fx, fy, w, h, r, half, lh)
+                val (sx, sy) = MapAreas.stopSpot(Trail.landAt(stop), fx, fy, w, h, r, half, lh)
                 assertTrue(sx in 0f..w && sy in 0f..h, "stop $stop off the map at ${w}x$h")
-                // Tablet-sized maps always have room: the button touches no area's zone at all.
-                if (w / r >= 15f) assertTrue(MapAreas.clearOfZones(sx, sy, w, h, r, half, lh), "stop $stop inside a zone at ${w}x$h")
+                // It is always clearly at its own land (a fresh start's button at the Forest).
+                assertTrue(MapAreas.belongsTo(Trail.landAt(stop), sx, sy, w, h), "stop $stop not by ${Trail.landAt(stop)} at ${w}x$h")
+                // Tablet-sized maps: the Forest and Meadow buttons touch no area's zone at all, and no
+                // button ever covers a picture or a label (those always open their land).
+                if (w / r >= 15f && stop < 4) assertTrue(MapAreas.clearOfZones(sx, sy, w, h, r, half, lh), "stop $stop inside a zone at ${w}x$h")
+                // (On a squarer map, an upright iPad, the Lagoon has no such room; there its picture
+                // still wins any tap on it, by the tap rule above.)
+                if (w / r >= 15f && w / h >= 1.5f) assertTrue(MapAreas.clearOfCores(sx, sy, w, h, r, half, lh), "stop $stop on a picture or label at ${w}x$h")
                 // Its middle and its ring start the story...
                 assertEquals(MapTarget.Stop, MapAreas.target(sx, sy, w, h, half, lh, sx, sy, r), "stop $stop centre at ${w}x$h")
-                assertEquals(MapTarget.Stop, MapAreas.target(sx + r * 0.9f, sy, w, h, half, lh, sx, sy, r), "stop $stop ring at ${w}x$h")
+                if (MapAreas.clearOfCores(sx, sy, w, h, r, half, lh)) {
+                    assertEquals(MapTarget.Stop, MapAreas.target(sx + r * 0.9f, sy, w, h, half, lh, sx, sy, r), "stop $stop ring at ${w}x$h")
+                }
                 // ...and every area's picture and label still open that area, wherever the button is.
                 MapAreas.all.forEach { a ->
                     assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r), "picture of ${a.land}, stop $stop at ${w}x$h")
@@ -664,7 +717,7 @@ class MapTargetTest {
         val (w, h, half, lh, r) = listOf(1000f, 570f, 64f, 40f, 48f)
         val m = MapAreas.of(Land.MEADOW)
         val (fx, fy) = Trail.position(2) // Meadow's first stop, just under the sunflower
-        val (sx, sy) = MapAreas.stopSpot(fx, fy, w, h, r, half, lh)
+        val (sx, sy) = MapAreas.stopSpot(Land.MEADOW, fx, fy, w, h, r, half, lh)
         // The lower half of the sunflower, where the button used to sit.
         assertEquals(MapTarget.Area(Land.MEADOW), MapAreas.target(m.markX * w, m.markY * h + 0.1f * h, w, h, half, lh, sx, sy, r))
         // The gap between the label and the picture.

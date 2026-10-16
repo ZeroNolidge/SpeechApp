@@ -70,6 +70,7 @@ import androidx.compose.foundation.layout.width
 import com.zeronolidge.speechapp.ui.components.KidScreen
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.theme.Kid
+import com.zeronolidge.speechapp.ui.theme.LetterFont
 import kotlin.random.Random
 
 /** Free-play games, outside the story. Each one is an endless loop of one kind of challenge. */
@@ -188,13 +189,15 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
         val big = p.areaStars(Progress.AREA_NUMBERS) > 15
         val tricky = p.areaStars(Progress.AREA_LETTERS) > 15
         when (kind) {
-            PracticeKind.BIG_SMALL -> Challenge.Letter(Letters.make(LetterMode.BIG_TO_SMALL, rnd, tricky))
-            PracticeKind.SMALL_BIG -> Challenge.Letter(Letters.make(LetterMode.SMALL_TO_BIG, rnd, tricky))
-            PracticeKind.FIRST_SOUND -> {
-                // Mostly the letters of his target sounds and own words.
+            // Every letter game asks mostly for the letters of his target sounds and own words.
+            PracticeKind.BIG_SMALL, PracticeKind.SMALL_BIG, PracticeKind.FIRST_SOUND -> {
+                val mode = when (kind) {
+                    PracticeKind.BIG_SMALL -> LetterMode.BIG_TO_SMALL
+                    PracticeKind.SMALL_BIG -> LetterMode.SMALL_TO_BIG
+                    else -> LetterMode.FIRST_SOUND
+                }
                 val mine = Letters.targetsFor(p.focusSounds, p.customWords.map { it.first })
-                val target = if (mine.isNotEmpty() && rnd.nextInt(3) != 0) mine.random(rnd) else null
-                Challenge.Letter(Letters.make(LetterMode.FIRST_SOUND, rnd, tricky, target))
+                Challenge.Letter(Letters.make(mode, rnd, tricky, Letters.pickTarget(mine, rnd)))
             }
             PracticeKind.SOUND_OUT -> Challenge.SoundOut(Reading.make(ReadingContent.cvcWords, rnd, ReadingContent.cvcWords.firstOrNull { it.text == last }))
             PracticeKind.WHICH_WORD -> Challenge.WhichWord(Reading.make(ReadingContent.cvcWords, rnd, ReadingContent.cvcWords.firstOrNull { it.text == last }))
@@ -268,8 +271,8 @@ fun AlphabetScreen(nav: Nav) {
             key = i,
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text("${l.upper}", fontSize = 130.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E88E5))
-                Text("${l.lower}", fontSize = 110.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFE53935))
+                Text("${l.upper}", fontSize = 130.sp, fontWeight = FontWeight.ExtraBold, fontFamily = LetterFont, color = Color(0xFF1E88E5))
+                Text("${l.lower}", fontSize = 110.sp, fontWeight = FontWeight.ExtraBold, fontFamily = LetterFont, color = Color(0xFFE53935))
             }
             Text(l.word.emoji, fontSize = 80.sp)
             PaperChip(l.word.text, fontSize = 32.sp)

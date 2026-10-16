@@ -44,6 +44,18 @@ val Sniglet: FontFamily
         Font(Res.font.sniglet_extrabold, FontWeight.Black),
     )
 
+/**
+ * Andika, a font made for children learning to read (SIL Open Font License): plain letter shapes,
+ * a single-storey a and g. Every letter he has to recognise uses it, because Sniglet's rounded
+ * small letters look like other things (its v looks like a heart, its g like a 9, its t like a +).
+ */
+val LetterFont: FontFamily
+    @Composable get() = FontFamily(
+        Font(Res.font.andika_bold, FontWeight.Normal),
+        Font(Res.font.andika_bold, FontWeight.Bold),
+        Font(Res.font.andika_bold, FontWeight.ExtraBold),
+    )
+
 private val scheme = lightColorScheme(
     primary = Color(0xFF7C4DFF),
     secondary = Color(0xFFFF7043),

@@ -204,7 +204,7 @@ fun MapScreen(nav: Nav) {
                         // A misty place: it wiggles, and Rory walks along a sparkly trail to the next stop.
                         hintFrom = l
                         hintKey++
-                        app.speaker.say("Beep boop! Not yet! Follow me to ${land.title}!")
+                        app.speaker.say("Beep boop! Not yet! Follow me to ${land.shortName}!")
                     }
                 }
             },

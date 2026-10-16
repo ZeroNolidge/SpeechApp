@@ -76,27 +76,43 @@ object MapAreas {
     }
 
     /**
-     * Where the next-stop button is drawn, in pixels: its spot on the trail ([fx], [fy] as
-     * fractions), or, if a button of radius [stopR] there would reach into an area's zone (as the
-     * Meadow stop did, under the sunflower), the nearest spot clear of every zone. On a map too
-     * small for that, the nearest spot clear of every picture and label.
+     * Where the next-stop button for [land] is drawn, in pixels: its spot on the trail ([fx], [fy]
+     * as fractions) if a button of radius [stopR] there stays out of every area's zone, otherwise
+     * the nearest spot that does, beside its own land: always nearer [land]'s picture than any
+     * other land's (by a clear margin), so a fresh start's button sits at the Forest, never by
+     * the misty Meadow.
      */
-    fun stopSpot(fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
+    fun stopSpot(land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
         val zones = all.map { Shape.Box(it.hitBox(w, h, labelHalfW, labelH)) }
         val cores = all.flatMap { it.core(w, h, labelHalfW, labelH) }
         val sx = (fx * w).coerceIn(stopR, w - stopR)
         val sy = (fy * h).coerceIn(stopR, h - stopR)
-        for (avoid in listOf(zones, cores)) {
-            fun clear(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, stopR) }
-            if (clear(sx, sy)) return sx to sy
-            nearest(sx, sy, w, h, stopR) { x, y -> clear(x, y) }?.let { return it }
+        // Clear of every zone; else of every picture and label; else at least the button's middle
+        // half clear of them (a squarer map, where the Lagoon is crowded), always by its own land.
+        // On a tiny phone map, just its middle off every picture and label, as near its land as fits.
+        val tiers = listOf(Triple(zones, stopR, true), Triple(cores, stopR, true), Triple(cores, stopR * 0.5f, true), Triple(cores, 1f, true), Triple(cores, 1f, false))
+        for ((avoid, r, mine) in tiers) {
+            fun ok(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, r) } && (!mine || belongsTo(land, cx, cy, w, h))
+            if (ok(sx, sy)) return sx to sy
+            nearest(sx, sy, w, h, stopR) { x, y -> ok(x, y) }?.let { return it }
         }
         return sx to sy
+    }
+
+    /** True when ([x], [y]) is clearly nearer [land]'s picture than any other land's. */
+    fun belongsTo(land: Land, x: Float, y: Float, w: Float, h: Float): Boolean {
+        fun d(a: MapArea) = sq(x - a.markX * w) + sq(y - a.markY * h)
+        val own = d(of(land))
+        return all.filter { it.land != land }.all { own * 1.4f < d(it) }
     }
 
     /** True when a button of radius [stopR] at ([x], [y]) is clear of every area's whole zone. */
     fun clearOfZones(x: Float, y: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float) =
         all.none { Shape.Box(it.hitBox(w, h, labelHalfW, labelH)).touches(x, y, stopR) }
+
+    /** True when a button of radius [stopR] at ([x], [y]) covers no area's picture or label. */
+    fun clearOfCores(x: Float, y: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float) =
+        all.flatMap { it.core(w, h, labelHalfW, labelH) }.none { it.touches(x, y, stopR) }
 
     private fun nearest(sx: Float, sy: Float, w: Float, h: Float, r: Float, ok: (Float, Float) -> Boolean): Pair<Float, Float>? {
         val step = r / 4f

@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.logic.Echo
 import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.PipSpot
@@ -54,6 +55,7 @@ import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import com.zeronolidge.speechapp.ui.components.LocalApp
+import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.popIn
@@ -72,7 +74,12 @@ private enum class PipPhase { INTRO, PROMPT, LISTEN, WAIT_TAP, REACT, END }
 fun PipStoryScreen(nav: Nav) {
     val app = LocalApp.current
     val p = app.progress
-    val turns = remember { PipStory.turns(p.speechStep) }
+    // His own words first, then a word for each of his target sounds: the treats that tempt Pip out.
+    val turns = remember {
+        val own = p.customWords.map { it.first }
+        val sounds = p.focusSounds.mapNotNull { id -> SpeechContent.sounds.firstOrNull { it.id == id }?.words?.firstOrNull()?.text }
+        PipStory.turns(p.speechStep, own + sounds)
+    }
     val mic = rememberMicPermission()
     var index by remember { mutableIntStateOf(-1) }
     var phase by remember { mutableStateOf(PipPhase.INTRO) }
@@ -84,6 +91,8 @@ fun PipStoryScreen(nav: Nav) {
     var asleep by remember { mutableStateOf(false) }
     var session by remember { mutableIntStateOf(0) }
     var line by remember { mutableStateOf("") }
+    /** Pip dashing from a hiding spot that just opened to the next, nearer one. */
+    var hop by remember { mutableStateOf<PipSpot?>(null) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
 
     lateinit var prompt: (Int) -> Unit
@@ -108,6 +117,7 @@ fun PipStoryScreen(nav: Nav) {
             rustle++
             if (turn.stage == PipStory.CALLS_PER_SPOT - 1) {
                 opened = opened + spot
+                if (spot != PipSpot.LOG) hop = spot
                 if (spot == PipSpot.LOG) {
                     pipOut = true
                     app.celebrate("")
@@ -191,9 +201,40 @@ fun PipStoryScreen(nav: Nav) {
                 val unit = minOf(w, h * 1.4f)
                 val logX = w * 0.52f
                 val logY = h * 0.70f
-                PipHidingSpot(PipSpot.BUSH, w * 0.80f, h * 0.60f, unit * 0.22f, current == PipSpot.BUSH, stage, PipSpot.BUSH in opened, rustle)
-                PipHidingSpot(PipSpot.ROCK, w * 0.34f, h * 0.56f, unit * 0.26f, current == PipSpot.ROCK, stage, PipSpot.ROCK in opened, rustle)
-                PipHidingSpot(PipSpot.LOG, logX, logY, unit * 0.32f, current == PipSpot.LOG, stage, PipSpot.LOG in opened, rustle)
+                // Where each spot stands (centre x, centre y, size): far and small to near and big.
+                val spots = mapOf(
+                    PipSpot.BUSH to Triple(w * 0.80f, h * 0.60f, unit * 0.22f),
+                    PipSpot.ROCK to Triple(w * 0.34f, h * 0.56f, unit * 0.26f),
+                    PipSpot.LOG to Triple(logX, logY, unit * 0.32f),
+                )
+                // Two floppy ears peek out from the second call at a spot.
+                val earsUp = stage >= 2 || (stage == 1 && phase == PipPhase.REACT)
+                spots.forEach { (spot, at) ->
+                    PipHidingSpot(spot, at.first, at.second, at.third, current == spot, current == spot && earsUp, spot in opened, rustle)
+                }
+                // When a spot folds open, Pip dashes out of it to the next, nearer one: he can see
+                // Pip coming closer.
+                val from = hop
+                if (from != null && !LocalReduceMotion.current) {
+                    val to = PipSpot.entries[from.ordinal + 1]
+                    val run = remember(from) { Animatable(0f) }
+                    LaunchedEffect(from) { run.animateTo(1f, tween(900)) }
+                    val a = spots.getValue(from)
+                    val b = spots.getValue(to)
+                    val k = run.value
+                    if (k < 1f) {
+                        val ph = (a.third + (b.third - a.third) * k) * 0.7f
+                        val jump = ph * 0.35f * kotlin.math.sin(k * kotlin.math.PI.toFloat())
+                        Critter(
+                            Species.PUPPY,
+                            Modifier
+                                .offset(x = a.first + (b.first - a.first) * k - ph * 0.4f, y = a.second + (b.second - a.second) * k - ph * 0.8f - jump)
+                                .size(ph * 0.8f, ph),
+                            mood = Mood.CHEER,
+                            mirrored = b.first < a.first,
+                        )
+                    }
+                }
                 if (pipOut) {
                     val pipH = unit * 0.30f
                     Box(
@@ -208,7 +249,7 @@ fun PipStoryScreen(nav: Nav) {
                                 paperRoundRect(Color(0xFF7DB8E8), Offset(-size.width * 0.15f, size.height * 0.62f), Size(size.width * 1.3f, size.height * 0.38f), CornerRadius(size.height * 0.1f))
                             }
                         }
-                        Critter(Species.PUPPY, Modifier.fillMaxSize(), mood = if (asleep) Mood.SLEEP else Mood.CHEER)
+                        Critter(Species.PUPPY, Modifier.fillMaxSize().wiggleOnTap(), mood = if (asleep) Mood.SLEEP else Mood.CHEER)
                         PipCollar(p.pipTags, Modifier.fillMaxSize())
                     }
                 }
@@ -217,7 +258,7 @@ fun PipStoryScreen(nav: Nav) {
                 val narrow = w < 520.dp
                 Row(Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * if (narrow) 0.30f else 0.36f).widthIn(max = (w - ContinueReserve).coerceAtLeast(0.dp)), verticalAlignment = Alignment.Bottom) {
                     val species = p.hero ?: Species.KID
-                    HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight(), if (pipOut) Mood.CHEER else Mood.HAPPY, talking = phase == PipPhase.REACT)
+                    HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (pipOut) Mood.CHEER else Mood.HAPPY, talking = phase == PipPhase.REACT)
                     if (!narrow) Critter(
                         Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80),
                         mood = if (phase == PipPhase.LISTEN) Mood.LISTEN else Mood.HAPPY,
@@ -227,20 +268,29 @@ fun PipStoryScreen(nav: Nav) {
                 if (phase == PipPhase.LISTEN) VoiceRing(level, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
                 if (line.isNotEmpty()) PaperChip(line, Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = w * 0.6f), fontSize = 24.sp)
             }
-            // Always a way on: "I called!" without a microphone, a skip while listening, and
-            // the big green arrow back at the end.
+            // The big "I called!" button is always there, in the same spot every turn (the way
+            // on without a microphone, or any time); the big green arrow back at the end.
             ContinueAction(
-                enabled = phase == PipPhase.WAIT_TAP || phase == PipPhase.LISTEN || phase == PipPhase.END,
-                hint = phase != PipPhase.LISTEN,
-                label = if (phase == PipPhase.WAIT_TAP) "I called!" else null,
+                hint = phase == PipPhase.WAIT_TAP,
+                label = if (phase == PipPhase.END) null else "I called!",
             ) {
                 when (phase) {
-                    PipPhase.WAIT_TAP -> react(index, heard = false)
+                    PipPhase.INTRO -> {
+                        session++
+                        app.speaker.stop()
+                        prompt(0)
+                    }
+                    // Pressed while Rory is still asking: that counts as calling too.
+                    PipPhase.PROMPT, PipPhase.WAIT_TAP -> {
+                        app.speaker.stop()
+                        react(index, heard = false)
+                    }
                     PipPhase.LISTEN -> {
                         app.voice.cancel()
                         react(index, heard = false)
                     }
-                    else -> nav.back()
+                    PipPhase.REACT -> {}
+                    PipPhase.END -> nav.back()
                 }
             }
         }
@@ -275,11 +325,11 @@ private fun PipCollar(tags: Int, modifier: Modifier) {
 }
 
 /**
- * A hiding spot drawn in paper. While Pip is in it, each call makes it rustle; on the third call
- * two floppy ears peek out; on the last it folds open (flat, like a pop-up page closing).
+ * A hiding spot drawn in paper. While Pip is in it, each call makes it rustle; from the second call
+ * two floppy ears peek out; on the third it folds open (flat, like a pop-up page closing).
  */
 @Composable
-private fun PipHidingSpot(spot: PipSpot, cx: Dp, cy: Dp, size: Dp, current: Boolean, stage: Int, opened: Boolean, rustle: Int) {
+private fun PipHidingSpot(spot: PipSpot, cx: Dp, cy: Dp, size: Dp, current: Boolean, ears: Boolean, opened: Boolean, rustle: Int) {
     val still = LocalReduceMotion.current
     val shake = remember { Animatable(0f) }
     LaunchedEffect(rustle) {
@@ -290,6 +340,7 @@ private fun PipHidingSpot(spot: PipSpot, cx: Dp, cy: Dp, size: Dp, current: Bool
         Modifier
             .offset(x = cx - size / 2, y = cy - size / 2)
             .size(size)
+            .wiggleOnTap()
             .graphicsLayer {
                 rotationZ = shake.value
                 transformOrigin = TransformOrigin(0.5f, 1f)
@@ -301,7 +352,7 @@ private fun PipHidingSpot(spot: PipSpot, cx: Dp, cy: Dp, size: Dp, current: Bool
         Canvas(Modifier.fillMaxSize()) {
             val s = this.size.width
             // Floppy ears peeking out (behind the spot's front).
-            if (current && stage >= 2 && !opened) {
+            if (ears && !opened) {
                 paperOval(Color(0xFF8B5E3C), Offset(s * 0.32f, s * 0.16f), Size(s * 0.13f, s * 0.24f))
                 paperOval(Color(0xFF8B5E3C), Offset(s * 0.55f, s * 0.16f), Size(s * 0.13f, s * 0.24f))
             }

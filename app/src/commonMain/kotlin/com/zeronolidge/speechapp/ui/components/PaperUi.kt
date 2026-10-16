@@ -1,5 +1,10 @@
 package com.zeronolidge.speechapp.ui.components
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.MaxMotionMs
@@ -319,6 +324,30 @@ fun PlainBackdrop() {
 }
 
 // ---------------------------------------------------------------- paper animations
+
+/**
+ * A picture that isn't a button still answers a tap: a quick paper wiggle (0.3 s). It only
+ * watches, so a button underneath still gets the tap, and an unclaimed tap still gets its puff
+ * and pop. Nothing moves with reduce motion on.
+ */
+fun Modifier.wiggleOnTap(): Modifier = composed {
+    val still = LocalReduceMotion.current
+    val turn = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    this
+        .pointerInput(still) {
+            if (still) return@pointerInput
+            awaitPointerEventScope {
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    if (e.changes.any { it.changedToUpIgnoreConsumed() }) {
+                        scope.launch { for (a in listOf(8f, -7f, 5f, -3f, 0f)) turn.animateTo(a, tween(60)) }
+                    }
+                }
+            }
+        }
+        .graphicsLayer { rotationZ = turn.value }
+}
 
 /** Pops up like a paper cut-out being stood up: a quick springy grow with a little twist. */
 fun Modifier.popIn(key: Any? = Unit, delayMillis: Int = 0): Modifier = composed {

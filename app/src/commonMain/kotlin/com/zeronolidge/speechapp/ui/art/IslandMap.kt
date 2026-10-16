@@ -142,6 +142,8 @@ fun IslandMap(
     // The area under a finger right now (its label sinks), and the last logged label positions.
     var pressedLand by remember { mutableStateOf<Land?>(null) }
     var pressedStop by remember { mutableStateOf(false) }
+    /** The place to go glows and sparkles until he taps it (or its stop button). */
+    var guide by remember(current) { mutableStateOf(true) }
     var lastAreaLog by remember { mutableStateOf("") }
     var islandOrigin by remember { mutableStateOf(Offset.Zero) }
     val app = LocalApp.current
@@ -194,7 +196,7 @@ fun IslandMap(
             val hPx = h.toPx()
             val labelH = (label * 1.45f + 6f).dp.toPx()
             remember(current, wPx, hPx, labelH) {
-                val (x, y) = MapAreas.stopSpot(fx, fy, wPx, hPx, (node / 2).toPx(), 64.dp.toPx(), labelH)
+                val (x, y) = MapAreas.stopSpot(Trail.landAt(current), fx, fy, wPx, hPx, (node / 2).toPx(), 64.dp.toPx(), labelH)
                 Offset(x, y)
             }
         }
@@ -242,6 +244,7 @@ fun IslandMap(
                         onTap = { p ->
                             val t = targetAt(p)
                             println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Sea -> "sea" }}")
+                            if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
                             when (t) {
                                 is MapTarget.Area -> onArea(t.land)
                                 MapTarget.Stop -> onStopTap()
@@ -309,6 +312,19 @@ fun IslandMap(
             Canvas(Modifier.fillMaxSize()) {
                 if (hintFrom != null && hint.value in 0.001f..0.999f) sparklePath(at(hintFrom), Offset(stopPx.x, stopPx.y), hint.value, still)
                 birds(slow, flap)
+                // Where to go: a soft golden ring that breathes around the next stop's land, with
+                // three sparkles going round it, until he taps it.
+                if (guide) {
+                    val a = MapAreas.of(Trail.landAt(current))
+                    val c = Offset(a.markX * size.width, a.markY * size.height)
+                    val r = size.minDimension * MapAreas.LANDMARK_RADIUS * (if (still) 1f else 0.95f + (pulse - 1f))
+                    drawCircle(Color(0xFFFFE082).copy(alpha = 0.25f), r, center = c)
+                    drawCircle(Color(0xFFFFD54F), r, center = c, style = Stroke(4.dp.toPx()))
+                    for (i in 0 until 3) {
+                        val ang = (if (still) 0f else fast * 6.2832f) + i * 2.0944f
+                        star(Offset(c.x + r * kotlin.math.cos(ang), c.y + r * kotlin.math.sin(ang)), 7.dp.toPx(), Color(0xFFFFF59D))
+                    }
+                }
             }
             // A soft wash so the scenery sits back and the raised stop button wins.
             Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash, Offset(-3000f, -3000f), Size(size.width + 6000f, size.height + 6000f)) }
