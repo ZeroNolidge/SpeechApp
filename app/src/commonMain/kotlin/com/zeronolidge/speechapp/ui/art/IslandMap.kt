@@ -380,7 +380,8 @@ fun IslandMap(
                 val step = if (still || walk >= 1f) 0f else sin(t * 60f)
                 Box(
                     Modifier
-                        .offset(x = w * rx + 52.dp, y = h * ry - rh)
+                        // He walks a little below the places' pictures, clear of their name labels.
+                        .offset(x = w * rx + 52.dp, y = h * ry - rh * 0.25f)
                         .size(rh * 0.72f, rh)
                         .zIndex(3f)
                         .graphicsLayer {
@@ -411,7 +412,7 @@ fun IslandMap(
                     if (left) "👈" else "👉",
                     fontSize = (rh.value * 0.42f).sp,
                     modifier = Modifier
-                        .offset(x = w * rx + 52.dp + if (left) -rh * 0.45f else rh * 0.7f, y = h * ry - rh * 0.75f)
+                        .offset(x = w * rx + 52.dp + if (left) -rh * 0.45f else rh * 0.7f, y = h * ry)
                         .zIndex(4f)
                         .graphicsLayer { alpha = fade },
                 )
