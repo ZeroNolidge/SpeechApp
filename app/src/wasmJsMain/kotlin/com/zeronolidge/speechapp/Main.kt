@@ -29,6 +29,8 @@ import com.zeronolidge.speechapp.audio.WebMicLevels
 import com.zeronolidge.speechapp.audio.WebParrot
 import com.zeronolidge.speechapp.audio.QueueSpeaker
 import com.zeronolidge.speechapp.audio.WebVoiceEngine
+import com.zeronolidge.speechapp.audio.ClipVoiceEngine
+import com.zeronolidge.speechapp.audio.WebClips
 import com.zeronolidge.speechapp.res.Res
 import com.zeronolidge.speechapp.res.noto_color_emoji
 import com.zeronolidge.speechapp.state.Progress
@@ -54,7 +56,8 @@ import org.jetbrains.compose.resources.preloadFont
 fun main() {
     val progress = Progress(WebPrefs())
     val services = AppServices(
-        speaker = QueueSpeaker(WebVoiceEngine()).also { it.rate = progress.speechRate },
+        // Rory's pre-made voice clips where they exist, the browser's voice for anything else.
+        speaker = QueueSpeaker(ClipVoiceEngine(WebClips(), WebVoiceEngine())).also { it.rate = progress.speechRate },
         voice = VoiceDetector(WebMicLevels()),
         parrot = WebParrot(),
         progress = progress,

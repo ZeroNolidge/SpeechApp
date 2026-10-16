@@ -6,3 +6,10 @@ local.properties
 .DS_Store
 captures/
 .kotlin/
+
+# Secrets: the OpenAI key for tools/make_voice.py lives in .env (or the environment), never in git.
+.env
+.env.*
+*.env
+# Made by tools/make_voice.py --dry-run
+tools/voice_lines.txt

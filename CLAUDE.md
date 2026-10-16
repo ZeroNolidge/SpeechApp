@@ -55,6 +55,17 @@ These are the owner's rules for all work:
 - **Growth without numbers:** no levels, XP or star counts. Gems are for words he *tried* to say
   (not right answers); they fill the 🎒 backpack (`Progress.addGem`), and a full backpack gives a
   paper piece. Practice shows ~3 games that rotate daily (🔄 for others).
+- **Rory's voice is pre-made OpenAI clips** (web): `tools/make_voice.py` (run by the owner on
+  their computer with `OPENAI_API_KEY` from the environment or a gitignored `.env`; never in the
+  app or CI) reads every string in commonMain, cuts out the changing parts, and saves one mp3 per
+  fixed piece in `app/src/wasmJsMain/resources/audio/` (filename = sha1 of the normalized text)
+  plus `manifest.json`. `ClipVoiceEngine` (common) plans each line with `logic/ClipText.kt`
+  (normalize, split at . ! ? : ; …, fewest clips per phrase) and plays clip runs gaplessly via
+  `WebClips` (Web Audio, trimmed silence; slow = audio element, pitch kept); anything without a
+  clip (his name, own words) uses the browser voice. **ClipText.kt and make_voice.py must use the
+  same rules.** No manifest = browser voice as before. The offline cache includes the clips
+  automatically. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
+  (tools/voice_overrides.json). Android still uses its own TTS.
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
   limit on each). If speech doesn't finish in time the flow carries on and the top-right 🔊 pulses
   in its own spot until tapped (`HearAgainButton`, `app.audioTrouble`); no overlay covers anything. Chrome sometimes never fires `onend`; that used to freeze the story.

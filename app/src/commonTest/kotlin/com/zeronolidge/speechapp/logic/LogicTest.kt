@@ -828,3 +828,29 @@ class TapLetterTest {
         }
     }
 }
+
+/** Pre-made voice clips: sentences are matched to clips the same way the build script makes them. */
+class ClipTextTest {
+    private val clips = setOf("pip loves", "say", "great job", "a", "big", "red", "ball", "listen", "ah", "apple", "says", "pig")
+
+    @Test
+    fun normalizesLikeTheBuildScript() {
+        assertEquals("great job saying it together", ClipText.normalize("Great job, saying it together!"))
+        assertEquals("millie's turn", ClipText.normalize("Millie’s turn…"))
+        assertEquals(listOf("Pip loves Grandma", "Say", "Grandma"), ClipText.phrases("Pip loves Grandma! Say: Grandma!"))
+    }
+
+    @Test
+    fun clipsBackToBackAndHisWordsByTheDeviceVoice() {
+        val plan = ClipText.plan("Pip loves Grandma! Say: Grandma!") { it in clips }
+        assertEquals(
+            listOf(ClipText.Part.Clips(listOf("pip loves")), ClipText.Part.Speak("grandma"), ClipText.Part.Clips(listOf("say")), ClipText.Part.Speak("grandma")),
+            plan,
+        )
+        assertEquals(listOf(ClipText.Part.Clips(listOf("a", "big", "red", "ball"))), ClipText.plan("A big red ball!") { it in clips })
+        assertEquals(listOf(ClipText.Part.Clips(listOf("listen", "ah", "ah", "apple", "a", "says", "ah"))), ClipText.plan("Listen: ah, ah, apple! A says ah.") { it in clips })
+        // A whole sentence with a clip of its own is one clip.
+        assertEquals(listOf(ClipText.Part.Clips(listOf("great job"))), ClipText.plan("Great job!") { it in clips })
+        assertEquals(listOf(ClipText.Part.Speak("hello sam")), ClipText.plan("Hello Sam") { it in clips })
+    }
+}
