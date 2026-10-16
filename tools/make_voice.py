@@ -68,8 +68,13 @@ def phrases(text):
     return [p.strip() for p in re.split(r"[.!?:;\u2026]+", text) if normalize(p)]
 
 
-def clip_file(key):
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:16] + ".mp3"
+def clip_file(key, audio=None):
+    """A clip's file name. A remade clip also carries a fingerprint of its sound, so tablets that
+    saved the old one for offline use fetch the new one (they never re-check a saved clip)."""
+    name = hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+    if audio is not None:
+        name += "-" + hashlib.sha1(audio).hexdigest()[:6]
+    return name + ".mp3"
 
 
 # ---------------------------------------------------------------- reading the strings in the code
@@ -321,7 +326,9 @@ def main():
     overrides = json.load(open(OVERRIDES, encoding="utf-8")) if os.path.exists(OVERRIDES) else {}
 
     lines = collect_lines()
-    clips = {k: clip_file(k) for k in lines}
+    # Which file holds each line: the last run's choice if that file is still there.
+    old_clips = old.get("clips", {})
+    clips = {k: old_clips[k] if k in old_clips and os.path.exists(os.path.join(OUT, old_clips[k])) else clip_file(k) for k in lines}
 
     if args.list_letters:
         print("Letter-sound lines (letter, line, clip file):")
@@ -364,11 +371,14 @@ def main():
 
     def make(k):
         audio = speak(key, overrides.get(k, lines[k]), voice, state)
-        path = os.path.join(OUT, clips[k])
+        remake = os.path.exists(os.path.join(OUT, clips[k]))
+        name = clip_file(k, audio) if remake else clip_file(k)
+        path = os.path.join(OUT, name)
         # Write to a temporary name first, so a stopped run never leaves half a clip behind.
         with open(path + ".part", "wb") as f:
             f.write(audio)
         os.replace(path + ".part", path)
+        clips[k] = name
         return k
 
     print("Working... making %d clips. A count shows every 10 clips (about every 10-20 seconds)." % len(todo))

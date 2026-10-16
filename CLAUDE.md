@@ -64,7 +64,9 @@ These are the owner's rules for all work:
   `WebClips` (Web Audio, trimmed silence; slow = audio element, pitch kept); anything without a
   clip (his name, own words) uses the browser voice. **ClipText.kt and make_voice.py must use the
   same rules.** No manifest = browser voice as before. The offline cache includes the clips
-  automatically. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
+  automatically; sw.js keeps clips (like the .wasm) in the long-lived cache, cache-first, so they
+  download once. A remade clip gets a new name (`-` + sound fingerprint); manifest.json is the only
+  key-to-file record. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
   (tools/voice_overrides.json). Android still uses its own TTS.
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
   limit on each). If speech doesn't finish in time the flow carries on and the top-right 🔊 pulses
