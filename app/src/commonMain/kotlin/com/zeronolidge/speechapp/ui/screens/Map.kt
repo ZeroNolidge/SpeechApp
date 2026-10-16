@@ -225,6 +225,7 @@ fun MapScreen(nav: Nav) {
 @Composable
 private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
     val app = LocalApp.current
+    val p = app.progress
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
         val narrow = mapNarrow(maxWidth)
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

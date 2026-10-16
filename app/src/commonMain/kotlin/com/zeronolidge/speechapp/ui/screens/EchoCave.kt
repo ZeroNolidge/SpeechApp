@@ -72,7 +72,7 @@ import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
-import com.zeronolidge.speechapp.ui.theme.PaperStyle
+import com.zeronolidge.speechapp.ui.art.PaperStyle
 
 private enum class CavePhase { INTRO, PROMPT, LISTEN, WAIT_TAP, ECHO, END }
 
