@@ -209,8 +209,10 @@ private fun QuestionLayout(
         val w = maxWidth
         val h = maxHeight
         if (allowSide && w > 700.dp) {
-            // Three cards stacked, plus the "Try again!" slot, must fit the height.
-            val card = minOf(w / 6f, (h - TryAgainHeight - 60.dp) / 3.2f).coerceIn(64.dp, 112.dp)
+            // Three cards stacked, plus the "Try again!" slot, must fit the height. A tablet (an
+            // upright iPad especially) has the room, so the cards grow up to 150: always at least
+            // as big as on a phone, never small in a big empty screen.
+            val card = minOf(w / 5.2f, (h - TryAgainHeight - 60.dp) / 3.2f).coerceIn(64.dp, 150.dp)
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 // The picture side has the room, so its pictures are drawn bigger than the cards.
                 val big = minOf(card * 1.6f, w * 0.5f / 3f, h / 3f).coerceAtLeast(card)
