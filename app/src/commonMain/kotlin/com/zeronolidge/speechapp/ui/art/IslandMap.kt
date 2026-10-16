@@ -3,6 +3,8 @@ package com.zeronolidge.speechapp.ui.art
 import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.platform.LocalDensity
 import com.zeronolidge.speechapp.logic.MapAreas
+import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.logic.MapTarget
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.layout.positionInWindow
@@ -294,7 +296,8 @@ fun IslandMap(
                 }
                 if (strength > 0.01f) {
                     val box = unit * 0.34f
-                    val wiggle = if (!still && land == hintFrom && hint.value in 0.001f..0.12f) sin(hint.value * 180f) * (1f - hint.value / 0.12f) else 0f
+                    // "Not yet!": the tapped land's mist gives a big shake for about a second.
+                    val wiggle = if (!still && land == hintFrom && hint.value in 0.001f..0.3f) sin(hint.value * 110f) * 1.6f * (1f - hint.value / 0.3f) else 0f
                     Box(
                         Modifier
                             .offset(x = w * land.mapX - box / 2, y = h * land.mapY - box / 2)
@@ -388,6 +391,29 @@ fun IslandMap(
                 ) {
                     Critter(Species.ROBOT, Modifier.fillMaxSize(), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true, mirrored = sx < from.mapX)
                 }
+                // Seen as well as heard (a muted iPad): a "Not yet!" chip with a stop hand by the
+                // misty place, and Rory pointing the way along the sparkly trail.
+                val fade = ((1f - t) / 0.12f).coerceIn(0f, 1f)
+                if (t < 0.6f) {
+                    PaperChip(
+                        "✋ Not yet!",
+                        Modifier
+                            .offset(x = w * from.mapX - 74.dp, y = h * from.mapY - unit * 0.22f)
+                            .zIndex(4f)
+                            .popIn(hintKey),
+                        fontSize = 22.sp,
+                        maxLines = 1,
+                    )
+                }
+                val left = sx < from.mapX
+                Text(
+                    if (left) "👈" else "👉",
+                    fontSize = (rh.value * 0.42f).sp,
+                    modifier = Modifier
+                        .offset(x = w * rx + 52.dp + if (left) -rh * 0.45f else rh * 0.7f, y = h * ry - rh * 0.75f)
+                        .zIndex(4f)
+                        .graphicsLayer { alpha = fade },
+                )
             }
         }
 

@@ -120,7 +120,10 @@ fun MapScreen(nav: Nav) {
         val present = p.checkIn(today())
         present?.let { app.showGift(it) }
         val welcome = present?.let { "Welcome back, ${p.heroName}! Your buddy found a present for coming to play: the ${it.name}! " } ?: ""
-        val line = when {
+        // Back after a few days away: no streaks, nothing lost, just a happy hello.
+        val missed = if (p.daysAway >= 2) "I missed you, ${p.heroName}! I'm so happy you're back! " else ""
+        val cave = if (p.echoReady) "A secret crystal cave! Tap the purple crystal to play. " else ""
+        val line = missed + cave + when {
             p.chapter == 0 -> "This is the map! Let's start the adventure. $hintLine"
             unfoldNew && Trail.opensLand(p.chapter) -> "Look, the map is opening up! A new place to explore. $hintLine"
             unfoldNew -> "The trail goes on! $hintLine"
@@ -251,7 +254,16 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             if (narrow) {
-                adventure(Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (p.echoReady) {
+                        PaperIconButton("💎", Color(0xFFD1C4E9), size = 84.dp, modifier = Modifier.popIn("cave")) {
+                            app.speaker.say("The crystal cave!")
+                            nav.go(Screen.EchoCave())
+                        }
+                        Spacer(Modifier.width(14.dp))
+                    }
+                    adventure(Modifier.weight(1f))
+                }
                 Spacer(Modifier.height(14.dp))
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -261,6 +273,14 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
                     nav.go(Screen.Gate)
                 }
                 Spacer(Modifier.width(24.dp))
+                // The crystal cave, a reward stop after finding Pip: a big purple crystal.
+                if (p.echoReady && !narrow) {
+                    PaperIconButton("💎", Color(0xFFD1C4E9), size = 84.dp, modifier = Modifier.popIn("cave")) {
+                        app.speaker.say("The crystal cave!")
+                        nav.go(Screen.EchoCave())
+                    }
+                    Spacer(Modifier.width(18.dp))
+                }
                 if (!narrow) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         adventure(Modifier.widthIn(max = 460.dp).fillMaxWidth())

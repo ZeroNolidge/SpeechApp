@@ -91,6 +91,21 @@ if (started) {
                 const ok = pos.STOP && pos.FOREST && pos.MEADOW && d(pos.STOP, pos.FOREST) < d(pos.STOP, pos.MEADOW);
                 check(`CHECK fresh start: stop button at the Forest: ${ok ? 'ok' : 'FAIL'} (${JSON.stringify(pos.STOP)} forest ${JSON.stringify(pos.FOREST)} meadow ${JSON.stringify(pos.MEADOW)})`);
                 for (const t of logs.filter((t) => t.startsWith('MAPSCENE MEADOW'))) console.log('FRESH ' + t);
+                // Tap the misty Meadow: "Not yet!" must show without sound too (shaking mist, a
+                // "Not yet!" chip, Rory pointing along the sparkly trail).
+                const labels = [...logs].reverse().find((t) => t.startsWith('MAPAREAS'));
+                const lab = {};
+                if (labels) for (const part of labels.split(' ').slice(1)) {
+                    const [name, xy] = part.split('@');
+                    const [x, y] = xy.split(',').map(Number);
+                    lab[name] = { x, y };
+                }
+                if (lab.MEADOW) {
+                    await page.mouse.click(lab.MEADOW.x, lab.MEADOW.y);
+                    await wait(900);
+                    await shot('map-not-yet');
+                    await wait(3000);
+                }
             }
             await page.evaluate(() => {
                 localStorage.setItem('talkandlearn.micAsked', 'true');
@@ -215,6 +230,13 @@ if (started) {
             await open('#test=pip', 400, 860, 'pip-phone');
             await wait(9000);
             await shot('pip-phone-called');
+            await open('#test=cave', 1180, 820, 'cave-ipad-landscape');
+            await open('#test=cave', 400, 860, 'cave-phone');
+            await wait(12000);
+            await page.mouse.click(400 - 70, 860 - 60);
+            await wait(5000);
+            await shot('cave-phone-lit');
+            await open('#test=rest', 1180, 820, 'rest-ipad-landscape');
             await open('#test=say', 1180, 820, 'say-ipad-landscape');
             await open('#test=say', 820, 1180, 'say-ipad-portrait');
             await open('#test=say', 400, 860, 'say-phone');

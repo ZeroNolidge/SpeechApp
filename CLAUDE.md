@@ -123,18 +123,33 @@ These are the owner's rules for all work:
   on the first visit of a new day (`Progress.checkIn`). Order is `Catalog.awardOrder`. Never taken
   away. New pieces pop up on `GiftOverlay`.
 - **Lost Puppy Pip** (`logic/Pip.kt` `PipStory`, `ui/screens/Pip.kt`, Forest tile "Find Pip"): he
-  calls "Pip!" / "Here, puppy!" (calls step up with `speechStep`); 3 calls per spot: the bush, rock,
-  then log rustles, two ears peek out, it folds open and Pip visibly dashes to the next, nearer spot
-  (about 0.9 s, an exception to the 0.5 s rule, it is the story), until Pip jumps out of the log; 2
-  goodnight turns end with Pip asleep under a blanket. 11 turns. His own words, then target-sound
+  calls "Pip!" / "Here, puppy!" (calls step up with `speechStep`); EVERY call makes Pip visibly
+  hop one step closer (`hops`, 9 in all, `PipStory.HOPS`): from behind the bush, past the rock (Pip
+  is drawn behind the spot it sits at, so it peeks over), to the log, then out in front; spots
+  rustle and fold open as extras. One goodnight turn ends with Pip asleep: 10 turns. Finishing
+  opens the Echo Cave reward stop (`Progress.echoReady`, the 💎 button on the map). His own words, then target-sound
   words, are the "ears" call at each spot ("Pip loves Grandma! Say: Grandma!"). Every try works
   (heard: Rory's `Echo`; quiet: "Pip heard you!"). The big "I called!" button is always shown in
   the same spot (ContinueAction label). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
+- **Echo Cave** (`logic/EchoCave.kt`, `ui/screens/EchoCave.kt`): 8 tries; Rory says a word (own
+  words, then target-sound words, then everyday words at his speech step), he says it into the
+  paper cave, the echo bounces back ("pig... pig... pig...") and a crystal lights up. Loudness only;
+  "I said it!" always shown; no score/timer/fail. Ends back in the story (next chapter), or, at the
+  end of a long play, at `RestScreen`.
+- **Session length:** after `SESSION_MINUTES` (12) of play (`AppServices.sessionLong`), the
+  chapter's goodbye goes to the Echo Cave and then `RestScreen` ("Pip's sleepy, let's rest!",
+  today's sticker). The grown-ups page lists 2-3 "Words to say today" (`TodayWords.pick`).
+- **Quiet difficulty** (`logic/Ladder.kt`, `Progress.ladder*`): speech (word, two words "big
+  pig", short sentence: `SpeechSteps`), numbers (count to 5, to 10, add one: `Numbers.forStep`)
+  and patterns (AB, ABB, ABC: `Patterns.makeStep`) step up after 4 of the last 5 right across at
+  least two sessions (`Progress.sessionNo`), and back after 2 misses in a row. Never shown.
+- **Back after days away:** the map says "I missed you!" (`Progress.daysAway` >= 2). No streaks.
 - **"Tap the B!"**: after saying a word with a speech sound (`SpeakMoment`, sound != null), he
   finds its letter among 2 (speech step 0) or 3 (`AnswerKey.tapLetter`, `LetterTap` via
   `AnswerRow`, so the same try-again pattern). Skipping the word with ▶ skips the letter too.
-- **Rory's echo** (`logic/Echo.kt`): when the mic hears him, Rory repeats the target word and adds
-  one word ("Dog! A big dog!"). Loudness only, never speech recognition.
+- **Rory models then expands** (`logic/Echo.kt`): before his turn Rory says the word three times
+  (slow, clearly, once more; twice for a phrase). When the mic hears him, Rory says the target word
+  back slowly and clearly, then expands it (`Echo.expansion`: "A big red ball!", "Hi, Grandma!"). Loudness only, never speech recognition.
 - **Answers live in one place** (`logic/AnswerKey.kt`); every quiz goes through `QuizState.tap`
   and `AnswerRow(key = AnswerKey.x(c))`. `PlayEveryQuizTest` plays every quiz kind with a right and
   wrong tap and fails if a wrong tap is ever marked right.
@@ -166,8 +181,8 @@ These are the owner's rules for all work:
   the 🔊). Open lands are never misty; on a land's last stop the next land peeks through half-mist.
   A land's second stop sits a third of the way to the next land. The map hand points at the stop
   from the side away from the buddy (👉/👈), never over a label. Tapping a
-  misty land wiggles it and Rory walks along a sparkly trail from there to the next stop ("Follow
-  me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). **One shared list of map
+  misty land shakes its mist, shows a "✋ Not yet!" chip and Rory walks, pointing 👈/👉, along a
+  sparkly trail from there to the next stop (seen without sound, for a muted iPad; "Follow me!"; about 2 s, an exception to the 0.5 s rule because it is the hint itself). **One shared list of map
   areas** (`MapAreas` in `logic/MapAreas.kt`, unit-tested) gives each land's label and landmark
   positions; labels are drawn from it and ONE tap handler on the island layer matches taps against
   it (`MapAreas.target`): each area has ONE zone (picture, label and the gap between); a picture

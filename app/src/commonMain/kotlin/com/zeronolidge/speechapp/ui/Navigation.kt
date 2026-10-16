@@ -28,6 +28,9 @@ sealed interface Screen {
     data object Alphabet : Screen
     data object NumberLine : Screen
     data object Pip : Screen
+    /** The crystal cave reward stop; [rest] ends with Rory's "let's rest". */
+    data class EchoCave(val rest: Boolean = false) : Screen
+    data object Rest : Screen
     /** Test hook only: a story say-a-word step. */
     data object SayCheck : Screen
 }

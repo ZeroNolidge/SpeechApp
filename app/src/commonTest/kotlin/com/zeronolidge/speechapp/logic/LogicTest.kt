@@ -614,14 +614,17 @@ class PersonalWordsTest {
 
 class PipStoryTest {
     @Test
-    fun pipHasEightToTwelveTurnsAndEndsAsleep() {
+    fun pipHasAboutTenTurnsHopsOnEveryCallAndEndsAsleep() {
         (0..2).forEach { step ->
             for (lures in listOf(emptyList(), listOf("Grandma", "ball"), listOf("a", "b", "c", "d"))) {
                 val t = PipStory.turns(step, lures)
-                assertTrue(t.size in 8..12, "${t.size} turns")
-                // Each hiding spot gets its calls in order, far to near, and the last one opens.
-                assertEquals(PipSpot.entries.toList(), t.mapNotNull { it.spot }.distinct())
-                assertTrue(t.first { it.spot == PipSpot.LOG && it.stage == PipStory.CALLS_PER_SPOT - 1 }.reaction.contains("jumps out"))
+                assertTrue(t.size in 9..11, "${t.size} turns")
+                val calls = t.filter { it.spot != null }
+                assertEquals(PipStory.HOPS, calls.size)
+                // Every call makes Pip hop closer: no rustle-only turns.
+                assertTrue(calls.all { it.reaction.startsWith("Hop") }, calls.map { it.reaction }.toString())
+                assertEquals(PipSpot.entries.toList(), calls.mapNotNull { it.spot }.distinct())
+                assertTrue(calls.last().reaction.contains("jumps out"))
                 assertTrue(t.last().reaction.contains("asleep"))
                 assertTrue(t.all { it.call.isNotBlank() && it.prompt.contains(it.call) })
             }
@@ -634,6 +637,84 @@ class PipStoryTest {
         val t = PipStory.turns(1, listOf("Grandma", "ball"))
         assertEquals(listOf("Grandma!", "ball!"), t.filter { it.stage == 1 && it.spot != null }.map { it.call }.take(2))
         assertTrue(t.first { it.call == "Grandma!" }.prompt.contains("Grandma"))
+    }
+}
+
+/** The quiet difficulty ladders: up after ~4 of 5 right across two sessions, back after 2 misses in a row. */
+class LadderTest {
+    private fun Ladder.play(vararg r: Pair<Int, Boolean>) = r.fold(this) { l, (s, ok) -> l.record(ok, s, 2) }
+
+    @Test
+    fun stepsUpOnlyAcrossTwoSessions() {
+        assertEquals(0, Ladder().play(1 to true, 1 to true, 1 to true, 1 to true, 1 to true).step)
+        assertEquals(1, Ladder().play(1 to true, 1 to true, 1 to false, 2 to true, 2 to true).step)
+        // Never past the top, never below the bottom.
+        assertEquals(2, Ladder(2).play(3 to true, 3 to true, 4 to true, 4 to true, 4 to true).step)
+        assertEquals(0, Ladder().play(1 to false, 1 to false).step)
+    }
+
+    @Test
+    fun stepsBackAfterTwoMissesInARow() {
+        assertEquals(1, Ladder(2).play(5 to true, 5 to false, 5 to false).step)
+        // One miss alone doesn't.
+        assertEquals(2, Ladder(2).play(5 to false, 5 to true, 5 to false).step)
+    }
+
+    @Test
+    fun survivesSaving() {
+        val l = Ladder().play(1 to true, 2 to false, 2 to true)
+        assertEquals(l, Ladder.decode(l.encode()))
+        assertEquals(Ladder(), Ladder.decode(null))
+    }
+
+    @Test
+    fun stepsChangeThePuzzles() {
+        val rnd = Random(9)
+        repeat(50) {
+            assertTrue((Numbers.forStep(0, rnd) as MathOrCount.C).round.count <= 5)
+            assertTrue((Numbers.forStep(1, rnd) as MathOrCount.C).round.count <= 10)
+            val add = (Numbers.forStep(2, rnd) as MathOrCount.M).round
+            assertEquals(1, add.b)
+            assertTrue(add.plus)
+            assertEquals(2, Patterns.makeStep(0, rnd).unit.size)
+            assertEquals(3, Patterns.makeStep(1, rnd).unit.size)
+            assertEquals(3, Patterns.makeStep(2, rnd).unit.distinct().size)
+        }
+        val s = SpeechContent.sounds.first()
+        assertTrue(SpeechSteps.wordsFor(s, 0).first().text.split(' ').size == 1)
+        assertTrue(SpeechSteps.wordsFor(s, 1).all { it.text.split(' ').size == 2 })
+        assertTrue(SpeechSteps.wordsFor(s, 2).all { it.text.split(' ').size >= 2 })
+    }
+}
+
+/** Echo Cave and the grown-ups' words for today. */
+class EchoCaveTest {
+    @Test
+    fun ownWordsThenTargetSoundsFirst() {
+        val w = EchoCave.words(listOf("Grandma" to "👵", "Rex" to "🐶"), setOf("s"), 0, Random(1))
+        assertEquals(EchoCave.TRIES, w.size)
+        assertEquals(listOf("Grandma", "Rex"), w.take(2).map { it.text })
+        val s = SpeechContent.sounds.first { it.id == "s" }.words.map { it.text }
+        assertTrue(w[2].text in s)
+        assertEquals(w.size, w.map { it.text.lowercase() }.distinct().size)
+        assertEquals("pig... pig... pig...", EchoCave.echo("pig!"))
+    }
+
+    @Test
+    fun wordsToSayToday() {
+        val book = WordBook().record("dog", "🐶", 5, clear = false, heard = true).record("dog", "🐶", 5, clear = false, heard = true)
+            .record("sun", "☀️", 2, clear = true, heard = true)
+        val today = TodayWords.pick(book, 6, listOf("sock", "sea"))
+        assertEquals(3, today.size)
+        assertEquals("dog", today.first())
+        assertTrue("sun" in today)
+    }
+
+    @Test
+    fun roryExpandsTheWord() {
+        assertEquals("A big red ball!", Echo.expansion("ball", 0))
+        assertEquals("Hi, Grandma!", Echo.expansion("Grandma"))
+        assertEquals("Yay!", Echo.expansion("big pig"))
     }
 }
 

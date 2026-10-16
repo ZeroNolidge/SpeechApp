@@ -78,6 +78,8 @@ private fun testStart(): Screen? {
             v == "talk" -> Screen.TalkPractice(SpeechContent.sounds.first())
             v == "pip" -> Screen.Pip
             v == "say" -> Screen.SayCheck
+            v == "cave" -> Screen.EchoCave()
+            v == "rest" -> Screen.Rest
             else -> Screen.PracticeGame(PracticeKind.valueOf(v))
         }
     }.getOrNull()

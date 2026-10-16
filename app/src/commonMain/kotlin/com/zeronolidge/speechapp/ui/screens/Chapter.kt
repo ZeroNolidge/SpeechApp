@@ -140,12 +140,10 @@ fun ChapterScreen(nav: Nav, visit: Land? = null) {
     fun solved(c: Challenge, firstTry: Boolean, revealed: Boolean) {
         when (c) {
             is Challenge.Robot -> p.setLevel("story_robot", p.level("story_robot") + 1)
-            is Challenge.Pattern -> if (firstTry) {
-                patternWins++
-                if (patternWins % 3 == 0) p.setLevel("patterns", (p.level("patterns") + 1).coerceAtMost(Patterns.maxLevel()))
-            }
             else -> {}
         }
+        // Numbers and patterns quietly step up or back (right first time counts as right).
+        p.quizResult(c, firstTry && !revealed)
         // Only a right answer is cheered; when the answer was shown, the story just carries on.
         cheer = !revealed
     }
@@ -175,7 +173,10 @@ fun ChapterScreen(nav: Nav, visit: Land? = null) {
             }
             Phase.Goodbye -> {
                 val earned = p.words.stickers.filter { it.text !in stickersBefore }
-                Goodbye(p.pieces.lastOrNull { it.id !in piecesBefore }, earned, onMap = nav.home)
+                // After about 12 minutes of play: one mini game (the crystal cave), then rest.
+                Goodbye(p.pieces.lastOrNull { it.id !in piecesBefore }, earned, onMap = {
+                    if (app.sessionLong()) nav.go(Screen.EchoCave(rest = true)) else nav.home()
+                })
             }
         }
         }

@@ -6,7 +6,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import com.zeronolidge.speechapp.logic.Ladder
+import com.zeronolidge.speechapp.logic.TodayWords
+import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.logic.Backup
+import com.zeronolidge.speechapp.logic.Challenge
 import com.zeronolidge.speechapp.logic.Catalog
 import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.Land
@@ -152,9 +156,14 @@ class Progress(private val prefs: Prefs) {
      * Called when the map opens. On the first visit of a new day (after the very first day),
      * the buddy gets a "welcome back" piece for showing up. Returns that piece, if any.
      */
+    /** Days since the last visit before today (0 on the first visit or the same day). */
+    var daysAway = 0
+        private set
+
     fun checkIn(day: Int): Cosmetic? {
         val last = prefs.getInt("lastDay", 0)
         if (last == day) return null
+        daysAway = if (last == 0) 0 else day - last
         prefs.edit().putInt("lastDay", day).apply()
         return if (last == 0) null else awardPiece()
     }
@@ -180,26 +189,60 @@ class Progress(private val prefs: Prefs) {
     private var missRun = prefs.getInt("speechMissRun", 0)
 
     /**
-     * Quietly adjusts how hard the words are. Two misses in a row drop back a step; three clear
-     * catches in a row move up a step. The child is never told.
+     * Quietly adjusts how hard the words are (one word, two words, a short sentence): see
+     * [Ladder]. The child is never told.
      */
     fun speechResult(clear: Boolean) {
-        if (clear) {
-            missRun = 0
-            clearRun++
-            if (clearRun >= 3 && speechStep < MAX_SPEECH_STEP) {
-                speechStep++
-                clearRun = 0
-            }
-        } else {
-            clearRun = 0
-            missRun++
-            if (missRun >= 2 && speechStep > 0) {
-                speechStep--
-                missRun = 0
-            }
+        speechStep = ladderResult(Ladder.SPEECH, clear).step
+        prefs.edit().putInt("speechStep", speechStep).apply()
+    }
+
+    // ---------- Quiet difficulty ----------
+
+    /** Counts app starts, so "across two sessions" can be checked. */
+    val sessionNo: Int = prefs.getInt("sessionNo", 0) + 1
+
+    init {
+        prefs.edit().putInt("sessionNo", sessionNo).apply()
+    }
+
+    fun ladder(key: String): Ladder =
+        Ladder.decode(prefs.getString("ladder_$key", null)).let { if (key == Ladder.SPEECH && it.step == 0 && it.recent.isEmpty()) Ladder(speechStep) else it }
+
+    /** Records a right (or not right first time) answer on one ladder and saves it. */
+    fun ladderResult(key: String, right: Boolean): Ladder {
+        val next = ladder(key).record(right, sessionNo, Ladder.MAX[key] ?: 2)
+        prefs.edit().putString("ladder_$key", next.encode()).apply()
+        return next
+    }
+
+    /** A puzzle's result on its ladder: right means right first time (numbers and patterns). */
+    fun quizResult(c: Challenge, right: Boolean) {
+        when (c) {
+            is Challenge.Count, is Challenge.Math, is Challenge.More -> ladderResult(Ladder.NUMBERS, right)
+            is Challenge.Pattern, is Challenge.OddOne -> ladderResult(Ladder.PATTERNS, right)
+            else -> {}
         }
-        prefs.edit().putInt("speechStep", speechStep).putInt("clearRun", clearRun).putInt("speechMissRun", missRun).apply()
+    }
+
+    val numbersStep: Int get() = ladder(Ladder.NUMBERS).step
+    val patternStep: Int get() = ladder(Ladder.PATTERNS).step
+
+    // ---------- Echo Cave, the reward stop after finding Pip ----------
+
+    var echoReady by mutableStateOf(prefs.getBoolean("echoReady", false))
+        private set
+
+    fun setEchoReady(ready: Boolean) {
+        echoReady = ready
+        prefs.edit().putBoolean("echoReady", ready).apply()
+    }
+
+    /** 2 or 3 words for a grown-up to say with him today (grown-ups page). */
+    fun wordsToSayToday(): List<String> {
+        val target = focusSounds.mapNotNull { id -> SpeechContent.sounds.firstOrNull { it.id == id } }
+            .flatMap { s -> s.words.take(2).map { it.text } }
+        return TodayWords.pick(words, today(), customWords.map { it.first } + target)
     }
 
     /** A grown-up's own words for their child, like family names. Each is "word|emoji". */
@@ -279,7 +322,8 @@ class Progress(private val prefs: Prefs) {
         chapter = chapter,
         focusSounds = focusSounds,
         robotSolved = level("story_robot"),
-        patternLevel = level("patterns"),
+        patternLevel = patternStep,
+        numbersStep = numbersStep,
         numbersSolved = areaStars(AREA_NUMBERS),
         lettersSolved = areaStars(AREA_LETTERS),
         reachedLands = Trail.reached(chapter),
@@ -293,7 +337,8 @@ class Progress(private val prefs: Prefs) {
 
     private val intKeys get() = listOf("stars", "chapter", "chaptersDone", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack", "pipTags") +
         areas.map { "area_$it" } + listOf("patterns", "story_robot", "robot_easy", "robot_turn").map { "level_$it" }
-    private val stringKeys get() = listOf("hero", "childName", "customWords") + Slot.entries.map { "equip_${it.name}" }
+    private val stringKeys get() = listOf("hero", "childName", "customWords") + Slot.entries.map { "equip_${it.name}" } +
+        Ladder.MAX.keys.map { "ladder_$it" }
     private val setKeys = listOf("owned", "words", "focus")
 
     /** Everything worth keeping, as a code a grown-up can copy and paste on another device. */

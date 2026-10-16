@@ -8,6 +8,21 @@ package com.zeronolidge.speechapp.logic
 object Echo {
     private val describing = listOf("big", "little", "happy", "funny", "silly", "nice")
 
+    /**
+     * Just the expansion, said after Rory has said the target word back clearly and slowly:
+     * "A big red ball!", "Hi, Grandma!", "Yay!".
+     */
+    fun expansion(text: String, turn: Int = 0): String {
+        val t = text.trim()
+        if (t.isEmpty() || ' ' in t) return "Yay!"
+        if (t.first().isUpperCase()) return "Hi, ${t.replaceFirstChar { it.uppercase() }}!"
+        val i = ((turn % describing.size) + describing.size) % describing.size
+        val colour = colours[((turn / describing.size) % colours.size + colours.size) % colours.size]
+        return "A ${describing[i]} $colour ${t.lowercase()}!"
+    }
+
+    private val colours = listOf("red", "blue", "yellow", "green")
+
     fun line(text: String, turn: Int = 0): String {
         val t = text.trim()
         if (t.isEmpty()) return "Yay!"

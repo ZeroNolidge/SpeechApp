@@ -4,6 +4,7 @@ import com.zeronolidge.speechapp.ui.theme.LetterFont
 import com.zeronolidge.speechapp.ui.components.AnswerRow
 import com.zeronolidge.speechapp.logic.Key
 import com.zeronolidge.speechapp.logic.AnswerKey
+import com.zeronolidge.speechapp.logic.SpeechSteps
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.logic.Echo
 import com.zeronolidge.speechapp.ui.art.paperOval
@@ -94,13 +95,8 @@ private var micBroken = false
 @Composable
 fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     val app = LocalApp.current
-    val words = remember(sound) {
-        when (app.progress.speechStep) {
-            0 -> sound.words.sortedBy { it.syllableCount }
-            1 -> sound.words.sortedByDescending { it.syllableCount == 2 }
-            else -> sound.phrases + sound.words
-        }
-    }
+    // The quiet speech step: one word, then two words, then a short sentence.
+    val words = remember(sound) { SpeechSteps.wordsFor(sound, app.progress.speechStep) }
     var index by remember { mutableIntStateOf(0) }
     val word = words[index % words.size]
     val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}." else null
@@ -189,7 +185,7 @@ fun SpeakMoment(
         val piece = p.addGem()
         val praise = when {
             // Rory says the target word back and adds one word ("Dog! A big dog!").
-            heard -> "${Echo.line(word.text, stat.tries)} I heard you! You got a shiny sticker!"
+            heard -> "${Echo.expansion(word.text, stat.tries)} I heard you! You got a shiny sticker!"
             micUsed -> "Great job saying it together!"
             else -> listOf("Great talking!", "Good saying!", "I love your talking!").random()
         }
@@ -203,6 +199,9 @@ fun SpeakMoment(
                 next()
             }
         }
+        // Voice heard: Rory says the target word back, slowly and clearly, then expands it
+        // ("Ball! ... A big red ball!").
+        if (heard) app.speaker.say("${word.text}!", slow = true)
         app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, gemLine, afterLine).joinToString(" "), onDone = { afterTry() })
         if (piece != null) app.showGift(piece)
     }
@@ -240,10 +239,13 @@ fun SpeakMoment(
     }
 
     /** The word, played slowly and clearly, then at normal speed. */
-    fun model(): List<Pair<String, Boolean>> = listOf(
+    // Rory models the word before his turn: three times for a word (slow, then clearly, then
+    // once more), twice for a phrase.
+    fun model(): List<Pair<String, Boolean>> = listOfNotNull(
         "Listen." to false,
         word.syllables to true,
         word.text to false,
+        if (' ' in word.text.trim()) null else "${word.text}!" to true,
     )
 
     listen = {
@@ -409,7 +411,7 @@ fun SpeakMoment(
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         // His turn without a microphone: Rory still cups his glowing ear to listen.
-                        RoryListens(0f, minOf(roryHeight * 0.72f, 110.dp))
+                        RoryListens(0f, minOf(roryHeight * 0.85f, 150.dp))
                         PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
                     }
                 }
@@ -518,7 +520,7 @@ private fun WordPicture(word: Word, picture: (@Composable (Modifier) -> Unit)?, 
  * around him grows with the loudness of his voice, so he can see he's being listened to.
  */
 @Composable
-private fun RoryListens(level: Float, size: Dp) {
+internal fun RoryListens(level: Float, size: Dp) {
     val t = rememberInfiniteTransition(label = "listen")
     val glow by t.loop(0.55f, 1f, 600, label = "earGlow")
     val voice by animateFloatAsState(level, tween(90), label = "voice")

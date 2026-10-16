@@ -91,8 +91,8 @@ fun PipStoryScreen(nav: Nav) {
     var asleep by remember { mutableStateOf(false) }
     var session by remember { mutableIntStateOf(0) }
     var line by remember { mutableStateOf("") }
-    /** Pip dashing from a hiding spot that just opened to the next, nearer one. */
-    var hop by remember { mutableStateOf<PipSpot?>(null) }
+    /** How many hops closer Pip has come: one on every call (0 = hiding behind the bush). */
+    var hops by remember { mutableIntStateOf(0) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
 
     lateinit var prompt: (Int) -> Unit
@@ -100,6 +100,8 @@ fun PipStoryScreen(nav: Nav) {
     fun finish() {
         phase = PipPhase.END
         p.addPipTag()
+        // Finding Pip opens the crystal cave: a reward stop on the map.
+        p.setEchoReady(true)
         line = "🏷️"
         app.celebrate(PipStory.ending(p.heroName))
         app.rememberInstruction("You found Pip! Tap the big green arrow to go back.")
@@ -114,10 +116,11 @@ fun PipStoryScreen(nav: Nav) {
         level = 0f
         val spot = turn.spot
         if (spot != null) {
+            // Every call: Pip hops a little closer (and the spot rustles, for fun).
+            hops = (hops + 1).coerceAtMost(PipStory.HOPS)
             rustle++
             if (turn.stage == PipStory.CALLS_PER_SPOT - 1) {
                 opened = opened + spot
-                if (spot != PipSpot.LOG) hop = spot
                 if (spot == PipSpot.LOG) {
                     pipOut = true
                     app.celebrate("")
@@ -125,7 +128,7 @@ fun PipStoryScreen(nav: Nav) {
             }
         } else {
             night = true
-            if (turn.stage >= 1) asleep = true
+            asleep = true
         }
         // Every try works: heard or not, Pip comes closer.
         val said = if (heard) Echo.line(turn.call.trimEnd('!'), k) else "Pip heard you!"
@@ -207,34 +210,51 @@ fun PipStoryScreen(nav: Nav) {
                     PipSpot.ROCK to Triple(w * 0.34f, h * 0.56f, unit * 0.26f),
                     PipSpot.LOG to Triple(logX, logY, unit * 0.32f),
                 )
-                // Two floppy ears peek out from the second call at a spot.
-                val earsUp = stage >= 2 || (stage == 1 && phase == PipPhase.REACT)
-                spots.forEach { (spot, at) ->
-                    PipHidingSpot(spot, at.first, at.second, at.third, current == spot, current == spot && earsUp, spot in opened, rustle)
-                }
-                // When a spot folds open, Pip dashes out of it to the next, nearer one: he can see
-                // Pip coming closer.
-                val from = hop
-                if (from != null && !LocalReduceMotion.current) {
-                    val to = PipSpot.entries[from.ordinal + 1]
-                    val run = remember(from) { Animatable(0f) }
-                    LaunchedEffect(from) { run.animateTo(1f, tween(900)) }
-                    val a = spots.getValue(from)
-                    val b = spots.getValue(to)
-                    val k = run.value
-                    if (k < 1f) {
-                        val ph = (a.third + (b.third - a.third) * k) * 0.7f
-                        val jump = ph * 0.35f * kotlin.math.sin(k * kotlin.math.PI.toFloat())
+                // Pip's place along the way: behind the bush (hop 0), by the rock (3), by the log
+                // (6), then out in front (9). Each call is one visible hop, with a little jump.
+                val still = LocalReduceMotion.current
+                val hopAt by animateFloatAsState(hops.toFloat(), tween(if (still) 0 else 500), label = "hops")
+                val pipBig = unit * 0.30f
+                val anchors = listOf(
+                    Triple(spots.getValue(PipSpot.BUSH).first, spots.getValue(PipSpot.BUSH).second - spots.getValue(PipSpot.BUSH).third * 0.22f, spots.getValue(PipSpot.BUSH).third * 0.6f),
+                    Triple(spots.getValue(PipSpot.ROCK).first, spots.getValue(PipSpot.ROCK).second - spots.getValue(PipSpot.ROCK).third * 0.22f, spots.getValue(PipSpot.ROCK).third * 0.62f),
+                    Triple(logX, logY - spots.getValue(PipSpot.LOG).third * 0.2f, spots.getValue(PipSpot.LOG).third * 0.65f),
+                    Triple(logX, logY + pipBig * 0.1f, pipBig),
+                )
+                val per = PipStory.CALLS_PER_SPOT.toFloat()
+                val seg = (hopAt / per).toInt().coerceIn(0, anchors.size - 2)
+                val f = ((hopAt - seg * per) / per).coerceIn(0f, 1f)
+                val a = anchors[seg]
+                val b = anchors[seg + 1]
+                val pipX = a.first + (b.first - a.first) * f
+                val pipY = a.second + (b.second - a.second) * f
+                val pipH = a.third + (b.third - a.third) * f
+                val inHop = hopAt - kotlin.math.floor(hopAt)
+                val jump = if (still) 0.dp else pipH * 0.45f * kotlin.math.sin(inHop * kotlin.math.PI.toFloat())
+                val drawPip: @Composable () -> Unit = {
+                    if (!pipOut) {
                         Critter(
                             Species.PUPPY,
                             Modifier
-                                .offset(x = a.first + (b.first - a.first) * k - ph * 0.4f, y = a.second + (b.second - a.second) * k - ph * 0.8f - jump)
-                                .size(ph * 0.8f, ph),
+                                .offset(x = pipX - pipH * 0.4f, y = pipY - pipH * 0.8f - jump)
+                                .size(pipH * 0.8f, pipH)
+                                .wiggleOnTap(),
                             mood = Mood.CHEER,
                             mirrored = b.first < a.first,
                         )
                     }
                 }
+                // Pip is behind a spot while sitting at it (only ears and head peek over), and in
+                // front of the spots it has already passed.
+                var pipDrawn = false
+                spots.entries.forEachIndexed { i, (spot, at) ->
+                    if (!pipDrawn && hopAt <= i * per + 0.05f) {
+                        drawPip()
+                        pipDrawn = true
+                    }
+                    PipHidingSpot(spot, at.first, at.second, at.third, current == spot, false, spot in opened, rustle)
+                }
+                if (!pipDrawn) drawPip()
                 if (pipOut) {
                     val pipH = unit * 0.30f
                     Box(

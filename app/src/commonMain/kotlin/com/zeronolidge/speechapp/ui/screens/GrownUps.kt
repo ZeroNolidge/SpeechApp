@@ -106,6 +106,16 @@ fun GrownUpsScreen(nav: Nav) {
                     Switch(checked = p.useMic, onCheckedChange = { p.updateUseMic(it) })
                 }
                 MicStatusSection()
+                // 2 or 3 words to say together today: tricky ones first, then ones due back, then
+                // his target-sound and own words.
+                Heading("Words to say today")
+                val today = remember { p.wordsToSayToday() }
+                if (today.isEmpty()) {
+                    Text("Play a little first: the words he practises will show up here.", fontSize = 16.sp)
+                } else {
+                    Text(today.joinToString("  ·  "), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Say each one slowly and clearly, then let him have a turn. Any try is great.", fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f))
+                }
                 Heading("Progress")
                 val lap = p.chapter / Trail.size
                 Text(

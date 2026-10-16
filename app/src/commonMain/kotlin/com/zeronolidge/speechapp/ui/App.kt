@@ -67,6 +67,8 @@ import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.screens.NumberLineScreen
 import com.zeronolidge.speechapp.ui.screens.ParentGateScreen
 import com.zeronolidge.speechapp.ui.screens.PipStoryScreen
+import com.zeronolidge.speechapp.ui.screens.EchoCaveScreen
+import com.zeronolidge.speechapp.ui.screens.RestScreen
 import com.zeronolidge.speechapp.ui.screens.SayStepCheck
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeMenu
@@ -211,6 +213,8 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         Screen.Alphabet -> AlphabetScreen(nav)
         Screen.NumberLine -> NumberLineScreen(nav)
         Screen.Pip -> PipStoryScreen(nav)
+        is Screen.EchoCave -> EchoCaveScreen(nav, s.rest)
+        Screen.Rest -> RestScreen(nav)
         Screen.SayCheck -> SayStepCheck(nav)
     }
 }

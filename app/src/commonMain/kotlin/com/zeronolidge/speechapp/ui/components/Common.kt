@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.components
 
+import kotlin.time.Duration.Companion.minutes
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.Mood
@@ -76,6 +77,9 @@ import com.zeronolidge.speechapp.ui.theme.Kid
 import kotlinx.coroutines.delay
 
 /** Everything a screen needs to talk, listen and award stars. */
+/** How long a play lasts before Rory suggests a rest (after the chapter and one mini game). */
+const val SESSION_MINUTES = 12
+
 class AppServices(
     val speaker: Speaker,
     /** "Did the child say something?" from microphone loudness. */
@@ -87,6 +91,15 @@ class AppServices(
 ) {
     /** True while it's his turn to talk: the scene dims a little so Rory and the word stand out. */
     var listening by mutableStateOf(false)
+
+    /** When this play started. After about 12 minutes Rory closes it gently ([sessionLong]). */
+    private val sessionStart = kotlin.time.TimeSource.Monotonic.markNow()
+
+    /** Set once Rory has said "let's rest" today, so it isn't said again in the same play. */
+    var sessionClosed by mutableStateOf(false)
+
+    /** About 12 minutes of play: at the end of the current chapter, one mini game, then rest. */
+    fun sessionLong(): Boolean = !sessionClosed && sessionStart.elapsedNow() >= SESSION_MINUTES.minutes
 
     /** Taps that landed on nothing tappable: each shows a little paper puff (x, y in window pixels, id). */
     val puffs = mutableStateListOf<Triple<Float, Float, Int>>()

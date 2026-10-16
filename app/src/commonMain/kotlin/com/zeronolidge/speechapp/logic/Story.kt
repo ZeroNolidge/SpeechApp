@@ -121,6 +121,8 @@ data class StoryParams(
     val robotSolved: Int = 0,
     val patternLevel: Int = 0,
     val numbersSolved: Int = 0,
+    /** The quiet numbers step (see [Ladder]): count to 5, count to 10, add one. */
+    val numbersStep: Int = 0,
     val lettersSolved: Int = 0,
     /** 0 = one-syllable words, 1 = two syllables, 2 = short phrases. */
     val speechStep: Int = 0,
@@ -235,9 +237,10 @@ object StoryGen {
         val sounds = SpeechContent.sounds.filter { p.focusSounds.isEmpty() || it.id in p.focusSounds }
             .ifEmpty { SpeechContent.sounds }
         val all = sounds.flatMap { s -> s.words.map { s to it } }
+        // The quiet speech steps: one word, then two words ("big pig"), then a short sentence.
         val atStep = when (p.speechStep) {
             0 -> all.filter { it.second.syllableCount == 1 }
-            1 -> all.filter { it.second.syllableCount == 2 }
+            1 -> all.filter { it.second.syllableCount == 1 }.mapIndexed { i, (s, w) -> s to SpeechSteps.twoWords(w, i) }
             else -> sounds.flatMap { s -> s.phrases.map { s to it } }
         }
         val fresh = { list: List<Pair<SpeechSound, Word>> -> list.filter { it.second.text !in used } }
@@ -291,15 +294,14 @@ object StoryGen {
                 used += c.word.text
                 c
             }
-            Subject.NUMBERS -> {
-                val max = if (p.numbersSolved > 15) 10 else 5
-                when (rnd.nextInt(if (p.chapter >= 4) 4 else 3)) {
-                    0 -> Challenge.Count(Numbers.count(if (max > 5) 10 else 6, rnd, item))
-                    1 -> Challenge.Math(Numbers.math(true, max, rnd, item))
-                    2 -> Challenge.More(Numbers.compare(if (max > 5) 8 else 6, rnd, item))
-                    else -> Challenge.Math(Numbers.math(false, max, rnd, item))
+            // Numbers follow the quiet step: count to 5, then to 10, then add one (plus "which
+            // has more?" now and then, at the same size).
+            Subject.NUMBERS ->
+                if (rnd.nextInt(3) == 0) Challenge.More(Numbers.compare(if (p.numbersStep >= 1) 8 else 5, rnd, item))
+                else when (val r = Numbers.forStep(p.numbersStep, rnd, item)) {
+                    is MathOrCount.C -> Challenge.Count(r.round)
+                    is MathOrCount.M -> Challenge.Math(r.round)
                 }
-            }
             Subject.LETTERS -> {
                 val mode = LetterMode.entries.random(rnd)
                 // Letter puzzles mostly use the letters of his target sounds and own words.
@@ -319,7 +321,7 @@ object StoryGen {
             }
             Subject.PATTERNS ->
                 if (rnd.nextInt(3) == 0) Challenge.OddOne(OddOneOut.make(if (p.patternLevel > 0) 1 else 0, rnd))
-                else Challenge.Pattern(Patterns.make(p.patternLevel, rnd))
+                else Challenge.Pattern(Patterns.makeStep(p.patternLevel, rnd))
             Subject.ROBOT -> {
                 val n = counters.robot++
                 Challenge.Robot(robotLevel(n, rnd), goalEmoji)
@@ -390,4 +392,22 @@ object StoryGen {
         .replace("{hero}", p.heroName)
         .replace("{land}", "the ${land.title}")
         .replace("{v}", (visitor?.species?.label ?: "friend").lowercase())
+}
+
+/** The quiet speech steps (see [Ladder]): one word, then two words, then a short sentence. */
+object SpeechSteps {
+    private val firstWords = listOf("big", "my", "little", "red")
+
+    /** "pig" becomes "big pig", "my sun", ... */
+    fun twoWords(w: Word, i: Int): Word {
+        val first = firstWords[((i % firstWords.size) + firstWords.size) % firstWords.size]
+        return Word("$first ${w.text}", w.emoji, "$first - ${w.syllables}")
+    }
+
+    /** The practice words for [sound] at speech step [step], easiest first. */
+    fun wordsFor(sound: SpeechSound, step: Int): List<Word> = when (step) {
+        0 -> sound.words.sortedBy { it.syllableCount }
+        1 -> sound.words.filter { it.syllableCount == 1 }.ifEmpty { sound.words }.mapIndexed { i, w -> twoWords(w, i) }
+        else -> sound.phrases.ifEmpty { sound.words }
+    }
 }

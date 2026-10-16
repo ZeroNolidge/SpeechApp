@@ -186,7 +186,6 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
     var streak by remember { mutableIntStateOf(0) }
     var last by remember { mutableStateOf<String?>(null) }
     val challenge = remember(roundNo) {
-        val big = p.areaStars(Progress.AREA_NUMBERS) > 15
         val tricky = p.areaStars(Progress.AREA_LETTERS) > 15
         when (kind) {
             // Every letter game asks mostly for the letters of his target sounds and own words.
@@ -201,11 +200,12 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
             }
             PracticeKind.SOUND_OUT -> Challenge.SoundOut(Reading.make(ReadingContent.cvcWords, rnd, ReadingContent.cvcWords.firstOrNull { it.text == last }))
             PracticeKind.WHICH_WORD -> Challenge.WhichWord(Reading.make(ReadingContent.cvcWords, rnd, ReadingContent.cvcWords.firstOrNull { it.text == last }))
-            PracticeKind.COUNT -> Challenge.Count(Numbers.count(if (big) 10 else 6, rnd))
+            // Counting and adding follow the quiet numbers step: count to 5, to 10, then add one.
+            PracticeKind.COUNT -> Challenge.Count(Numbers.count(if (p.numbersStep >= 1) 10 else 5, rnd))
             PracticeKind.MORE -> Challenge.More(Numbers.compare(8, rnd))
-            PracticeKind.ADD -> Challenge.Math(Numbers.math(true, if (big) 10 else 5, rnd))
-            PracticeKind.TAKE_AWAY -> Challenge.Math(Numbers.math(false, if (big) 10 else 5, rnd))
-            PracticeKind.NEXT -> Challenge.Pattern(Patterns.make(p.level("patterns"), rnd))
+            PracticeKind.ADD -> Challenge.Math(if (p.numbersStep >= 2) Numbers.addOne(rnd) else Numbers.math(true, 5, rnd))
+            PracticeKind.TAKE_AWAY -> Challenge.Math(Numbers.math(false, if (p.numbersStep >= 1) 10 else 5, rnd))
+            PracticeKind.NEXT -> Challenge.Pattern(Patterns.makeStep(p.patternStep, rnd))
             PracticeKind.ODD -> Challenge.OddOne(OddOneOut.make(if (roundNo < 5) 0 else 1, rnd))
             PracticeKind.ROBOT_ARROWS -> {
                 val n = p.level("robot_easy")
@@ -220,16 +220,10 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
     }
     KidScreen(kind.emoji, nav.home, kind.spoken, onBack = nav.back) {
         // key: a new round always starts fresh, even if it happens to look like the last one.
-        key(roundNo) { ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry, _ ->
+        key(roundNo) { ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry, revealed ->
+            // Numbers and patterns quietly step up or back (right first time counts as right).
+            p.quizResult(challenge, firstTry && !revealed)
             when (kind) {
-                PracticeKind.NEXT -> {
-                    // Every few right-first-time answers, the patterns get trickier.
-                    streak = if (firstTry) streak + 1 else 0
-                    if (streak >= 4 && p.level("patterns") < Patterns.maxLevel()) {
-                        streak = 0
-                        p.setLevel("patterns", p.level("patterns") + 1)
-                    }
-                }
                 PracticeKind.ROBOT_ARROWS -> p.setLevel("robot_easy", p.level("robot_easy") + 1)
                 PracticeKind.ROBOT_TURNS -> p.setLevel("robot_turn", p.level("robot_turn") + 1)
                 else -> {}

@@ -34,8 +34,14 @@ object Patterns {
 
     fun maxLevel() = unitsByLevel.size - 1
 
-    fun make(level: Int, rnd: Random): PatternRound {
-        val shape = unitsByLevel[level.coerceIn(0, maxLevel())].random(rnd)
+    /** The quiet difficulty steps (see [Ladder]): AB, then ABB (or AAB), then ABC. */
+    private val unitsByStep = listOf(listOf("AB"), listOf("ABB", "AAB"), listOf("ABC"))
+
+    fun makeStep(step: Int, rnd: Random): PatternRound = fromShape(unitsByStep[step.coerceIn(0, unitsByStep.size - 1)].random(rnd), rnd)
+
+    fun make(level: Int, rnd: Random): PatternRound = fromShape(unitsByLevel[level.coerceIn(0, maxLevel())].random(rnd), rnd)
+
+    private fun fromShape(shape: String, rnd: Random): PatternRound {
         val pool = (if (rnd.nextBoolean()) Things.shapes else Things.categories.random(rnd)).shuffled(rnd)
         val letters = shape.toSet().sorted()
         val pick = letters.zip(pool).toMap()
@@ -86,6 +92,12 @@ data class CompareRound(val emoji: String, val left: Int, val right: Int) {
     val moreIsLeft get() = left > right
 }
 
+/** A counting round or a sum, for [Numbers.forStep]. */
+sealed interface MathOrCount {
+    data class C(val round: CountRound) : MathOrCount
+    data class M(val round: MathRound) : MathOrCount
+}
+
 object Numbers {
     private fun nearby(n: Int, min: Int, max: Int, rnd: Random): Choice<Int> {
         val pool = ((n - 3)..(n + 3)).filter { it in min..max && it != n }
@@ -108,6 +120,19 @@ object Numbers {
             val b = rnd.nextInt(1, a + 1)
             MathRound(emoji, a, b, false, nearby(a - b, 0, max, rnd))
         }
+    }
+
+    /** "One more": a few things and one more come along (the top numbers step). */
+    fun addOne(rnd: Random, emoji: String = Things.countables.random(rnd)): MathRound {
+        val a = rnd.nextInt(1, 10)
+        return MathRound(emoji, a, 1, true, nearby(a + 1, 0, 10, rnd))
+    }
+
+    /** A numbers puzzle for a quiet difficulty step: count to 5, count to 10, then add one. */
+    fun forStep(step: Int, rnd: Random, emoji: String = Things.countables.random(rnd)): MathOrCount = when (step.coerceIn(0, 2)) {
+        0 -> MathOrCount.C(count(5, rnd, emoji))
+        1 -> MathOrCount.C(count(10, rnd, emoji))
+        else -> MathOrCount.M(addOne(rnd, emoji))
     }
 
     fun compare(max: Int, rnd: Random, emoji: String = Things.countables.random(rnd)): CompareRound {
