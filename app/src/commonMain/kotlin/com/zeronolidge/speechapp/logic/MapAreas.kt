@@ -90,9 +90,13 @@ object MapAreas {
         // Clear of every zone; else of every picture and label; else at least the button's middle
         // half clear of them (a squarer map, where the Lagoon is crowded), always by its own land.
         // On a tiny phone map, just its middle off every picture and label, as near its land as fits.
-        val tiers = listOf(Triple(zones, stopR, true), Triple(cores, stopR, true), Triple(cores, stopR * 0.5f, true), Triple(cores, 1f, true), Triple(cores, 1f, false))
-        for ((avoid, r, mine) in tiers) {
-            fun ok(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, r) } && (!mine || belongsTo(land, cx, cy, w, h))
+        // First try right beside its own land (well over twice as near it as any other land).
+        val tiers = listOf(
+            Triple(zones, stopR, 5f), Triple(zones, stopR, 1.4f), Triple(cores, stopR, 1.4f),
+            Triple(cores, stopR * 0.5f, 1.4f), Triple(cores, 1f, 1.4f), Triple(cores, 1f, 0f),
+        )
+        for ((avoid, r, margin) in tiers) {
+            fun ok(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, r) } && (margin == 0f || belongsTo(land, cx, cy, w, h, margin))
             if (ok(sx, sy)) return sx to sy
             nearest(sx, sy, w, h, stopR) { x, y -> ok(x, y) }?.let { return it }
         }
@@ -100,10 +104,10 @@ object MapAreas {
     }
 
     /** True when ([x], [y]) is clearly nearer [land]'s picture than any other land's. */
-    fun belongsTo(land: Land, x: Float, y: Float, w: Float, h: Float): Boolean {
+    fun belongsTo(land: Land, x: Float, y: Float, w: Float, h: Float, margin: Float = 1.4f): Boolean {
         fun d(a: MapArea) = sq(x - a.markX * w) + sq(y - a.markY * h)
         val own = d(of(land))
-        return all.filter { it.land != land }.all { own * 1.4f < d(it) }
+        return all.filter { it.land != land }.all { own * margin < d(it) }
     }
 
     /** True when a button of radius [stopR] at ([x], [y]) is clear of every area's whole zone. */

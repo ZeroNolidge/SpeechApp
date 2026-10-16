@@ -344,7 +344,7 @@ fun SpeakMoment(
                 // A narrow card (the right-hand column on an upright iPad, a phone): picture above
                 // the word instead of beside it, so the word always fits on one line.
                 val narrowCard = cardW < 400.dp
-                val textW = if (narrowCard) cardW - 32.dp else (cardW - 24.dp) * (1.2f / 2.2f)
+                val textW = if (narrowCard) cardW - 32.dp else (cardW - 24.dp) * (1f / 2.3f)
                 // Big, but never wider than the room it has (about 0.62 of the size per letter).
                 val wordSize = minOf(if (small) 30f else if (word.text.length > 12) 36f else 50f, textW.value / (word.text.length.coerceAtLeast(3) * 0.62f)).sp
                 val wordAndState: @Composable () -> Unit = {
@@ -360,7 +360,7 @@ fun SpeakMoment(
                     Box(Modifier.height(if (small) 84.dp else 124.dp), contentAlignment = Alignment.Center) {
                         when (state) {
                             Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                RoryListens(level, if (small) 62.dp else 92.dp)
+                                RoryListens(level, if (small) 60.dp else 88.dp)
                                 // "Your turn!" is spoken anyway; the chip only goes where it fits.
                                 if (textW >= (if (small) 200.dp else 260.dp)) {
                                     Spacer(Modifier.width(10.dp))
@@ -396,8 +396,8 @@ fun SpeakMoment(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            WordPicture(word, picture, pulse, Modifier.weight(1f).fillMaxHeight())
-                            Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) { wordAndState() }
+                            WordPicture(word, picture, pulse, Modifier.weight(1.3f).fillMaxHeight())
+                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { wordAndState() }
                         }
                     }
                 }
@@ -508,7 +508,7 @@ private val ButtonPanelColor = Color(0xF2FFFAF0)
 private fun WordPicture(word: Word, picture: (@Composable (Modifier) -> Unit)?, pulse: Float, modifier: Modifier) {
     BoxWithConstraints(modifier.scale(pulse).wiggleOnTap(), contentAlignment = Alignment.Center) {
         val room = minOf(maxWidth, maxHeight)
-        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = (room.value * 0.62f).coerceIn(40f, 200f).sp)
+        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = (room.value * 0.8f).coerceIn(40f, 240f).sp)
     }
 }
 
@@ -538,11 +538,13 @@ private fun RoryListens(level: Float, size: Dp) {
             val h = s * 0.8f
             val w = h * 100f / 140f
             val left = (s - w) / 2
-            val ear = Offset(left + w * 0.9f, (s - h) / 2 + h * 0.3f)
-            drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.3f * (1f + 0.35f * voice), ear)
-            paperCircle(Color(0xFFFFB74D), w * 0.13f, Offset(ear.x + w * 0.08f, ear.y + w * 0.03f))
-            paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.1f, ear.y - w * 0.16f), Size(w * 0.2f, w * 0.32f))
-            paperOval(Color(0xFFFF8A65), Offset(ear.x - w * 0.05f, ear.y - w * 0.09f), Size(w * 0.1f, w * 0.18f))
+            // Big enough to read as an ear at a glance: about half Rory's width, sticking out
+            // from the side of his head.
+            val ear = Offset(left + w * 0.98f, (s - h) / 2 + h * 0.3f)
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.65f * glow), w * 0.5f * (1f + 0.3f * voice), ear)
+            paperCircle(Color(0xFFFFB74D), w * 0.2f, Offset(ear.x + w * 0.14f, ear.y + w * 0.06f))
+            paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.17f, ear.y - w * 0.27f), Size(w * 0.34f, w * 0.54f))
+            paperOval(Color(0xFFFF8A65), Offset(ear.x - w * 0.08f, ear.y - w * 0.15f), Size(w * 0.16f, w * 0.3f))
         }
     }
 }
