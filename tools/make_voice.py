@@ -200,7 +200,11 @@ def api_key():
             if raw.strip().startswith("OPENAI_API_KEY="):
                 key = raw.split("=", 1)[1].strip().strip('"').strip("'")
     if not key:
-        sys.exit("Set OPENAI_API_KEY first (export OPENAI_API_KEY=sk-..., or a line in a .env file here).")
+        # Ask for it (typed or pasted, not shown on screen, never saved anywhere).
+        import getpass
+        key = getpass.getpass("Paste your OpenAI API key (it won't show, and isn't saved), then press Enter: ").strip()
+    if not key:
+        sys.exit("No key given. Set OPENAI_API_KEY, put it in a .env file here, or paste it when asked.")
     return key
 
 
