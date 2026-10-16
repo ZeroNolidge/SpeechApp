@@ -13,6 +13,7 @@ import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -362,7 +363,7 @@ fun SpeakMoment(
                             Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
                                 RoryListens(level, if (small) 60.dp else 88.dp)
                                 // "Your turn!" is spoken anyway; the chip only goes where it fits.
-                                if (textW >= (if (small) 200.dp else 260.dp)) {
+                                if (textW >= (if (small) 230.dp else 300.dp)) {
                                     Spacer(Modifier.width(10.dp))
                                     PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
                                 }
@@ -508,7 +509,7 @@ private val ButtonPanelColor = Color(0xF2FFFAF0)
 private fun WordPicture(word: Word, picture: (@Composable (Modifier) -> Unit)?, pulse: Float, modifier: Modifier) {
     BoxWithConstraints(modifier.scale(pulse).wiggleOnTap(), contentAlignment = Alignment.Center) {
         val room = minOf(maxWidth, maxHeight)
-        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = (room.value * 0.8f).coerceIn(40f, 240f).sp)
+        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = (room.value * 0.92f).coerceIn(40f, 260f).sp)
     }
 }
 
@@ -541,10 +542,18 @@ private fun RoryListens(level: Float, size: Dp) {
             // Big enough to read as an ear at a glance: about half Rory's width, sticking out
             // from the side of his head.
             val ear = Offset(left + w * 0.98f, (s - h) / 2 + h * 0.3f)
-            drawCircle(Color(0xFFFFE082).copy(alpha = 0.65f * glow), w * 0.5f * (1f + 0.3f * voice), ear)
-            paperCircle(Color(0xFFFFB74D), w * 0.2f, Offset(ear.x + w * 0.14f, ear.y + w * 0.06f))
-            paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.17f, ear.y - w * 0.27f), Size(w * 0.34f, w * 0.54f))
-            paperOval(Color(0xFFFF8A65), Offset(ear.x - w * 0.08f, ear.y - w * 0.15f), Size(w * 0.16f, w * 0.3f))
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.42f * (1f + 0.3f * voice), ear)
+            // The cupped hand behind the ear.
+            paperCircle(Color(0xFFFFB74D), w * 0.16f, Offset(ear.x + w * 0.15f, ear.y + w * 0.08f))
+            // The ear itself: a tall rounded shape with the curl inside, like a drawn ear (a C
+            // that opens towards Rory's face) and a little lobe at the bottom.
+            paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.15f, ear.y - w * 0.24f), Size(w * 0.3f, w * 0.48f))
+            drawArc(
+                Color(0xFFE65100), startAngle = 200f, sweepAngle = 250f, useCenter = false,
+                topLeft = Offset(ear.x - w * 0.08f, ear.y - w * 0.15f), size = Size(w * 0.16f, w * 0.24f),
+                style = Stroke(w * 0.035f, cap = StrokeCap.Round),
+            )
+            paperCircle(Color(0xFFFF8A65), w * 0.035f, Offset(ear.x - w * 0.01f, ear.y + w * 0.13f))
         }
     }
 }
