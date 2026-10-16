@@ -288,5 +288,10 @@ if (started) {
     }
 }
 await browser.close();
+// Words Rory's clips didn't cover (said by the browser voice instead, so the voice changes).
+const gaps = {};
+for (const t of logs.filter((t) => t.startsWith('VOICEGAP '))) { const g = t.slice(9, t.indexOf('] in:') + 1); gaps[g] = (gaps[g] || 0) + 1; }
+console.log(`VOICE GAPS: ${Object.keys(gaps).length} different`);
+for (const [g, n] of Object.entries(gaps).sort((a, b) => b[1] - a[1])) console.log(`VOICE GAP ${n}x ${g}  e.g. ${logs.find((t) => t.startsWith('VOICEGAP ' + g)).slice(10 + g.length)}`);
 console.log(`Console errors: ${errors}, crashes: ${crashes}, failed checks: ${failedChecks}`);
 process.exit(started && crashes === 0 && failedChecks === 0 ? 0 : 1);

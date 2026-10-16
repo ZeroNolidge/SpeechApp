@@ -147,6 +147,7 @@ def string_pieces(code):
 
 
 SKIP_LINE = re.compile(r"println|prefs\.|putInt|getInt|getString|putString|Regex\(|BakedLayer|^\s*(import|package)\b|label = \"|js\(")
+STORY_BLANK = re.compile(r"\{[a-z]+\}")
 NOT_SPEECH = re.compile(r"[_/@#%<>=\\{}|]|\.kt\b|^[a-z]+[A-Z]")
 
 
@@ -168,7 +169,12 @@ def collect_lines():
             for line, pieces in string_pieces(code):
                 if SKIP_LINE.search(line):
                     continue
+                # Story text has its own blanks too ({f} = the friend, {hero} = his name, ...).
+                pieces = [q for piece in pieces for q in STORY_BLANK.split(piece)]
                 for piece in pieces:
+                    # "{f}'s kite": the 's goes with the name (see the possessive names below).
+                    if piece.startswith("'s "):
+                        piece = piece[3:]
                     if not piece.strip() or NOT_SPEECH.search(piece):
                         continue
                     add(piece)
@@ -178,6 +184,8 @@ def collect_lines():
                     if 2 <= len(words) <= 3 and all(w[:1].isupper() for w in words):
                         for w in words:
                             add(w)
+                        if len(words) == 2 and words[0] != "The":
+                            add(piece.strip() + "'s")  # "Benny Bunny's kite"
     # Letter names, said on their own ("A says ah").
     for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
         lines.setdefault(normalize(ch), ch)

@@ -11,10 +11,20 @@ private fun jsClipsLoad(): Unit = js(
     """(() => {
         if (window.__tlClips) return;
         window.__tlClips = { map: null, cache: new Map(), playing: [], gen: 0 };
-        fetch('audio/manifest.json', { cache: 'no-cache' })
+        window.__tlClips.loaded = fetch('audio/manifest.json', { cache: 'no-cache' })
             .then(r => r.ok ? r.json() : null)
             .then(m => { if (m && m.clips) window.__tlClips.map = m.clips; })
             .catch(() => {});
+    })()"""
+)
+
+private fun jsClipsWhenReady(maxMs: Int, then: () -> Unit): Unit = js(
+    """(() => {
+        let done = false;
+        const go = () => { if (!done) { done = true; then(); } };
+        const st = window.__tlClips;
+        if (st && st.loaded) st.loaded.then(go, go);
+        setTimeout(go, maxMs);
     })()"""
 )
 
@@ -107,6 +117,7 @@ class WebClips : ClipPlayer {
     init { jsClipsLoad() }
 
     override val ready: Boolean get() = jsClipsReady()
+    override fun whenReady(maxMs: Int, then: () -> Unit) = jsClipsWhenReady(maxMs, then)
     override fun has(key: String): Boolean = jsClipsHas(key)
     override fun play(keys: List<String>, slow: Boolean, onEnd: (ok: Boolean) -> Unit) = jsClipsPlay(keys.joinToString("\n"), slow, onEnd)
     override fun stop() = jsClipsStop()

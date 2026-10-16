@@ -852,5 +852,8 @@ class ClipTextTest {
         // A whole sentence with a clip of its own is one clip.
         assertEquals(listOf(ClipText.Part.Clips(listOf("great job"))), ClipText.plan("Great job!") { it in clips })
         assertEquals(listOf(ClipText.Part.Speak("hello sam")), ClipText.plan("Hello Sam") { it in clips })
+        // Long story sentences (up to 22 words) still match their own clip.
+        val long = "we can see the kite string past a wobbly bridge but some boards are missing and the river is very wide today"
+        assertEquals(listOf(ClipText.Part.Clips(listOf(long))), ClipText.plan(long.replaceFirstChar { it.uppercase() } + "!") { it == long })
     }
 }

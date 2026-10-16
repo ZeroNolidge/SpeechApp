@@ -9,6 +9,8 @@ import com.zeronolidge.speechapp.logic.ClipText
 interface ClipPlayer {
     /** True once the list of clips has loaded (false if there are none, e.g. before they're made). */
     val ready: Boolean
+    /** Calls [then] once the clip list has loaded, or after [maxMs] if it hasn't (or there is none). */
+    fun whenReady(maxMs: Int, then: () -> Unit)
     fun has(key: String): Boolean
     /** Plays [keys] back to back with no gap; [slow] plays them slower without changing the voice's pitch. */
     fun play(keys: List<String>, slow: Boolean, onEnd: (ok: Boolean) -> Unit)
@@ -25,7 +27,19 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
     private var token = 0
 
     override fun speakOne(text: String, rate: Float, onEnd: (spoken: Boolean) -> Unit) {
+        // Just after start the clip list may still be loading: wait a moment rather than switch voices.
+        if (!clips.ready) {
+            val my = ++token
+            return clips.whenReady(2000) { if (my == token) speakNow(text, rate, onEnd) }
+        }
+        speakNow(text, rate, onEnd)
+    }
+
+    private fun speakNow(text: String, rate: Float, onEnd: (spoken: Boolean) -> Unit) {
         val parts = if (clips.ready) ClipText.plan(text) { clips.has(it) } else emptyList()
+        // Words with no clip are said by the device voice (a different voice): log them, so the
+        // smoke test can list any line that still mixes voices.
+        if (clips.ready) parts.filterIsInstance<ClipText.Part.Speak>().forEach { println("VOICEGAP [${it.text}] in: $text") }
         // No clips for this line at all: the device voice says it whole, so it sounds natural.
         if (parts.none { it is ClipText.Part.Clips }) return voice.speakOne(text, rate, onEnd)
         val my = ++token

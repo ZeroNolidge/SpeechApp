@@ -28,7 +28,7 @@ object ClipText {
     }
 
     /** How to say [text] with the clips that exist ([has]); consecutive clips are grouped. */
-    fun plan(text: String, maxWords: Int = 14, has: (String) -> Boolean): List<Part> {
+    fun plan(text: String, maxWords: Int = 40, has: (String) -> Boolean): List<Part> {
         val out = mutableListOf<Part>()
         fun addClip(k: String) {
             val last = out.lastOrNull()

@@ -57,12 +57,14 @@ These are the owner's rules for all work:
   paper piece. Practice shows ~3 games that rotate daily (🔄 for others).
 - **Rory's voice is pre-made OpenAI clips** (web): `tools/make_voice.py` (run by the owner on
   their computer with `OPENAI_API_KEY` from the environment or a gitignored `.env`; never in the
-  app or CI) reads every string in commonMain, cuts out the changing parts, and saves one mp3 per
+  app or CI) reads every string in commonMain, cuts out the changing parts (`${...}`, `$name` and the story
+  blanks `{f}` `{hero}` `{land}` `{v}`; friends' names also get a possessive clip, "Benny Bunny's"), and saves one mp3 per
   fixed piece in `app/src/wasmJsMain/resources/audio/` (filename = sha1 of the normalized text)
   plus `manifest.json`. `ClipVoiceEngine` (common) plans each line with `logic/ClipText.kt`
   (normalize, split at . ! ? : ; …, fewest clips per phrase) and plays clip runs gaplessly via
   `WebClips` (Web Audio, trimmed silence; slow = audio element, pitch kept); anything without a
-  clip (his name, own words) uses the browser voice. **ClipText.kt and make_voice.py must use the
+  clip (his name, own words) uses the browser voice; each such gap logs `VOICEGAP` and the smoke
+  test lists them (`VOICE GAP` lines). Speech waits up to 2 s for the clip list at start. **ClipText.kt and make_voice.py must use the
   same rules.** No manifest = browser voice as before. The offline cache includes the clips
   automatically; sw.js keeps clips (like the .wasm) in the long-lived cache, cache-first, so they
   download once. A remade clip gets a new name (`-` + sound fingerprint); manifest.json is the only
