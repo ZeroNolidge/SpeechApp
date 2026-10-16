@@ -233,7 +233,7 @@ class Progress(private val prefs: Prefs) {
     var echoReady by mutableStateOf(prefs.getBoolean("echoReady", false))
         private set
 
-    fun setEchoReady(ready: Boolean) {
+    fun updateEchoReady(ready: Boolean) {
         echoReady = ready
         prefs.edit().putBoolean("echoReady", ready).apply()
     }

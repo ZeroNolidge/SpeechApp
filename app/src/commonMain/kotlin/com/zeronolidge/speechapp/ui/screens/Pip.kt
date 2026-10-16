@@ -101,7 +101,7 @@ fun PipStoryScreen(nav: Nav) {
         phase = PipPhase.END
         p.addPipTag()
         // Finding Pip opens the crystal cave: a reward stop on the map.
-        p.setEchoReady(true)
+        p.updateEchoReady(true)
         line = "🏷️"
         app.celebrate(PipStory.ending(p.heroName))
         app.rememberInstruction("You found Pip! Tap the big green arrow to go back.")
@@ -216,9 +216,9 @@ fun PipStoryScreen(nav: Nav) {
                 val hopAt by animateFloatAsState(hops.toFloat(), tween(if (still) 0 else 500), label = "hops")
                 val pipBig = unit * 0.30f
                 val anchors = listOf(
-                    Triple(spots.getValue(PipSpot.BUSH).first, spots.getValue(PipSpot.BUSH).second - spots.getValue(PipSpot.BUSH).third * 0.22f, spots.getValue(PipSpot.BUSH).third * 0.6f),
-                    Triple(spots.getValue(PipSpot.ROCK).first, spots.getValue(PipSpot.ROCK).second - spots.getValue(PipSpot.ROCK).third * 0.22f, spots.getValue(PipSpot.ROCK).third * 0.62f),
-                    Triple(logX, logY - spots.getValue(PipSpot.LOG).third * 0.2f, spots.getValue(PipSpot.LOG).third * 0.65f),
+                    Triple(spots.getValue(PipSpot.BUSH).first, spots.getValue(PipSpot.BUSH).second - spots.getValue(PipSpot.BUSH).third * 0.22f, spots.getValue(PipSpot.BUSH).third * 0.8f),
+                    Triple(spots.getValue(PipSpot.ROCK).first, spots.getValue(PipSpot.ROCK).second - spots.getValue(PipSpot.ROCK).third * 0.22f, spots.getValue(PipSpot.ROCK).third * 0.8f),
+                    Triple(logX, logY - spots.getValue(PipSpot.LOG).third * 0.2f, spots.getValue(PipSpot.LOG).third * 0.8f),
                     Triple(logX, logY + pipBig * 0.1f, pipBig),
                 )
                 val per = PipStory.CALLS_PER_SPOT.toFloat()

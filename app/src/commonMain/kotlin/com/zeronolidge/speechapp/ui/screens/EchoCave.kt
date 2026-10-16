@@ -97,7 +97,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
     val echoAnim = remember { Animatable(1f) }
     val still = LocalReduceMotion.current
     fun micOk() = p.useMic && app.voice.available && mic.granted()
-    LaunchedEffect(Unit) { p.setEchoReady(false) }
+    LaunchedEffect(Unit) { p.updateEchoReady(false) }
     LaunchedEffect(lit) { if (lit > 0 && !still) { echoAnim.snapTo(0f); echoAnim.animateTo(1f, tween(1200)) } }
 
     lateinit var ask: (Int) -> Unit
@@ -191,8 +191,11 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     val species = p.hero ?: Species.KID
-                    HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == CavePhase.END) Mood.CHEER else Mood.HAPPY)
-                    if (phase == CavePhase.LISTEN || phase == CavePhase.WAIT_TAP) RoryListens(level, h * if (narrow) 0.16f else 0.2f)
+                    val listening = phase == CavePhase.LISTEN || phase == CavePhase.WAIT_TAP
+                    // On a phone there's only room for one of them beside the big button: Rory
+                    // while he listens, the buddy otherwise.
+                    if (!(narrow && listening)) HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == CavePhase.END) Mood.CHEER else Mood.HAPPY)
+                    if (listening) RoryListens(level, minOf(h * if (narrow) 0.16f else 0.2f, (w - ContinueReserve) * 0.55f))
                     else if (!narrow) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
                 }
             }
@@ -288,12 +291,15 @@ fun RestScreen(nav: Nav) {
         app.rememberInstruction(line)
         app.instruct(line)
     }
-    ScreenFrame(onHome = nav.home, background = { Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 31) }) {
+    // Night has fallen over the whole forest.
+    ScreenFrame(onHome = nav.home, background = {
+        Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 31)
+        Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xFF1A2350).copy(alpha = 0.5f)) }
+    }) {
         ContinueHost {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
-                Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xFF1A2350).copy(alpha = 0.4f)) }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (sticker != null) Sticker(sticker, minOf(w, h) * 0.32f, Modifier.popIn("sticker"))
                 }

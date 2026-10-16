@@ -398,7 +398,8 @@ fun IslandMap(
                     PaperChip(
                         "✋ Not yet!",
                         Modifier
-                            .offset(x = w * from.mapX - 74.dp, y = h * from.mapY - unit * 0.22f)
+                            // Below the land's picture, clear of its name label above.
+                            .offset(x = w * from.mapX - 74.dp, y = h * from.mapY + unit * 0.09f)
                             .zIndex(4f)
                             .popIn(hintKey),
                         fontSize = 22.sp,
