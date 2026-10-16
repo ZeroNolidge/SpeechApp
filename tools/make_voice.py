@@ -208,7 +208,13 @@ def api_key():
     return key
 
 
-def speak(key, text, voice, model):
+class SpeakError(Exception):
+    def __init__(self, code, detail):
+        super().__init__("%s %s" % (code, detail))
+        self.code, self.detail = code, detail
+
+
+def speak_once(key, text, voice, model):
     body = {"model": model, "voice": voice, "input": text, "response_format": "mp3"}
     if model.startswith("gpt-4o"):
         body["instructions"] = INSTRUCTIONS
@@ -227,12 +233,38 @@ def speak(key, text, voice, model):
             if e.code in (429, 500, 502, 503, 504) and attempt < 5:
                 time.sleep(2 ** attempt)
                 continue
-            raise SystemExit("OpenAI said %s for %r: %s" % (e.code, text, e.read().decode("utf-8", "replace")[:300]))
-        except urllib.error.URLError:
+            detail = e.read().decode("utf-8", "replace")
+            try:
+                detail = json.loads(detail)["error"]["message"]
+            except Exception:
+                pass
+            raise SpeakError(e.code, detail.strip() or e.reason)
+        except urllib.error.URLError as e:
             if attempt < 5:
                 time.sleep(2 ** attempt)
                 continue
-            raise
+            raise SystemExit("Couldn't reach OpenAI (%s). Check the internet connection and run it again." % e.reason)
+
+
+HINTS = {
+    401: "The key wasn't accepted. Copy it again from platform.openai.com (API keys) and paste the whole key.",
+    429: "OpenAI says there's no credit or too many requests. Add a little credit under Settings, Billing, then run it again.",
+    403: "This OpenAI account isn't allowed to use that voice model yet.",
+}
+
+
+def speak(key, text, voice, state):
+    """Makes one clip. If OpenAI turns down the newer model, switches the whole run to tts-1."""
+    try:
+        return speak_once(key, text, voice, state["model"])
+    except SpeakError as e:
+        if state["model"] != "tts-1" and e.code in (400, 403, 404):
+            with state["lock"]:
+                if state["model"] != "tts-1":
+                    print("OpenAI turned down %s (%s: %s). Switching to tts-1, the same voices." % (state["model"], e.code, e.detail))
+                    state["model"] = "tts-1"
+            return speak(key, text, voice, state)
+        raise SystemExit("OpenAI said %s for %r: %s\n%s" % (e.code, text, e.detail, HINTS.get(e.code, "")))
 
 
 # ---------------------------------------------------------------- main
@@ -312,9 +344,11 @@ def main():
 
     key = api_key()
     done = 0
+    import threading
+    state = {"model": model, "lock": threading.Lock()}
 
     def make(k):
-        audio = speak(key, overrides.get(k, lines[k]), voice, model)
+        audio = speak(key, overrides.get(k, lines[k]), voice, state)
         with open(os.path.join(OUT, clips[k]), "wb") as f:
             f.write(audio)
         return k
@@ -330,7 +364,7 @@ def main():
     for f in os.listdir(OUT):
         if f.endswith(".mp3") and f not in keep:
             os.remove(os.path.join(OUT, f))
-    json.dump({"voice": voice, "model": model, "clips": clips}, open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
+    json.dump({"voice": voice, "model": state["model"], "clips": clips}, open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
     write_letters_page(clips)
     print("Done. Commit and push app/src/wasmJsMain/resources/audio/ (and tools/voice_overrides.json if you used --say).")
 
