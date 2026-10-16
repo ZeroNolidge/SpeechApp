@@ -202,7 +202,11 @@ def api_key():
     if not key:
         # Ask for it (typed or pasted, not shown on screen, never saved anywhere).
         import getpass
-        key = getpass.getpass("Paste your OpenAI API key (it won't show, and isn't saved), then press Enter: ").strip()
+        print("Paste your OpenAI API key and press Enter. (Nothing shows while you paste; that's normal.")
+        print("In the Windows Command Prompt, paste with a right-click.)")
+        key = getpass.getpass("Key: ")
+        # Keep only the characters a key can have (Ctrl+V in some windows adds a hidden character).
+        key = "".join(ch for ch in key if ch.isalnum() or ch in "-_")
     if not key:
         sys.exit("No key given. Set OPENAI_API_KEY, put it in a .env file here, or paste it when asked.")
     return key
@@ -353,10 +357,11 @@ def main():
             f.write(audio)
         return k
 
+    print("Working... making %d clips. A count shows every 10 clips (about every 10-20 seconds)." % len(todo))
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         for _ in pool.map(make, todo):
             done += 1
-            if done % 25 == 0 or done == len(todo):
+            if done % 10 == 0 or done == len(todo):
                 print("  %d / %d" % (done, len(todo)))
 
     # Clips for lines that are gone from the app are removed, so the offline cache stays small.
