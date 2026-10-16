@@ -29,6 +29,8 @@ page.on('console', (m) => {
     if (!m.text().startsWith('MAPAREAS')) console.log(`[console.${m.type()}] ${m.text()}`);
 });
 page.on('pageerror', (e) => { errors++; crashes++; console.log(`[pageerror] ${e.stack || e.message}`); });
+let clipFetches = 0;
+page.on('response', (r) => { if (/\/audio\/[0-9a-f-]+\.mp3$/.test(r.url()) && r.ok()) clipFetches++; });
 page.on('requestfailed', (r) => console.log(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`));
 
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
@@ -45,6 +47,23 @@ if (started) {
     await page.mouse.click(640, 400);
     await new Promise((r) => setTimeout(r, 4000));
     console.log('The app started.');
+    // Rory's voice clips: the list loads, a clip decodes as real audio, and the first screen's
+    // spoken line was played from clips (not the browser voice).
+    const clips = await page.evaluate(async () => {
+        const st = window.__tlClips;
+        const map = st && st.map;
+        if (!map) return { count: 0 };
+        const files = Object.values(map);
+        let decoded = false;
+        try {
+            const b = await (await fetch('audio/' + files[0])).arrayBuffer();
+            const buf = await new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(b);
+            decoded = buf.duration > 0.1;
+        } catch (e) {}
+        return { count: files.length, decoded };
+    });
+    if (clips.count === 0) console.log('No voice clips (audio/manifest.json missing), so the browser voice is used.');
+    else check(`CHECK voice clips: ${clips.count} listed, decodes ${clips.decoded}, ${clipFetches} played on the first screen: ${clips.decoded && clipFetches > 0 ? 'ok' : 'FAIL'}`);
     // With --shots, print a few small screenshots into the log (one "SHOT name base64" line
     // each), so the art can be checked without a device.
     if (process.argv.includes('--shots')) {
@@ -254,6 +273,8 @@ if (started) {
                 offline = true;
             } catch (e) {}
             check(`CHECK offline start: ${offline ? 'ok' : 'FAIL'}`);
+            const saved = await page.evaluate(async () => (await (await caches.open('talkandlearn-static')).keys()).filter((r) => r.url.endsWith('.mp3')).length);
+            console.log(`Voice clips saved for offline: ${saved}`);
             if (offline) {
                 await wait(2500);
                 await page.mouse.click(640, 400);
