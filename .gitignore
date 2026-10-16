@@ -14,3 +14,4 @@ captures/
 # Made by tools/make_voice.py --dry-run
 tools/voice_lines.txt
 app/src/wasmJsMain/resources/audio/*.part
+__pycache__/
