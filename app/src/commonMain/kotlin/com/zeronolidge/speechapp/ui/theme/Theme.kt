@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.res.Res
+import com.zeronolidge.speechapp.res.andika_bold
 import com.zeronolidge.speechapp.res.sniglet_extrabold
 import com.zeronolidge.speechapp.res.sniglet_regular
 import org.jetbrains.compose.resources.Font
