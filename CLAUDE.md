@@ -63,7 +63,8 @@ These are the owner's rules for all work:
   screens (< 520dp) show 2 choices; story/challenge sit side by side over 700dp or in landscape,
   and practice games (`QuestionLayout`) put the picture left and answers in a column right over
   700dp (any way up, so iPad portrait too), and the say-a-word screen (`SpeakMoment`) puts its
-  picture card left and its buttons in a column right over 700dp. Story say-a-word steps on a
+  picture card left (~60%, the picture filling it) and its buttons in their own panel on the right
+  (a gap between), over 700dp; under that the buttons sit in their own panel under the card. Story say-a-word steps on a
   screen 768dp or wider (`LocalScreenWidth`) put the story scene left (60%) and the word card and
   buttons right; buttons are dp-sized, so the same physical size as on a phone. Choice tiles put the word beside the picture when the tile is short or wide. The chapter
   header says "Adventure" and drops the footprints when there's no room; labels never cut off.
@@ -107,7 +108,10 @@ These are the owner's rules for all work:
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
   `paperArc`, `paperPath`, `Modifier.paperCard`), not raw `drawCircle` etc. They give rough torn
   edges (deterministic, so no flicker). Strokes stay plain.
-- Font: Sniglet (OFL, `FONT_LICENSE_Sniglet_OFL.txt`).
+- Font: Sniglet (OFL, `FONT_LICENSE_Sniglet_OFL.txt`). **Letters he must recognise use Andika**
+  (`LetterFont`, OFL, `FONT_LICENSE_Andika_OFL.txt`, made for early readers): Sniglet's rounded
+  small letters read as other things (its v looked like a heart, g like 9, t like +). Tile text
+  comes from `Letters.tileText` / `questionText` (unit-tested: only letters, one case per round).
 
 ## How the game works
 
@@ -119,10 +123,13 @@ These are the owner's rules for all work:
   on the first visit of a new day (`Progress.checkIn`). Order is `Catalog.awardOrder`. Never taken
   away. New pieces pop up on `GiftOverlay`.
 - **Lost Puppy Pip** (`logic/Pip.kt` `PipStory`, `ui/screens/Pip.kt`, Forest tile "Find Pip"): he
-  calls "Pip!" / "Here, puppy!" (calls step up with `speechStep`); each call rustles the bush, rock,
-  then log (ears peek on the 3rd call, the 4th folds it open) until Pip jumps out; 2 goodnight turns
-  end with Pip asleep under a blanket. 14 turns, every try works (heard: Rory's `Echo`; quiet: "Pip
-  heard you!"; no mic: "I called!" button). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
+  calls "Pip!" / "Here, puppy!" (calls step up with `speechStep`); 3 calls per spot: the bush, rock,
+  then log rustles, two ears peek out, it folds open and Pip visibly dashes to the next, nearer spot
+  (about 0.9 s, an exception to the 0.5 s rule, it is the story), until Pip jumps out of the log; 2
+  goodnight turns end with Pip asleep under a blanket. 11 turns. His own words, then target-sound
+  words, are the "ears" call at each spot ("Pip loves Grandma! Say: Grandma!"). Every try works
+  (heard: Rory's `Echo`; quiet: "Pip heard you!"). The big "I called!" button is always shown in
+  the same spot (ContinueAction label). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
 - **"Tap the B!"**: after saying a word with a speech sound (`SpeakMoment`, sound != null), he
   finds its letter among 2 (speech step 0) or 3 (`AnswerKey.tapLetter`, `LetterTap` via
   `AnswerRow`, so the same try-again pattern). Skipping the word with ▶ skips the letter too.
@@ -132,8 +139,12 @@ These are the owner's rules for all work:
   and `AnswerRow(key = AnswerKey.x(c))`. `PlayEveryQuizTest` plays every quiz kind with a right and
   wrong tap and fails if a wrong tap is ever marked right.
 - **Every tap reacts:** `PaperButton` crinkles (`Sfx`) and presses down; scenery decor wiggles
-  (`WigglyDecor`); any other tap leaves a small paper puff (`PuffOverlay`). Listening dims the
-  scene (`app.listening`) and Rory cups a glowing ear inside a ring that grows with his voice.
+  (`WigglyDecor`); pictures that aren't buttons (the word picture, story characters, quiz pictures,
+  Pip and its hiding spots) wiggle (`Modifier.wiggleOnTap`, watches only); any unclaimed tap leaves
+  a paper puff and a pop (`PuffOverlay`). Listening dims the
+  scene (`app.listening`) and Rory (`RoryListens`) cups his hand to a big glowing gold paper ear at
+  his head, inside a ring that grows with his voice; with no mic he still listens that way beside
+  the "I said it!" button. (The old ear was tiny and mid-body: it read as a grey dot on phones.)
 - **Offline + install:** the CI stamp step writes every file into sw.js `PRECACHE`; the grown-ups
   page shows "works offline" / "progress protected" (`AppHome`, `navigator.storage.persist()`)
   and an add-to-home-screen button with iPad steps.
@@ -162,7 +173,11 @@ These are the owner's rules for all work:
   it (`MapAreas.target`): each area has ONE zone (picture, label and the gap between); a picture
   or label always opens its area, then the next-stop button, then the gap. The stop button is
   drawn but takes no taps itself (`PaperButton(pressedBy = ...)`), and `MapAreas.stopSpot` moves
-  it clear of every zone (always possible on tablets; unit-tested for all 16 stops). That fixed
+  it clear of every zone while keeping it clearly nearest its own land (`belongsTo`; a fresh start's
+  button is at the Forest, never by the misty Meadow; unit-tested for all 16 stops). The next
+  stop's land glows gold with three sparkles until he taps it or its button. The misty-land line is
+  "Not yet! Follow me to Forest!" (`shortName`); the Meadow stays misty until the first Forest
+  chapter is done. That fixed
   the sunflower starting a story: the stop button sat under it and took the tap. Logs `MAPTAP x,y
   -> LAND/STOP/sea`, `MAPAREAS` (labels), `MAPMARKS` (pictures + stop) and `MAPSCENE` (what each
   area opens), which the smoke test taps and prints as an AREA LIST. Tapping an open land, or the next land peeking through its mist, opens that
