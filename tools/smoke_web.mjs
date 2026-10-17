@@ -242,6 +242,27 @@ if (started) {
             await page.mouse.click(640, 400);
             await wait(4500);
             console.log(`SHOT tablet-listening-full ${await page.screenshot({ type: 'jpeg', quality: 80, encoding: 'base64' })}`);
+            // The listening look: wait (up to 30 s) for his turn to start, then photograph it.
+            const listenShot = async (hash, w, h, name) => {
+                await page.setViewport({ width: w, height: h });
+                await page.goto(url + hash, { waitUntil: 'load' });
+                await page.reload({ waitUntil: 'load' });
+                await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+                await wait(3000);
+                const before = logs.length;
+                await page.mouse.click(w / 2, h / 2);
+                const t0 = Date.now();
+                while (Date.now() - t0 < 30000 && !logs.slice(before).includes('LISTENING true')) await wait(250);
+                const ok = logs.slice(before).includes('LISTENING true');
+                await wait(900);
+                console.log(`LISTEN ${name}: ${ok ? 'reached his turn' : 'never reached his turn in 30 s'}`);
+                await shot(name);
+            };
+            await listenShot('#test=say', 1180, 820, 'listen-story-ipad');
+            await listenShot('#test=say', 400, 860, 'listen-story-phone');
+            await listenShot('#test=talk', 1180, 820, 'listen-talk-ipad');
+            await listenShot('#test=pip', 1180, 820, 'listen-pip-ipad');
+            await listenShot('#test=cave', 1180, 820, 'listen-cave-ipad');
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');

@@ -92,7 +92,14 @@ class AppServices(
     val sfx: Sfx = Sfx.Silent,
 ) {
     /** True while it's his turn to talk: the scene dims a little so Rory and the word stand out. */
-    var listening by mutableStateOf(false)
+    var listening: Boolean
+        get() = listeningState.value
+        set(v) {
+            // Logged for the smoke test, which waits for it to photograph the listening look.
+            if (v != listeningState.value) println("LISTENING $v")
+            listeningState.value = v
+        }
+    private val listeningState = mutableStateOf(false)
 
     /** How loud his voice is right now while listening (0 to 1), for Rory's ear and ring. */
     var listenLevel by mutableStateOf(0f)
