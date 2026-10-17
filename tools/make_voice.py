@@ -448,6 +448,7 @@ def main():
             audio = speak(key, text, voice, state if attempt < 2 else dict(state, model="tts-1"))
             if clip_ok(audio):
                 break
+            print("  (%r came back silent, trying again)" % k)
         else:
             # Still silent: leave it out, so the app uses the browser voice for it.
             old_file = os.path.join(OUT, clips[k])
@@ -464,7 +465,7 @@ def main():
         clips[k] = name
         return k
 
-    print("Working... making %d clips. A count shows every 10 clips (about every 10-20 seconds)." % len(todo))
+    print("Working... making %d clips. %s" % (len(todo), "Each one shows when it's done." if len(todo) <= 30 else "A count shows every 10 clips (about every 10-20 seconds)."))
     skipped = []
     still_silent = []
 
@@ -496,7 +497,7 @@ def main():
                             f.cancel()
                         raise SystemExit("The internet connection keeps dropping. Check it, then run the same command again; it carries on where it stopped.")
                 done += 1
-                if done % 10 == 0 or done == len(todo):
+                if len(todo) <= 30 or done % 10 == 0 or done == len(todo):
                     print("  %d / %d" % (done, len(todo)))
     finally:
         save_manifest()
