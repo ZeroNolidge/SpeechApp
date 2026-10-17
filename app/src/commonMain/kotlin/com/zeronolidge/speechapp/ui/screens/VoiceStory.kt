@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.audio.VoiceTry
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceStories
+import com.zeronolidge.speechapp.logic.VoicePush
 import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.Screen
@@ -41,6 +42,11 @@ import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.ui.art.PaperStyle
 import com.zeronolidge.speechapp.ui.art.VoiceStoryScene
+import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
+import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
+import com.zeronolidge.speechapp.ui.art.voiceTarget
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.mutableFloatStateOf
 import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
@@ -57,11 +63,12 @@ private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END }
 
 /**
  * A voice story (logic/VoiceStories.kt): his word makes each thing happen. Every beat: Rory names
- * the problem, says the word three times (slower the third time), then the listening look; the
- * moment the microphone hears a voice the action starts (a soft try: a smaller version), and once
- * he stops Rory says it back and adds one more ("Go! Go, boat!"). Quiet: "Let's say it together!"
- * and one more listen, then the "I said it!" button (always there) does the same action. A calm
- * goodbye beat, then a sticker.
+ * the problem, says the word three times (slower the third time), then the listening look (the
+ * thing to move glows). His voice pushes the action live ([VoicePush]): louder pushes further,
+ * holding the sound keeps it moving, shown as paper wind strips from Rory. Any voice finishes it
+ * (the rest gently); a quiet try nudges it and Rory says "Again, together!"; the second try and
+ * "I said it!" always finish it. Every success: hole-punch confetti, then Rory says it back and
+ * adds one more ("Go! Go, boat!"). A calm goodbye beat, then a sticker.
  */
 @Composable
 fun VoiceStoryScreen(id: String, nav: Nav) {
@@ -76,25 +83,20 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
     var phase by remember { mutableStateOf(VPhase.INTRO) }
     var strengths by remember { mutableStateOf(mapOf<Int, Float>()) }
     var session by remember { mutableIntStateOf(0) }
-    var tries by remember { mutableIntStateOf(0) }
     var sticker by remember { mutableStateOf<WordStat?>(null) }
+    /** The current beat's action, 0 to 1, moved live by his voice (see [VoicePush]). */
     val act = remember { Animatable(0f) }
+    /** How hard his voice pushes right now (0 when quiet), for the paper wind strips. */
+    var pushNow by remember { mutableFloatStateOf(0f) }
+    /** Hole-punch confetti: where, and its 0 to 1 run (1.6 s). */
+    var confettiAt by remember { mutableStateOf(Offset(0.5f, 0.5f)) }
+    val confetti = remember { Animatable(1f) }
+    val model = remember { arrayOf(VoicePush()) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
+    fun progress(k: Int) = BeatProgress(k, strengths) { act.value }
 
     lateinit var startBeat: (Int) -> Unit
-
-    /** His word (or the button) makes it happen, at once: [strength] 1 for a clear voice, less for a soft try. */
-    fun action(k: Int, strength: Float) {
-        if (strengths.containsKey(k)) return
-        strengths = strengths + (k to strength)
-        app.listening = false
-        app.listenLevel = 0f
-        scope.launch {
-            act.snapTo(0f)
-            act.animateTo(1f, tween(if (still) 0 else 1100))
-        }
-    }
 
     fun finish() {
         phase = VPhase.END
@@ -103,6 +105,15 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
         sticker = p.recordWord(story.sticker.first, story.sticker.second, clear = true, heard = false)
         app.celebrate(story.ending)
         app.rememberInstruction("${story.ending} Tap the big green arrow.")
+    }
+
+    /** It worked: hole-punch confetti at the thing that moved (gone in under 2 s). */
+    fun cheer(k: Int) {
+        confettiAt = voiceTarget(story, progress(k))
+        scope.launch {
+            confetti.snapTo(0f)
+            confetti.animateTo(1f, tween(if (still) 0 else 1600))
+        }
     }
 
     /** After the action: Rory says it back and adds one more, tells what happened, and the story goes on. */
@@ -124,6 +135,21 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
         }
     }
 
+    /** The rest of the action at a gentle speed ("I said it!", or after a try), then confetti and Rory's echo. */
+    fun finishGently(k: Int, heard: Boolean, micUsed: Boolean) {
+        val s = session
+        app.listening = false
+        pushNow = 0f
+        strengths = strengths + (k to model[0].strength)
+        phase = VPhase.ACT
+        scope.launch {
+            if (act.value < 1f) act.animateTo(1f, tween(if (still) 0 else (1400 * (1f - act.value)).toInt().coerceAtLeast(250)))
+            if (s != session) return@launch
+            cheer(k)
+            after(k, heard, micUsed)
+        }
+    }
+
     fun waitForTap(k: Int, ask: String) {
         phase = VPhase.WAIT_TAP
         // Rory still listens the same way, beside the "I said it!" button.
@@ -139,35 +165,53 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
             waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
         } else {
             phase = VPhase.LISTEN
-            tries++
             app.listening = true
+            var reached = false
             app.voice.listenTry(
                 4000,
                 onLevel = { app.listenLevel = it },
-                // The moment a voice is heard, the action starts (no waiting for the end).
-                onVoice = { if (s == session) action(k, 1f) },
+                onVoice = null,
+                // Every 50 ms: louder pushes further, holding the sound keeps it moving.
+                onPush = { push ->
+                    if (s == session && phase == VPhase.LISTEN) {
+                        pushNow = push
+                        if (push > 0f && !reached) {
+                            reached = model[0].feed(push, 50)
+                            strengths = strengths + (k to model[0].strength)
+                            val to = model[0].progress
+                            scope.launch { act.animateTo(to, tween(if (still) 0 else 70)) }
+                            if (reached) cheer(k)
+                        }
+                    }
+                },
             ) { t ->
                 if (s != session || phase != VPhase.LISTEN) return@listenTry
                 app.listenLevel = 0f
-                when (t) {
-                    VoiceTry.HEARD -> {
-                        action(k, 1f)
-                        after(k, heard = true, micUsed = true)
-                    }
-                    // A soft try still works, just a little smaller.
-                    VoiceTry.SOFT -> {
-                        action(k, 0.55f)
-                        after(k, heard = false, micUsed = true)
-                    }
-                    VoiceTry.QUIET -> if (tries < 2) {
+                pushNow = 0f
+                if (t == VoiceTry.NO_MIC) {
+                    waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
+                    return@listenTry
+                }
+                when (model[0].afterTry(heard = t == VoiceTry.HEARD, soft = t == VoiceTry.SOFT)) {
+                    // He spoke: the rest of the action goes on by itself (gently), then confetti.
+                    VoicePush.Next.FINISH_GENTLY ->
+                        if (reached) {
+                            phase = VPhase.ACT
+                            app.listening = false
+                            after(k, heard = t == VoiceTry.HEARD, micUsed = true)
+                        } else {
+                            finishGently(k, heard = t == VoiceTry.HEARD, micUsed = true)
+                        }
+                    // Quiet: it still moves a little, then "Again, together!" and one more listen.
+                    VoicePush.Next.AGAIN_TOGETHER -> {
                         phase = VPhase.MODEL
                         app.listening = false
-                        app.speaker.say("Let's say it together!")
+                        strengths = strengths + (k to model[0].strength)
+                        val to = model[0].progress
+                        scope.launch { act.animateTo(to, tween(if (still) 0 else 500)) }
+                        app.speaker.say("Again, together!")
                         app.speaker.then(line(k), slow = true) { if (s == session) listen(k) }
-                    } else {
-                        waitForTap(k, "Say it with me, then tap I said it!")
                     }
-                    VoiceTry.NO_MIC -> waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
                 }
             }
         }
@@ -177,7 +221,9 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
         session++
         val s = session
         index = k
-        tries = 0
+        model[0] = VoicePush()
+        pushNow = 0f
+        scope.launch { act.snapTo(0f) }
         phase = VPhase.MODEL
         app.listening = false
         val b = beats[k]
@@ -214,11 +260,26 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
                 "owl" -> 0.2f to 0.6f
                 else -> 0.8f to 0.58f
             }
-            ListeningStage(Modifier.fillMaxSize(), endX = endX, endY = endY) {
+            val prog = progress(index)
+            ListeningStage(
+                Modifier.fillMaxSize(), endX = endX, endY = endY,
+                aboveDim = {
+                    // The thing to move glows; his voice streams to it as paper wind strips.
+                    if (index >= 0 && phase != VPhase.END) {
+                        VoiceListenExtras(
+                            target = { voiceTarget(story, prog) },
+                            fromX = endX, fromY = endY,
+                            glowing = app.listening,
+                            push = { pushNow },
+                        )
+                    }
+                    HolePunchConfetti(confettiAt, { confetti.value })
+                },
+            ) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
-                    VoiceStoryScene(story, BeatProgress(index, strengths) { act.value }, Modifier.fillMaxSize())
+                    VoiceStoryScene(story, prog, Modifier.fillMaxSize())
                     // The word to say, big, at the top in the middle.
                     val k = index
                     if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT) {
@@ -262,8 +323,9 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
                         session++
                         app.voice.cancel()
                         app.speaker.stop()
-                        action(k, 1f)
-                        after(k, heard = false, micUsed = false)
+                        // The same action as his voice, at a gentle speed.
+                        model[0].pressed()
+                        finishGently(k, heard = false, micUsed = false)
                     }
                     VPhase.ACT -> {}
                     VPhase.END -> if (app.sessionLong()) nav.go(Screen.Rest) else nav.home()

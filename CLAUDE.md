@@ -176,6 +176,15 @@ These are the owner's rules for all work:
   target sounds start >= 4 beats' words (later stories: word ends too); one prop can be his own word
   (`VoiceStories.ready`: a capitalised name for a character, else a thing); 3 line versions per
   beat picked by `speechStep`; calm goodbye beat, then a sticker (`Progress.finishVoiceStory`).
+  **Voice-action feel** (`logic/VoicePush.kt`, unit-tested): his voice pushes the action live, every
+  50 ms reading (`listenTry(onPush)`, `VoiceMeter.push`): louder = faster/bigger, holding keeps it
+  moving, silence stops it (first reading of voice moves it, < 0.2 s). Any clear voice finishes
+  (the rest gently); a quiet try nudges partway (never past 60%) + "Again, together!"; the 2nd try
+  and "I said it!" always finish at a gentle speed, so no beat needs a loud voice. While listening
+  the target glows with paper sparkles and three torn cream paper wind strips stream from Rory to it
+  (`VoiceListenExtras`, `voiceTarget`, drawn above the dim via `ListeningStage(aboveDim)`); one
+  paper effect per beat (sail bellies out, bubble layers burst apart, leaves flip to their darker
+  side, ...); every success ends with hole-punch confetti (`HolePunchConfetti`, 1.6 s).
   Stories: Pip's Boat Trip (Lagoon), Sleepy Owl's Morning (Forest), The Balloon Picnic (Meadow),
   each a round stop by its land on the map (`MapAreas.spotBy`, `MapTarget.Story`, unit-tested with
   the cave and next stop). Existing chapters follow it too: no magic word, 3x model with the 3rd

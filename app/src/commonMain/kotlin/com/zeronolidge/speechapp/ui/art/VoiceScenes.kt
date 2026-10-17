@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -85,6 +86,37 @@ private fun BoxWithConstraintsScope.Item(
 @Composable
 private fun Emoji(e: String, size: Dp) = Text(e, fontSize = (size.value * 0.72f).sp)
 
+private fun boatX(p: BeatProgress) = 0.16f + 0.15f * p.a(0) + 0.13f * p.a(2) + 0.08f * p.a(4) + 0.18f * p.a(5)
+private fun boatY(p: BeatProgress) = 0.62f - 0.16f * bump(p.a(4)) * p.s(4) - (if (p.beat == 0) 0.02f * bump(p.a(0)) else 0f)
+private fun balloonAlt(p: BeatProgress) = 0.3f * p.a(1) - 0.26f * p.a(3)
+private fun owlLoop(p: BeatProgress) = if (p.beat == 5) 2f * PI.toFloat() * p.a(5) else 0f
+
+/**
+ * Where the thing his word is about to move is (as parts of the scene's width and height): it
+ * glows with a paper sparkle while he listens, and his voice's paper wind strips push toward it.
+ */
+fun voiceTarget(story: VoiceStory, p: BeatProgress): Offset = when (story.id) {
+    "boat" -> when (p.beat) {
+        1 -> Offset(0.5f, 0.46f)
+        2 -> Offset(boatX(p) + 0.03f, boatY(p) - 0.14f)
+        3 -> Offset(0.555f, 0.56f)
+        else -> Offset(boatX(p), boatY(p) - 0.08f)
+    }
+    "owl" -> when (p.beat) {
+        0 -> Offset(0.8f, lerp(0.78f, 0.24f, p.a(0)))
+        3 -> Offset(0.44f, 0.86f)
+        4 -> Offset(0.47f, 0.18f)
+        else -> Offset(0.47f + 0.16f * p.s(5) * sin(owlLoop(p)), 0.41f - 0.16f * p.s(5) * (1f - cos(owlLoop(p))))
+    }
+    else -> when (p.beat) {
+        2 -> Offset(0.42f + 0.32f * p.a(2), 0.22f)
+        3 -> Offset(0.74f, 0.84f)
+        4 -> Offset(0.47f, 0.12f)
+        5 -> Offset(0.52f, 0.28f)
+        else -> Offset(0.42f, 0.8f - balloonAlt(p) - 0.28f)
+    }
+}
+
 /** The picture for one voice story, drawn in paper, moving as his words make things happen. */
 @Composable
 fun VoiceStoryScene(story: VoiceStory, progress: BeatProgress, modifier: Modifier = Modifier) {
@@ -101,8 +133,8 @@ private fun BoatScene(story: VoiceStory, p: BeatProgress, modifier: Modifier) {
     Scenery(Land.LAGOON, modifier.fillMaxSize(), seed = 41) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
-            fun boatX() = 0.16f + 0.15f * p.a(0) + 0.13f * p.a(2) + 0.08f * p.a(4) + 0.18f * p.a(5)
-            fun boatY() = 0.62f - 0.16f * bump(p.a(4)) * p.s(4) - (if (p.beat == 0) 0.02f * bump(p.a(0)) else 0f)
+            fun boatX() = boatX(p)
+            fun boatY() = boatY(p)
             Canvas(Modifier.fillMaxSize()) {
                 val w = size.width
                 val h = size.height
@@ -135,15 +167,25 @@ private fun BoatScene(story: VoiceStory, p: BeatProgress, modifier: Modifier) {
             }
             if (p.beat >= 5) Item(unit * 0.16f, { 0.86f }, { 0.52f }) { Emoji("🌴", unit * 0.16f) }
             // The bubble: it bursts into confetti.
+            // The bubble: three paper layers that burst apart, each flying its own way.
             if (p.beat == 1) {
-                Item(unit * 0.26f, { 0.5f }, { 0.46f }, alpha = { 1f - p.a(1) }, scale = { 1f + 0.5f * p.a(1) }) {
+                Item(unit * 0.3f, { 0.5f }, { 0.46f }) {
                     Canvas(Modifier.fillMaxSize()) {
-                        drawCircle(Color(0xFFE1F5FE).copy(alpha = 0.55f), size.minDimension / 2)
-                        drawCircle(Color.White, size.minDimension / 2, style = Stroke(4.dp.toPx()))
-                        drawCircle(Color.White, size.minDimension * 0.08f, Offset(size.width * 0.32f, size.height * 0.3f))
+                        val f = p.a(1)
+                        val r0 = size.minDimension / 2 * 0.8f
+                        val layers = listOf(Color(0xFFE1F5FE), Color(0xFFB3E5FC), Color(0xFFFFFFFF))
+                        layers.forEachIndexed { i, c ->
+                            val a = i * 2.1f + 0.4f
+                            val d = size.minDimension * 0.45f * f * p.s(1) * (1f + 0.3f * i)
+                            val r = r0 * (1f - 0.22f * i) * (1f - 0.35f * f)
+                            val at = center + Offset(cos(a) * d, sin(a) * d)
+                            if (f < 0.98f) {
+                                paperCircle(c.copy(alpha = (0.75f - 0.15f * i) * (1f - f)), r, at)
+                                drawCircle(Color.White.copy(alpha = 1f - f), r, at, style = Stroke(3.dp.toPx()))
+                            }
+                        }
                     }
                 }
-                Confetti({ p.a(1) }, count = if (p.s(1) < 1f) 8 else 18, cx = 0.5f, cy = 0.46f)
             }
             // The duck (or his own word): on the rock, then into the boat.
             if (p.beat >= 3) {
@@ -163,9 +205,13 @@ private fun BoatScene(story: VoiceStory, p: BeatProgress, modifier: Modifier) {
                     // Mast and sail (the sail droops until his "blow").
                     drawLine(Color(0xFF5D4037), Offset(w * 0.55f, h * 0.12f), Offset(w * 0.55f, h * 0.72f), 4.dp.toPx())
                     val f = sail()
+                    // The sail fills with his breath: its edge bellies out in a curve.
+                    val belly = if (p.beat == 2) 0.12f * p.a(2) * p.s(2) else if (p.beat > 2) 0.06f else 0f
+                    val tipX = w * (0.57f + 0.33f * f)
+                    val tipY = h * (0.68f - 0.2f * (1f - f))
                     val sailPath = Path().apply {
                         moveTo(w * 0.57f, h * 0.14f)
-                        lineTo(w * (0.57f + 0.33f * f), h * (0.68f - 0.2f * (1f - f)))
+                        quadraticTo(w * (0.57f + 0.2f * f + belly * 2f), h * (0.4f - belly), tipX, tipY)
                         lineTo(w * 0.57f, h * 0.68f)
                         close()
                     }
@@ -231,7 +277,7 @@ private fun OwlScene(story: VoiceStory, p: BeatProgress, modifier: Modifier) {
                 }
             }
             // Owl: on the branch, asleep until his word; later a big loop.
-            fun loopAngle() = if (p.beat == 5) 2f * PI.toFloat() * p.a(5) else 0f
+            fun loopAngle() = owlLoop(p)
             val loopR = 0.16f * p.s(5)
             Item(
                 unit * 0.22f,
@@ -245,7 +291,20 @@ private fun OwlScene(story: VoiceStory, p: BeatProgress, modifier: Modifier) {
             if (p.beat <= 3) {
                 listOf(0.32f, 0.44f, 0.56f).forEachIndexed { i, x ->
                     val dir = if (i == 0) -1f else 1f
-                    Item(unit * 0.09f, { x + dir * 0.4f * p.a(3) }, { 0.86f - 0.12f * bump(p.a(3)) * p.s(3) }, rotation = { 200f * p.a(3) }) { Emoji("🍂", unit * 0.09f) }
+                    Item(unit * 0.1f, { x + dir * 0.4f * p.a(3) }, { 0.86f - 0.12f * bump(p.a(3)) * p.s(3) }, rotation = { 120f * p.a(3) * dir }) {
+                        // A paper leaf that flips over to its darker side as it blows away.
+                        Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX = cos(PI.toFloat() * p.a(3)) }) {
+                            val flipped = p.a(3) > 0.5f
+                            val leaf = Path().apply {
+                                moveTo(size.width * 0.5f, size.height * 0.05f)
+                                quadraticTo(size.width * 0.98f, size.height * 0.45f, size.width * 0.5f, size.height * 0.95f)
+                                quadraticTo(size.width * 0.02f, size.height * 0.45f, size.width * 0.5f, size.height * 0.05f)
+                                close()
+                            }
+                            paperPath(leaf, if (flipped) Color(0xFF8D4E1C) else Color(0xFFE59A3C))
+                            drawLine(Color(0xFF6D3A12), Offset(size.width * 0.5f, size.height * 0.1f), Offset(size.width * 0.5f, size.height * 0.92f), 2.dp.toPx())
+                        }
+                    }
                 }
             }
             // Berries (or his own word) tumble down to Owl.
@@ -274,7 +333,7 @@ private fun BalloonScene(story: VoiceStory, p: BeatProgress, modifier: Modifier)
     Scenery(Land.MEADOW, modifier.fillMaxSize(), seed = 63) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
-            fun alt() = 0.3f * p.a(1) - 0.26f * p.a(3)
+            fun alt() = balloonAlt(p)
             fun basketY() = 0.8f - alt()
             // The picnic blanket and cupcakes below.
             Canvas(Modifier.fillMaxSize()) {
@@ -345,18 +404,79 @@ private fun BalloonScene(story: VoiceStory, p: BeatProgress, modifier: Modifier)
     }
 }
 
-/** A quick burst of paper confetti from ([cx], [cy]). */
+/**
+ * What shows over the dimmed scene while he talks: the thing to move glows gold with paper
+ * sparkles turning round it, and his voice is three torn cream paper "wind strips" streaming from
+ * Rory ([fromX], [fromY]) toward it, longer and brighter the louder he is ([push], read while drawing).
+ */
 @Composable
-private fun BoxWithConstraintsScope.Confetti(f: () -> Float, count: Int, cx: Float, cy: Float) {
-    val colors = listOf(Color(0xFFFFD54F), Color(0xFF4FC3F7), Color(0xFFAB47BC), Color(0xFF81C784), Color(0xFFFFB74D))
-    Canvas(Modifier.fillMaxSize()) {
+fun VoiceListenExtras(target: () -> Offset, fromX: Float, fromY: Float, glowing: Boolean, push: () -> Float, modifier: Modifier = Modifier) {
+    val still = LocalReduceMotion.current
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "extras")
+    val spin by t.loop(0f, 1f, 2400, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "spin")
+    val flow by t.loop(0f, 1f, 700, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "flow")
+    Canvas(modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val tg = target()
+        val c = Offset(tg.x * w, tg.y * h)
+        val u = size.minDimension
+        if (glowing) {
+            // The glow and its paper sparkles.
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.45f), u * 0.11f, c)
+            for (k in 0 until 3) {
+                val a = 2f * PI.toFloat() * ((if (still) 0f else spin) + k / 3f)
+                star(c + Offset(cos(a) * u * 0.12f, sin(a) * u * 0.12f), u * 0.022f, Color(0xFFFFF59D))
+            }
+        }
+        val v = push()
+        if (v > 0f) {
+            // Three torn paper strips, flowing from Rory toward the target.
+            val from = Offset(fromX * w, fromY * h)
+            val dx = c.x - from.x
+            val dy = c.y - from.y
+            val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+            val nx = -dy / len
+            val ny = dx / len
+            for (k in 0 until 3) {
+                val lane = (k - 1) * u * 0.035f
+                val phase = ((if (still) 0.5f else flow) + k * 0.33f) % 1f
+                val along = 0.15f + 0.6f * phase
+                val stripLen = len * (0.12f + 0.18f * v)
+                val start = from + Offset(dx * along + nx * lane, dy * along + ny * lane)
+                val end = start + Offset(dx / len * stripLen, dy / len * stripLen)
+                val path = Path().apply {
+                    // A slightly ragged paper strip: two wavy long edges.
+                    val thick = u * (0.012f + 0.01f * v)
+                    moveTo(start.x + nx * thick, start.y + ny * thick)
+                    quadraticTo((start.x + end.x) / 2 + nx * thick * 2.2f, (start.y + end.y) / 2 + ny * thick * 2.2f, end.x + nx * thick * 0.5f, end.y + ny * thick * 0.5f)
+                    lineTo(end.x - nx * thick * 0.5f, end.y - ny * thick * 0.5f)
+                    quadraticTo((start.x + end.x) / 2 - nx * thick * 0.4f, (start.y + end.y) / 2 - ny * thick * 0.4f, start.x - nx * thick, start.y - ny * thick)
+                    close()
+                }
+                paperPath(path, Color(0xFFFFF3D6).copy(alpha = (0.55f + 0.45f * v) * (1f - kotlin.math.abs(phase - 0.5f))))
+            }
+        }
+    }
+}
+
+/**
+ * Hole-punch paper confetti: little paper circles burst from ([at], parts of the scene) when his
+ * word succeeds, fall and fade, and are gone within 1.6 s ([f] 0 to 1 over that time).
+ */
+@Composable
+fun HolePunchConfetti(at: Offset, f: () -> Float, modifier: Modifier = Modifier) {
+    val colors = listOf(Color(0xFFFFD54F), Color(0xFF4FC3F7), Color(0xFFAB47BC), Color(0xFF81C784), Color(0xFFFFB74D), Color.White)
+    Canvas(modifier.fillMaxSize()) {
         val t = f()
         if (t <= 0f || t >= 1f) return@Canvas
-        for (k in 0 until count) {
-            val a = k * 2f * PI.toFloat() / count
-            val d = size.minDimension * 0.3f * t
-            val c = Offset(size.width * cx + cos(a) * d, size.height * cy + sin(a) * d + size.height * 0.1f * t * t)
-            paperRect(colors[k % colors.size], c, Size(size.minDimension * 0.02f, size.minDimension * 0.012f))
+        val u = size.minDimension
+        for (k in 0 until 22) {
+            val a = k * 2.4f
+            val speed = 0.18f + 0.12f * ((k * 37) % 10) / 10f
+            val d = u * speed * kotlin.math.sqrt(t)
+            val c = Offset(size.width * at.x + cos(a) * d, size.height * at.y + sin(a) * d * 0.7f + u * 0.25f * t * t)
+            paperCircle(colors[k % colors.size].copy(alpha = 1f - t), u * 0.011f, c)
         }
     }
 }

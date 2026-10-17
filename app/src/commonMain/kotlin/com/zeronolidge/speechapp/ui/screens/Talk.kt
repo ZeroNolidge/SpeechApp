@@ -592,6 +592,8 @@ internal fun ListeningStage(
     endX: Float = 0.5f,
     endY: Float = 0.6f,
     enabled: Boolean = true,
+    /** Drawn over the dimmed scene, under Rory (a voice story's glow, wind strips and confetti). */
+    aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val app = LocalApp.current
@@ -601,8 +603,9 @@ internal fun ListeningStage(
         val w = maxWidth
         val h = maxHeight
         content()
+        if (k > 0.001f) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
+        aboveDim?.invoke(this)
         if (k > 0.001f) {
-            Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
             // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
             val rory = minOf(maxOf(h * 0.28f, 100.dp), w * 0.7f / 1.35f)
             val box = rory * 1.35f

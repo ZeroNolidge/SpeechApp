@@ -1013,3 +1013,41 @@ class VoiceStoriesTest {
         assertTrue(loud.heard && !loud.soft)
     }
 }
+
+/** His voice pushes a voice story's action: louder is faster, holding keeps going, quiet is never a miss. */
+class VoicePushTest {
+    @Test
+    fun louderPushesFurtherAndHoldingKeepsItMoving() {
+        val soft = VoicePush().apply { repeat(4) { feed(0.15f, 50) } }
+        val loud = VoicePush().apply { repeat(4) { feed(0.9f, 50) } }
+        assertTrue(loud.progress > soft.progress * 2, "${loud.progress} vs ${soft.progress}")
+        assertTrue(loud.strength > soft.strength)
+        // Silence doesn't move it; holding the sound does, until the end.
+        val p = VoicePush()
+        p.feed(0.5f, 50)
+        val before = p.progress
+        repeat(10) { p.feed(0f, 50) }
+        assertEquals(before, p.progress)
+        var done = false
+        repeat(40) { if (p.feed(0.5f, 50)) done = true }
+        assertTrue(done && p.progress == 1f)
+        // It starts moving on the very first reading of voice (well within 0.2 s).
+        assertTrue(VoicePush().apply { feed(0.1f, 50) }.progress > 0f)
+    }
+
+    @Test
+    fun aQuietTryNudgesAndAsksAgainThenAlwaysFinishes() {
+        val p = VoicePush()
+        assertEquals(VoicePush.Next.AGAIN_TOGETHER, p.afterTry(heard = false, soft = true))
+        assertTrue(p.progress > 0f && p.progress <= VoicePush.NUDGE_CAP)
+        // Never a miss: the second try finishes, whatever happens.
+        assertEquals(VoicePush.Next.FINISH_GENTLY, p.afterTry(heard = false, soft = false))
+        // Any clear voice finishes (the rest gently), even if it didn't push all the way.
+        val q = VoicePush().apply { feed(0.3f, 50) }
+        assertEquals(VoicePush.Next.FINISH_GENTLY, q.afterTry(heard = true, soft = false))
+        // A quiet try never reaches the end by itself.
+        val r = VoicePush()
+        r.afterTry(false, true)
+        assertTrue(r.progress < 1f)
+    }
+}

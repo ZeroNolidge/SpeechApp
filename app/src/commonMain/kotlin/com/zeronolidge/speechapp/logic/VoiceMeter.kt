@@ -36,6 +36,12 @@ class VoiceMeter(
     /** Anything louder than this counts as voice. */
     val threshold: Float get() = maxOf(MIN_VOICE, room * 2.2f)
 
+    /**
+     * How hard this reading pushes, 0 to 1: nothing below the voice threshold (or while the room
+     * is still being measured), louder = more. A voice story moves its action with it, live.
+     */
+    fun push(rms: Float): Float = if (t <= settleMs || rms <= threshold) 0f else display(rms).coerceAtLeast(0.08f)
+
     /** Adds a reading covering [stepMs]. Returns true when listening is finished. */
     fun feed(rms: Float, stepMs: Int): Boolean {
         t += stepMs

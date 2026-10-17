@@ -30,7 +30,14 @@ class VoiceDetector(private val mic: MicLevels) {
      * 0.15 s after he starts, long before listening ends), so a story can act on his word at
      * once; the result also tells a soft try ([VoiceTry.SOFT]) from silence.
      */
-    fun listenTry(windowMs: Int = 4000, onLevel: (Float) -> Unit, onVoice: (() -> Unit)?, onResult: (VoiceTry) -> Unit) {
+    fun listenTry(
+        windowMs: Int = 4000,
+        onLevel: (Float) -> Unit,
+        onVoice: (() -> Unit)?,
+        /** Every reading (each 50 ms): how hard his voice pushes right now, 0 when quiet (see [VoiceMeter.push]). */
+        onPush: ((Float) -> Unit)? = null,
+        onResult: (VoiceTry) -> Unit,
+    ) {
         cancel()
         val s = ++session
         val meter = VoiceMeter(windowMs)
@@ -55,6 +62,7 @@ class VoiceDetector(private val mic: MicLevels) {
                 if (s == session) {
                     onLevel(VoiceMeter.display(rms))
                     val finished = meter.feed(rms, MicLevels.STEP_MS)
+                    onPush?.invoke(meter.push(rms))
                     if (meter.heard && !voiced) {
                         voiced = true
                         onVoice?.invoke()
