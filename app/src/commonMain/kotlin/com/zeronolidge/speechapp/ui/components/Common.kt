@@ -1,5 +1,7 @@
 package com.zeronolidge.speechapp.ui.components
 
+import com.zeronolidge.speechapp.state.nowMillis
+
 import kotlin.time.Duration.Companion.minutes
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.Critter
@@ -92,14 +94,37 @@ class AppServices(
     /** True while it's his turn to talk: the scene dims a little so Rory and the word stand out. */
     var listening by mutableStateOf(false)
 
-    /** When this play started. After about 12 minutes Rory closes it gently ([sessionLong]). */
-    private val sessionStart = kotlin.time.TimeSource.Monotonic.markNow()
+    /** How loud his voice is right now while listening (0 to 1), for Rory's ear and ring. */
+    var listenLevel by mutableStateOf(0f)
 
-    /** Set once Rory has said "let's rest" today, so it isn't said again in the same play. */
-    var sessionClosed by mutableStateOf(false)
+    /**
+     * This sitting of play, saved on the device so a reload doesn't start it again (away more
+     * than half an hour is a new one). After about 12 minutes Rory wraps up at the next natural
+     * pause ([sessionLong]); once he has, [sessionClosed].
+     */
+    private var session = com.zeronolidge.speechapp.logic.PlaySession.resume(progress.playSession, nowMillis())
+        set(v) {
+            field = v
+            progress.playSession = v
+        }
 
-    /** About 12 minutes of play: at the end of the current chapter, one mini game, then rest. */
-    fun sessionLong(): Boolean = !sessionClosed && sessionStart.elapsedNow() >= SESSION_MINUTES.minutes
+    init { progress.playSession = session }
+
+    /** Still playing: keeps the sitting going (called now and then, and at every check). */
+    fun touchSession() {
+        session = com.zeronolidge.speechapp.logic.PlaySession.resume(session, nowMillis())
+    }
+
+    /** Set once Rory has said "let's rest", so it isn't said again in the same sitting. */
+    var sessionClosed: Boolean
+        get() = session.rested
+        set(v) { session = session.copy(rested = v) }
+
+    /** About 12 minutes of play: time to wrap up at the next natural pause. */
+    fun sessionLong(): Boolean {
+        touchSession()
+        return session.long(nowMillis())
+    }
 
     /** Taps that landed on nothing tappable: each shows a little paper puff (x, y in window pixels, id). */
     val puffs = mutableStateListOf<Triple<Float, Float, Int>>()

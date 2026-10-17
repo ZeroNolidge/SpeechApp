@@ -302,6 +302,51 @@ def speak(key, text, voice, state):
         raise SystemExit("OpenAI said %s for %r: %s\n%s" % (e.code, text, e.detail, HINTS.get(e.code, "")))
 
 
+# ---------------------------------------------------------------- checking a clip has sound
+
+MIN_SOUND = 0.2  # seconds of real sound a clip needs; less is a silent or broken clip
+
+
+def sound_seconds(data):
+    """How many seconds of an MP3 carry real sound, read from the file itself (no extra software).
+
+    OpenAI's clips are MPEG-2 Layer III, mono. Every frame stores a global gain: speech frames
+    sit at about 130 or more, quiet ones about 120 or less, and digital silence at 210 with no
+    sound data. (Checked against the decoded audio of every clip: the same ten silent ones.)
+    """
+    i = 10 + ((data[6] << 21) | (data[7] << 14) | (data[8] << 7) | data[9]) if data[:3] == b"ID3" else 0
+    loud = 0.0
+    while i + 13 <= len(data):
+        b1, b2, b3 = data[i + 1], data[i + 2], data[i + 3]
+        ver, layer, bi, si = (b1 >> 3) & 3, (b1 >> 1) & 3, b2 >> 4, (b2 >> 2) & 3
+        if data[i] != 0xFF or (b1 & 0xE0) != 0xE0 or layer != 1 or bi in (0, 15) or si == 3 or ver == 1:
+            i += 1
+            continue
+        mpeg1 = ver == 3
+        rate = ([44100, 48000, 32000] if mpeg1 else [22050, 24000, 16000] if ver == 2 else [11025, 12000, 8000])[si]
+        kbps = ([0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] if mpeg1 else
+                [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160])[bi]
+        mono = (b3 >> 6) == 3
+        side = data[i + 4 + (0 if b1 & 1 else 2):][:17]
+        bits, n = int.from_bytes(side, "big"), len(side) * 8
+        # Skip main_data_begin and private bits (and scfsi for MPEG-1), then part2_3_length and
+        # big_values, to reach the first granule's global gain.
+        pos = (9 + (5 if mono else 3) + (4 if mono else 8)) if mpeg1 else (8 + (1 if mono else 2))
+        gain = (bits >> (n - (pos + 21) - 8)) & 0xFF
+        if 128 <= gain < 210:
+            loud += (1152 if mpeg1 else 576) / rate
+        i += (144 if mpeg1 else 72) * kbps * 1000 // rate + ((b2 >> 1) & 1)
+    return loud
+
+
+def clip_ok(data):
+    return sound_seconds(data) >= MIN_SOUND
+
+
+class SilentClip(Exception):
+    pass
+
+
 # ---------------------------------------------------------------- main
 
 
@@ -331,6 +376,7 @@ def main():
     ap.add_argument("--list-letters", action="store_true", help="list the letter-sound lines")
     ap.add_argument("--redo", action="append", default=[], help="remake this line (its text, e.g. fff)")
     ap.add_argument("--say", default=None, help="with one --redo: the text the voice should read instead")
+    ap.add_argument("--check", action="store_true", help="only list clips that are silent or too short")
     args = ap.parse_args()
 
     os.makedirs(OUT, exist_ok=True)
@@ -361,14 +407,24 @@ def main():
         overrides[normalize(args.redo[0])] = args.say
         json.dump(overrides, open(OVERRIDES, "w", encoding="utf-8"), indent=1, sort_keys=True)
 
+    # Silent or too-short clips (OpenAI sometimes sends back silence) are always remade.
+    bad = sorted(k for k in lines if os.path.exists(os.path.join(OUT, clips[k]))
+                 and not clip_ok(open(os.path.join(OUT, clips[k]), "rb").read()))
+    if bad:
+        print("%d clips are silent or under %.1f s of sound, so they'll be remade: %s" % (len(bad), MIN_SOUND, ", ".join(bad)))
+    if args.check:
+        if not bad:
+            print("All %d clips have sound." % len(lines))
+        return
+
     redo = {normalize(r) for r in args.redo}
     for r in redo:
         if r not in lines:
             sys.exit("No spoken line %r. Try --list-letters, or --dry-run to see all lines." % r)
     changed_voice = old and (old.get("voice") != voice or old.get("model") != model)
-    todo = [k for k in lines if args.force or changed_voice or k in redo or not os.path.exists(os.path.join(OUT, clips[k]))]
+    todo = [k for k in lines if args.force or changed_voice or k in redo or k in bad or not os.path.exists(os.path.join(OUT, clips[k]))]
     if args.redo and not args.force:
-        todo = [k for k in todo if k in redo]
+        todo = [k for k in todo if k in redo or k in bad]
 
     chars = sum(len(overrides.get(k, lines[k])) for k in todo)
     print("%d spoken lines, %d to make (%d characters, about $%.2f with %s)." % (len(lines), len(todo), chars, chars / 1e6 * (15 if model == "tts-1" else 12), model))
@@ -385,7 +441,19 @@ def main():
     state = {"model": model, "lock": threading.Lock()}
 
     def make(k):
-        audio = speak(key, overrides.get(k, lines[k]), voice, state)
+        text = overrides.get(k, lines[k])
+        # Check it has sound; try again if not, the last time with tts-1 (the newer model has
+        # sent back silence for some single words and long sounds like "thhhh").
+        for attempt in range(3):
+            audio = speak(key, text, voice, state if attempt < 2 else dict(state, model="tts-1"))
+            if clip_ok(audio):
+                break
+        else:
+            # Still silent: leave it out, so the app uses the browser voice for it.
+            old_file = os.path.join(OUT, clips[k])
+            if os.path.exists(old_file) and not clip_ok(open(old_file, "rb").read()):
+                os.remove(old_file)
+            raise SilentClip(k)
         remake = os.path.exists(os.path.join(OUT, clips[k]))
         name = clip_file(k, audio) if remake else clip_file(k)
         path = os.path.join(OUT, name)
@@ -398,6 +466,7 @@ def main():
 
     print("Working... making %d clips. A count shows every 10 clips (about every 10-20 seconds)." % len(todo))
     skipped = []
+    still_silent = []
 
     def save_manifest():
         # Only clips that really exist go in the manifest, so a stopped run still leaves a working set.
@@ -411,6 +480,9 @@ def main():
             for fut in concurrent.futures.as_completed(futures):
                 try:
                     fut.result()
+                except SilentClip as e:
+                    still_silent.append(str(e))
+                    print("  (%r came back silent 3 times; the app will use the browser voice for it)" % str(e))
                 except BaseException as e:
                     if not isinstance(e, NetError):
                         # A real stop (key refused, no credit, Ctrl+C): don't start the rest.
@@ -434,6 +506,9 @@ def main():
     for f in os.listdir(OUT):
         if f.endswith(".mp3") and f not in keep:
             os.remove(os.path.join(OUT, f))
+    if still_silent:
+        print("These came back silent every time: %s. Try --redo with --say, e.g. --redo \"%s\" --say \"%s, %s\"."
+              % (", ".join(still_silent), still_silent[0], still_silent[0], still_silent[0]))
     if skipped:
         print("%d lines were skipped because the connection dropped. Run the same command again to make just those." % len(skipped))
         return

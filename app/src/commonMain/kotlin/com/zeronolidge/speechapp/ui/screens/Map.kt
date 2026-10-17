@@ -121,8 +121,8 @@ fun MapScreen(nav: Nav) {
         present?.let { app.showGift(it) }
         val welcome = present?.let { "Welcome back, ${p.heroName}! Your buddy found a present for coming to play: the ${it.name}! " } ?: ""
         // Back after a few days away: no streaks, nothing lost, just a happy hello.
-        val missed = if (p.daysAway >= 2) "I missed you, ${p.heroName}! I'm so happy you're back! " else ""
-        val cave = if (p.echoReady) "A secret crystal cave! Tap the purple crystal to play. " else ""
+        val missed = if (p.daysAway >= 1) "I missed you, ${p.heroName}! I'm so happy you're back! " else ""
+        val cave = if (p.echoReady) "A secret crystal cave! Tap the glowing purple cave by the trees to play. " else ""
         val line = missed + cave + when {
             p.chapter == 0 -> "This is the map! Let's start the adventure. $hintLine"
             unfoldNew && Trail.opensLand(p.chapter) -> "Look, the map is opening up! A new place to explore. $hintLine"
@@ -193,6 +193,12 @@ fun MapScreen(nav: Nav) {
             unfoldNew = unfoldNew,
             onUnfolded = { p.markUnfoldSeen() },
             onStop = startChapter,
+            // Once Pip is found: the crystal cave, a glowing stop just past the Forest.
+            cave = p.echoReady,
+            onCave = {
+                app.speaker.say("The crystal cave!")
+                nav.go(Screen.EchoCave())
+            },
             onElsewhere = { l ->
                 // The next area along the trail is already peeking out of its mist: it opens too.
                 val peek = if (!Trail.opensLand(p.chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(land) + 1) else null

@@ -30,62 +30,81 @@ private fun jsClipsWhenReady(maxMs: Int, then: () -> Unit): Unit = js(
 
 private fun jsClipsReady(): Boolean = js("!!(window.__tlClips && window.__tlClips.map)")
 
-private fun jsClipsHas(key: String): Boolean = js("!!(window.__tlClips && window.__tlClips.map && Object.prototype.hasOwnProperty.call(window.__tlClips.map, key))")
+// A clip that failed to load or turned out silent counts as missing from then on.
+private fun jsClipsHas(key: String): Boolean = js("!!(window.__tlClips && window.__tlClips.map && Object.prototype.hasOwnProperty.call(window.__tlClips.map, key) && !(window.__tlClips.bad && window.__tlClips.bad.has(key)))")
 
 private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> Unit): Unit = js(
     """(() => {
         const st = window.__tlClips;
         const keys = keysJoined.split('\n').filter(k => k);
-        if (!st || !st.map || !keys.length) { onEnd(false); return; }
+        const C = window.AudioContext || window.webkitAudioContext;
+        if (!st || !st.map || !keys.length || !C) { onEnd(false); return; }
         const gen = ++st.gen;
         const url = (k) => 'audio/' + st.map[k];
         // '_' (ClipText.PAUSE) is a short breath between two sentences.
-        const PAUSE = '_', breath = 0.25;
+        const PAUSE = '_', breath = 0.25, slowRate = 0.72;
         let finished = false;
         const fin = (ok) => { if (finished) return; finished = true; if (gen === st.gen) onEnd(ok); };
-        if (slow) {
-            // Slow: one after another, slower but at the same pitch.
-            let i = 0;
-            const next = () => {
-                if (gen !== st.gen) return;
-                if (i >= keys.length) { fin(true); return; }
-                if (keys[i] === PAUSE) { i++; setTimeout(next, breath * 1000 / 0.72); return; }
-                const a = new Audio(url(keys[i++]));
-                a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
-                a.playbackRate = 0.72;
-                st.playing.push(a);
-                a.onended = next;
-                a.onerror = next;
-                const p = a.play();
-                if (p && p.catch) p.catch(() => next());
-            };
-            next();
-            return;
-        }
-        const C = window.AudioContext || window.webkitAudioContext;
-        if (!C) { fin(false); return; }
         window.__tlAudio = window.__tlAudio || new C();
         const ctx = window.__tlAudio;
         try { ctx.resume(); } catch (e) {}
-        // Decoded clips are kept, with the quiet at each end found once.
+        // Decoded clips are kept, with the quiet at each end found once (so a clip's trailing
+        // silence, up to 2 s on some single words, never delays his turn). A clip that won't load
+        // or is silent is rejected and remembered: the caller then uses the browser voice.
         const load = (k) => {
             if (k === PAUSE) return Promise.resolve({ pause: breath });
             if (st.cache.has(k)) return st.cache.get(k);
-            const p = fetch(url(k)).then(r => r.arrayBuffer()).then(b => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej))).then(buf => {
+            const p = fetch(url(k)).then(r => { if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
+                .then(b => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej))).then(buf => {
                 const d = buf.getChannelData(0);
                 const th = 0.01;
                 let s = 0, e = d.length - 1;
                 while (s < e && Math.abs(d[s]) < th) s++;
                 while (e > s && Math.abs(d[e]) < th) e--;
+                let peak = 0;
+                for (let i = s; i <= e; i += 16) peak = Math.max(peak, Math.abs(d[i]));
+                if ((e - s) / buf.sampleRate < 0.12 || peak < 0.03) throw new Error('silent');
                 const pad = Math.floor(buf.sampleRate * 0.015);
                 return { buf, start: Math.max(0, s - pad) / buf.sampleRate, end: Math.min(d.length, e + pad) / buf.sampleRate };
             });
             st.cache.set(k, p);
-            p.catch(() => st.cache.delete(k));
+            p.catch(() => { st.bad = st.bad || new Set(); st.bad.add(k); });
             return p;
         };
+        // Everything is loaded and checked before anything plays, so a bad clip never leaves half
+        // a sentence said twice.
         Promise.all(keys.map(load)).then(parts => {
             if (gen !== st.gen) return;
+            if (slow) {
+                // Slow: an audio element per clip, slower at the same pitch, cut to its sound.
+                let i = 0;
+                const next = () => {
+                    if (gen !== st.gen) return;
+                    if (i >= parts.length) { fin(true); return; }
+                    const c = parts[i], k = keys[i];
+                    i++;
+                    if (c.pause) { setTimeout(next, c.pause * 1000 / slowRate); return; }
+                    const a = new Audio(url(k));
+                    a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
+                    st.playing.push(a);
+                    let done = false, timer = 0;
+                    const after = () => { if (done) return; done = true; clearTimeout(timer); try { a.pause(); } catch (e) {} next(); };
+                    a.onended = after;
+                    a.onerror = after;
+                    a.onplaying = () => { clearTimeout(timer); timer = setTimeout(after, Math.max(0, c.end - a.currentTime) * 1000 / slowRate + 40); };
+                    a.onloadedmetadata = () => {
+                        try { a.currentTime = c.start; } catch (e) {}
+                        a.playbackRate = slowRate;
+                        const p = a.play();
+                        if (p && p.catch) p.catch(after);
+                    };
+                    a.load();
+                    // In case the element never gets going.
+                    timer = setTimeout(after, (c.end - c.start) * 1000 / slowRate + 3000);
+                };
+                next();
+                return;
+            }
             let t = ctx.currentTime + 0.03;
             let last = null;
             parts.forEach(c => {

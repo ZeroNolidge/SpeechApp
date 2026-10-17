@@ -123,12 +123,20 @@ fun ChapterScreen(nav: Nav, visit: Land? = null) {
     val stickersBefore = remember { p.words.words.keys }
     val species = p.hero ?: Species.KID
 
-    fun next() {
+    /**
+     * Moves the story on from [from]. A step can only move on from itself, so a late or repeated
+     * "next" (a second tap, a timer from a step already gone) never skips the step after it.
+     */
+    fun next(from: Phase) {
+        if (from != phase) return
         cheer = false
         phase = when (val ph = phase) {
             Phase.Intro -> Phase.Beat(0)
             is Phase.Beat -> when {
                 ph.index + 1 >= quest.beats.size -> Phase.Ending
+                // After about 12 minutes of play, the story wraps up after this step: straight to
+                // the happy ending (the chapter still counts), then rest.
+                app.sessionLong() -> Phase.Ending
                 ph.index + 1 == quest.twistBefore -> Phase.Twist(ph.index + 1)
                 else -> Phase.Beat(ph.index + 1)
             }
@@ -157,26 +165,26 @@ fun ChapterScreen(nav: Nav, visit: Land? = null) {
         // Every step's continue button is drawn by the host: same size, same bottom-right spot.
         ContinueHost {
         when (val ph = phase) {
-            Phase.Intro -> StoryScene(quest, quest.intro, species, Mood.HAPPY, onNext = ::next)
+            Phase.Intro -> StoryScene(quest, quest.intro, species, Mood.HAPPY, onNext = { next(ph) })
             is Phase.Twist -> if (!woken) {
                 WakeScene(quest, species) { woken = true }
             } else {
-                StoryScene(quest, quest.twist, species, Mood.HAPPY, visitor = quest.visitor, onNext = ::next)
+                StoryScene(quest, quest.twist, species, Mood.HAPPY, visitor = quest.visitor, onNext = { next(ph) })
             }
             is Phase.Beat -> key(ph.index) {
-                BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft, rv -> solved(c, ft, rv) }, onNext = ::next)
+                BeatScene(quest, ph.index, species, cheer, onSolved = { c, ft, rv -> solved(c, ft, rv) }, onNext = { next(ph) })
             }
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
                     if (!bonus && p.chapter == chapter) p.finishChapter()
                 }
-                StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = ::next)
+                StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = { next(ph) })
             }
             Phase.Goodbye -> {
                 val earned = p.words.stickers.filter { it.text !in stickersBefore }
-                // After about 12 minutes of play: one mini game (the crystal cave), then rest.
+                // After about 12 minutes of play: Rory's "let's rest".
                 Goodbye(p.pieces.lastOrNull { it.id !in piecesBefore }, earned, onMap = {
-                    if (app.sessionLong()) nav.go(Screen.EchoCave(rest = true)) else nav.home()
+                    if (app.sessionLong()) nav.go(Screen.Rest) else nav.home()
                 })
             }
         }
@@ -423,19 +431,16 @@ private fun StorySplit(
     story: @Composable (Modifier) -> Unit,
     challenge: @Composable (Modifier) -> Unit,
 ) {
-    // While it's his turn to talk, the story picture dims slightly so the word card stands out.
-    val dim by androidx.compose.animation.core.animateFloatAsState(if (LocalApp.current.listening) 0.22f else 0f, tween(250), label = "dim")
-    val dimmed = Modifier.drawWithContent {
-        drawContent()
-        if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
-    }
+    // While it's his turn to talk, the story scene gets the listening look (dimmed, Rory big with
+    // his cupped ear in the middle); the word card beside it stays bright.
+    androidx.compose.runtime.CompositionLocalProvider(LocalHasStage provides true) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Wide screens (over 700, e.g. an iPad either way up) and any landscape screen: scene on the
         // left, choices on the right. Narrow portrait phones: stacked.
         val sideBySide = maxWidth > 700.dp || maxWidth > maxHeight
         if (!sideBySide) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                story(Modifier.fillMaxWidth().weight(0.34f).then(dimmed))
+                ListeningStage(Modifier.fillMaxWidth().weight(0.34f)) { story(Modifier.fillMaxSize()) }
                 challenge(Modifier.fillMaxWidth().weight(0.66f))
             }
         } else {
@@ -444,10 +449,11 @@ private fun StorySplit(
             // phone (they are sized in dp, never scaled to the screen).
             val storyShare = if (speaking && LocalScreenWidth.current >= 768.dp) 0.6f else 0.36f
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                story(Modifier.weight(storyShare).fillMaxHeight().then(dimmed))
+                ListeningStage(Modifier.weight(storyShare).fillMaxHeight()) { story(Modifier.fillMaxSize()) }
                 challenge(Modifier.weight(1f - storyShare).fillMaxHeight())
             }
         }
+    }
     }
 }
 

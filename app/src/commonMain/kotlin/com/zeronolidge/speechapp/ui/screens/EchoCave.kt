@@ -97,13 +97,15 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
     val echoAnim = remember { Animatable(1f) }
     val still = LocalReduceMotion.current
     fun micOk() = p.useMic && app.voice.available && mic.granted()
-    LaunchedEffect(Unit) { p.updateEchoReady(false) }
     LaunchedEffect(lit) { if (lit > 0 && !still) { echoAnim.snapTo(0f); echoAnim.animateTo(1f, tween(1200)) } }
 
     lateinit var ask: (Int) -> Unit
 
     fun done() {
         phase = CavePhase.END
+        // Only now, with every try done, does the cave stop waiting on the map (opening it and
+        // leaving early keeps it there).
+        p.updateEchoReady(false)
         app.celebrate("All the crystals are shining! What a great talker you are!")
         app.rememberInstruction("All the crystals are shining! Tap the big green arrow.")
     }
@@ -114,6 +116,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         phase = CavePhase.ECHO
         app.listening = false
         level = 0f
+        app.listenLevel = 0f
         val w = words[i]
         p.recordWord(w.text, w.emoji, clear = heard, heard = micUsed)
         if (micUsed) p.speechResult(heard)
@@ -122,7 +125,12 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         // The echo bounces back from the cave, softer and softer.
         app.speaker.say(EchoCave.echo(w.text)) {
             if (s != session) return@say
-            if (i + 1 < words.size) ask(i + 1) else done()
+            when {
+                i + 1 >= words.size -> done()
+                // After about 12 minutes of play: rest now (the cave stays on the map for next time).
+                app.sessionLong() -> nav.go(Screen.Rest)
+                else -> ask(i + 1)
+            }
         }
     }
 
@@ -139,12 +147,13 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
             if (micOk()) {
                 phase = CavePhase.LISTEN
                 app.listening = true
-                app.voice.listen(4000, onLevel = { level = it }) { heard ->
+                app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }) { heard ->
                     if (s != session || phase != CavePhase.LISTEN) return@listen
                     echo(i, heard == true, micUsed = true)
                 }
             } else {
                 phase = CavePhase.WAIT_TAP
+                app.listening = true
                 app.speaker.say("Say it out loud into the cave! Then tap the big green I said it button.")
             }
         }
@@ -169,6 +178,8 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         PaperChip("💎", fontSize = 26.sp, maxLines = 1)
     }) {
         ContinueHost {
+            // His turn: the listening look, Rory sliding in towards the cave mouth.
+            ListeningStage(Modifier.fillMaxSize(), endX = 0.5f, endY = 0.6f) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
@@ -191,13 +202,11 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     val species = p.hero ?: Species.KID
-                    val listening = phase == CavePhase.LISTEN || phase == CavePhase.WAIT_TAP
-                    // On a phone there's only room for one of them beside the big button: Rory
-                    // while he listens, the buddy otherwise.
-                    if (!(narrow && listening)) HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == CavePhase.END) Mood.CHEER else Mood.HAPPY)
-                    if (listening) RoryListens(level, minOf(h * if (narrow) 0.16f else 0.2f, (w - ContinueReserve) * 0.55f))
-                    else if (!narrow) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
+                    HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == CavePhase.END) Mood.CHEER else Mood.HAPPY)
+                    // While listening Rory is the big one in the listening look instead.
+                    if (!narrow && !app.listening) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
                 }
+            }
             }
             ContinueAction(
                 hint = phase == CavePhase.WAIT_TAP || phase == CavePhase.END,
@@ -219,7 +228,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                     }
                     CavePhase.ECHO -> {}
                     // Back to the story, or Rory's "let's rest" at the end of a long play.
-                    CavePhase.END -> if (rest) nav.go(Screen.Rest) else nav.go(Screen.Chapter())
+                    CavePhase.END -> if (rest || app.sessionLong()) nav.go(Screen.Rest) else nav.go(Screen.Chapter())
                 }
             }
         }

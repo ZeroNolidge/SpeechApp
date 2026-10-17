@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -103,7 +104,8 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}", onBack = nav.back) {
         ContinueHost {
             SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index) {
-                index++
+                // After about 12 minutes of play, Rory wraps up here, between words.
+                if (app.sessionLong()) nav.go(com.zeronolidge.speechapp.ui.Screen.Rest) else index++
             }
         }
     }
@@ -252,9 +254,10 @@ fun SpeakMoment(
         val s = session
         state = Speak.LISTENING
         tries++
-        app.voice.listen(4000, onLevel = { level = it }) { heard ->
+        app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }) { heard ->
             if (s != session || state == Speak.DONE) return@listen
             level = 0f
+            app.listenLevel = 0f
             when (heard) {
                 true -> finish(heard = true, micUsed = true)
                 false ->
@@ -299,7 +302,9 @@ fun SpeakMoment(
     }
     DisposableEffect(key) { onDispose { stopAll(); app.listening = false } }
     // His turn to talk: the scene behind dims slightly.
-    LaunchedEffect(state) { app.listening = state == Speak.LISTENING }
+    // His turn (listening, or waiting for "I said it!" without a microphone): the listening look.
+    LaunchedEffect(state) { app.listening = state == Speak.LISTENING || state == Speak.WAITING_TAP }
+    val inStory = LocalHasStage.current
 
     // The word card and its big icon buttons: on a phone the buttons sit in a row under the card;
     // on any screen wider than 700 (an iPad either way up) the card is on the left and the buttons
@@ -343,11 +348,12 @@ fun SpeakMoment(
                 },
                 label = "pulse",
             )
-            // The picture card: tap it to hear the word again.
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            // The picture card: tap it to hear the word again. On its own (Talk) the card is the
+            // scene for the listening look; in a story the story scene beside it is.
+            ListeningStage(Modifier.weight(1f).fillMaxWidth(), endY = 0.62f, enabled = !inStory) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
                 val small = maxHeight < 240.dp
                 val cardW = maxWidth
-                val roryHeight = minOf(maxHeight * 0.7f, 150.dp)
                 // A narrow card (the right-hand column on an upright iPad, a phone): picture above
                 // the word instead of beside it, so the word always fits on one line.
                 val narrowCard = cardW < 400.dp
@@ -366,14 +372,10 @@ fun SpeakMoment(
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.height(if (small) 84.dp else 124.dp), contentAlignment = Alignment.Center) {
                         when (state) {
-                            Speak.LISTENING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                RoryListens(level, if (small) 60.dp else 88.dp)
-                                // "Your turn!" is spoken anyway; the chip only goes where it fits.
-                                if (textW >= (if (small) 230.dp else 300.dp)) {
-                                    Spacer(Modifier.width(10.dp))
-                                    PaperChip("Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
-                                }
-                            }
+                            // Rory listens big in the scene (ListeningStage); here just the cue.
+                            Speak.LISTENING ->
+                                if (textW >= (if (small) 170.dp else 220.dp)) PaperChip("👂 Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
+                                else Text("👂", fontSize = 52.sp)
                             Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
                             Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
                             Speak.MODELLING -> Text("👂", fontSize = 52.sp)
@@ -409,15 +411,10 @@ fun SpeakMoment(
                 }
                 // No microphone: Rory pops up big and asks for the word out loud, then waits for ▶.
                 if (roryWaiting) {
-                    Row(
-                        Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        // His turn without a microphone: Rory still cups his glowing ear to listen.
-                        RoryListens(0f, minOf(roryHeight * 0.85f, 150.dp))
-                        PaperChip("🗣️ ${word.text}!", fontSize = 22.sp)
-                    }
+                    // His turn without a microphone: Rory listens big in the scene; the word to say here.
+                    PaperChip("🗣️ ${word.text}!", Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 16.dp).popIn("rory"), fontSize = 22.sp)
                 }
+            }
             }
         }
         val letters = letterKey
@@ -463,10 +460,13 @@ fun SpeakMoment(
     }
     // Always there: carry on (or skip). With no microphone it becomes a big "I said it!" button.
     // It is pointed at only when it's the way forward, so it doesn't pull attention while listening.
+    // The skip arrow waits a few seconds (it sits where the last step's continue arrow was, and a
+    // child tapping it again and again skipped every word of a story); "I said it!" shows at once.
     ContinueAction(
         enabled = state != Speak.DONE,
         hint = state == Speak.WAITING_TAP,
         label = if (roryWaiting) "I said it!" else null,
+        delayMs = if (roryWaiting) 0 else 3000,
     ) {
         if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
     }
@@ -547,7 +547,7 @@ internal fun RoryListens(level: Float, size: Dp) {
             // Big enough to read as an ear at a glance: about half Rory's width, sticking out
             // from the side of his head.
             val ear = Offset(left + w * 0.98f, (s - h) / 2 + h * 0.3f)
-            drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.42f * (1f + 0.3f * voice), ear)
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.42f * (1f + 0.3f * voice + 0.15f * glow), ear)
             // The ear itself: a tall rounded shape with a lobe at the bottom and the curl inside,
             // a C that opens towards Rory's face, the way a child draws an ear.
             paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.15f, ear.y - w * 0.24f), Size(w * 0.3f, w * 0.48f))
@@ -557,6 +557,54 @@ internal fun RoryListens(level: Float, size: Dp) {
                 topLeft = Offset(ear.x - w * 0.09f, ear.y - w * 0.15f), size = Size(w * 0.16f, w * 0.28f),
                 style = Stroke(w * 0.04f, cap = StrokeCap.Round),
             )
+        }
+    }
+}
+
+/** True inside a screen whose scene already shows the listening look (a story step's scene). */
+internal val LocalHasStage = androidx.compose.runtime.compositionLocalOf { false }
+
+/**
+ * The listening look, the same on every talk turn (story word cards, Talk, Pip, the crystal
+ * cave): while it's his turn ([AppServices.listening]) the scene dims and Rory, with his big
+ * cupped paper ear, grows to about a quarter of the scene's height and slides from the bottom-left
+ * corner towards the middle ([endX], [endY]: where Rory's centre ends up, as parts of the scene's
+ * width and height). His ear pulses and the ring grows with the voice. It scales with the scene,
+ * so it is big on a tablet, and takes no taps from anything.
+ */
+@Composable
+internal fun ListeningStage(
+    modifier: Modifier = Modifier,
+    endX: Float = 0.5f,
+    endY: Float = 0.6f,
+    enabled: Boolean = true,
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    val app = LocalApp.current
+    val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
+    val k by animateFloatAsState(if (enabled && app.listening) 1f else 0f, tween(if (still) 0 else 450), label = "stage")
+    BoxWithConstraints(modifier) {
+        val w = maxWidth
+        val h = maxHeight
+        content()
+        if (k > 0.001f) {
+            Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
+            // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
+            val rory = minOf(maxOf(h * 0.23f, 90.dp), w * 0.7f / 1.35f)
+            val box = rory * 1.35f
+            val startX = 0.dp
+            val startY = h - box
+            val endLeft = (w * endX - box / 2).coerceIn(0.dp, (w - box).coerceAtLeast(0.dp))
+            val endTop = (h * endY - box / 2).coerceIn(0.dp, (h - box).coerceAtLeast(0.dp))
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .graphicsLayer {
+                        translationX = (startX + (endLeft - startX) * k).toPx()
+                        translationY = (startY + (endTop - startY) * k).toPx()
+                        alpha = k
+                    },
+            ) { RoryListens(app.listenLevel, rory) }
         }
     }
 }

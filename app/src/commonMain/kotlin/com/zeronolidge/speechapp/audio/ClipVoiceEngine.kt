@@ -49,7 +49,17 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
             if (my != token) return
             if (i == parts.size) return onEnd(anySpoken)
             when (val part = parts[i]) {
-                is ClipText.Part.Clips -> clips.play(part.keys, slow) { ok -> anySpoken = anySpoken || ok; run(i + 1) }
+                is ClipText.Part.Clips -> clips.play(part.keys, slow) { ok ->
+                    if (ok) {
+                        anySpoken = true
+                        run(i + 1)
+                    } else if (my == token) {
+                        // A clip was missing, wouldn't load or was silent: the device voice says
+                        // this part instead of leaving a gap.
+                        val words = part.keys.filter { it != ClipText.PAUSE }.joinToString(" ")
+                        voice.speakOne(words, rate) { spoken -> anySpoken = anySpoken || spoken; run(i + 1) }
+                    }
+                }
                 is ClipText.Part.Speak -> voice.speakOne(part.text, rate) { ok -> anySpoken = anySpoken || ok; run(i + 1) }
             }
         }

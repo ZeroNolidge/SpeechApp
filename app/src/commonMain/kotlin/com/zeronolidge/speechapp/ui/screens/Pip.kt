@@ -42,6 +42,7 @@ import com.zeronolidge.speechapp.logic.PipSpot
 import com.zeronolidge.speechapp.logic.PipStory
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.ui.Nav
+import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.HeroWithPet
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
@@ -114,6 +115,7 @@ fun PipStoryScreen(nav: Nav) {
         phase = PipPhase.REACT
         app.listening = false
         level = 0f
+        app.listenLevel = 0f
         val spot = turn.spot
         if (spot != null) {
             // Every call: Pip hops a little closer (and the spot rustles, for fun).
@@ -135,7 +137,17 @@ fun PipStoryScreen(nav: Nav) {
         line = turn.reaction
         app.speaker.say("$said ${turn.reaction}") {
             if (s != session) return@say
-            if (k + 1 < turns.size) prompt(k + 1) else finish()
+            when {
+                k + 1 >= turns.size -> finish()
+                // After about 12 minutes of play: Pip hops out and gets sleepy (the goodnight turn).
+                turns[k + 1].spot != null && app.sessionLong() -> {
+                    hops = PipStory.HOPS
+                    opened = opened + PipSpot.entries
+                    pipOut = true
+                    prompt(turns.lastIndex)
+                }
+                else -> prompt(k + 1)
+            }
         }
     }
 
@@ -143,7 +155,7 @@ fun PipStoryScreen(nav: Nav) {
         val s = session
         phase = PipPhase.LISTEN
         app.listening = true
-        app.voice.listen(4000, onLevel = { level = it }) { heard ->
+        app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }) { heard ->
             if (s != session || phase != PipPhase.LISTEN) return@listen
             react(k, heard == true)
         }
@@ -160,6 +172,8 @@ fun PipStoryScreen(nav: Nav) {
             if (s != session || phase != PipPhase.PROMPT) return@say
             if (micOk()) listen(k) else {
                 phase = PipPhase.WAIT_TAP
+                // No microphone: Rory still listens the same way, beside the "I called!" button.
+                app.listening = true
                 app.speaker.say("Call Pip out loud! Then tap the big green I called button.")
             }
         }
@@ -185,6 +199,8 @@ fun PipStoryScreen(nav: Nav) {
     }) {
         ContinueHost {
             val nightness by animateFloatAsState(if (night) 1f else 0f, tween(450), label = "night")
+            // His turn: the listening look, with Rory sliding in on the left, clear of Pip's path.
+            ListeningStage(Modifier.fillMaxSize(), endX = 0.17f, endY = 0.66f) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
@@ -279,14 +295,15 @@ fun PipStoryScreen(nav: Nav) {
                 Row(Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * if (narrow) 0.30f else 0.36f).widthIn(max = (w - ContinueReserve).coerceAtLeast(0.dp)), verticalAlignment = Alignment.Bottom) {
                     val species = p.hero ?: Species.KID
                     HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (pipOut) Mood.CHEER else Mood.HAPPY, talking = phase == PipPhase.REACT)
-                    if (!narrow) Critter(
+                    // While listening Rory is the big one in the listening look instead.
+                    if (!narrow && !app.listening) Critter(
                         Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80),
-                        mood = if (phase == PipPhase.LISTEN) Mood.LISTEN else Mood.HAPPY,
-                        talking = phase != PipPhase.LISTEN,
+                        mood = Mood.HAPPY,
+                        talking = true,
                     )
                 }
-                if (phase == PipPhase.LISTEN) VoiceRing(level, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
                 if (line.isNotEmpty()) PaperChip(line, Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = w * 0.6f), fontSize = 24.sp)
+            }
             }
             // The big "I called!" button is always there, in the same spot every turn (the way
             // on without a microphone, or any time); the big green arrow back at the end.
@@ -310,23 +327,13 @@ fun PipStoryScreen(nav: Nav) {
                         react(index, heard = false)
                     }
                     PipPhase.REACT -> {}
-                    PipPhase.END -> nav.back()
+                    PipPhase.END -> if (app.sessionLong()) nav.go(Screen.Rest) else nav.back()
                 }
             }
         }
     }
 }
 
-/** A paper ring that grows with his voice while Pip is listening for the call. */
-@Composable
-private fun VoiceRing(level: Float, modifier: Modifier) {
-    val voice by animateFloatAsState(level, tween(90), label = "voice")
-    Canvas(modifier.size(96.dp)) {
-        val r = size.minDimension * 0.3f * (1f + 0.6f * voice)
-        paperCircle(Color(0xFFFFF3C4), r, center)
-        drawCircle(Color.White, r, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
-    }
-}
 
 /** Pip's collar with a paper tag for every time he found Pip. */
 @Composable

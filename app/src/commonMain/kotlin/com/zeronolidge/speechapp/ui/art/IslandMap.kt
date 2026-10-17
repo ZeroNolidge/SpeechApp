@@ -109,6 +109,9 @@ fun IslandMap(
      * (the side away from the buddy), so it never covers a label above the stop.
      */
     pointer: @Composable (Modifier, Dp, Boolean) -> Unit = { _, _, _ -> },
+    /** The crystal cave is open (Pip was found): a glowing paper cave stop just past the Forest. */
+    cave: Boolean = false,
+    onCave: () -> Unit = {},
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -144,6 +147,7 @@ fun IslandMap(
     // The area under a finger right now (its label sinks), and the last logged label positions.
     var pressedLand by remember { mutableStateOf<Land?>(null) }
     var pressedStop by remember { mutableStateOf(false) }
+    var pressedCave by remember { mutableStateOf(false) }
     /** The place to go glows and sparkles until he taps it (or its stop button). */
     var guide by remember(current) { mutableStateOf(true) }
     var lastAreaLog by remember { mutableStateOf("") }
@@ -189,6 +193,7 @@ fun IslandMap(
         val label = (unit.value * 0.055f).coerceIn(20f, 30f)
         val onArea by rememberUpdatedState(onElsewhere)
         val onStopTap by rememberUpdatedState(onStop)
+        val onCaveTap by rememberUpdatedState(onCave)
         val dens = LocalDensity.current.density
         // The next stop: same physical size on every screen, placed clear of every area's tap zone.
         val node = 96.dp
@@ -203,6 +208,17 @@ fun IslandMap(
             }
         }
         val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
+        // The crystal cave stop: just past the Forest, clear of every area and of the next stop.
+        val caveNode = node * 0.8f
+        val cavePx = with(LocalDensity.current) {
+            val wPx = w.toPx()
+            val hPx = h.toPx()
+            val labelH = (label * 1.45f + 6f).dp.toPx()
+            remember(cave, stopPx, wPx, hPx, labelH) {
+                if (!cave) null
+                else MapAreas.caveSpot(wPx, hPx, (caveNode / 2).toPx(), stopPx.x, stopPx.y, (node / 2).toPx(), 64.dp.toPx(), labelH).let { (x, y) -> Offset(x, y) }
+            }
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -216,7 +232,8 @@ fun IslandMap(
                     // ...and where each area's picture and the next-stop button are.
                     val marks = MapAreas.all.joinToString(" ") { a ->
                         "${a.land}@${(o.x + a.markX * c.size.width).toInt()},${(o.y + a.markY * c.size.height).toInt()}"
-                    } + " STOP@${(o.x + stopPx.x).toInt()},${(o.y + stopPx.y).toInt()}"
+                    } + " STOP@${(o.x + stopPx.x).toInt()},${(o.y + stopPx.y).toInt()}" +
+                        (cavePx?.let { " CAVE@${(o.x + it.x).toInt()},${(o.y + it.y).toInt()}" } ?: "")
                     islandOrigin = o
                     if (line + marks != lastAreaLog) {
                         lastAreaLog = line + marks
@@ -224,32 +241,36 @@ fun IslandMap(
                         println("MAPMARKS $marks")
                     }
                 }
-                .pointerInput(stopPx, label) {
+                .pointerInput(stopPx, cavePx, label) {
                     // Everything on the island goes through MapAreas.target: each area's one zone
                     // (picture, label and the gap between) and the next-stop button.
                     fun targetAt(p: Offset): MapTarget = MapAreas.target(
                         p.x, p.y, size.width.toFloat(), size.height.toFloat(),
                         labelHalfW = 64.dp.toPx(), labelH = (label * 1.45f + 6f).dp.toPx(),
                         stopX = stopPx.x, stopY = stopPx.y, stopR = (node / 2).toPx(),
+                        caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
                     )
                     detectTapGestures(
                         onPress = { p ->
                             when (val t = targetAt(p)) {
                                 is MapTarget.Area -> pressedLand = t.land
                                 MapTarget.Stop -> pressedStop = true
+                                MapTarget.Cave -> pressedCave = true
                                 MapTarget.Sea -> {}
                             }
                             tryAwaitRelease()
                             pressedLand = null
                             pressedStop = false
+                            pressedCave = false
                         },
                         onTap = { p ->
                             val t = targetAt(p)
-                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Sea -> "sea" }}")
+                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; MapTarget.Sea -> "sea" }}")
                             if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
                             when (t) {
                                 is MapTarget.Area -> onArea(t.land)
                                 MapTarget.Stop -> onStopTap()
+                                MapTarget.Cave -> onCaveTap()
                                 MapTarget.Sea -> app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
                             }
                         },
@@ -474,6 +495,15 @@ fun IslandMap(
                     ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
                 }
             }
+            // The crystal cave stop (its taps go through the island's one tap handler too).
+            cavePx?.let { cp ->
+                val cd = with(LocalDensity.current) { DpOffset(cp.x.toDp(), cp.y.toDp()) }
+                CaveStop(
+                    Modifier.offset(x = cd.x - caveNode / 2, y = cd.y - caveNode / 2).size(caveNode).zIndex(2f),
+                    pressed = pressedCave,
+                    glow = { pulse },
+                )
+            }
             val heroOnRight = cx < 0.5f
             hero(
                 Modifier
@@ -497,6 +527,54 @@ fun IslandMap(
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * The crystal cave on the map: a purple paper cave with a dark mouth and gold crystals, in a
+ * soft gold glow that pulses ([glow]). It bounces in when it first appears and presses down
+ * while tapped. Not tomato red: the stop button stays the one red-ringed thing.
+ */
+@Composable
+private fun CaveStop(modifier: Modifier, pressed: Boolean, glow: () -> Float) {
+    val still = LocalReduceMotion.current
+    val bounce = remember { Animatable(if (still) 1f else 0.3f) }
+    LaunchedEffect(Unit) {
+        if (!still) bounce.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 500f))
+    }
+    Box(
+        modifier.graphicsLayer {
+            val s = bounce.value * if (pressed) 0.92f else 1f
+            scaleX = s
+            scaleY = s
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            // The glow.
+            drawCircle(Color(0xFFFFE082).copy(alpha = 0.55f), w * 0.5f * glow(), center)
+            // The cave: a rounded purple hill with a dark arched mouth.
+            paperOval(Color(0xFF7E57C2), Offset(w * 0.1f, h * 0.2f), Size(w * 0.8f, h * 0.75f))
+            paperRect(Color(0xFF7E57C2), Offset(w * 0.1f, h * 0.58f), Size(w * 0.8f, h * 0.24f))
+            paperOval(Color(0xFF311B92), Offset(w * 0.32f, h * 0.45f), Size(w * 0.36f, h * 0.5f))
+            paperRect(Color(0xFF311B92), Offset(w * 0.32f, h * 0.68f), Size(w * 0.36f, h * 0.14f))
+            // Gold crystals round the mouth.
+            fun crystal(x: Float, y: Float, s: Float) {
+                val path = Path().apply {
+                    moveTo(x, y - s)
+                    lineTo(x + s * 0.5f, y)
+                    lineTo(x, y + s * 0.6f)
+                    lineTo(x - s * 0.5f, y)
+                    close()
+                }
+                paperPath(path, Color(0xFFFFD54F))
+            }
+            crystal(w * 0.25f, h * 0.42f, w * 0.13f)
+            crystal(w * 0.5f, h * 0.3f, w * 0.15f)
+            crystal(w * 0.75f, h * 0.42f, w * 0.13f)
+        }
+    }
+}
 
 /** Places this thing with its top centred on ([x], [y]), kept inside [maxX] (the map's width). */
 private fun Modifier.centeredAt(x: Dp, y: Dp, maxX: Dp) = layout { m, c ->

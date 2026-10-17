@@ -7,6 +7,8 @@ import kotlin.math.sqrt
 sealed interface MapTarget {
     data class Area(val land: Land) : MapTarget
     data object Stop : MapTarget
+    /** The crystal cave stop beside the Forest (only there once Pip is found). */
+    data object Cave : MapTarget
     data object Sea : MapTarget
 }
 
@@ -67,10 +69,13 @@ object MapAreas {
     fun target(
         x: Float, y: Float, w: Float, h: Float, labelHalfW: Float, labelH: Float,
         stopX: Float, stopY: Float, stopR: Float,
+        /** The crystal cave stop, when there is one ([caveR] 0 when not). */
+        caveX: Float = 0f, caveY: Float = 0f, caveR: Float = 0f,
     ): MapTarget {
         val area = all.firstOrNull { it.land == hit(x, y, w, h, labelHalfW, labelH) }
         if (area != null && area.core(w, h, labelHalfW, labelH).any { it.contains(x, y) }) return MapTarget.Area(area.land)
         if (sq(x - stopX) + sq(y - stopY) <= sq(stopR)) return MapTarget.Stop
+        if (caveR > 0f && sq(x - caveX) + sq(y - caveY) <= sq(caveR)) return MapTarget.Cave
         if (area != null) return MapTarget.Area(area.land)
         return MapTarget.Sea
     }
@@ -82,7 +87,26 @@ object MapAreas {
      * other land's (by a clear margin), so a fresh start's button sits at the Forest, never by
      * the misty Meadow.
      */
-    fun stopSpot(land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
+    fun stopSpot(land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> =
+        place(land, fx, fy, w, h, stopR, labelHalfW, labelH) { _, _ -> true }
+
+    /**
+     * Where the crystal cave stop goes: just past the Forest (where Pip lives), by the same rules
+     * as the next-stop button (clear of every area's zone, clearly nearest the Forest), and never
+     * touching the next-stop button at ([stopX], [stopY], radius [stopR]).
+     */
+    fun caveSpot(w: Float, h: Float, caveR: Float, stopX: Float, stopY: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
+        val forest = of(Land.FOREST)
+        val gap = caveR * 0.4f
+        return place(Land.FOREST, forest.markX + 0.02f, forest.markY + 0.21f, w, h, caveR, labelHalfW, labelH) { x, y ->
+            sqrt(sq(x - stopX) + sq(y - stopY)) >= stopR + caveR + gap
+        }
+    }
+
+    private fun place(
+        land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float,
+        alsoOk: (Float, Float) -> Boolean,
+    ): Pair<Float, Float> {
         val zones = all.map { Shape.Box(it.hitBox(w, h, labelHalfW, labelH)) }
         val cores = all.flatMap { it.core(w, h, labelHalfW, labelH) }
         val sx = (fx * w).coerceIn(stopR, w - stopR)
@@ -96,7 +120,7 @@ object MapAreas {
             Triple(cores, stopR * 0.5f, 1.4f), Triple(cores, 1f, 1.4f), Triple(cores, 1f, 0f),
         )
         for ((avoid, r, margin) in tiers) {
-            fun ok(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, r) } && (margin == 0f || belongsTo(land, cx, cy, w, h, margin))
+            fun ok(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, r) } && (margin == 0f || belongsTo(land, cx, cy, w, h, margin)) && alsoOk(cx, cy)
             if (ok(sx, sy)) return sx to sy
             nearest(sx, sy, w, h, stopR) { x, y -> ok(x, y) }?.let { return it }
         }

@@ -135,6 +135,8 @@ class ContinueSlot {
     /** The child has tapped something since this step started: the hand hides. */
     internal var touched by mutableStateOf(false)
     internal var owner: Any? = null
+    /** When the current step's button took over: taps in the first moment after are ignored. */
+    internal var since = kotlin.time.TimeSource.Monotonic.markNow()
 }
 
 val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
@@ -144,10 +146,15 @@ val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
  * the same size, pinned to the same bottom-right spot inside the screen edges. Steps say what it
  * does with [ContinueAction].
  */
+/** How long a new step's continue button ignores taps (a double tap mustn't skip two steps). */
+private const val SettleMs = 700L
+
 @Composable
 fun ContinueHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val slot = remember { ContinueSlot() }
-    val action = slot.onClick
+    // A quick second tap (or a tap still landing from the last step) on the same spot must not
+    // skip the step that just opened: the button only listens once it has been there a moment.
+    val action = slot.onClick?.let { a -> { if (slot.since.elapsedNow().inWholeMilliseconds >= SettleMs) a() } }
     Box(
         modifier
             .fillMaxSize()
@@ -227,7 +234,10 @@ fun ContinueAction(
     val visible = shown && enabled
     SideEffect {
         if (visible) {
-            if (slot.owner !== token) slot.touched = false
+            if (slot.owner !== token) {
+                slot.touched = false
+                slot.since = kotlin.time.TimeSource.Monotonic.markNow()
+            }
             slot.owner = token
             slot.onClick = stable
             slot.label = label

@@ -202,6 +202,11 @@ class Progress(private val prefs: Prefs) {
     /** Counts app starts, so "across two sessions" can be checked. */
     val sessionNo: Int = prefs.getInt("sessionNo", 0) + 1
 
+    /** The current sitting of play (see [com.zeronolidge.speechapp.logic.PlaySession]), kept so a reload carries on. */
+    var playSession: com.zeronolidge.speechapp.logic.PlaySession?
+        get() = com.zeronolidge.speechapp.logic.PlaySession.decode(prefs.getString("playSession", ""))
+        set(v) { prefs.edit().putString("playSession", v?.encode() ?: "").apply() }
+
     init {
         prefs.edit().putInt("sessionNo", sessionNo).apply()
     }

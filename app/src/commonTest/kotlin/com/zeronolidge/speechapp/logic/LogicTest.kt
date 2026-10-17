@@ -794,6 +794,29 @@ class MapTargetTest {
     }
 
     @Test
+    fun theCrystalCaveStopSitsByTheForestClearOfTheNextStopAndOpensTheCave() {
+        for (c in cases) {
+            val (w, h, half, lh, r) = c.toList()
+            for (stop in 0 until Trail.size) {
+                val (fx, fy) = Trail.position(stop)
+                val (sx, sy) = MapAreas.stopSpot(Trail.landAt(stop), fx, fy, w, h, r, half, lh)
+                val cr = r * 0.8f
+                val (cx, cy) = MapAreas.caveSpot(w, h, cr, sx, sy, r, half, lh)
+                assertTrue(cx in 0f..w && cy in 0f..h, "cave off the map at ${w}x$h")
+                // Never touching the next-stop button, so the two never share a tap.
+                val d = kotlin.math.sqrt((cx - sx) * (cx - sx) + (cy - sy) * (cy - sy))
+                assertTrue(d >= r + cr, "cave on the stop button (stop $stop) at ${w}x$h")
+                assertEquals(MapTarget.Cave, MapAreas.target(cx, cy, w, h, half, lh, sx, sy, r, cx, cy, cr), "cave centre, stop $stop at ${w}x$h")
+                if (w / r >= 15f) assertTrue(MapAreas.belongsTo(Land.FOREST, cx, cy, w, h), "cave not by the Forest at ${w}x$h")
+                // Every area's picture and label still open their area.
+                MapAreas.all.forEach { a ->
+                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr), "picture of ${a.land} with the cave at ${w}x$h")
+                }
+            }
+        }
+    }
+
+    @Test
     fun theSunflowerOpensTheMeadowEvenWhenTheNextStopIsThere() {
         val (w, h, half, lh, r) = listOf(1000f, 570f, 64f, 40f, 48f)
         val m = MapAreas.of(Land.MEADOW)
@@ -855,5 +878,29 @@ class ClipTextTest {
         // Long story sentences (up to 22 words) still match their own clip.
         val long = "we can see the kite string past a wobbly bridge but some boards are missing and the river is very wide today"
         assertEquals(listOf(ClipText.Part.Clips(listOf(long))), ClipText.plan(long.replaceFirstChar { it.uppercase() } + "!") { it == long })
+    }
+}
+
+/** A sitting of play survives a reload; a long break starts a new one; Rory wraps up once. */
+class PlaySessionTest {
+    private val min = 60_000L
+
+    @Test
+    fun aReloadCarriesOnAndALongBreakStartsAgain() {
+        val start = 1_000_000L
+        val s = PlaySession.resume(null, start)
+        assertEquals(start, s.start)
+        // Reloaded 5 minutes in: the same sitting.
+        val reloaded = PlaySession.resume(PlaySession.decode(s.seen(start + 5 * min).encode()), start + 6 * min)
+        assertEquals(start, reloaded.start)
+        assertTrue(!reloaded.long(start + 11 * min))
+        assertTrue(reloaded.long(start + 12 * min))
+        // Back after an hour: a new sitting.
+        assertEquals(start + 70 * min, PlaySession.resume(reloaded, start + 70 * min).start)
+        // Once Rory has wrapped up, not again in the same sitting, even after a reload.
+        val rested = reloaded.copy(rested = true)
+        assertTrue(!PlaySession.resume(PlaySession.decode(rested.encode()), start + 13 * min).long(start + 20 * min))
+        assertEquals(null, PlaySession.decode(""))
+        assertEquals(null, PlaySession.decode("junk"))
     }
 }

@@ -229,7 +229,8 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
                 else -> {}
             }
             last = (challenge as? Challenge.SoundOut)?.round?.word?.text ?: (challenge as? Challenge.WhichWord)?.round?.word?.text
-            roundNo++
+            // After about 12 minutes of play, Rory wraps up here, between rounds.
+            if (app.sessionLong()) nav.go(Screen.Rest) else roundNo++
         } }
     }
 }

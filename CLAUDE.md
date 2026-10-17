@@ -42,6 +42,14 @@ These are the owner's rules for all work:
   (`VoiceDetector` + `logic/VoiceMeter.kt`), NOT speech recognition (unreliable on iPhone/iPad and
   with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
   carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.
+- **Listening look, one everywhere** (`ListeningStage` in Talk.kt): on every talk turn (story word
+  cards, Talk, Pip, the crystal cave; also while waiting for "I said it!" with no mic) the scene
+  dims and Rory with his cupped ear grows to ~25% of the scene's height and slides from the
+  bottom-left toward the middle (Pip: the left, clear of Pip's path), ear pulsing, ring growing with
+  `app.listenLevel`. In a story the story scene is the stage (`LocalHasStage`); in Talk the card is.
+- **No double skips:** a step's continue button ignores taps for its first 0.7 s (`SettleMs`), a
+  word card's ▶ skip appears after 3 s, and the chapter moves on only from the step that asked
+  (`next(from)`). Before this, tapping ▶ repeatedly skipped every word of Penny's all-words chapter.
 - **Say-a-word card after the try:** it stays fully visible while Rory praises (taps do nothing);
   a faded, disabled card looked broken.
 - **Wrong answers, one pattern everywhere** (`Misses`, `AnswerRow`, `TryAgainSlot` in
@@ -74,7 +82,12 @@ These are the owner's rules for all work:
   same rules.** No manifest = browser voice as before. The offline cache includes the clips
   automatically; sw.js keeps clips (like the .wasm) in the long-lived cache, cache-first, so they
   download once. A remade clip gets a new name (`-` + sound fingerprint); manifest.json is the only
-  key-to-file record. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
+  key-to-file record. `make_voice.py` checks every clip has sound (`sound_seconds`, read from the
+  MP3 frames' global gain, no extra software; under 0.2 s = silent) and remakes silent ones (last
+  try with tts-1); `--check` lists them. The player loads and checks a whole line first: a missing,
+  failed or silent clip makes that part fall back to the browser voice (`ClipVoiceEngine`), and is
+  remembered as missing. Both players trim each clip to its sound (slow mode cuts the audio
+  element at the trimmed end), so his turn starts right after Rory. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
   (tools/voice_overrides.json). Android still uses its own TTS.
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
   limit on each). If speech doesn't finish in time the flow carries on and the top-right 🔊 pulses
@@ -148,7 +161,9 @@ These are the owner's rules for all work:
   hop one step closer (`hops`, 9 in all, `PipStory.HOPS`): from behind the bush, past the rock (Pip
   is drawn behind the spot it sits at, so it peeks over), to the log, then out in front; spots
   rustle and fold open as extras. One goodnight turn ends with Pip asleep: 10 turns. Finishing
-  opens the Echo Cave reward stop (`Progress.echoReady`, the 💎 button on the map). His own words, then target-sound
+  opens the Echo Cave reward stop (`Progress.echoReady`): a glowing paper-cave stop just past the
+  Forest on the island (`MapAreas.caveSpot`/`MapTarget.Cave`, through the one tap handler, clear of
+  the next stop; bounces in) plus the 💎 button. It stays until he finishes all the tries. His own words, then target-sound
   words, are the "ears" call at each spot ("Pip loves Grandma! Say: Grandma!"). Every try works
   (heard: Rory's `Echo`; quiet: "Pip heard you!"). The big "I called!" button is always shown in
   the same spot (ContinueAction label). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
@@ -157,14 +172,17 @@ These are the owner's rules for all work:
   paper cave, the echo bounces back ("pig... pig... pig...") and a crystal lights up. Loudness only;
   "I said it!" always shown; no score/timer/fail. Ends back in the story (next chapter), or, at the
   end of a long play, at `RestScreen`.
-- **Session length:** after `SESSION_MINUTES` (12) of play (`AppServices.sessionLong`), the
-  chapter's goodbye goes to the Echo Cave and then `RestScreen` ("Pip's sleepy, let's rest!",
-  today's sticker). The grown-ups page lists 2-3 "Words to say today" (`TodayWords.pick`).
+- **Session length:** a sitting of play (`logic/PlaySession.kt`, saved in `Progress.playSession`,
+  wall clock `nowMillis()`) survives reloads; over 30 min away starts a new one. After 12 minutes
+  (`AppServices.sessionLong`, checked at natural pauses) Rory wraps up: a story jumps to its happy
+  ending after the current step, then `RestScreen`; Pip jumps to the goodnight turn; the cave, Talk
+  and practice games go to `RestScreen` after the current try/round. Once per sitting
+  (`sessionClosed`). `RestScreen`: "Pip's sleepy, let's rest!", today's sticker. The grown-ups page lists 2-3 "Words to say today" (`TodayWords.pick`).
 - **Quiet difficulty** (`logic/Ladder.kt`, `Progress.ladder*`): speech (word, two words "big
   pig", short sentence: `SpeechSteps`), numbers (count to 5, to 10, add one: `Numbers.forStep`)
   and patterns (AB, ABB, ABC: `Patterns.makeStep`) step up after 4 of the last 5 right across at
   least two sessions (`Progress.sessionNo`), and back after 2 misses in a row. Never shown.
-- **Back after days away:** the map says "I missed you!" (`Progress.daysAway` >= 2). No streaks.
+- **Back on a new day:** the map says "I missed you!" (`Progress.daysAway` >= 1). No streaks.
 - **"Tap the B!"**: after saying a word with a speech sound (`SpeakMoment`, sound != null), he
   finds its letter among 2 (speech step 0) or 3 (`AnswerKey.tapLetter`, `LetterTap` via
   `AnswerRow`, so the same try-again pattern). Skipping the word with ▶ skips the letter too.

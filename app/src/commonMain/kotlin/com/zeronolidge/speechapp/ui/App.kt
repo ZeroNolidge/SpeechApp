@@ -114,6 +114,13 @@ fun TalkAndLearnApp(
                         }
                     },
             ) {
+                // Keeps this sitting of play going while he plays (saved, so a reload carries on).
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        kotlinx.coroutines.delay(60_000)
+                        services.touchSession()
+                    }
+                }
                 CompositionLocalProvider(LocalScreenWidth provides screenW) { Screens(start) }
                 CelebrationOverlay()
                 GiftOverlay()
