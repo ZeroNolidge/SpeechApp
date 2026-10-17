@@ -207,7 +207,14 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
 
     ScreenFrame(onHome = nav.home, background = {}, top = { PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1) }) {
         ContinueHost {
-            ListeningStage(Modifier.fillMaxSize(), endX = 0.5f, endY = 0.55f) {
+            // Rory slides in where he covers nothing important: low in the river for the boat,
+            // left of Owl's branch, right of the balloon's path.
+            val (endX, endY) = when (story.id) {
+                "boat" -> 0.5f to 0.8f
+                "owl" -> 0.2f to 0.6f
+                else -> 0.8f to 0.58f
+            }
+            ListeningStage(Modifier.fillMaxSize(), endX = endX, endY = endY) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight

@@ -311,9 +311,11 @@ private fun BalloonScene(story: VoiceStory, p: BeatProgress, modifier: Modifier)
             // Bear in the basket (holding the cupcake after "more").
             Item(unit * 0.2f, { 0.42f }, { basketY() }) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                    Critter(Species.BEAR, Modifier.fillMaxWidth(0.75f).fillMaxHeight(0.8f), mood = if (p.beat == 6 && p.triggered(6)) Mood.SLEEP else Mood.HAPPY)
-                    Canvas(Modifier.fillMaxWidth().fillMaxHeight(0.42f)) {
-                        paperRect(Color(0xFFA1887F), Offset(size.width * 0.15f, 0f), Size(size.width * 0.7f, size.height))
+                    Critter(Species.BEAR, Modifier.fillMaxWidth(0.85f).fillMaxHeight(0.95f), mood = if (p.beat == 6 && p.triggered(6)) Mood.SLEEP else Mood.HAPPY)
+                    // The basket: low, so Bear's face and paws show over the top.
+                    Canvas(Modifier.fillMaxWidth().fillMaxHeight(0.28f)) {
+                        paperRect(Color(0xFF8D6E63), Offset(size.width * 0.12f, 0f), Size(size.width * 0.76f, size.height))
+                        drawLine(Color(0xFF5D4037), Offset(size.width * 0.12f, size.height * 0.35f), Offset(size.width * 0.88f, size.height * 0.35f), 3.dp.toPx())
                     }
                 }
             }
