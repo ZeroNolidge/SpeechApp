@@ -344,13 +344,14 @@ object StoryGen {
     /** Ties a challenge into the story, after the scene has set things up. */
     private fun hook(c: Challenge, land: Land, rnd: Random): String = when (c) {
         is Challenge.Say -> when (c.kind) {
-            SayKind.STORY -> "We can ${c.doing} with a magic word!"
-            SayKind.REVIEW -> "Remember this word? Saying it will help us!"
-            SayKind.OWN -> "Here's a special word, just for {hero}!"
+            // His word makes it happen (no "magic word" password): Rory names what it will do.
+            SayKind.STORY -> "Your word can ${c.doing}!"
+            SayKind.REVIEW -> "Remember this word? Say it, and watch what happens!"
+            SayKind.OWN -> "Here's a special word, just for {hero}! Say it, and watch!"
             SayKind.PRACTICE -> listOf(
-                "A magic word will help us. Say it loud and clear!",
-                "{f} says: let's use the magic word!",
-                "Say the magic word, and it will work!",
+                "Your voice can help! Say it, and watch what happens!",
+                "{f} says: you say it, and it will happen!",
+                "Say it out loud, and watch!",
             ).random(rnd)
         }
         is Challenge.Count -> "We found some ${Things.nameOf(c.round.emoji)} that can help. Let's count them!"

@@ -1,3 +1,4 @@
+A big bubble is blocking the river
 A big gust of wind grabbed Benny Bunny's kite and carried it far, far away
 A big gust of wind grabbed Bruno Bear's kite and carried it far, far away
 A big gust of wind grabbed Daisy Dino's kite and carried it far, far away
@@ -8,6 +9,7 @@ A big gust of wind grabbed Pepper Puppy's kite and carried it far, far away
 A big tree reaches up to the clouds
 A bridge leads to the tallest mountain, but it needs fixing
 A bunny pops out from behind a rock
+A cupcake drops right into Bear's paw
 A dino pops out from behind a rock
 A fish splashes
 A friendly chick peeks in
@@ -37,7 +39,6 @@ A little star fell out of the sky and landed near Millie Mouse's house
 A little star fell out of the sky and landed near Olive Owl's house
 A little star fell out of the sky and landed near Penny Penguin's house
 A little star fell out of the sky and landed near Pepper Puppy's house
-A magic word will help us
 A mouse pops out from behind a rock
 A owl pops out from behind a rock
 A penguin pops out from behind a rock
@@ -56,6 +57,9 @@ A sparkly river is in the way
 A tiny mouse hurries over
 A unicorn pops out from behind a rock
 Balloons, presents and a yummy cake
+Bear wants a ride
+Bear wants a treat
+Bear wants to have a picnic, up in the sky
 Benny Bunny found an old treasure map
 Benny Bunny holds the balloon tight and does a happy dance
 Benny Bunny is sad
@@ -66,7 +70,13 @@ Benny Bunny wants to have a picnic, but the basket is empty
 Benny Bunny's clubhouse door is locked, and the golden key is lost
 Benny Bunny's red balloon slipped away
 Benny is awake
+Big balloon
 Big hugs for Teddy
+Blow
+Blow it big
+Blow, wind
+Blow, wind, blow
+Brr
 Bruno Bear can't find Teddy anywhere
 Bruno Bear found an old treasure map
 Bruno Bear is sad
@@ -75,6 +85,8 @@ Bruno Bear says
 Bruno Bear shares the treasure with everyone
 Bruno Bear's clubhouse door is locked, and the golden key is lost
 Bruno is awake
+Bubbles are floating past
+Bump
 But Benny Bunny can't
 But Bruno Bear can't
 But Coco Chick can't
@@ -93,13 +105,22 @@ But it has a puzzle lock
 But look, the path splits three ways
 But oh no, the party things are missing
 But which path
+Bye
+Bye, see you, owl
+Bye-bye, duck
+Bye-bye, owl
 Can I come to the party too
 Click
 Coco Chick can't find Teddy anywhere
 Coco Chick says
 Coco Chick wants to have a picnic, but the basket is empty
 Coco is awake
+Come
+Come here, duck
+Come, duck
+Confetti everywhere
 Creak
+Cupcakes, far down below
 Daisy Dino found an old treasure map
 Daisy Dino is sad
 Daisy Dino runs and runs, and the kite flies high in the sky again
@@ -109,6 +130,10 @@ Daisy Dino wants to have a picnic, but the basket is empty
 Daisy Dino's clubhouse door is locked, and the golden key is lost
 Daisy is awake
 Did you take Teddy
+Down
+Down to the picnic
+Down we go
+Everyone is sleepy after the trip
 Everyone shares the yummy food
 Everyone sings and dances
 Felix Fox can't find Teddy anywhere
@@ -123,12 +148,20 @@ Felix Fox's red balloon slipped away
 Felix is awake
 Find it
 First, balloons
+Fly
+Fly up high, owl
+Fly, owl
 Freddie Frog can't find Teddy anywhere
 Freddie Frog holds the balloon tight and does a happy dance
 Freddie Frog says
 Freddie Frog wants to have a picnic, but the basket is empty
 Freddie Frog's red balloon slipped away
 Freddie is awake
+Get warm, owl
+Go
+Go, boat
+Go, boat, go
+Good night, Bear
 Got it
 Happy birthday, Benny Bunny
 Happy birthday, Coco Chick
@@ -137,6 +170,8 @@ Happy birthday, Felix Fox
 Happy birthday, Freddie Frog
 Happy birthday, Luna Unicorn
 Happy birthday, Penny Penguin
+Hello, sun
+Here come the berries
 Here is the treasure chest
 Hoo hoo
 Hurry
@@ -163,6 +198,7 @@ It's Penny Penguin's birthday
 It's Pepper
 It's Rory
 It's full of shiny gems
+It's morning in the forest, but it's still dark, and Owl is fast asleep
 Its planks go in a pattern, but one is missing
 Keep going
 Kiki Kitty found an old treasure map
@@ -172,6 +208,7 @@ Kiki Kitty wants to have a picnic, but the basket is empty
 Kiki Kitty's clubhouse door is locked, and the golden key is lost
 Kiki is awake
 Knock knock
+Leaves are blocking the path
 Let's be quiet
 Let's climb the big hill
 Let's count them
@@ -193,6 +230,7 @@ Let's sound it out
 Look
 Look for the chest
 Look up
+Look, a little island
 Look, a market stall
 Look, tiny footprints
 Luna Unicorn found an old treasure map
@@ -211,6 +249,15 @@ Millie Mouse wants to have a picnic, but the basket is empty
 Millie Mouse's clubhouse door is locked, and the golden key is lost
 Millie is awake
 Mmm, is that a picnic
+More
+More berries
+More berries, please
+More cake
+More cake, please
+Move
+Move, bird
+Move, please, bird
+Night
 No balloons, no presents, and no cake
 Not me
 Now Teddy is home
@@ -219,6 +266,8 @@ Now let's make the birthday cake, just right
 Now let's open the tricky lock
 Now we have to cross the water
 Of course you can
+Oh
+Oh no
 Olive Owl can't find Teddy anywhere
 Olive Owl holds the balloon tight and does a happy dance
 Olive Owl is sad
@@ -229,6 +278,15 @@ Olive Owl's red balloon slipped away
 Olive is awake
 Only one has the right word
 Ooh, sparkly
+Owl drops a feather for you, and flies home
+Owl is hungry
+Owl is ready to fly
+Owl is snoring
+Owl is too cold to fly
+Owl says thank you
+Owl swoops around in a big loop
+Owl's eyes pop open
+Owl's tummy rumbles
 Penny Penguin can't find Teddy anywhere
 Penny Penguin holds the balloon tight and does a happy dance
 Penny Penguin is sad
@@ -247,6 +305,13 @@ Pepper Puppy's clubhouse door is locked, and the golden key is lost
 Pepper Puppy's red balloon slipped away
 Pepper is awake
 Picnic time
+Pip has a little paper boat, and Pip wants to go on a trip down the river
+Pop
+Pop the bubble
+Pop the bubbles
+Pop, bubble
+Pop, pop
+Pop, pop, pop
 Red apples grow on this big tree
 Rory Robot can't find Teddy anywhere
 Rory Robot found an old treasure map
@@ -255,33 +320,62 @@ Rory Robot says
 Rory Robot shares the treasure with everyone
 Rory Robot's red balloon slipped away
 Rory is awake
-Say it loud and clear
-Say the magic word, and it will work
+Say it out loud, and watch
+Say it, and watch what happens
+See you next time
 Shh, the moon is sleeping,' it whispers
 Sniff sniff
 Something here doesn't belong
 Something shiny is glowing inside a cave
 Spooky
+Sss
+Sss, leaves
+Sss, move, leaves
+Stop
+Stop the boat
+Stop, boat
+Sun
+Sunbeams wrap Owl up, all cozy and warm
 Surprise
 Teddy is sitting in a tree, next to a baby bird
 Teddy was keeping the baby bird company
 Teddy was there at bedtime, and now Teddy is gone
 The balloon floated over the river
+The balloon floats gently down to the picnic
+The balloon is all flat
+The balloon lifts Bear up into the sky
+The balloon puffs up, bigger and bigger
 The balloon string is caught on a branch
+The bird is in the way
+The bird moves out of the way
+The boat glides out onto the river
+The boat is stuck at the dock
+The boat rides right over the wave
+The boat stops on the soft sand
 The chest opens
 The door swings open
+The duck is stuck on a rock
+The duck paddles over to the boat
+The duck waves goodbye, and Pip falls fast asleep
 The footprints go all the way up a big hill
 The footprints go into a cozy cave
 The kite flew over the hill
 The kite is close
 The kite is stuck at the very top of a tall tree
+The leaves blow aside
 The map leads into a dark cave
 The map says
+The moon rises, and Bear gives a big yawn
 The path splits
 The presents are in the cupboard, but the door is locked
+The sail is all droopy
+The sail puffs up, and the boat speeds along
+The sky is still dark
 The stall keeper needs the right coins
 The star wants to go home
 The star zooms back up and twinkles
+The sun is going down
+The sun peeks over the hill
 The treasure is very close,' it whispers
 There are games and snacks inside
 There are two piles of apples
@@ -298,16 +392,22 @@ There are two piles of stars
 There it is
 There it is, bobbing above a big hill
 There's a word written here
+They burst one by one
 They got tangled up in the flower garden
 They grow on the other side of the stream
 Three signs point the way
+Time to rest
 To get close to the sky, we need to go up high
+Uh oh, a big wave is coming
+Up
 Up we go
+Up, up, boat
 Up, up, up it goes
-We can climb up the tree with a magic word
-We can find the way with a magic word
-We can fix the bridge with a magic word
-We can fly up high with a magic word
+Wake
+Wake up, owl
+Wake up, sun
+Warm
+Warm owl
 We can get apples to help
 We can get bananas to help
 We can get bread rolls to help
@@ -316,15 +416,7 @@ We can get cheeses to help
 We can get cookies to help
 We can get eggs to help
 We can get strawberries to help
-We can get up the hill with a magic word
-We can jump across the water with a magic word
-We can light up the cave with a magic word
-We can make the flowers grow with a magic word
-We can open the door with a magic word
-We can open the treasure with a magic word
 We can see the kite string past a wobbly bridge, but some boards are missing
-We can start the party with a magic word
-We can start the picnic with a magic word
 We found some apples that can help
 We found some balloons that can help
 We found some bees that can help
@@ -357,15 +449,75 @@ We'll take the bigger pile
 We're so high
 Welcome to the clubhouse
 What a happy day
+What a morning
+What a picnic
 What a sunny day
+What a trip
 Which purse has just enough
 Which way did it go
 Which way did the balloon float
 Whoosh
 X marks the spot
+You got a balloon sticker
+You got a boat sticker
+You got an owl sticker
 Your balloon went that way
+Your voice can help
+Your word can climb up the tree
+Your word can find the way
+Your word can fix the bridge
+Your word can fly up high
+Your word can get up the hill
+Your word can jump across the water
+Your word can light up the cave
+Your word can make the flowers grow
+Your word can open the door
+Your word can open the treasure
+Your word can start the party
+Your word can start the picnic
+Your words make the balloon fly
+Your words make the boat go
+Your words wake up the morning
+Yum
+Zzz
 and quick
+big balloon
+blow
+blow wind
 but fun
+bye
+bye duck
+bye owl
+come
+come duck
+down
+fly
+fly owl
 follow the path to the big rock
+go
+go boat
+go down
+go up
 it giggles
-let's use the magic word
+more
+more berries
+more cake
+move
+move bird
+night
+night Bear
+pop
+pop bubble
+pop pop
+sss
+sss leaves
+stop
+stop boat
+sun
+sun up
+up
+wake
+wake owl
+warm
+warm owl
+you say it, and it will happen

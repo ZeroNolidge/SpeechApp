@@ -9,8 +9,13 @@ sealed interface MapTarget {
     data object Stop : MapTarget
     /** The crystal cave stop beside the Forest (only there once Pip is found). */
     data object Cave : MapTarget
+    /** A voice story's stop (logic/VoiceStories.kt). */
+    data class Story(val id: String) : MapTarget
     data object Sea : MapTarget
 }
+
+/** An extra round stop on the map (a voice story, the cave): [target] at ([x], [y]), radius [r], in pixels. */
+data class MapSpot(val target: MapTarget, val x: Float, val y: Float, val r: Float)
 
 /**
  * One area of the world map: where its picture label sits and where its landmark is drawn, as
@@ -71,11 +76,14 @@ object MapAreas {
         stopX: Float, stopY: Float, stopR: Float,
         /** The crystal cave stop, when there is one ([caveR] 0 when not). */
         caveX: Float = 0f, caveY: Float = 0f, caveR: Float = 0f,
+        /** Other round stops (the voice stories), after the cave. */
+        spots: List<MapSpot> = emptyList(),
     ): MapTarget {
         val area = all.firstOrNull { it.land == hit(x, y, w, h, labelHalfW, labelH) }
         if (area != null && area.core(w, h, labelHalfW, labelH).any { it.contains(x, y) }) return MapTarget.Area(area.land)
         if (sq(x - stopX) + sq(y - stopY) <= sq(stopR)) return MapTarget.Stop
         if (caveR > 0f && sq(x - caveX) + sq(y - caveY) <= sq(caveR)) return MapTarget.Cave
+        spots.firstOrNull { sq(x - it.x) + sq(y - it.y) <= sq(it.r) }?.let { return it.target }
         if (area != null) return MapTarget.Area(area.land)
         return MapTarget.Sea
     }
@@ -95,11 +103,21 @@ object MapAreas {
      * as the next-stop button (clear of every area's zone, clearly nearest the Forest), and never
      * touching the next-stop button at ([stopX], [stopY], radius [stopR]).
      */
-    fun caveSpot(w: Float, h: Float, caveR: Float, stopX: Float, stopY: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
-        val forest = of(Land.FOREST)
-        val gap = caveR * 0.4f
-        return place(Land.FOREST, forest.markX + 0.02f, forest.markY + 0.21f, w, h, caveR, labelHalfW, labelH) { x, y ->
-            sqrt(sq(x - stopX) + sq(y - stopY)) >= stopR + caveR + gap
+    fun caveSpot(
+        w: Float, h: Float, caveR: Float, stopX: Float, stopY: Float, stopR: Float, labelHalfW: Float, labelH: Float,
+        others: List<MapSpot> = emptyList(),
+    ): Pair<Float, Float> = spotBy(Land.FOREST, w, h, caveR, others + MapSpot(MapTarget.Stop, stopX, stopY, stopR), labelHalfW, labelH)
+
+    /**
+     * Where an extra round stop of radius [r] for [land] goes (a voice story by its land): just in
+     * front of the land's picture, by the next-stop button's rules (clear of every area's zone,
+     * clearly nearest [land]), and never touching any of [avoid] (the next stop, other stops).
+     */
+    fun spotBy(land: Land, w: Float, h: Float, r: Float, avoid: List<MapSpot>, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
+        val a = of(land)
+        val gap = r * 0.4f
+        return place(land, a.markX + 0.02f, a.markY + 0.21f, w, h, r, labelHalfW, labelH) { x, y ->
+            avoid.all { sqrt(sq(x - it.x) + sq(y - it.y)) >= it.r + r + gap }
         }
     }
 

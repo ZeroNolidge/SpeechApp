@@ -167,6 +167,19 @@ These are the owner's rules for all work:
   words, are the "ears" call at each spot ("Pip loves Grandma! Say: Grandma!"). Every try works
   (heard: Rory's `Echo`; quiet: "Pip heard you!"). The big "I called!" button is always shown in
   the same spot (ContinueAction label). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
+- **Voice stories** (`logic/VoiceStories.kt`, `ui/screens/VoiceStory.kt`, art in
+  `ui/art/VoiceScenes.kt`): his word makes the plot happen, never a "magic word" password. Pattern
+  for every new story: setup with one want; 6-7 beats (max 8), each: Rory names the problem, says
+  the line 3 times (3rd slower), listening look, any voice triggers the action at once
+  (`VoiceDetector.listenTry` `onVoice`, ~0.15 s; a soft try `VoiceTry.SOFT` = same end state, smaller
+  flourish), Rory echoes + adds one ("Go! Go, boat!"); "I said it!" does the same action. His
+  target sounds start >= 4 beats' words (later stories: word ends too); one prop can be his own word
+  (`VoiceStories.ready`: a capitalised name for a character, else a thing); 3 line versions per
+  beat picked by `speechStep`; calm goodbye beat, then a sticker (`Progress.finishVoiceStory`).
+  Stories: Pip's Boat Trip (Lagoon), Sleepy Owl's Morning (Forest), The Balloon Picnic (Meadow),
+  each a round stop by its land on the map (`MapAreas.spotBy`, `MapTarget.Story`, unit-tested with
+  the cave and next stop). Existing chapters follow it too: no magic word, 3x model with the 3rd
+  slower, and the set piece changes the moment he speaks (`SpeakMoment(onAction)`).
 - **Echo Cave** (`logic/EchoCave.kt`, `ui/screens/EchoCave.kt`): 8 tries; Rory says a word (own
   words, then target-sound words, then everyday words at his speech step), he says it into the
   paper cave, the echo bounces back ("pig... pig... pig...") and a crystal lights up. Loudness only;

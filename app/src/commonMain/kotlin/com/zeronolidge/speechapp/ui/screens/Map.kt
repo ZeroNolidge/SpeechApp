@@ -199,6 +199,14 @@ fun MapScreen(nav: Nav) {
                 app.speaker.say("The crystal cave!")
                 nav.go(Screen.EchoCave())
             },
+            // The voice stories, each a stop by its land (always in the same order, so they stay put).
+            stories = com.zeronolidge.speechapp.logic.VoiceStories.all.map {
+                com.zeronolidge.speechapp.ui.art.MapStoryStop(it.id, it.emoji, it.land, it.id in p.voiceStoriesDone)
+            },
+            onStory = { id ->
+                com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
+                nav.go(Screen.VoiceStory(id))
+            },
             onElsewhere = { l ->
                 // The next area along the trail is already peeking out of its mist: it opens too.
                 val peek = if (!Trail.opensLand(p.chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(land) + 1) else null

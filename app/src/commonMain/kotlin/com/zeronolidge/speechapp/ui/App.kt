@@ -55,6 +55,7 @@ import com.zeronolidge.speechapp.ui.components.paperEnter
 import com.zeronolidge.speechapp.ui.platform.PlatformBackHandler
 import com.zeronolidge.speechapp.ui.screens.AlphabetScreen
 import com.zeronolidge.speechapp.ui.screens.ChapterScreen
+import com.zeronolidge.speechapp.ui.screens.VoiceStoryScreen
 import com.zeronolidge.speechapp.ui.screens.ClosetScreen
 import com.zeronolidge.speechapp.ui.screens.GrownUpsScreen
 import com.zeronolidge.speechapp.ui.screens.HeroPickScreen
@@ -220,6 +221,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         Screen.Alphabet -> AlphabetScreen(nav)
         Screen.NumberLine -> NumberLineScreen(nav)
         Screen.Pip -> PipStoryScreen(nav)
+        is Screen.VoiceStory -> VoiceStoryScreen(s.id, nav)
         is Screen.EchoCave -> EchoCaveScreen(nav, s.rest)
         Screen.Rest -> RestScreen(nav)
         Screen.SayCheck -> SayStepCheck(nav)

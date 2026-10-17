@@ -157,6 +157,8 @@ fun ChallengeView(
     /** Story narration said just before the challenge's own question. */
     intro: String? = null,
     powers: PowerTicks = remember(challenge) { PowerTicks() },
+    /** A speaking step: his word happened (see [SpeakMoment]'s onAction), so the story can act at once. */
+    onAction: (() -> Unit)? = null,
     onDone: (firstTry: Boolean, revealed: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
@@ -178,6 +180,7 @@ fun ChallengeView(
             is Challenge.Say -> SpeakMoment(
                 challenge.word, challenge.sound, Modifier.fillMaxSize(), intro = intro,
                 afterLine = challenge.doing?.let { "Now we can $it!" },
+                onAction = onAction,
             ) { onDone(true, false) }
             is Challenge.Count -> CountView(challenge, area, powers.wand, miss, done)
             is Challenge.Math -> MathView(challenge, area, powers.wand, miss, done)

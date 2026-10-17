@@ -6,6 +6,7 @@ import com.zeronolidge.speechapp.logic.MapAreas
 import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.logic.MapTarget
+import com.zeronolidge.speechapp.logic.MapSpot
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -112,6 +113,9 @@ fun IslandMap(
     /** The crystal cave is open (Pip was found): a glowing paper cave stop just past the Forest. */
     cave: Boolean = false,
     onCave: () -> Unit = {},
+    /** The voice stories' stops (id, emoji, its land, finished), each a round paper stop by its land. */
+    stories: List<MapStoryStop> = emptyList(),
+    onStory: (String) -> Unit = {},
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -148,6 +152,7 @@ fun IslandMap(
     var pressedLand by remember { mutableStateOf<Land?>(null) }
     var pressedStop by remember { mutableStateOf(false) }
     var pressedCave by remember { mutableStateOf(false) }
+    var pressedStory by remember { mutableStateOf<String?>(null) }
     /** The place to go glows and sparkles until he taps it (or its stop button). */
     var guide by remember(current) { mutableStateOf(true) }
     var lastAreaLog by remember { mutableStateOf("") }
@@ -194,6 +199,7 @@ fun IslandMap(
         val onArea by rememberUpdatedState(onElsewhere)
         val onStopTap by rememberUpdatedState(onStop)
         val onCaveTap by rememberUpdatedState(onCave)
+        val onStoryTap by rememberUpdatedState(onStory)
         val dens = LocalDensity.current.density
         // The next stop: same physical size on every screen, placed clear of every area's tap zone.
         val node = 96.dp
@@ -208,15 +214,31 @@ fun IslandMap(
             }
         }
         val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
-        // The crystal cave stop: just past the Forest, clear of every area and of the next stop.
+        // The voice stories' stops, each by its land, then the crystal cave just past the Forest:
+        // all clear of every area, of the next stop and of each other.
+        val storyNode = node * 0.7f
         val caveNode = node * 0.8f
+        val storySpots = with(LocalDensity.current) {
+            val wPx = w.toPx()
+            val hPx = h.toPx()
+            val labelH = (label * 1.45f + 6f).dp.toPx()
+            remember(stories.map { it.id }, stopPx, wPx, hPx, labelH) {
+                val placed = mutableListOf(MapSpot(MapTarget.Stop, stopPx.x, stopPx.y, (node / 2).toPx()))
+                stories.forEach { st ->
+                    val r = (storyNode / 2).toPx()
+                    val (x, y) = MapAreas.spotBy(st.land, wPx, hPx, r, placed, 64.dp.toPx(), labelH)
+                    placed += MapSpot(MapTarget.Story(st.id), x, y, r)
+                }
+                placed.drop(1)
+            }
+        }
         val cavePx = with(LocalDensity.current) {
             val wPx = w.toPx()
             val hPx = h.toPx()
             val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(cave, stopPx, wPx, hPx, labelH) {
+            remember(cave, stopPx, storySpots, wPx, hPx, labelH) {
                 if (!cave) null
-                else MapAreas.caveSpot(wPx, hPx, (caveNode / 2).toPx(), stopPx.x, stopPx.y, (node / 2).toPx(), 64.dp.toPx(), labelH).let { (x, y) -> Offset(x, y) }
+                else MapAreas.caveSpot(wPx, hPx, (caveNode / 2).toPx(), stopPx.x, stopPx.y, (node / 2).toPx(), 64.dp.toPx(), labelH, storySpots).let { (x, y) -> Offset(x, y) }
             }
         }
         Box(
@@ -233,7 +255,8 @@ fun IslandMap(
                     val marks = MapAreas.all.joinToString(" ") { a ->
                         "${a.land}@${(o.x + a.markX * c.size.width).toInt()},${(o.y + a.markY * c.size.height).toInt()}"
                     } + " STOP@${(o.x + stopPx.x).toInt()},${(o.y + stopPx.y).toInt()}" +
-                        (cavePx?.let { " CAVE@${(o.x + it.x).toInt()},${(o.y + it.y).toInt()}" } ?: "")
+                        (cavePx?.let { " CAVE@${(o.x + it.x).toInt()},${(o.y + it.y).toInt()}" } ?: "") +
+                        storySpots.joinToString("") { sp -> " STORY-${(sp.target as MapTarget.Story).id}@${(o.x + sp.x).toInt()},${(o.y + sp.y).toInt()}" }
                     islandOrigin = o
                     if (line + marks != lastAreaLog) {
                         lastAreaLog = line + marks
@@ -241,7 +264,7 @@ fun IslandMap(
                         println("MAPMARKS $marks")
                     }
                 }
-                .pointerInput(stopPx, cavePx, label) {
+                .pointerInput(stopPx, cavePx, storySpots, label) {
                     // Everything on the island goes through MapAreas.target: each area's one zone
                     // (picture, label and the gap between) and the next-stop button.
                     fun targetAt(p: Offset): MapTarget = MapAreas.target(
@@ -249,6 +272,7 @@ fun IslandMap(
                         labelHalfW = 64.dp.toPx(), labelH = (label * 1.45f + 6f).dp.toPx(),
                         stopX = stopPx.x, stopY = stopPx.y, stopR = (node / 2).toPx(),
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
+                        spots = storySpots,
                     )
                     detectTapGestures(
                         onPress = { p ->
@@ -256,21 +280,24 @@ fun IslandMap(
                                 is MapTarget.Area -> pressedLand = t.land
                                 MapTarget.Stop -> pressedStop = true
                                 MapTarget.Cave -> pressedCave = true
+                                is MapTarget.Story -> pressedStory = t.id
                                 MapTarget.Sea -> {}
                             }
                             tryAwaitRelease()
                             pressedLand = null
                             pressedStop = false
                             pressedCave = false
+                            pressedStory = null
                         },
                         onTap = { p ->
                             val t = targetAt(p)
-                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; MapTarget.Sea -> "sea" }}")
+                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
                             if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
                             when (t) {
                                 is MapTarget.Area -> onArea(t.land)
                                 MapTarget.Stop -> onStopTap()
                                 MapTarget.Cave -> onCaveTap()
+                                is MapTarget.Story -> onStoryTap(t.id)
                                 MapTarget.Sea -> app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
                             }
                         },
@@ -495,6 +522,16 @@ fun IslandMap(
                     ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
                 }
             }
+            // The voice stories' stops (taps through the island's one tap handler).
+            storySpots.forEach { sp ->
+                val id = (sp.target as MapTarget.Story).id
+                val st = stories.first { it.id == id }
+                val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
+                StoryStop(
+                    Modifier.offset(x = sd.x - storyNode / 2, y = sd.y - storyNode / 2).size(storyNode).zIndex(2f),
+                    st.emoji, done = st.done, pressed = pressedStory == id,
+                )
+            }
             // The crystal cave stop (its taps go through the island's one tap handler too).
             cavePx?.let { cp ->
                 val cd = with(LocalDensity.current) { DpOffset(cp.x.toDp(), cp.y.toDp()) }
@@ -527,6 +564,30 @@ fun IslandMap(
 }
 
 // ---------------------------------------------------------------- helpers
+
+/** A voice story's stop on the map. */
+data class MapStoryStop(val id: String, val emoji: String, val land: Land, val done: Boolean)
+
+/**
+ * A voice story's stop: a round raised paper badge with the story's picture, a gold edge (not
+ * tomato red, which stays the next stop's ring) and a little star once he has played it.
+ */
+@Composable
+private fun StoryStop(modifier: Modifier, emoji: String, done: Boolean, pressed: Boolean) {
+    Box(
+        modifier.graphicsLayer {
+            val s = if (pressed) 0.92f else 1f
+            scaleX = s
+            scaleY = s
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.fillMaxSize().paperCard(Color(0xFFFFF8E1), circle = true).border(4.dp, Color(0xFFFFCA28), CircleShape), contentAlignment = Alignment.Center) {
+            Text(emoji, fontSize = 30.sp)
+        }
+        if (done) Text("⭐", fontSize = 18.sp, modifier = Modifier.align(Alignment.TopEnd))
+    }
+}
 
 /**
  * The crystal cave on the map: a purple paper cave with a dark mouth and gold crystals, in a

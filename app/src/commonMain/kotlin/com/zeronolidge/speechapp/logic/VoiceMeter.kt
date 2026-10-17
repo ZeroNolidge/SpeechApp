@@ -20,8 +20,15 @@ class VoiceMeter(
     private var roomCount = 0
     private var voiceMs = 0
     private var lastVoiceAt = -1
+    private var loudest = 0f
 
     val heard: Boolean get() = voiceMs >= needMs
+
+    /**
+     * A soft try: some sound above the room, but not enough to count as a clear voice (a tiny
+     * whisper, a breath of a word). Voice stories answer it with a smaller version of the action.
+     */
+    val soft: Boolean get() = !heard && (voiceMs > 0 || loudest > maxOf(MIN_VOICE * 0.5f, room * 1.4f))
 
     /** How loud the room was before the child spoke. */
     val room: Float get() = if (roomCount == 0) 0f else roomSum / roomCount
@@ -35,7 +42,10 @@ class VoiceMeter(
         if (t <= settleMs) {
             roomSum += rms
             roomCount++
-        } else if (rms > threshold) {
+        } else {
+            loudest = maxOf(loudest, rms)
+        }
+        if (t > settleMs && rms > threshold) {
             voiceMs += stepMs
             lastVoiceAt = t
         }

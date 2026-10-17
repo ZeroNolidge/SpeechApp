@@ -148,7 +148,7 @@ def string_pieces(code):
 
 
 SKIP_LINE = re.compile(r"println|prefs\.|putInt|getInt|getString|putString|Regex\(|BakedLayer|^\s*(import|package)\b|label = \"|js\(")
-STORY_BLANK = re.compile(r"\{[a-z]+\}")
+STORY_BLANK = re.compile(r"\{[A-Za-z]+\}")
 NOT_SPEECH = re.compile(r"[_/@#%<>=\\{}|]|\.kt\b|^[a-z]+[A-Z]")
 
 
@@ -185,7 +185,7 @@ def collect_lines():
                     if 2 <= len(words) <= 3 and all(w[:1].isupper() for w in words):
                         for w in words:
                             add(w)
-                        if len(words) == 2 and words[0] != "The":
+                        if len(words) == 2 and words[0] != "The" and all(w.isalpha() for w in words):
                             add(piece.strip() + "'s")  # "Benny Bunny's kite"
     # Story sentences with their blanks filled in, recorded whole so they don't sound stitched
     # together (made by tools/whole_lines/WholeLines.kt).

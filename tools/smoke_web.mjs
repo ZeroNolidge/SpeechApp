@@ -263,6 +263,15 @@ if (started) {
             await listenShot('#test=talk', 1180, 820, 'listen-talk-ipad');
             await listenShot('#test=pip', 1180, 820, 'listen-pip-ipad');
             await listenShot('#test=cave', 1180, 820, 'listen-cave-ipad');
+            // The voice stories: each at his first turn (listening look), and the boat on a phone.
+            await listenShot('#test=story-boat', 1180, 820, 'listen-story-boat');
+            await listenShot('#test=story-owl', 1180, 820, 'listen-story-owl');
+            await listenShot('#test=story-balloon', 1180, 820, 'listen-story-balloon');
+            await listenShot('#test=story-boat', 400, 860, 'listen-story-boat-phone');
+            // Then "I said it!" (bottom-right): the action happens, and the next problem.
+            await page.mouse.click(400 - 70, 860 - 60);
+            await wait(2500);
+            await shot('story-boat-phone-acted');
             await open('#test=talk', 820, 1180, 'talk-ipad-portrait');
             await open('#test=talk', 400, 860, 'talk-phone');
             await open('#test=BIG_SMALL', 820, 1180, 'letters-ipad-portrait');

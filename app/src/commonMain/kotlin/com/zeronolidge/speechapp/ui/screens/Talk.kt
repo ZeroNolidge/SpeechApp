@@ -142,9 +142,22 @@ fun SpeakMoment(
     key: Any = word,
     /** After saying a word with a speech sound: "Tap the B!" with 2 or 3 letters (skipped with ▶). */
     tapLetter: Boolean = true,
+    /**
+     * His word makes it happen: called the moment the microphone hears a voice (about 0.15 s in,
+     * long before listening ends), or when the try ends another way ("I said it!", a quiet try),
+     * so a story can show its action at once. Not called for a skip.
+     */
+    onAction: (() -> Unit)? = null,
     onDone: (heard: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
+    var acted by remember(key) { mutableStateOf(false) }
+    fun act() {
+        if (!acted) {
+            acted = true
+            onAction?.invoke()
+        }
+    }
     val p = app.progress
     val micPermission = rememberMicPermission()
     var state by remember(key) { mutableStateOf(Speak.MODELLING) }
@@ -176,6 +189,7 @@ fun SpeakMoment(
         state = Speak.DONE
         roryWaiting = false
         val next = { onDone(heard) }
+        if (!skipped) act()
         if (skipped) {
             app.speaker.say(listOfNotNull("Okay! Let's keep going.", afterLine).joinToString(" "), onDone = next)
             return
@@ -240,22 +254,22 @@ fun SpeakMoment(
         }
     }
 
-    /** The word, played slowly and clearly, then at normal speed. */
-    // Rory models the word before his turn: three times for a word (slow, then clearly, then
-    // once more), twice for a phrase.
-    fun model(): List<Pair<String, Boolean>> = listOfNotNull(
+    // Rory models the word before his turn: three times, the third time slower.
+    fun model(): List<Pair<String, Boolean>> = listOf(
         "Listen." to false,
-        word.syllables to true,
         word.text to false,
-        if (' ' in word.text.trim()) null else "${word.text}!" to true,
+        word.text to false,
+        // The third time slower (in syllables for a longer word: "piz - za").
+        word.syllables to true,
     )
 
     listen = {
         val s = session
         state = Speak.LISTENING
         tries++
-        app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }) { heard ->
-            if (s != session || state == Speak.DONE) return@listen
+        app.voice.listenTry(4000, onLevel = { level = it; app.listenLevel = it }, onVoice = { if (s == session) act() }) { t ->
+            val heard = when (t) { com.zeronolidge.speechapp.audio.VoiceTry.HEARD -> true; com.zeronolidge.speechapp.audio.VoiceTry.NO_MIC -> null; else -> false }
+            if (s != session || state == Speak.DONE) return@listenTry
             level = 0f
             app.listenLevel = 0f
             when (heard) {
