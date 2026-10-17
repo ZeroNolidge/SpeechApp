@@ -590,7 +590,7 @@ internal fun ListeningStage(
         if (k > 0.001f) {
             Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
             // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
-            val rory = minOf(maxOf(h * 0.23f, 90.dp), w * 0.7f / 1.35f)
+            val rory = minOf(maxOf(h * 0.28f, 100.dp), w * 0.7f / 1.35f)
             val box = rory * 1.35f
             val startX = 0.dp
             val startY = h - box
