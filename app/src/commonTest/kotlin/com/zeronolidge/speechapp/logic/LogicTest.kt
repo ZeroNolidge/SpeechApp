@@ -817,6 +817,45 @@ class MapTargetTest {
     }
 
     @Test
+    fun theVoiceStoryStopsSitByTheirLandsAndNeverShareATap() {
+        for (c in cases) {
+            val (w, h, half, lh, r) = c.toList()
+            for (stop in 0 until Trail.size) {
+                val (fx, fy) = Trail.position(stop)
+                val (sx, sy) = MapAreas.stopSpot(Trail.landAt(stop), fx, fy, w, h, r, half, lh)
+                val placed = mutableListOf(MapSpot(MapTarget.Stop, sx, sy, r))
+                val sr = r * 0.7f
+                for (story in VoiceStories.all) {
+                    val (x, y) = MapAreas.spotBy(story.land, w, h, sr, placed, half, lh)
+                    placed += MapSpot(MapTarget.Story(story.id), x, y, sr)
+                }
+                val cr = r * 0.8f
+                val (cx, cy) = MapAreas.caveSpot(w, h, cr, sx, sy, r, half, lh, placed.drop(1))
+                placed += MapSpot(MapTarget.Cave, cx, cy, cr)
+                val spots = placed.filter { it.target is MapTarget.Story }
+                // Tablet-sized maps: no two stops touch, each story is by its land, and its middle opens it.
+                if (w / r >= 15f) {
+                    for (i in placed.indices) for (j in i + 1 until placed.size) {
+                        val a = placed[i]
+                        val b = placed[j]
+                        val d = kotlin.math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y))
+                        assertTrue(d >= a.r + b.r, "${a.target} touches ${b.target} (stop $stop) at ${w}x$h")
+                    }
+                    for (story in VoiceStories.all) {
+                        val sp = spots.first { it.target == MapTarget.Story(story.id) }
+                        assertTrue(MapAreas.belongsTo(story.land, sp.x, sp.y, w, h), "${story.id} not by ${story.land} (stop $stop) at ${w}x$h")
+                        assertEquals(MapTarget.Story(story.id), MapAreas.target(sp.x, sp.y, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "${story.id} centre at ${w}x$h")
+                    }
+                }
+                // Pictures and labels always open their area, whatever stops there are.
+                MapAreas.all.forEach { a ->
+                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "picture of ${a.land} with story stops at ${w}x$h")
+                }
+            }
+        }
+    }
+
+    @Test
     fun theSunflowerOpensTheMeadowEvenWhenTheNextStopIsThere() {
         val (w, h, half, lh, r) = listOf(1000f, 570f, 64f, 40f, 48f)
         val m = MapAreas.of(Land.MEADOW)
@@ -902,5 +941,75 @@ class PlaySessionTest {
         assertTrue(!PlaySession.resume(PlaySession.decode(rested.encode()), start + 13 * min).long(start + 20 * min))
         assertEquals(null, PlaySession.decode(""))
         assertEquals(null, PlaySession.decode("junk"))
+    }
+}
+
+/** The voice stories follow the pattern: short, their sounds up front, a calm goodbye. */
+class VoiceStoriesTest {
+    @Test
+    fun everyStoryFollowsThePattern() {
+        for (s in VoiceStories.all) {
+            assertTrue(s.beats.size in 6..VoiceStories.MAX_BEATS, "${s.id}: ${s.beats.size} beats")
+            // His sounds start the words of at least 4 beats.
+            val withSound = s.beats.count { b -> s.sounds.any { VoiceStories.startsWith(b.word, it) } }
+            assertTrue(withSound >= 4, "${s.id}: only $withSound beats start with ${s.sounds}")
+            // Three versions per beat: one word, two words, a short sentence.
+            for (b in s.beats) {
+                assertEquals(3, b.lines.size, "${s.id} ${b.word}")
+                assertEquals(1, b.lines[0].trim().split(' ').size, "${s.id}: '${b.lines[0]}' is one word")
+                assertTrue(ClipText.normalize(b.lines[1]).split(' ').size == 2, "${s.id}: '${b.lines[1]}' is two words")
+                assertTrue(ClipText.normalize(b.lines[2]).split(' ').size >= 2, "${s.id}: '${b.lines[2]}' is a sentence")
+                // Rory says the word back first.
+                assertTrue(ClipText.normalize(b.echo).startsWith(ClipText.normalize(b.word)), "${s.id}: echo '${b.echo}'")
+                assertTrue(b.problem.isNotBlank() && b.result.isNotBlank())
+            }
+            // It ends calmly, with the goodbye beat last (and only last).
+            assertTrue(s.beats.last().goodbye && s.beats.dropLast(1).none { it.goodbye }, s.id)
+            assertTrue(s.ending.contains("sticker"), s.id)
+        }
+        // Later stories use sounds at the ends of words too ("up", "stop").
+        assertTrue(VoiceStories.boat.beats.any { b -> VoiceStories.boat.sounds.any { VoiceStories.endsWith(b.word, it) && !VoiceStories.startsWith(b.word, it) } })
+    }
+
+    @Test
+    fun hisOwnWordStandsInForTheProp() {
+        // A name for the boat story's duck.
+        val boat = VoiceStories.ready(VoiceStories.boat, listOf("ball" to "⚽", "Grandma" to "👵"))
+        assertEquals("Grandma", boat.prop.name)
+        val come = boat.beats.first { it.word == "come" }
+        assertEquals("come Grandma", come.lines[1])
+        assertEquals("Oh no! Grandma is stuck on a rock.", come.problem)
+        assertEquals("👵", come.emoji)
+        // A thing for the owl's berries.
+        val owl = VoiceStories.ready(VoiceStories.owl, listOf("Grandma" to "👵", "ball" to "⚽"))
+        assertEquals("More ball, please!", owl.beats.first { it.word == "more" }.lines[2])
+        // No own words: the story's own prop, with "the".
+        val plain = VoiceStories.ready(VoiceStories.boat, emptyList())
+        assertEquals("Oh no! The duck is stuck on a rock.", plain.beats.first { it.word == "come" }.problem)
+        // Nothing left unfilled.
+        for (s in VoiceStories.all) for (r in listOf(VoiceStories.ready(s, emptyList()), VoiceStories.ready(s, listOf("Max" to "🐶", "car" to "🚗")))) {
+            (listOf(r.setup) + r.beats.flatMap { listOf(it.problem, it.echo, it.result) + it.lines }).forEach { assertTrue('{' !in it, "${s.id}: $it") }
+        }
+    }
+
+    @Test
+    fun theSpeechStepPicksTheLine() {
+        val b = VoiceStories.boat.beats[0]
+        assertEquals("go", b.line(0))
+        assertEquals("go boat", b.line(1))
+        assertEquals("Go, boat, go!", b.line(2))
+        assertEquals("Go, boat, go!", b.line(5))
+    }
+
+    @Test
+    fun aSoftTryIsNotSilence() {
+        fun meter(levels: List<Float>) = VoiceMeter().also { m -> levels.forEach { m.feed(it, 50) } }
+        val room = List(6) { 0.004f }
+        val soft = meter(room + List(10) { 0.009f } + List(70) { 0.004f })
+        assertTrue(!soft.heard && soft.soft)
+        val quiet = meter(room + List(80) { 0.004f })
+        assertTrue(!quiet.heard && !quiet.soft)
+        val loud = meter(room + List(10) { 0.05f } + List(20) { 0.004f })
+        assertTrue(loud.heard && !loud.soft)
     }
 }

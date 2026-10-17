@@ -366,6 +366,9 @@ private fun BeatScene(
     val powers = remember(index) { PowerTicks() }
     var used by remember(index) { mutableStateOf(setOf<Power>()) }
     var solvedHere by remember(index) { mutableStateOf(false) }
+    // His word makes it happen: the scene changes (the door opens, the stones appear) the moment
+    // the microphone hears him, not after Rory's praise.
+    var acted by remember(index) { mutableStateOf(false) }
     val text = beat.narration
     // Pause on the solved picture (stones appear, the door opens) before moving on.
     if (solvedHere) AfterDelay(index, 1800) { onNext() }
@@ -375,7 +378,7 @@ private fun BeatScene(
         Column(m) {
             SpeechBubble(text, Modifier.zIndex(2f).fillMaxWidth(), fontSize = 15) { app.speaker.say(text) }
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                SetPieceView(beat.scene.piece, beat.scene.prop, solvedHere, Modifier.fillMaxSize())
+                SetPieceView(beat.scene.piece, beat.scene.prop, solvedHere || acted, Modifier.fillMaxSize())
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
                     HeroWithPet(
                         hero, p.heroColor(hero), p.outfit, p.pet,
@@ -410,7 +413,7 @@ private fun BeatScene(
         // card, and its buttons in a panel of their own), so it isn't wrapped again.
         val speakingStep = beat.challenge is Challenge.Say
         Box(if (speakingStep) m else m.paperCard(Color(0xF2FFFAF0), 28.dp).padding(14.dp)) {
-            ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers) { firstTry, revealed ->
+            ChallengeView(beat.challenge, Modifier.fillMaxSize(), intro = text, powers = powers, onAction = { acted = true }) { firstTry, revealed ->
                 if (!solvedHere) {
                     solvedHere = true
                     onSolved(beat.challenge, firstTry, revealed)

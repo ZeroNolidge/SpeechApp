@@ -20,28 +20,49 @@ class VoiceDetector(private val mic: MicLevels) {
 
     val available: Boolean get() = mic.available
 
-    fun listen(windowMs: Int = 4000, onLevel: (Float) -> Unit, onResult: (heard: Boolean?) -> Unit) {
+    fun listen(windowMs: Int = 4000, onLevel: (Float) -> Unit, onResult: (heard: Boolean?) -> Unit) =
+        listenTry(windowMs, onLevel, onVoice = null) { t ->
+            onResult(when (t) { VoiceTry.HEARD -> true; VoiceTry.NO_MIC -> null; else -> false })
+        }
+
+    /**
+     * Like [listen], with more detail: [onVoice] fires the moment a clear voice is heard (about
+     * 0.15 s after he starts, long before listening ends), so a story can act on his word at
+     * once; the result also tells a soft try ([VoiceTry.SOFT]) from silence.
+     */
+    fun listenTry(windowMs: Int = 4000, onLevel: (Float) -> Unit, onVoice: (() -> Unit)?, onResult: (VoiceTry) -> Unit) {
         cancel()
         val s = ++session
         val meter = VoiceMeter(windowMs)
-        fun done(result: Boolean?) {
+        var voiced = false
+        fun done(result: VoiceTry) {
             if (s != session) return
             cancel()
             onResult(result)
         }
+        fun outcome() = when {
+            meter.heard -> VoiceTry.HEARD
+            meter.soft -> VoiceTry.SOFT
+            else -> VoiceTry.QUIET
+        }
         // If the microphone never starts sending (a stuck permission prompt, say), give up kindly.
         guard = scope.launch {
             delay(windowMs + 3000L)
-            done(null)
+            done(VoiceTry.NO_MIC)
         }
         mic.start(
             onLevel = { rms ->
                 if (s == session) {
                     onLevel(VoiceMeter.display(rms))
-                    if (meter.feed(rms, MicLevels.STEP_MS)) done(meter.heard)
+                    val finished = meter.feed(rms, MicLevels.STEP_MS)
+                    if (meter.heard && !voiced) {
+                        voiced = true
+                        onVoice?.invoke()
+                    }
+                    if (finished) done(outcome())
                 }
             },
-            onFail = { done(null) },
+            onFail = { done(VoiceTry.NO_MIC) },
         )
     }
 
@@ -51,3 +72,6 @@ class VoiceDetector(private val mic: MicLevels) {
         mic.stop()
     }
 }
+
+/** How a listening turn went: a clear voice, a soft try, silence, or no microphone. */
+enum class VoiceTry { HEARD, SOFT, QUIET, NO_MIC }

@@ -135,6 +135,15 @@ class Progress(private val prefs: Prefs) {
         prefs.edit().putInt("pipTags", pipTags).apply()
     }
 
+    /** Voice stories he has played to the end (their map stops wear a star). */
+    var voiceStoriesDone by mutableStateOf(prefs.getStringSet("voiceStoriesDone", emptySet()) ?: emptySet())
+        private set
+
+    fun finishVoiceStory(id: String) {
+        voiceStoriesDone = voiceStoriesDone + id
+        prefs.edit().putStringSet("voiceStoriesDone", voiceStoriesDone).apply()
+    }
+
     /** The last chapter whose stop has already been shown unfolding on the map. */
     var unfoldedSeen by mutableIntStateOf(prefs.getInt("unfoldedSeen", 0))
         private set
