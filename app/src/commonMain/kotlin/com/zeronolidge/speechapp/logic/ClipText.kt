@@ -20,6 +20,9 @@ object ClipText {
 
     fun phrases(text: String): List<String> = text.split(breaks).map { it.trim() }.filter { normalize(it).isNotEmpty() }
 
+    /** In a run of clips: a short breath between two sentences (clips have their silence trimmed). */
+    const val PAUSE = "_"
+
     sealed interface Part {
         /** One or more clips, played back to back with no gap. */
         data class Clips(val keys: List<String>) : Part
@@ -38,7 +41,8 @@ object ClipText {
             val last = out.lastOrNull()
             if (last is Part.Speak) out[out.size - 1] = Part.Speak(last.text + " " + w) else out += Part.Speak(w)
         }
-        for (phrase in phrases(text)) {
+        for ((n0, phrase) in phrases(text).withIndex()) {
+            if (n0 > 0 && out.lastOrNull() is Part.Clips) addClip(PAUSE)
             val words = normalize(phrase).split(' ')
             val n = words.size
             // Fewest words left to the device voice first, then fewest pieces.
@@ -62,6 +66,8 @@ object ClipText {
             }
             pieces.reversed().forEach { (isClip, s) -> if (isClip) addClip(s) else addWords(s) }
         }
-        return out
+        // A pause only ever sits between two clips.
+        return out.map { if (it is Part.Clips) Part.Clips(it.keys.dropLastWhile { k -> k == PAUSE }) else it }
+            .filter { it !is Part.Clips || it.keys.isNotEmpty() }
     }
 }

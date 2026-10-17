@@ -42,6 +42,8 @@ These are the owner's rules for all work:
   (`VoiceDetector` + `logic/VoiceMeter.kt`), NOT speech recognition (unreliable on iPhone/iPad and
   with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
   carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.
+- **Say-a-word card after the try:** it stays fully visible while Rory praises (taps do nothing);
+  a faded, disabled card looked broken.
 - **Wrong answers, one pattern everywhere** (`Misses`, `AnswerRow`, `TryAgainSlot` in
   `Common.kt`; `MoreView` and `RobotView` follow it too): every tap is checked against the answer
   first, and tile colours come from one unit-tested rule (`tileLook` in `logic/Quiz.kt`): only the
@@ -64,7 +66,11 @@ These are the owner's rules for all work:
   (normalize, split at . ! ? : ; …, fewest clips per phrase) and plays clip runs gaplessly via
   `WebClips` (Web Audio, trimmed silence; slow = audio element, pitch kept); anything without a
   clip (his name, own words) uses the browser voice; each such gap logs `VOICEGAP` and the smoke
-  test lists them (`VOICE GAP` lines). Speech waits up to 2 s for the clip list at start. **ClipText.kt and make_voice.py must use the
+  test lists them (`VOICE GAP` lines). Speech waits up to 2 s for the clip list at start. Story sentences whose blanks are filled
+  from a small set (friends, items) are also recorded whole (`tools/voice_whole_lines.txt`, made by
+  `tools/whole_lines/WholeLines.kt` in the scratch JVM test project; rerun it after changing story
+  text), since stitched pieces sound choppy. Sentences in a clip run get a 0.25 s breath
+  (`ClipText.PAUSE`). **ClipText.kt and make_voice.py must use the
   same rules.** No manifest = browser voice as before. The offline cache includes the clips
   automatically; sw.js keeps clips (like the .wasm) in the long-lived cache, cache-first, so they
   download once. A remade clip gets a new name (`-` + sound fingerprint); manifest.json is the only

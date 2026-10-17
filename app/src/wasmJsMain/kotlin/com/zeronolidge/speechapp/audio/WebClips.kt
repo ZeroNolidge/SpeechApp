@@ -39,6 +39,8 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
         if (!st || !st.map || !keys.length) { onEnd(false); return; }
         const gen = ++st.gen;
         const url = (k) => 'audio/' + st.map[k];
+        // '_' (ClipText.PAUSE) is a short breath between two sentences.
+        const PAUSE = '_', breath = 0.25;
         let finished = false;
         const fin = (ok) => { if (finished) return; finished = true; if (gen === st.gen) onEnd(ok); };
         if (slow) {
@@ -47,6 +49,7 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
             const next = () => {
                 if (gen !== st.gen) return;
                 if (i >= keys.length) { fin(true); return; }
+                if (keys[i] === PAUSE) { i++; setTimeout(next, breath * 1000 / 0.72); return; }
                 const a = new Audio(url(keys[i++]));
                 a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
                 a.playbackRate = 0.72;
@@ -66,6 +69,7 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
         try { ctx.resume(); } catch (e) {}
         // Decoded clips are kept, with the quiet at each end found once.
         const load = (k) => {
+            if (k === PAUSE) return Promise.resolve({ pause: breath });
             if (st.cache.has(k)) return st.cache.get(k);
             const p = fetch(url(k)).then(r => r.arrayBuffer()).then(b => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej))).then(buf => {
                 const d = buf.getChannelData(0);
@@ -85,6 +89,7 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
             let t = ctx.currentTime + 0.03;
             let last = null;
             parts.forEach(c => {
+                if (c.pause) { t += c.pause; return; }
                 const src = ctx.createBufferSource();
                 src.buffer = c.buf;
                 src.connect(ctx.destination);

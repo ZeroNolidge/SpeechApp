@@ -47,6 +47,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "app", "src", "commonMain", "kotlin")
 OUT = os.path.join(ROOT, "app", "src", "wasmJsMain", "resources", "audio")
 OVERRIDES = os.path.join(ROOT, "tools", "voice_overrides.json")
+WHOLE_LINES = os.path.join(ROOT, "tools", "voice_whole_lines.txt")
 CONTENT = os.path.join(SRC, "com", "zeronolidge", "speechapp", "data", "Content.kt")
 
 INSTRUCTIONS = (
@@ -186,6 +187,12 @@ def collect_lines():
                             add(w)
                         if len(words) == 2 and words[0] != "The":
                             add(piece.strip() + "'s")  # "Benny Bunny's kite"
+    # Story sentences with their blanks filled in, recorded whole so they don't sound stitched
+    # together (made by tools/whole_lines/WholeLines.kt).
+    if os.path.exists(WHOLE_LINES):
+        for raw in open(WHOLE_LINES, encoding="utf-8"):
+            if raw.strip():
+                add(raw.strip())
     # Letter names, said on their own ("A says ah").
     for ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
         lines.setdefault(normalize(ch), ch)

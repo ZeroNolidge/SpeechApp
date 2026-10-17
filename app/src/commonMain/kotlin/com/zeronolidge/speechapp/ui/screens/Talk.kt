@@ -306,25 +306,29 @@ fun SpeakMoment(
     // are in a column on the right, above the continue button's corner.
     BoxWithConstraints(modifier) {
         val wide = maxWidth > 700.dp
-        val active = state != Speak.DONE
         val size = 68.dp
+        // Once the word is done the card and buttons stay fully visible (faded ones looked broken
+        // while Rory praises him); taps just do nothing until the story moves on.
+        fun whileActive(action: () -> Unit) { if (state != Speak.DONE) action() }
         val icons: @Composable () -> Unit = {
-            RoundIcon("🔊", PaperColorsUi.hear, size = size, enabled = active) { speakThen(model(), true) }
-            RoundIcon("🐢", Color(0xFFC8E6C9), size = size, enabled = active) {
-                speakThen(listOf(word.syllables to true, word.text to true), true)
+            RoundIcon("🔊", PaperColorsUi.hear, size = size) { whileActive { speakThen(model(), true) } }
+            RoundIcon("🐢", Color(0xFFC8E6C9), size = size) {
+                whileActive { speakThen(listOf(word.syllables to true, word.text to true), true) }
             }
             if (sound != null) {
-                RoundIcon("👄", Color(0xFFFFCDD2), size = size, enabled = active) {
-                    speakThen(listOf(sound.tip to false, sound.modelSound to true), true)
+                RoundIcon("👄", Color(0xFFFFCDD2), size = size) {
+                    whileActive { speakThen(listOf(sound.tip to false, sound.modelSound to true), true) }
                 }
             }
-            RoundIcon("🎤", Color(0xFFFFE0B2), size = size, enabled = active) {
-                micBroken = false
-                withMic(onDenied = { speakThen(emptyList(), false) }) { speakThen(emptyList(), true) }
+            RoundIcon("🎤", Color(0xFFFFE0B2), size = size) {
+                whileActive {
+                    micBroken = false
+                    withMic(onDenied = { speakThen(emptyList(), false) }) { speakThen(emptyList(), true) }
+                }
             }
             if (showParrot && p.useMic) {
-                RoundIcon("🦜", Color(0xFFB2EBF2), size = size, enabled = active) {
-                    withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() }
+                RoundIcon("🦜", Color(0xFFB2EBF2), size = size) {
+                    whileActive { withMic(onDenied = { app.speaker.say("Ask a grown-up to turn on the microphone.") }) { parrotNow() } }
                 }
             }
         }
@@ -381,8 +385,7 @@ fun SpeakMoment(
                 PaperButton(
                     PaperStyle.chip,
                     Modifier.fillMaxSize().padding(bottom = 8.dp),
-                    enabled = state != Speak.DONE,
-                    onClick = { speakThen(model(), true) },
+                    onClick = { whileActive { speakThen(model(), true) } },
                 ) {
                     if (narrowCard) {
                         Column(
