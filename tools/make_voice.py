@@ -52,7 +52,8 @@ CONTENT = os.path.join(SRC, "com", "zeronolidge", "speechapp", "data", "Content.
 
 INSTRUCTIONS = (
     "You are Rory, a warm, friendly, playful paper robot talking to a four-year-old who is "
-    "learning to talk. Speak clearly, a little slowly, gently and cheerfully. Never rushed."
+    "learning to talk. Speak clearly, a little slowly, gently and cheerfully, at a normal speaking "
+    "volume: never shout, never whisper, even for single sounds. Never rushed."
 )
 
 # ---------------------------------------------------------------- the same rules as ClipText.kt
@@ -472,7 +473,11 @@ def main():
     def save_manifest():
         # Only clips that really exist go in the manifest, so a stopped run still leaves a working set.
         made = {k: f for k, f in clips.items() if os.path.exists(os.path.join(OUT, f))}
-        json.dump({"voice": voice, "model": state["model"], "clips": made}, open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
+        # Clips trimmed and evened out by tools/finish_clips.py stay marked as finished while
+        # their file is unchanged; remade ones get finished again next time.
+        finished = sorted(k for k in old.get("finished", []) if k in made and made[k] == old_clips.get(k))
+        json.dump({"voice": voice, "model": state["model"], "clips": made, "finished": finished},
+                  open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
         write_letters_page(made)
 
     try:

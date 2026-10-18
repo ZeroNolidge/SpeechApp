@@ -61,9 +61,12 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
                 let s = 0, e = d.length - 1;
                 while (s < e && Math.abs(d[s]) < th) s++;
                 while (e > s && Math.abs(d[e]) < th) e--;
-                let peak = 0;
-                for (let i = s; i <= e; i += 16) peak = Math.max(peak, Math.abs(d[i]));
-                if ((e - s) / buf.sampleRate < 0.12 || peak < 0.03) throw new Error('silent');
+                // Under normal speaking loudness (finished clips sit near 0.1) counts as silent
+                // too: a whispery clip is harder to hear than the browser voice.
+                let peak = 0, sum = 0, n = 0;
+                for (let i = s; i <= e; i += 8) { const v = Math.abs(d[i]); peak = Math.max(peak, v); sum += v * v; n++; }
+                const rms = Math.sqrt(sum / Math.max(1, n));
+                if ((e - s) / buf.sampleRate < 0.12 || peak < 0.05 || rms < 0.03) throw new Error('silent');
                 const pad = Math.floor(buf.sampleRate * 0.015);
                 return { buf, start: Math.max(0, s - pad) / buf.sampleRate, end: Math.min(d.length, e + pad) / buf.sampleRate };
             });
