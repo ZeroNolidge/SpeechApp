@@ -480,7 +480,7 @@ fun SpeakMoment(
             )
             // The picture card: tap it to hear the word again. On its own (Talk) the card is the
             // scene for the listening look; in a story the story scene beside it is.
-            ListeningStage(Modifier.weight(1f).fillMaxWidth(), endY = 0.62f, enabled = !inStory) {
+            ListeningStage(Modifier.weight(1f).fillMaxWidth(), endX = 0.14f, endY = 0.72f, enabled = !inStory) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val small = maxHeight < 240.dp
                 val cardW = maxWidth
