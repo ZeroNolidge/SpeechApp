@@ -218,8 +218,15 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 paperPath(hull, Color(0xFF26A69A))
             }
             val sleepy = beat.light == Light.DUSK
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
-                Critter(Species.PUPPY, Modifier.fillMaxWidth(0.36f).fillMaxHeight(0.45f).offset(x = 6.dp, y = (-18).dp), mood = if (sleepy) Mood.SLEEP else Mood.HAPPY)
+            // Pip sits in the boat: feet on the deck (the hull's top edge), left of the mast.
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val bw = maxWidth
+                val bh = maxHeight
+                Critter(
+                    Species.PUPPY,
+                    Modifier.offset(x = bw * 0.16f, y = bh * 0.34f).size(bw * 0.34f, bh * 0.4f),
+                    mood = if (sleepy) Mood.SLEEP else Mood.HAPPY,
+                )
             }
         }
         Prop.SAIL -> Canvas(Modifier.fillMaxSize()) {
