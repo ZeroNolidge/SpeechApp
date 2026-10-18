@@ -167,6 +167,15 @@ These are the owner's rules for all work:
   words, are the "ears" call at each spot ("Pip loves Grandma! Say: Grandma!"). Every try works
   (heard: Rory's `Echo`; quiet: "Pip heard you!"). The big "I called!" button is always shown in
   the same spot (ContinueAction label). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
+- **Voice stories are data** (`logic/VoiceStories.kt`): each beat = backdrop (`Backdrop`: a land's
+  scenery + water/island/path/sky, reusable across stories), problem line, word at 3 levels, target
+  `sound` (or null), `prop` + `move`, `success` line (full fixed sentence, no blanks, so clips are
+  whole), optional `light` (DAWN/DUSK) and a `still` prop for company. Shared voice-driven moves
+  (`Move`: RISE, SINK, SLIDE, POP, GROW, SHAKE; `pose()` in `ui/art/VoiceScenes.kt`) take how far
+  (loudness x time, `VoicePush`), how big (loudest moment) and a live wobble; props are paper art
+  in `PropArt` (each can show its own paper motion from the move's progress). A new story is words
+  + maybe one new prop. His own word swaps into the fixed sentences at play time (`PropSwap`).
+  "I said it!" = the same move at medium strength.
 - **Voice stories** (`logic/VoiceStories.kt`, `ui/screens/VoiceStory.kt`, art in
   `ui/art/VoiceScenes.kt`): his word makes the plot happen, never a "magic word" password. Pattern
   for every new story: setup with one want; 6-7 beats (max 8), each: Rory names the problem, says

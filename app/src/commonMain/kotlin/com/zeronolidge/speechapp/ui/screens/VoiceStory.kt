@@ -35,13 +35,13 @@ import com.zeronolidge.speechapp.logic.VoicePush
 import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.Screen
-import com.zeronolidge.speechapp.ui.art.BeatProgress
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.HeroWithPet
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.ui.art.PaperStyle
-import com.zeronolidge.speechapp.ui.art.VoiceStoryScene
+import com.zeronolidge.speechapp.ui.art.VoiceBeatScene
+import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
 import com.zeronolidge.speechapp.ui.art.voiceTarget
@@ -94,7 +94,7 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
     val model = remember { arrayOf(VoicePush()) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
-    fun progress(k: Int) = BeatProgress(k, strengths) { act.value }
+    fun strength(k: Int) = strengths[k] ?: 0.7f
 
     lateinit var startBeat: (Int) -> Unit
 
@@ -109,7 +109,7 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
 
     /** It worked: hole-punch confetti at the thing that moved (gone in under 2 s). */
     fun cheer(k: Int) {
-        confettiAt = voiceTarget(story, progress(k))
+        confettiAt = voiceTarget(beats[k], act.value, strength(k))
         scope.launch {
             confetti.snapTo(0f)
             confetti.animateTo(1f, tween(if (still) 0 else 1600))
@@ -124,7 +124,7 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
         if (micUsed) p.speechResult(heard)
         p.addGem()?.let { app.showGift(it) }
-        app.speaker.say("${b.echo} ${b.result}") {
+        app.speaker.say(b.success) {
             if (s != session) return@say
             when {
                 k + 1 >= beats.size -> finish()
@@ -253,21 +253,17 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
 
     ScreenFrame(onHome = nav.home, background = {}, top = { PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1) }) {
         ContinueHost {
-            // Rory slides in where he covers nothing important: low in the river for the boat,
-            // left of Owl's branch, right of the balloon's path.
-            val (endX, endY) = when (story.id) {
-                "boat" -> 0.5f to 0.8f
-                "owl" -> 0.2f to 0.6f
-                else -> 0.8f to 0.58f
-            }
-            val prog = progress(index)
+            // Rory slides in where he covers nothing his voice moves: below a sliding prop, left of
+            // one that rises, sinks, grows, pops or shakes in the middle.
+            val beat = beats[index.coerceAtLeast(0)]
+            val (endX, endY) = if (beat.move == Move.SLIDE) 0.5f to 0.84f else 0.18f to 0.62f
             ListeningStage(
                 Modifier.fillMaxSize(), endX = endX, endY = endY,
                 aboveDim = {
                     // The thing to move glows; his voice streams to it as paper wind strips.
                     if (index >= 0 && phase != VPhase.END) {
                         VoiceListenExtras(
-                            target = { voiceTarget(story, prog) },
+                            target = { voiceTarget(beat, act.value, strength(index)) },
                             fromX = endX, fromY = endY,
                             glowing = app.listening,
                             push = { pushNow },
@@ -279,7 +275,7 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
-                    VoiceStoryScene(story, prog, Modifier.fillMaxSize())
+                    VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize())
                     // The word to say, big, at the top in the middle.
                     val k = index
                     if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT) {

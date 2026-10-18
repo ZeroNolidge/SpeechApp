@@ -25,7 +25,7 @@ class WholeLines {
         // The voice stories, with their own props (his own words have no clip anyway).
         for (st in VoiceStories.all.map { VoiceStories.ready(it, emptyList()) }) {
             add(st.setup); add(st.ending)
-            st.beats.forEach { b -> add(b.problem); b.lines.forEach(::add); add("${b.echo} ${b.result}") }
+            st.beats.forEach { b -> add(b.problem); b.lines.forEach(::add); add(b.success) }
         }
         // The wake-up scene (ui/screens/Chapter.kt WakeScene).
         for (f in Friends.all) add("It's ${f.callName}! ${f.callName} is awake!")

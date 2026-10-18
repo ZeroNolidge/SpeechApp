@@ -950,46 +950,53 @@ class VoiceStoriesTest {
     fun everyStoryFollowsThePattern() {
         for (s in VoiceStories.all) {
             assertTrue(s.beats.size in 6..VoiceStories.MAX_BEATS, "${s.id}: ${s.beats.size} beats")
-            // His sounds start the words of at least 4 beats.
-            val withSound = s.beats.count { b -> s.sounds.any { VoiceStories.startsWith(b.word, it) } }
-            assertTrue(withSound >= 4, "${s.id}: only $withSound beats start with ${s.sounds}")
-            // Three versions per beat: one word, two words, a short sentence.
+            // His sounds start the words of at least 4 beats; each beat's sound is really in its word.
+            val starting = s.beats.count { b -> b.sound != null && VoiceStories.startsWith(b.word, b.sound!!) }
+            assertTrue(starting >= 4, "${s.id}: only $starting beats start with their sound")
             for (b in s.beats) {
+                b.sound?.let { snd ->
+                    assertTrue(snd in s.sounds, "${s.id} ${b.word}: $snd isn't one of ${s.sounds}")
+                    assertTrue(VoiceStories.startsWith(b.word, snd) || VoiceStories.endsWith(b.word, snd), "${s.id}: '${b.word}' has no $snd")
+                }
+                // Three versions: one word, two words, a short sentence.
                 assertEquals(3, b.lines.size, "${s.id} ${b.word}")
                 assertEquals(1, b.lines[0].trim().split(' ').size, "${s.id}: '${b.lines[0]}' is one word")
                 assertTrue(ClipText.normalize(b.lines[1]).split(' ').size == 2, "${s.id}: '${b.lines[1]}' is two words")
                 assertTrue(ClipText.normalize(b.lines[2]).split(' ').size >= 2, "${s.id}: '${b.lines[2]}' is a sentence")
-                // Rory says the word back first.
-                assertTrue(ClipText.normalize(b.echo).startsWith(ClipText.normalize(b.word)), "${s.id}: echo '${b.echo}'")
-                assertTrue(b.problem.isNotBlank() && b.result.isNotBlank())
+                // Rory says the word back first, and nothing has a blank to fill.
+                assertTrue(ClipText.normalize(b.success).startsWith(ClipText.normalize(b.word)), "${s.id}: success '${b.success}'")
+                (listOf(b.problem, b.success) + b.lines).forEach { assertTrue('{' !in it, "${s.id}: blank in '$it'") }
             }
             // It ends calmly, with the goodbye beat last (and only last).
             assertTrue(s.beats.last().goodbye && s.beats.dropLast(1).none { it.goodbye }, s.id)
             assertTrue(s.ending.contains("sticker"), s.id)
+            // Later stories use sounds at the ends of words too ("up", "stop").
         }
-        // Later stories use sounds at the ends of words too ("up", "stop").
-        assertTrue(VoiceStories.boat.beats.any { b -> VoiceStories.boat.sounds.any { VoiceStories.endsWith(b.word, it) && !VoiceStories.startsWith(b.word, it) } })
+        assertTrue(VoiceStories.boat.beats.any { b -> b.sound != null && VoiceStories.endsWith(b.word, b.sound!!) && !VoiceStories.startsWith(b.word, b.sound!!) })
+    }
+
+    @Test
+    fun theStoriesShareTheMovesAndBackdrops() {
+        // A handful of moves carry every beat, and backdrops are reused across beats.
+        val beats = VoiceStories.all.flatMap { it.beats }
+        assertTrue(beats.map { it.move }.toSet().size <= Move.entries.size)
+        assertTrue(beats.map { it.backdrop }.toSet().size * 3 <= beats.size, "backdrops are shared: ${beats.map { it.backdrop }.toSet()}")
     }
 
     @Test
     fun hisOwnWordStandsInForTheProp() {
         // A name for the boat story's duck.
         val boat = VoiceStories.ready(VoiceStories.boat, listOf("ball" to "⚽", "Grandma" to "👵"))
-        assertEquals("Grandma", boat.prop.name)
         val come = boat.beats.first { it.word == "come" }
         assertEquals("come Grandma", come.lines[1])
         assertEquals("Oh no! Grandma is stuck on a rock.", come.problem)
-        assertEquals("👵", come.emoji)
+        assertEquals("Come! Come, Grandma! Grandma paddles over to the boat!", come.success)
+        assertEquals("👵", come.propEmoji)
         // A thing for the owl's berries.
         val owl = VoiceStories.ready(VoiceStories.owl, listOf("Grandma" to "👵", "ball" to "⚽"))
         assertEquals("More ball, please!", owl.beats.first { it.word == "more" }.lines[2])
-        // No own words: the story's own prop, with "the".
-        val plain = VoiceStories.ready(VoiceStories.boat, emptyList())
-        assertEquals("Oh no! The duck is stuck on a rock.", plain.beats.first { it.word == "come" }.problem)
-        // Nothing left unfilled.
-        for (s in VoiceStories.all) for (r in listOf(VoiceStories.ready(s, emptyList()), VoiceStories.ready(s, listOf("Max" to "🐶", "car" to "🚗")))) {
-            (listOf(r.setup) + r.beats.flatMap { listOf(it.problem, it.echo, it.result) + it.lines }).forEach { assertTrue('{' !in it, "${s.id}: $it") }
-        }
+        // No own words: the story as written.
+        assertEquals(VoiceStories.boat, VoiceStories.ready(VoiceStories.boat, emptyList()))
     }
 
     @Test
