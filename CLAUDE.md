@@ -1,4 +1,8 @@
-# Talk & Learn: notes for Claude
+# Rory's Talk Trail: notes for Claude
+
+(Called "Talk & Learn" until round 13; code names like `TalkAndLearnApp`, the `talkandlearn.`
+saved-progress prefix, sw.js cache names and the repo/URL keep the old name on purpose: changing
+the prefix would wipe his progress.)
 
 An Android learning game the owner is building for their son (almost 5, has speech issues,
 **can't read yet**). README.md describes features; this file holds the decisions and working

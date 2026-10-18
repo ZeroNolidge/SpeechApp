@@ -53,7 +53,7 @@ actual fun rememberCopyText(): (String) -> Boolean {
         { text: String ->
             runCatching {
                 val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("Talk & Learn backup", text))
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Rory's Talk Trail backup", text))
             }.isSuccess
         }
     }

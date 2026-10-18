@@ -1,4 +1,4 @@
-// Talk & Learn service worker.
+// Rory's Talk Trail service worker.
 // Network first, so the app is always the latest version when online; falls back to the
 // cached copy when offline. CI replaces BUILD_ID on every deploy so new versions take over.
 const CACHE = 'talkandlearn-BUILD_ID';

@@ -51,7 +51,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-build
-          name: Talk & Learn (latest build)
+          name: Rory's Talk Trail (latest build)
           body: |
             The main version is the web app: https://zeronolidge.github.io/SpeechApp/
             This APK is the Android version. Built from ${{ github.sha }}.

@@ -1,4 +1,4 @@
-# Talk & Learn
+# Rory's Talk Trail
 
 An adventure game for a ~5-year-old early reader that teaches speech, letters, early reading,
 numbers, coins, patterns and Cubetto-style coding. Your child picks a cartoon buddy and follows a

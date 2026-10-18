@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.ComposeViewport
 import com.zeronolidge.speechapp.audio.VoiceDetector
@@ -130,7 +131,7 @@ private fun StartScreen(ready: Boolean, onStart: () -> Unit) {
     SpeechAppTheme {
         Box(Modifier.fillMaxSize().background(Kid.background), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("Talk & Learn", fontSize = 48.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink)
+                Text("Rory's Talk Trail", fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(24.dp))
                 if (ready) GoButton(size = 130.dp, onClick = onStart)
                 else Text("Loading…", fontSize = 24.sp, color = Kid.ink)

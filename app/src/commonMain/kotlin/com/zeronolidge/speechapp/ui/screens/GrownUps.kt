@@ -295,7 +295,7 @@ private fun MicStatusSection() {
         Tip("iPad or iPhone: open Settings, scroll to Safari, tap Microphone, and choose Allow (or Ask). Then come back here and tap Turn on listening.")
         Tip("In Safari itself: tap the aA button in the address bar, then Website Settings, then Microphone: Allow.")
         Tip("Android tablet in Chrome: tap the icon to the left of the web address, then Permissions, then Microphone: Allow.")
-        Tip("Android app: open Settings, then Apps, then Talk & Learn, then Permissions, then Microphone: Allow.")
+        Tip("Android app: open Settings, then Apps, then Rory's Talk Trail, then Permissions, then Microphone: Allow.")
     }
 }
 
