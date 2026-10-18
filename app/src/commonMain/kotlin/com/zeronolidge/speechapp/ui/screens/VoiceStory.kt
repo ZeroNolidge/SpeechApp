@@ -24,6 +24,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -290,18 +291,6 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     val w = maxWidth
                     val h = maxHeight
                     VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize())
-                    // The word to say, big, at the top in the middle.
-                    val k = index
-                    if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT) {
-                        Row(
-                            Modifier.align(Alignment.TopCenter).padding(top = 8.dp).widthIn(max = w * 0.9f).paperCard(PaperStyle.chip, 22.dp).padding(horizontal = 18.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(beats[k].emoji, fontSize = 40.sp, modifier = Modifier.wiggleOnTap())
-                            Spacer(Modifier.width(10.dp))
-                            Text(line(k), fontSize = if (line(k).length > 14) 28.sp else 40.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1)
-                        }
-                    }
                     // The sticker he earned, peeling on in the middle at the end.
                     sticker?.let { st ->
                         Box(Modifier.align(Alignment.Center)) { Sticker(st, minOf(h * 0.35f, 180.dp), Modifier.peelIn(st.text)) }
@@ -316,6 +305,25 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == VPhase.END) Mood.CHEER else Mood.HAPPY)
                         if (!narrow && !app.listening) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
                     }
+                }
+            }
+            // The word to say, big, at the top: drawn over everything (scene, dim and the glowing
+            // prop), so it's never hidden. When the prop starts high (it sinks), the word sits
+            // top-left, clear of it.
+            val k = index
+            if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT) {
+                Row(
+                    Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
+                        .padding(top = 8.dp, start = 8.dp)
+                        .widthIn(max = 560.dp)
+                        .zIndex(4f)
+                        .paperCard(PaperStyle.chip, 22.dp)
+                        .padding(horizontal = 18.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(beats[k].emoji, fontSize = 40.sp, modifier = Modifier.wiggleOnTap())
+                    Spacer(Modifier.width(10.dp))
+                    Text(line(k), fontSize = if (line(k).length > 14) 28.sp else 40.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1)
                 }
             }
             // "I said it!" is always there in the same spot: it does the same action as his voice.

@@ -634,9 +634,10 @@ private fun DrawScope.sleepyOwlBadge() {
     val w = size.width
     val h = size.height
     // The sun coming up, and a little star still out.
-    paperCircle(Color(0xFFFFB74D), w * 0.3f, Offset(w * 0.5f, h * 0.72f))
+    // A pink-orange dawn glow low in the sky, and a big sun peeking up at the right, beside the owl.
+    paperOval(Color(0xFFFF8A65), Offset(-w * 0.1f, h * 0.5f), Size(w * 1.2f, h * 0.4f))
+    paperCircle(Color(0xFFFFD54F), w * 0.2f, Offset(w * 0.8f, h * 0.68f))
     paperCircle(Color(0xFFFFF59D), w * 0.035f, Offset(w * 0.24f, h * 0.24f))
-    paperCircle(Color(0xFFFFF59D), w * 0.025f, Offset(w * 0.78f, h * 0.3f))
     // The hill (a branch for the owl), across the bottom.
     paperOval(Color(0xFF2E7D32), Offset(-w * 0.1f, h * 0.7f), Size(w * 1.2f, h * 0.5f))
     // The owl: a round brown body with ear tufts, cream face, closed sleepy eyes and a beak.
