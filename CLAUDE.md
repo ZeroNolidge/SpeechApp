@@ -345,4 +345,8 @@ Kotlin Multiplatform module `app` with three source sets:
 - They test on a Samsung tablet in landscape and send screenshots. Ask for screenshots of art
   changes, since art is drawn blind in code.
 - They like being asked clarifying questions on big design choices (use multiple-choice).
+- **Voice clips are batched:** don't ask the owner to run `tools/make_voice.py` after each change
+  (lines without a clip just use the browser voice meanwhile). Keep track of how many lines are
+  waiting (`python3 tools/make_voice.py --dry-run` here, no key needed) and suggest one batch run
+  when a lot have piled up or before they test something where Rory's voice matters.
 - Not a substitute for a speech-language pathologist; keep that note in the grown-ups screen.
