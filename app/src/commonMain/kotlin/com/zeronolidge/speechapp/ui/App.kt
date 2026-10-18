@@ -71,6 +71,7 @@ import com.zeronolidge.speechapp.ui.screens.PipStoryScreen
 import com.zeronolidge.speechapp.ui.screens.EchoCaveScreen
 import com.zeronolidge.speechapp.ui.screens.RestScreen
 import com.zeronolidge.speechapp.ui.screens.SayStepCheck
+import com.zeronolidge.speechapp.ui.screens.SayBeatCheck
 import com.zeronolidge.speechapp.ui.screens.PracticeGameScreen
 import com.zeronolidge.speechapp.ui.screens.PracticeMenu
 import com.zeronolidge.speechapp.ui.screens.LandGamesScreen

@@ -71,7 +71,7 @@ private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END }
  * adds one more ("Go! Go, boat!"). A calm goodbye beat, then a sticker.
  */
 @Composable
-fun VoiceStoryScreen(id: String, nav: Nav, startBeat: Int = 0) {
+fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val app = LocalApp.current
     val p = app.progress
     val story = remember(id) { VoiceStories.ready(VoiceStories.byId(id) ?: VoiceStories.boat, p.customWords) }
@@ -251,7 +251,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, startBeat: Int = 0) {
         app.rememberInstruction(story.setup)
         val s = session
         // The first talk turn of a sitting: a quick quiet check of the room before Rory talks.
-        val first = startBeat.coerceIn(0, beats.lastIndex)
+        val first = firstBeat.coerceIn(0, beats.lastIndex)
         val go = { if (s == session) app.speaker.say(story.setup) { if (s == session && phase == VPhase.INTRO) startBeat(first) } }
         if (micOk()) app.voice.checkRoom(go) else go()
     }
