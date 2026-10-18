@@ -83,13 +83,34 @@ jobs:
           cp "$RUNNER_TEMP/emoji.ttf" app/src/wasmJsMain/composeResources/font/noto_color_emoji.ttf
       - name: Build the web app
         run: ./gradlew --no-daemon :app:wasmJsBrowserDistribution
+      - name: Add word listening (Vosk in the browser, small English model)
+        # Downloaded at build time (never kept in the repo). If it fails, the app simply has no
+        # word listening (loudness still works), so this step can't break the build.
+        continue-on-error: true
+        run: |
+          set -x
+          out=app/build/dist/wasmJs/productionExecutable/vosk
+          mkdir -p "$out"
+          cd "$RUNNER_TEMP"
+          npm pack --silent vosk-browser@0.0.8
+          tar xzf vosk-browser-0.0.8.tgz
+          cp package/dist/vosk.js "$GITHUB_WORKSPACE/$out/vosk-0.0.8.js"
+          # The model as a .tar.gz (Vosk strips the archive's top folder, whatever its name).
+          if ! curl -fsSL --retry 3 -o model.tar.gz https://ccoreilly.github.io/vosk-browser/models/vosk-model-small-en-us-0.15.tar.gz; then
+            curl -fsSL --retry 3 -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+            unzip -q model.zip
+            tar czf model.tar.gz vosk-model-small-en-us-0.15
+          fi
+          cp model.tar.gz "$GITHUB_WORKSPACE/$out/model-small-en-us-0.15.tar.gz"
+          ls -la "$GITHUB_WORKSPACE/$out"
       - name: Stamp the service worker with this build and the list of files to save offline
         run: |
           cd app/build/dist/wasmJs/productionExecutable
           sed -i "s/BUILD_ID/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/" sw.js
           python3 - <<'PY'
           import json, os
-          files = sorted(os.path.relpath(os.path.join(d, f), '.') for d, _, fs in os.walk('.') for f in fs if f != 'sw.js')
+          # Word listening (vosk/) isn't saved up front: it's 45 MB, downloaded on first use instead.
+          files = sorted(os.path.relpath(os.path.join(d, f), '.') for d, _, fs in os.walk('.') for f in fs if f != 'sw.js' and not d.startswith('./vosk'))
           s = open('sw.js').read().replace('PRECACHE_LIST', json.dumps(files))
           open('sw.js', 'w').write(s)
           print(len(files), 'files to save offline')

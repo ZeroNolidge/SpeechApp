@@ -8,6 +8,7 @@ import com.zeronolidge.speechapp.logic.SpeechSteps
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.logic.Echo
 import com.zeronolidge.speechapp.ui.art.paperOval
+import com.zeronolidge.speechapp.ui.art.paperRect
 import com.zeronolidge.speechapp.ui.art.paperCircle
 import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.ui.components.wiggleOnTap
@@ -65,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.data.Praise
 import com.zeronolidge.speechapp.data.SpeechSound
+import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.data.Word
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.ui.art.Critter
@@ -174,6 +176,10 @@ fun SpeakMoment(
     var heardIt by remember(key) { mutableStateOf(false) }
     /** Two quiet tries: listening carries on until his voice or "I said it!". */
     var waitingVoice by remember(key) { mutableStateOf(false) }
+    /** Rory has modelled a near-miss once for this word (never more). */
+    var modelledOnce by remember(key) { mutableStateOf(false) }
+    /** The sound whose mouth shape Rory is showing while he models it. */
+    var mouthCue by remember(key) { mutableStateOf<String?>(null) }
     fun micUsable() = p.useMic && app.voice.available && micPermission.granted() && !micBroken
     val yourTurn = "Your turn!"
 
@@ -269,7 +275,12 @@ fun SpeakMoment(
         val s = session
         state = Speak.LISTENING
         tries++
-        app.voice.listenTry(4000, onLevel = { level = it; app.listenLevel = it }, onVoice = { if (s == session) act() }) { t ->
+        // Word listening: records what was heard (listen-only). When the grown-up has turned
+        // modelling on, the answer waits (about a second at most) for the words.
+        val check = app.wordCheck(word.text, sound?.id, modeled = !waitingVoice)
+        val waitWords = check != null && app.modelingOn && !modelledOnce
+        var loud: com.zeronolidge.speechapp.audio.VoiceTry? = null
+        val handle: (com.zeronolidge.speechapp.audio.VoiceTry, Pair<com.zeronolidge.speechapp.logic.Heard, Float>?) -> Unit = handle@{ t, judged ->
             val heard = when (t) {
                 com.zeronolidge.speechapp.audio.VoiceTry.HEARD -> true
                 com.zeronolidge.speechapp.audio.VoiceTry.NO_MIC -> null
@@ -277,11 +288,34 @@ fun SpeakMoment(
                 com.zeronolidge.speechapp.audio.VoiceTry.SOFT -> tries > 2
                 else -> false
             }
-            if (s != session || state == Speak.DONE) return@listenTry
+            if (s != session || state == Speak.DONE) return@handle
             level = 0f
             app.listenLevel = 0f
+            // After Rory modelled the sound: this was the one more try; the word is done either way.
+            if (modelledOnce && heard == false) {
+                finish(heard = false, micUsed = true)
+                return@handle
+            }
             when (heard) {
-                true -> finish(heard = true, micUsed = true)
+                true -> {
+                    // Modelling on: a confident near-miss gets the sound modelled once (the
+                    // action has already happened), then one more try at most.
+                    val model = check?.let { c -> judged?.let { (r, conf) -> com.zeronolidge.speechapp.logic.Corrections.reply(c, r, conf, app.corrections()) } }
+                    val target = check?.let { c -> SpeechContent.sounds.firstOrNull { it.id == c.sound } }
+                    if (waitWords) app.corrections().noteReply(check!!.sound, model == com.zeronolidge.speechapp.logic.Reply.MODEL_SOUND && target != null)
+                    if (waitWords && model == com.zeronolidge.speechapp.logic.Reply.MODEL_SOUND && target != null) {
+                        modelledOnce = true
+                        state = Speak.MODELLING
+                        mouthCue = target.id
+                        app.speaker.say("Listen. ${target.modelSound}. ${word.text}.")
+                        app.speaker.then("One more time!") {
+                            mouthCue = null
+                            if (s == session && state != Speak.DONE) listen()
+                        }
+                    } else {
+                        finish(heard = true, micUsed = true)
+                    }
+                }
                 false ->
                     when {
                         // Quiet: say it together and listen once more.
@@ -305,6 +339,14 @@ fun SpeakMoment(
                 }
             }
         }
+        app.voice.listenTry(
+            4000, onLevel = { level = it; app.listenLevel = it }, onVoice = { if (s == session) act() },
+            words = check?.grammar,
+            onWords = { heard ->
+                val judged = check?.let { app.wordHeard(it, heard) }
+                if (waitWords) loud?.let { handle(it, judged) }
+            },
+        ) { t -> if (waitWords) loud = t else handle(t, null) }
     }
 
     /** Never asks for the microphone mid-story: that happens on the start screen or the grown-ups page. */
@@ -441,6 +483,8 @@ fun SpeakMoment(
                         }
                     }
                 }
+                // Rory models a sound: his mouth shape for it, big, in the card's corner.
+                mouthCue?.let { MouthCue(it, Modifier.align(Alignment.TopEnd).padding(10.dp).popIn("mouth")) }
                 // No microphone: Rory pops up big and asks for the word out loud, then waits for ▶.
                 if (roryWaiting) {
                     // His turn without a microphone: Rory listens big in the scene; the word to say here.
@@ -691,4 +735,58 @@ private fun highlighted(text: String, soundId: String?) = buildAnnotatedString {
     append(text.substring(0, at))
     withStyle(SpanStyle(color = Color(0xFFE53935))) { append(text.substring(at, at + len)) }
     append(text.substring(at + len))
+}
+
+/**
+ * Rory's mouth shape for a sound, as a simple paper lip cue while he models it: lips pressed
+ * together (p b m), top teeth on the bottom lip (f v), tongue tip up behind the teeth (t d n l),
+ * open with the tongue back (k g), round pushed-out lips (sh ch w), a teeth-together smile (s z).
+ */
+@Composable
+internal fun MouthCue(sound: String, modifier: Modifier = Modifier) {
+    Box(modifier.size(110.dp).paperCard(Color(0xFFFFE0B2), circle = true), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize().padding(14.dp)) {
+            val w = size.width
+            val h = size.height
+            val lip = Color(0xFFE57373)
+            val dark = Color(0xFF5D1F1F)
+            val teeth = Color.White
+            val tongue = Color(0xFFF48FB1)
+            when (sound) {
+                "p", "b", "m" -> {
+                    // Lips pressed together.
+                    paperOval(lip, Offset(w * 0.1f, h * 0.36f), Size(w * 0.8f, h * 0.16f))
+                    paperOval(lip, Offset(w * 0.1f, h * 0.5f), Size(w * 0.8f, h * 0.16f))
+                }
+                "f", "v" -> {
+                    paperOval(lip, Offset(w * 0.1f, h * 0.24f), Size(w * 0.8f, h * 0.22f))
+                    paperRect(teeth, Offset(w * 0.28f, h * 0.42f), Size(w * 0.44f, h * 0.12f))
+                    paperOval(lip, Offset(w * 0.14f, h * 0.5f), Size(w * 0.72f, h * 0.22f))
+                }
+                "t", "d", "n", "l" -> {
+                    paperOval(lip, Offset(w * 0.08f, h * 0.22f), Size(w * 0.84f, h * 0.56f))
+                    paperOval(dark, Offset(w * 0.2f, h * 0.32f), Size(w * 0.6f, h * 0.36f))
+                    paperRect(teeth, Offset(w * 0.3f, h * 0.32f), Size(w * 0.4f, h * 0.07f))
+                    // The tongue tip lifted to just behind the top teeth.
+                    paperOval(tongue, Offset(w * 0.34f, h * 0.38f), Size(w * 0.32f, h * 0.26f))
+                }
+                "k", "g" -> {
+                    paperOval(lip, Offset(w * 0.1f, h * 0.18f), Size(w * 0.8f, h * 0.64f))
+                    paperOval(dark, Offset(w * 0.22f, h * 0.28f), Size(w * 0.56f, h * 0.44f))
+                    // The tongue low at the front (its back is up, out of sight).
+                    paperOval(tongue, Offset(w * 0.3f, h * 0.56f), Size(w * 0.4f, h * 0.14f))
+                }
+                "sh", "ch", "w", "r" -> {
+                    // Round, pushed-out lips.
+                    paperCircle(lip, w * 0.32f, Offset(w * 0.5f, h * 0.5f))
+                    paperCircle(dark, w * 0.15f, Offset(w * 0.5f, h * 0.5f))
+                }
+                else -> {
+                    // A smile with the teeth together (s, z and the rest).
+                    paperOval(lip, Offset(w * 0.06f, h * 0.3f), Size(w * 0.88f, h * 0.4f))
+                    paperRect(teeth, Offset(w * 0.18f, h * 0.42f), Size(w * 0.64f, h * 0.16f))
+                }
+            }
+        }
+    }
 }

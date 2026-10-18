@@ -75,6 +75,8 @@ private fun jsMicStart(onLevel: (Double) -> Unit, onFail: () -> Unit): JsAny = j
                 an.fftSize = 1024;
                 src.connect(an);
                 st.src = src;
+                // Word listening (WebWords.kt) hears the same stream, when a turn asked for it.
+                try { if (window.__tlWords && window.__tlWords.attach) window.__tlWords.attach(ctx, src); } catch (e) {}
                 const buf = new Float32Array(an.fftSize);
                 st.timer = setInterval(() => {
                     an.getFloatTimeDomainData(buf);
@@ -91,6 +93,7 @@ private fun jsMicStart(onLevel: (Double) -> Unit, onFail: () -> Unit): JsAny = j
 private fun jsMicStop(st: JsAny): Unit = js(
     """(() => {
         st.stopped = true;
+        try { if (window.__tlWords && window.__tlWords.detach) window.__tlWords.detach(); } catch (e) {}
         try { if (st.timer) clearInterval(st.timer); } catch (e) {}
         try { if (st.src) st.src.disconnect(); } catch (e) {}
         try { if (st.stream) st.stream.getTracks().forEach(t => t.stop()); } catch (e) {}

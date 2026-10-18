@@ -147,7 +147,9 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
             if (micOk()) {
                 phase = CavePhase.LISTEN
                 app.listening = true
-                app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }) { heard ->
+                // Word listening (listen-only here): a small record of what was heard.
+                val check = app.wordCheck(w.text, null, modeled = true)
+                app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }, words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } }) { heard ->
                     if (s != session || phase != CavePhase.LISTEN) return@listen
                     echo(i, heard == true, micUsed = true)
                 }

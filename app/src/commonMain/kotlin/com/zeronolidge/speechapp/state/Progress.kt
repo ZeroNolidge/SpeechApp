@@ -408,6 +408,51 @@ class Progress(private val prefs: Prefs) {
         focusSounds = prefs.getStringSet("focus", emptySet())!!.toSet()
     }
 
+    // ---------- Word listening (on-device recognition; small records only, never audio or text) ----------
+
+    /** Recognition listens on each talk turn (records only, "listen-only", unless modelling is on). */
+    var wordListening by mutableStateOf(prefs.getBoolean("wordListening", true))
+        private set
+
+    fun updateWordListening(v: Boolean) {
+        wordListening = v
+        prefs.edit().putBoolean("wordListening", v).apply()
+    }
+
+    /** Grown-up test mode: after each try the grown-up taps "right" or "off". */
+    var wordTestMode by mutableStateOf(prefs.getBoolean("wordTestMode", false))
+        private set
+
+    fun updateWordTestMode(v: Boolean) {
+        wordTestMode = v
+        prefs.edit().putBoolean("wordTestMode", v).apply()
+    }
+
+    /** Rory models a near-miss sound (only works once ratings unlock it, see Agreement). */
+    var nearMissModeling by mutableStateOf(prefs.getBoolean("nearMissModeling", false))
+        private set
+
+    fun updateNearMissModeling(v: Boolean) {
+        nearMissModeling = v
+        prefs.edit().putBoolean("nearMissModeling", v).apply()
+    }
+
+    /** One small record per try: day, word, sound, where in the word, what was heard, how sure, modelled or not. */
+    var wordTries by mutableStateOf(com.zeronolidge.speechapp.logic.TryRecord.decodeAll(prefs.getString("wordTries", "")))
+        private set
+
+    fun addWordTry(r: com.zeronolidge.speechapp.logic.TryRecord) {
+        wordTries = (wordTries + r).takeLast(com.zeronolidge.speechapp.logic.TryRecord.MAX)
+        prefs.edit().putString("wordTries", com.zeronolidge.speechapp.logic.TryRecord.encodeAll(wordTries)).apply()
+    }
+
+    /** Test mode: the grown-up's rating for the latest try. */
+    fun rateLastWordTry(right: Boolean) {
+        val last = wordTries.lastOrNull() ?: return
+        wordTries = wordTries.dropLast(1) + last.copy(rating = right)
+        prefs.edit().putString("wordTries", com.zeronolidge.speechapp.logic.TryRecord.encodeAll(wordTries)).apply()
+    }
+
     /** Clears the buddy, the trail, pieces, stickers and stars. Grown-up settings and own words are kept. */
     fun reset() {
         prefs.edit().clear()
@@ -429,6 +474,8 @@ class Progress(private val prefs: Prefs) {
         clearRun = 0
         missRun = 0
         backpack = 0
+        wordTries = emptyList()
+        prefs.edit().putBoolean("wordListening", wordListening).putBoolean("nearMissModeling", nearMissModeling).apply()
     }
 
     companion object {

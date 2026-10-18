@@ -244,7 +244,9 @@ object StoryGen {
             else -> sounds.flatMap { s -> s.phrases.map { s to it } }
         }
         val fresh = { list: List<Pair<SpeechSound, Word>> -> list.filter { it.second.text !in used } }
-        return fresh(atStep).ifEmpty { fresh(all) }.ifEmpty { all }.random(rnd)
+        // Words whose likely swaps are real words too ("pig": "big"), so word listening can tell them apart.
+        val pairs = { list: List<Pair<SpeechSound, Word>> -> list.filter { Swaps.hasRealSwap(it.second.text.split(" ").last(), it.first.id) }.ifEmpty { list } }
+        return pairs(fresh(atStep)).ifEmpty { fresh(all) }.ifEmpty { all }.random(rnd)
     }
 
     /** A mix of subjects from the lands the hero can reach, always including speech. */

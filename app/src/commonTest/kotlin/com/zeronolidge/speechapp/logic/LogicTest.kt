@@ -1144,3 +1144,128 @@ class RoomLevelTest {
         assertTrue(n.roomAfter()!! <= 0.006f + 1e-6f)
     }
 }
+
+/** Word listening: swaps by sound, judging, records, agreement, gentle corrections, parent cards. */
+class WordCheckTest {
+    @Test
+    fun swapsFollowTheSoundTable() {
+        val pig = Swaps.forWord("pig", "p")
+        assertTrue("big" in pig, "$pig")
+        assertTrue(pig.size <= 3)
+        assertEquals(SoundPos.START, Swaps.position("pig", "p"))
+        assertEquals(SoundPos.END, Swaps.position("cup", "p"))
+        assertEquals(SoundPos.MIDDLE, Swaps.position("happy", "p"))
+        // Final sound dropped for p, t, d, k, s at the end.
+        assertTrue("cu" in Swaps.forWord("cup", "p") || Swaps.forWord("cup", "p").any { it.length == 2 })
+        assertTrue("bat" in Swaps.forWord("mat", "m"))
+        assertTrue("dog" in Swaps.forWord("dog", "d").map { it } == false)
+        assertTrue("dug" in Swaps.forWord("duck", "k"), "${Swaps.forWord("duck", "k")}")
+        assertTrue("cop" in Swaps.forWord("top", "t"), "${Swaps.forWord("top", "t")}")
+        assertTrue("sip" in Swaps.forWord("ship", "sh"))
+        assertTrue("pan" in Swaps.forWord("fan", "f"))
+        // Real words come first.
+        assertTrue(Swaps.forWord("pig", "p").first() in RealWords.all)
+    }
+
+    @Test
+    fun clustersAndDevelopingSoundsAreNeverScored() {
+        assertTrue(Swaps.inCluster("stop", "s"))
+        assertTrue(Swaps.inCluster("blue", "b"))
+        assertTrue(!Swaps.inCluster("pig", "p"))
+        assertTrue(!Swaps.inCluster("happy", "p"))
+        assertTrue("top" in Swaps.forWord("stop", "s"), "${Swaps.forWord("stop", "s")}")
+        for (s in listOf("r", "l", "s", "z", "sh", "ch", "j", "th", "v")) assertTrue(!Swaps.check("${s}ip", s, true)!!.scored, s)
+        assertTrue(!Swaps.check("blue", "b", true)!!.scored)
+        assertTrue(Swaps.check("pig", "p", true)!!.scored)
+    }
+
+    @Test
+    fun judgingIsGenerousAndUnsureIsAPass() {
+        val c = Swaps.check("big pig", "p", true)!!
+        assertEquals("pig", c.target)
+        assertTrue("big" in c.others && "big" !in c.swaps)
+        assertEquals(Heard.RIGHT, Judge.judge(c, listOf("big" to 0.9f, "pig" to 0.8f)).second.first)
+        assertEquals(Heard.UNSURE, Judge.judge(c, listOf("pig" to 0.3f)).second.first)
+        assertEquals(Heard.UNSURE, Judge.judge(c, listOf("[unk]" to 1f)).second.first)
+        assertEquals(Heard.UNSURE, Judge.judge(c, emptyList()).second.first)
+        val swap = c.swaps.first()
+        assertEquals(Heard.NEAR_MISS, Judge.judge(c, listOf(swap to 0.9f)).second.first)
+        assertEquals(Heard.UNSURE, Judge.judge(c, listOf(swap to 0.6f)).second.first)
+        // A lisp-like "th" for s counts as right.
+        val sun = Swaps.check("sun", "s", true)!!
+        assertEquals(Heard.RIGHT, Judge.judge(sun, listOf("thun" to 0.9f)).second.first)
+        assertTrue("[unk]" in c.grammar)
+    }
+
+    @Test
+    fun recordsRoundTripAndKeepNoText() {
+        val r = TryRecord(100, "pig", "p", SoundPos.START, "big", 0.87f, true, Heard.NEAR_MISS, true, null)
+        val back = TryRecord.decode(r.encode())!!
+        assertEquals(r.copy(conf = 0.87f), back.copy(conf = 0.87f))
+        assertTrue(kotlin.math.abs(back.conf - 0.87f) < 0.011f)
+        assertEquals(listOf(back.copy(rating = true)), TryRecord.decodeAll(TryRecord.encodeAll(listOf(r.copy(rating = true)))).map { it.copy(conf = back.conf) })
+        assertEquals(TryRecord.MAX, TryRecord.decodeAll(TryRecord.encodeAll(List(TryRecord.MAX + 5) { r })).size)
+    }
+
+    @Test
+    fun modellingUnlocksOnlyAfter30RatedTriesAt90Percent() {
+        fun rec(result: Heard, rating: Boolean) = TryRecord(1, "pig", "p", SoundPos.START, "pig", 0.9f, true, result, true, rating)
+        val agree = List(29) { rec(Heard.RIGHT, true) }
+        assertTrue(!Agreement.modelingAllowed(agree))
+        assertTrue(Agreement.modelingAllowed(agree + rec(Heard.NEAR_MISS, false)))
+        val some = List(26) { rec(Heard.RIGHT, true) } + List(4) { rec(Heard.RIGHT, false) }
+        assertTrue(!Agreement.modelingAllowed(some))
+        // Unsure tries don't count either way.
+        assertEquals(0, Agreement.called(List(40) { rec(Heard.UNSURE, true) }).size)
+    }
+
+    @Test
+    fun correctionsAreRareNeverTwiceInARowAndStopWhenHeTires() {
+        val c = Corrections()
+        c.noteTry("p", 0.5f, 600)
+        assertTrue(!c.mayCorrect("p"))
+        c.noteTry("p", 0.5f, 600)
+        c.noteTry("p", 0.5f, 600)
+        assertTrue(c.mayCorrect("p"))
+        c.noteReply("p", true)
+        c.noteTry("p", 0.5f, 600)
+        assertTrue(!c.mayCorrect("p"))
+        c.noteReply("p", false)
+        c.noteTry("p", 0.5f, 600)
+        assertTrue(!c.mayCorrect("p"))
+        c.noteReply("p", false)
+        c.noteTry("p", 0.5f, 600)
+        assertTrue(c.mayCorrect("p"))
+        // Quieter, shorter tries: no more corrections this sitting.
+        val t = Corrections()
+        repeat(3) { t.noteTry("b", 0.6f, 700) }
+        repeat(3) { t.noteTry("b", 0.2f, 300) }
+        assertTrue(t.stopped && !t.mayCorrect("b"))
+        // Replies: a confident near-miss on a scored sound may be modelled; never on developing sounds.
+        val check = Swaps.check("pig", "p", true)!!
+        val fresh = Corrections().apply { repeat(3) { noteTry("p", 0.5f, 600) } }
+        assertEquals(Reply.MODEL_SOUND, Corrections.reply(check, Heard.NEAR_MISS, 0.9f, fresh))
+        assertEquals(Reply.ECHO, Corrections.reply(check, Heard.NEAR_MISS, 0.75f, fresh))
+        assertEquals(Reply.CELEBRATE, Corrections.reply(check, Heard.RIGHT, 0.9f, fresh))
+        assertEquals(Reply.ECHO, Corrections.reply(Swaps.check("sun", "s", true)!!, Heard.NEAR_MISS, 0.95f, Corrections().apply { repeat(3) { noteTry("s", 0.5f, 600) } }))
+    }
+
+    @Test
+    fun soundCardsNeedAbout20TriesAndSuggestFocusWords() {
+        fun rec(day: Int, right: Boolean, pos: SoundPos = SoundPos.START, sound: String = "p") =
+            TryRecord(day, "pig", sound, pos, "x", 0.9f, true, if (right) Heard.RIGHT else Heard.NEAR_MISS, true)
+        val few = List(19) { rec(100, true) }
+        assertTrue(SoundCards.cards(few, 100).isEmpty())
+        val many = List(10) { rec(80, false) } + List(10) { rec(100, it % 2 == 0, SoundPos.END) } + List(5) { rec(100, true) }
+        val card = SoundCards.cards(many, 100).single()
+        assertEquals("p", card.sound)
+        assertEquals(4, card.weeks.size)
+        assertTrue(card.weeks.first() == null || card.weeks.first()!! < card.weeks.last()!!)
+        assertTrue(card.byPos[SoundPos.MIDDLE] == null)
+        val focus = SoundCards.focus(listOf(card))
+        assertEquals("p", focus.single().first)
+        assertEquals(3, focus.single().second.size)
+        // Developing sounds never get a card.
+        assertTrue(SoundCards.cards(List(30) { rec(100, false).copy(sound = "r", scored = false) }, 100).isEmpty())
+    }
+}

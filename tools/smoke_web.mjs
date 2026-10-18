@@ -293,6 +293,22 @@ if (started) {
             await open('#test=say', 1180, 820, 'say-ipad-landscape');
             await open('#test=say', 820, 1180, 'say-ipad-portrait');
             await open('#test=say', 400, 860, 'say-phone');
+            // Word listening: Vosk and its model load in a real browser (it's optional, so this
+            // never fails the build; it just reports).
+            {
+                await page.setViewport({ width: 1180, height: 820 });
+                await page.goto(url + '#test=talk+words', { waitUntil: 'load' });
+                await page.reload({ waitUntil: 'load' });
+                await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+                await wait(3000);
+                const before = logs.length;
+                await page.mouse.click(590, 410);
+                const t0 = Date.now();
+                const seen = () => logs.slice(before).find((t) => t.startsWith('WORDS '));
+                while (Date.now() - t0 < 150000 && !seen()) await wait(500);
+                console.log(`WORD LISTENING: ${seen() ? seen() : 'no answer in 150 s'} (after ${Math.round((Date.now() - t0) / 1000)} s)`);
+                for (const t of logs.slice(before).filter((t) => t.startsWith('WORDTRY'))) console.log(t);
+            }
             // Offline: once the service worker has saved every file, switch the network off,
             // reload, and the app must still start.
             await page.setViewport({ width: 1280, height: 800 });

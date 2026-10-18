@@ -59,7 +59,7 @@ fun main() {
     val services = AppServices(
         // Rory's pre-made voice clips where they exist, the browser's voice for anything else.
         speaker = QueueSpeaker(ClipVoiceEngine(WebClips(), WebVoiceEngine())).also { it.rate = progress.speechRate },
-        voice = VoiceDetector(WebMicLevels()),
+        voice = VoiceDetector(WebMicLevels(), com.zeronolidge.speechapp.audio.WebWords()),
         parrot = WebParrot(),
         progress = progress,
         sfx = com.zeronolidge.speechapp.audio.WebSfx(),
@@ -75,7 +75,7 @@ private fun locationHash(): String = js("(() => { try { return window.location.h
  * "#test=land-MEADOW" an area's games, so layouts can be checked at different screen sizes.
  */
 private fun testStart(): Screen? {
-    val v = locationHash().removePrefix("#test=").takeIf { locationHash().startsWith("#test=") } ?: return null
+    val v = locationHash().removePrefix("#test=").removeSuffix("+words").takeIf { locationHash().startsWith("#test=") } ?: return null
     return runCatching {
         when {
             v.startsWith("land-") -> Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
@@ -121,6 +121,8 @@ private fun WebRoot(services: AppServices) {
                 if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
             }
             started = true
+            // Automatic check only ("#test=...+words"): load word listening straight away.
+            if (locationHash().endsWith("+words")) services.voice.words.prepare()
         } }
         else -> TalkAndLearnApp(services, start = remember { testStart() })
     }

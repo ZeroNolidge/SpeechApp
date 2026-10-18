@@ -17,6 +17,8 @@ import com.zeronolidge.speechapp.ui.art.PaperStyle
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
@@ -116,6 +118,14 @@ fun TalkAndLearnApp(
                         }
                     },
             ) {
+                // Word listening: the recogniser loads quietly in the background a little after
+                // start (once; about 45 MB the first time, then from the device), only when
+                // listening is on and the microphone is allowed.
+                val mic = com.zeronolidge.speechapp.ui.platform.rememberMicPermission()
+                LaunchedEffect(services.progress.wordListening, services.progress.useMic, mic.status) {
+                    kotlinx.coroutines.delay(5000)
+                    if (services.progress.wordListening && services.progress.useMic && mic.granted()) services.voice.words.prepare()
+                }
                 // Keeps this sitting of play going while he plays (saved, so a reload carries on).
                 LaunchedEffect(Unit) {
                     while (true) {
@@ -126,6 +136,7 @@ fun TalkAndLearnApp(
                 CompositionLocalProvider(LocalScreenWidth provides screenW) { Screens(start) }
                 CelebrationOverlay()
                 GiftOverlay()
+                WordRateBar()
                 PuffOverlay(origin)
             }
         }
@@ -262,6 +273,39 @@ private fun GiftOverlay() {
                 HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, Modifier.weight(1f).fillMaxWidth(), Mood.CHEER)
                 PaperChip(piece.name)
             }
+        }
+    }
+}
+
+/**
+ * Grown-up test mode (turned on behind the parent lock): after each try, a small bar asks the
+ * grown-up "right" or "off". Only that rating is saved, next to what the recogniser heard (which
+ * isn't shown, so it can't sway the rating). It closes by itself after 12 seconds.
+ */
+@Composable
+private fun WordRateBar() {
+    val app = LocalApp.current
+    if (!app.progress.wordTestMode || !app.rateOpen) return
+    LaunchedEffect(app.rateTry) {
+        kotlinx.coroutines.delay(12_000)
+        app.rateOpen = false
+    }
+    Box(Modifier.fillMaxSize().padding(top = 70.dp), contentAlignment = Alignment.TopCenter) {
+        androidx.compose.foundation.layout.Row(
+            Modifier.paperCard(Color(0xFFECEFF1), 18.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Grown-up: that try was", fontSize = 16.sp, color = Kid.ink)
+            androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
+            com.zeronolidge.speechapp.ui.components.PaperButton(Color(0xFFC8E6C9), Modifier.height(48.dp), onClick = {
+                app.progress.rateLastWordTry(true)
+                app.rateOpen = false
+            }) { Text("👍 Right", fontSize = 18.sp, color = Kid.ink, modifier = Modifier.padding(horizontal = 14.dp)) }
+            androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
+            com.zeronolidge.speechapp.ui.components.PaperButton(Color(0xFFFFE0B2), Modifier.height(48.dp), onClick = {
+                app.progress.rateLastWordTry(false)
+                app.rateOpen = false
+            }) { Text("✋ Off", fontSize = 18.sp, color = Kid.ink, modifier = Modifier.padding(horizontal = 14.dp)) }
         }
     }
 }

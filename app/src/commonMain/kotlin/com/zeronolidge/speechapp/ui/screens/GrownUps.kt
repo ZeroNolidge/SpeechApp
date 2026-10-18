@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import com.zeronolidge.speechapp.ui.art.paperCard
+import com.zeronolidge.speechapp.ui.art.paperCircle
+import com.zeronolidge.speechapp.ui.art.paperRoundRect
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -77,6 +81,10 @@ fun GrownUpsScreen(nav: Nav) {
                 Spacer(Modifier.padding(4.dp))
                 Heading("Add your own words")
                 OwnWords()
+                Spacer(Modifier.padding(4.dp))
+                Heading("Word listening")
+                WordListeningSection()
+                SoundCardsSection()
             }
             Card(Modifier.weight(1f)) {
                 Heading("Settings")
@@ -410,5 +418,117 @@ private fun Tip(text: String) {
         Text("•", fontSize = 16.sp)
         Spacer(Modifier.width(8.dp))
         Text(text, fontSize = 15.sp, color = Kid.ink)
+    }
+}
+
+/**
+ * On-device word listening: what it is, whether it's ready, the grown-up test mode (rate each try
+ * "right" or "off") with how often the app agrees, and the near-miss modelling switch, which only
+ * unlocks after 30 rated tries at 90% agreement.
+ */
+@Composable
+private fun WordListeningSection() {
+    val app = LocalApp.current
+    val p = app.progress
+    val dim = Kid.ink.copy(alpha = 0.7f)
+    val status = when (app.voice.words.status) {
+        com.zeronolidge.speechapp.audio.WordListener.Status.READY -> "Ready (on this device, works offline)"
+        com.zeronolidge.speechapp.audio.WordListener.Status.LOADING -> "Getting ready (a one-time 45 MB download)…"
+        com.zeronolidge.speechapp.audio.WordListener.Status.UNAVAILABLE -> "Not available on this device: listening by loudness only, as before"
+        com.zeronolidge.speechapp.audio.WordListener.Status.OFF -> if (p.wordListening) "Starts a few seconds after the app opens, once the microphone is on" else "Off"
+    }
+    Text(
+        "Besides hearing that your child spoke, the app can now try to recognise the word, on this device only. " +
+            "It keeps no recordings and no text: just a small note per try (the word, its sound, what it heard and how sure). " +
+            "Right now it only listens: Rory reacts exactly as before.",
+        fontSize = 14.sp, color = dim,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Word listening", fontSize = 18.sp, modifier = Modifier.weight(1f))
+        Switch(checked = p.wordListening, onCheckedChange = { p.updateWordListening(it) })
+    }
+    Text(status, fontSize = 14.sp, color = dim)
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Test mode: I'll rate each try", fontSize = 18.sp, modifier = Modifier.weight(1f))
+        Switch(checked = p.wordTestMode, onCheckedChange = { p.updateWordTestMode(it) })
+    }
+    Text(
+        "Sit with your child. After each try a small bar appears: tap \"Right\" if the sound was right, \"Off\" if it wasn't. " +
+            "This checks how well the app hears your child.",
+        fontSize = 14.sp, color = dim,
+    )
+    val called = com.zeronolidge.speechapp.logic.Agreement.called(p.wordTries)
+    val rated = p.wordTries.count { it.rating != null }
+    val agree = com.zeronolidge.speechapp.logic.Agreement.rate(p.wordTries)
+    Text(
+        if (rated == 0) "No rated tries yet."
+        else "You've rated $rated ${if (rated == 1) "try" else "tries"}. The app made a call on ${called.size}" +
+            (if (called.isNotEmpty()) " and agreed with you on ${(agree * 100).roundToInt()}%." else "."),
+        fontSize = 16.sp, fontWeight = FontWeight.Bold,
+    )
+    val allowed = com.zeronolidge.speechapp.logic.Agreement.modelingAllowed(p.wordTries)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Rory models near-miss sounds", fontSize = 18.sp, modifier = Modifier.weight(1f), color = if (allowed) Kid.ink else dim)
+        Switch(checked = p.nearMissModeling && allowed, enabled = allowed, onCheckedChange = { p.updateNearMissModeling(it) })
+    }
+    Text(
+        if (allowed) "When the app is sure a sound was close, Rory says it once more clearly (with his mouth shape) and asks for one more try. At most 1 try in 3, never twice in a row, and never for sounds that are still developing at this age."
+        else "Unlocks after ${com.zeronolidge.speechapp.logic.Agreement.MIN_RATED} rated tries that the app made a call on, with at least ${(com.zeronolidge.speechapp.logic.Agreement.MIN_AGREE * 100).roundToInt()}% agreement (now ${called.size}" +
+            (if (called.isNotEmpty()) ", ${(agree * 100).roundToInt()}%)." else ")."),
+        fontSize = 14.sp, color = dim,
+    )
+}
+
+/** One card per sound (after about 20 tries): start, middle and end of words, and a 4-week trend. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SoundCardsSection() {
+    val p = LocalApp.current.progress
+    val cards = remember(p.wordTries.size) { com.zeronolidge.speechapp.logic.SoundCards.cards(p.wordTries, today()) }
+    if (cards.isEmpty()) {
+        Text("Sound cards appear here after about ${com.zeronolidge.speechapp.logic.SoundCards.MIN_TRIES} tries of a sound.", fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f))
+        return
+    }
+    Text("App estimate, not a speech assessment.", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8D6E63))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        cards.forEach { c -> SoundCard(c) }
+    }
+    val focus = com.zeronolidge.speechapp.logic.SoundCards.focus(cards)
+    if (focus.isNotEmpty()) {
+        Text("Sounds to practise together", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        focus.forEach { (s, words) ->
+            val label = SpeechContent.sounds.firstOrNull { it.id == s }?.label ?: s
+            Tip("$label: ${words.joinToString(", ")}. Say each slowly, face to face, then let your child try.")
+        }
+    }
+    Tip("If you're worried about your child's speech, talk to a speech-language pathologist (speech therapist). This app can't diagnose anything.")
+}
+
+@Composable
+private fun SoundCard(c: com.zeronolidge.speechapp.logic.SoundCards.Card) {
+    val label = SpeechContent.sounds.firstOrNull { it.id == c.sound }?.label ?: c.sound
+    fun pct(v: Float?) = v?.let { "${(it * 100).roundToInt()}%" } ?: "–"
+    Column(
+        Modifier.width(220.dp).paperCard(Color(0xFFFFF8E1), 18.dp).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("$label  (${c.tries} tries)", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Start ${pct(c.byPos[com.zeronolidge.speechapp.logic.SoundPos.START])} · Middle ${pct(c.byPos[com.zeronolidge.speechapp.logic.SoundPos.MIDDLE])} · End ${pct(c.byPos[com.zeronolidge.speechapp.logic.SoundPos.END])}", fontSize = 14.sp)
+        // A small paper trend line over the last 4 weeks (shown once there are 2 weeks to compare).
+        val pts = c.weeks.mapIndexedNotNull { i, v -> v?.let { i to it } }
+        if (pts.size >= 2) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(56.dp)) {
+                val w = size.width
+                val h = size.height
+                paperRoundRect(Color(0xFFFFECB3), androidx.compose.ui.geometry.Offset.Zero, size, androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()))
+                fun at(i: Int, v: Float) = androidx.compose.ui.geometry.Offset(w * (0.1f + 0.8f * i / 3f), h * (0.85f - 0.7f * v))
+                for (j in 1 until pts.size) {
+                    drawLine(Color(0xFF6D4C41), at(pts[j - 1].first, pts[j - 1].second), at(pts[j].first, pts[j].second), strokeWidth = 3.dp.toPx())
+                }
+                pts.forEach { (i, v) -> paperCircle(Color(0xFFFF8F00), 5.dp.toPx(), at(i, v)) }
+            }
+            Text("Last 4 weeks", fontSize = 12.sp, color = Kid.ink.copy(alpha = 0.6f))
+        }
     }
 }

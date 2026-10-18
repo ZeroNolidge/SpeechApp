@@ -35,6 +35,10 @@ class VoiceMeter(
 
     val heard: Boolean get() = voiceMs >= needMs
 
+    /** How long there was voice, and the loudest reading (0 to 1 on the display scale), for this try. */
+    val voicedMs: Int get() = voiceMs
+    val peak: Float get() = display(loudest)
+
     /**
      * A soft try: some sound above the room, but not enough to count as a clear voice (a tiny
      * whisper, a breath of a word). Voice stories answer it with a smaller version of the action.

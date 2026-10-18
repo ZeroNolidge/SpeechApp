@@ -156,6 +156,58 @@ class AppServices(
 
     init {
         speaker.onTrouble = { audioTrouble = true }
+        // The microphone never listens while Rory is talking.
+        voice.isSpeaking = { speaker.speaking }
+    }
+
+    // ---------- Word listening (see logic/WordCheck.kt) ----------
+
+    /** This turn's word list, if word listening is on and ready (else null: loudness only, as always). */
+    fun wordCheck(line: String, sound: String?, modeled: Boolean): com.zeronolidge.speechapp.logic.WordCheck? =
+        if (progress.wordListening && voice.words.ready) com.zeronolidge.speechapp.logic.Swaps.check(line, sound, modeled) else null
+
+    /** Rory models near-miss sounds: the grown-up turned it on, and it agrees with their ratings. */
+    val modelingOn: Boolean
+        get() = progress.nearMissModeling && com.zeronolidge.speechapp.logic.Agreement.modelingAllowed(progress.wordTries)
+
+    private var corrections = com.zeronolidge.speechapp.logic.Corrections()
+    private var correctionsSitting = -1L
+
+    /** The gentle correction rules for this sitting of play (fresh each sitting). */
+    fun corrections(): com.zeronolidge.speechapp.logic.Corrections {
+        if (correctionsSitting != session.start) {
+            correctionsSitting = session.start
+            corrections = com.zeronolidge.speechapp.logic.Corrections()
+        }
+        return corrections
+    }
+
+    /** Test mode: a try is waiting for the grown-up's "right" / "off" (bumped per try). */
+    var rateTry by mutableIntStateOf(0)
+        private set
+    var rateOpen by mutableStateOf(false)
+
+    /**
+     * What the recogniser heard on a turn: saved as one small record (never audio or text), and
+     * judged. Null when nothing was heard (not ready, failed): then nothing is saved.
+     */
+    fun wordHeard(check: com.zeronolidge.speechapp.logic.WordCheck, heard: List<Pair<String, Float>>?): Pair<com.zeronolidge.speechapp.logic.Heard, Float>? {
+        if (heard == null) return null
+        val (word, judged) = com.zeronolidge.speechapp.logic.Judge.judge(check, heard)
+        val (result, conf) = judged
+        progress.addWordTry(
+            com.zeronolidge.speechapp.logic.TryRecord(
+                com.zeronolidge.speechapp.state.today(), check.target, check.sound, check.pos, word,
+                (conf * 100).toInt() / 100f, check.modeled, result, check.scored,
+            ),
+        )
+        corrections().noteTry(check.sound, voice.lastPeak, voice.lastVoicedMs)
+        println("WORDTRY ${check.target} /${check.sound}/ heard=$word ${(conf * 100).toInt()}% -> $result")
+        if (progress.wordTestMode) {
+            rateTry++
+            rateOpen = true
+        }
+        return result to conf
     }
 
     /** A new paper piece to show off on a pop-up card (from the backpack or a welcome-back present). */

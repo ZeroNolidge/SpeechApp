@@ -107,6 +107,30 @@ These are the owner's rules for all work:
   and reused by the next (`VoiceMeter(knownRoom)`: no settling, only a 150 ms lead). Only the
   first turn of a sitting measures, with `checkRoom` (0.4 s) in the quiet before Rory's first
   line (story/Pip/cave intro, `SpeakMoment` start). Never measure while Rory talks.
+- **Word listening (on-device recognition, listen-only by default)** (`logic/WordCheck.kt`,
+  unit-tested; `audio/WordListener.kt`; web: `audio/WebWords.kt`, Vosk via vosk-browser 0.0.8 +
+  vosk-model-small-en-us-0.15, downloaded by CI into the site's `vosk/` folder, never in the repo,
+  not precached, left alone by sw.js; the script is kept in the "talkandlearn-vosk" cache and Vosk
+  keeps the unpacked model in IndexedDB by its fixed URL, so it downloads once and works offline).
+  Loads 5 s after start when listening + mic are on (`#test=...+words` loads at once; the smoke
+  test prints `WORD LISTENING: ...`). Each talk turn (`SpeakMoment`, voice stories, Pip, cave)
+  passes a tiny grammar (`Swaps.check`: target, up to 3 swaps by the sound table, phrase words,
+  "[unk]") to `VoiceDetector.listenTry(words, onWords)`; the mic stream feeds the recogniser
+  (`window.__tlWords.attach`), the answer comes ≤1 s after the loudness result (which still moves
+  the story at once). The mic never starts while `speaker.speaking`. `Judge`: right (conf ≥ 0.55),
+  near-miss (a swap, conf ≥ 0.7), else unsure (= pass); s→th counts as right; r l s z sh ch j th v
+  and clusters are never scored (`Speech5`, `Swaps.inCluster`). `AppServices.wordHeard` saves one
+  `TryRecord` (day, word, sound, start/middle/end, heard, conf, modeled or on his own, result,
+  rating; max 1500; no audio, no text) and logs `WORDTRY`. Grown-ups page: switches (word
+  listening, test mode, near-miss modelling), agreement (`Agreement`: 30 rated tries the app made a
+  call on, 90%), sound cards after 20 tries (`SoundCards`: by position, 4-week paper trend, "App
+  estimate, not a speech assessment.", 1-2 focus sounds with 3 words, see-a-therapist note). Test
+  mode shows `WordRateBar` (App.kt) after each try: "👍 Right" / "✋ Off", 12 s. Modelling (only
+  when allowed + on, `AppServices.modelingOn`): clear match = full-strength move; confident
+  near-miss (≥ 0.8, scored sound, `Corrections`: ≤ 1 in 3 tries per sound, never twice in a row,
+  off for the sitting once tries get 30% quieter or shorter) = move, then "Listen. <modelSound>.
+  <word>." with `MouthCue` (paper lip shape) and one more try; otherwise Rory's usual echo. Practice
+  words prefer ones with real-word swaps (`practiceWord`). Difficulty steps don't use recognition yet.
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
   limit on each). If speech doesn't finish in time the flow carries on and the top-right 🔊 pulses
   in its own spot until tapped (`HearAgainButton`, `app.audioTrouble`); no overlay covers anything. Chrome sometimes never fires `onend`; that used to freeze the story.

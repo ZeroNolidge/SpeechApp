@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import com.zeronolidge.speechapp.data.SpeechContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,7 @@ import com.zeronolidge.speechapp.ui.art.voiceTarget
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
 import com.zeronolidge.speechapp.ui.art.paperCard
+import com.zeronolidge.speechapp.ui.components.popIn
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueReserve
@@ -93,6 +95,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     var confettiAt by remember { mutableStateOf(Offset(0.5f, 0.5f)) }
     val confetti = remember { Animatable(1f) }
     val model = remember { arrayOf(VoicePush()) }
+    /** Modelling on: the sound to model after this beat's move, and whether it was modelled already. */
+    val modelSound = remember { arrayOf<String?>(null) }
+    val modelledBeat = remember { arrayOf(false) }
+    /** The sound whose mouth shape Rory shows while he models it. */
+    var mouthCue by remember { mutableStateOf<String?>(null) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
@@ -120,6 +127,32 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     /** After the action: Rory says it back and adds one more, tells what happened, and the story goes on. */
     fun after(k: Int, heard: Boolean, micUsed: Boolean) {
         val s = session
+        // Modelling on, after a confident near-miss: the move has played; now Rory models the
+        // sound once, clearly, with his mouth shape, and listens for one more try (any try is fine).
+        modelSound[0]?.let { id ->
+            modelSound[0] = null
+            modelledBeat[0] = true
+            val target = SpeechContent.sounds.first { it.id == id }
+            phase = VPhase.MODEL
+            app.listening = false
+            mouthCue = id
+            app.speaker.say("Listen. ${target.modelSound}. ${line(k)}.")
+            app.speaker.then("One more time!") {
+                if (s != session) return@then
+                mouthCue = null
+                phase = VPhase.LISTEN
+                app.listening = true
+                val again = app.wordCheck(line(k), beats[k].sound, modeled = true)
+                app.voice.listenTry(4000, onLevel = { app.listenLevel = it }, onVoice = null, words = again?.grammar,
+                    onWords = { h -> again?.let { app.wordHeard(it, h) } }) { _ ->
+                    if (s != session) return@listenTry
+                    app.listening = false
+                    app.listenLevel = 0f
+                    after(k, heard, micUsed)
+                }
+            }
+            return
+        }
         phase = VPhase.ACT
         val b = beats[k]
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
@@ -168,6 +201,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             phase = VPhase.LISTEN
             app.listening = true
             var reached = false
+            // Word listening: records what was heard (listen-only). With modelling on, the
+            // answer waits (about a second at most) for the words; the action has already moved.
+            val check = app.wordCheck(line(k), beats[k].sound, modeled = !model[0].waiting)
+            val waitWords = check != null && app.modelingOn && !modelledBeat[0]
+            var loud: VoiceTry? = null
+            lateinit var handle: (VoiceTry, Pair<com.zeronolidge.speechapp.logic.Heard, Float>?) -> Unit
             app.voice.listenTry(
                 4000,
                 onLevel = { app.listenLevel = it },
@@ -185,17 +224,32 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         }
                     }
                 },
-            ) { t ->
-                if (s != session || phase != VPhase.LISTEN) return@listenTry
+                words = check?.grammar,
+                onWords = { heard ->
+                    val judged = check?.let { app.wordHeard(it, heard) }
+                    if (waitWords) loud?.let { handle(it, judged) }
+                },
+            ) { t -> if (waitWords) loud = t else handle(t, null) }
+            handle = handle@{ t, judged ->
+                if (s != session || phase != VPhase.LISTEN) return@handle
                 app.listenLevel = 0f
                 pushNow = 0f
                 if (t == VoiceTry.NO_MIC) {
                     waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
-                    return@listenTry
+                    return@handle
                 }
                 when (model[0].afterTry(heard = t == VoiceTry.HEARD, soft = t == VoiceTry.SOFT)) {
                     // He spoke: the rest of the action goes on by itself (gently), then confetti.
-                    VoicePush.Next.FINISH_GENTLY ->
+                    VoicePush.Next.FINISH_GENTLY -> {
+                        if (waitWords && check != null && judged != null) {
+                            val reply = com.zeronolidge.speechapp.logic.Corrections.reply(check, judged.first, judged.second, app.corrections())
+                            val canModel = reply == com.zeronolidge.speechapp.logic.Reply.MODEL_SOUND && SpeechContent.sounds.any { it.id == check.sound }
+                            app.corrections().noteReply(check.sound, canModel)
+                            // A clear match: the full-strength move.
+                            if (reply == com.zeronolidge.speechapp.logic.Reply.CELEBRATE) strengths = strengths + (k to 1f)
+                            // A confident near-miss: after the move, Rory models the sound once.
+                            if (canModel) modelSound[0] = check.sound
+                        }
                         if (reached) {
                             phase = VPhase.ACT
                             app.listening = false
@@ -203,6 +257,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         } else {
                             finishGently(k, heard = t == VoiceTry.HEARD, micUsed = true)
                         }
+                    }
                     // Quiet: it still moves a little, then "Again, together!" and one more listen.
                     VoicePush.Next.AGAIN_TOGETHER -> {
                         phase = VPhase.MODEL
@@ -234,6 +289,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val s = session
         index = k
         model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
+        modelSound[0] = null
+        modelledBeat[0] = false
+        mouthCue = null
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
         phase = VPhase.MODEL
@@ -326,6 +384,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     Text(line(k), fontSize = if (line(k).length > 14) 28.sp else 40.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1)
                 }
             }
+            // Rory models a sound: his mouth shape for it, big, top-right.
+            mouthCue?.let { MouthCue(it, Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).zIndex(4f).popIn("mouth")) }
             // "I said it!" is always there in the same spot: it does the same action as his voice.
             ContinueAction(
                 hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),

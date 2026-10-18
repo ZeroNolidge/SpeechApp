@@ -25,7 +25,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
     e.waitUntil(
         caches.keys()
-            .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== STATIC).map((k) => caches.delete(k))))
+            .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== STATIC && k !== 'talkandlearn-vosk').map((k) => caches.delete(k))))
             // Keep only the .wasm files and voice clips this version uses.
             .then(() => Promise.all([
                 fetch('./talkandlearn.js').then((r) => r.text()),
@@ -44,6 +44,9 @@ self.addEventListener('fetch', (e) => {
     const req = e.request;
     const url = new URL(req.url);
     if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+    // Word listening's files (vosk/) look after their own storage (WebWords.kt): left alone here,
+    // so the 40 MB model is never kept twice.
+    if (url.pathname.includes('/vosk/')) return;
     // The big .wasm files and the voice clips have a new name whenever they change, so use the
     // saved copy straight away (only fetch new ones). Saves ~12 MB of app and ~35 MB of clips per launch.
     if (lasting(url.pathname)) {

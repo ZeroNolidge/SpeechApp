@@ -155,7 +155,9 @@ fun PipStoryScreen(nav: Nav) {
         val s = session
         phase = PipPhase.LISTEN
         app.listening = true
-        app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }) { heard ->
+        // Word listening (listen-only here): a small record of what was heard.
+        val check = app.wordCheck(turns[k].call, null, modeled = true)
+        app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }, words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } }) { heard ->
             if (s != session || phase != PipPhase.LISTEN) return@listen
             react(k, heard == true)
         }
