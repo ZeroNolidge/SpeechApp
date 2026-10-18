@@ -808,6 +808,7 @@ class MapTargetTest {
                 assertTrue(d >= r + cr, "cave on the stop button (stop $stop) at ${w}x$h")
                 assertEquals(MapTarget.Cave, MapAreas.target(cx, cy, w, h, half, lh, sx, sy, r, cx, cy, cr), "cave centre, stop $stop at ${w}x$h")
                 if (w / r >= 15f) assertTrue(MapAreas.belongsTo(Land.FOREST, cx, cy, w, h), "cave not by the Forest at ${w}x$h")
+                if (w / r >= 15f) assertTrue(MapAreas.onIsland(cx, cy, w, h, cr), "cave in the sea (stop $stop) at ${w}x$h")
                 // Every area's picture and label still open their area.
                 MapAreas.all.forEach { a ->
                     assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr), "picture of ${a.land} with the cave at ${w}x$h")
@@ -824,14 +825,15 @@ class MapTargetTest {
                 val (fx, fy) = Trail.position(stop)
                 val (sx, sy) = MapAreas.stopSpot(Trail.landAt(stop), fx, fy, w, h, r, half, lh)
                 val placed = mutableListOf(MapSpot(MapTarget.Stop, sx, sy, r))
+                // The cave first (as the map places it), then the stories.
+                val cr = r * 0.8f
+                val (cx, cy) = MapAreas.caveSpot(w, h, cr, sx, sy, r, half, lh)
+                placed += MapSpot(MapTarget.Cave, cx, cy, cr)
                 val sr = r * 0.7f
                 for (story in VoiceStories.all) {
                     val (x, y) = MapAreas.spotBy(story.land, w, h, sr, placed, half, lh)
                     placed += MapSpot(MapTarget.Story(story.id), x, y, sr)
                 }
-                val cr = r * 0.8f
-                val (cx, cy) = MapAreas.caveSpot(w, h, cr, sx, sy, r, half, lh, placed.drop(1))
-                placed += MapSpot(MapTarget.Cave, cx, cy, cr)
                 val spots = placed.filter { it.target is MapTarget.Story }
                 // Tablet-sized maps: no two stops touch, each story is by its land, and its middle opens it.
                 if (w / r >= 15f) {
@@ -844,6 +846,7 @@ class MapTargetTest {
                     for (story in VoiceStories.all) {
                         val sp = spots.first { it.target == MapTarget.Story(story.id) }
                         assertTrue(MapAreas.belongsTo(story.land, sp.x, sp.y, w, h), "${story.id} not by ${story.land} (stop $stop) at ${w}x$h")
+                        assertTrue(MapAreas.onIsland(sp.x, sp.y, w, h, sr), "${story.id} in the sea (stop $stop) at ${w}x$h")
                         assertEquals(MapTarget.Story(story.id), MapAreas.target(sp.x, sp.y, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "${story.id} centre at ${w}x$h")
                     }
                 }

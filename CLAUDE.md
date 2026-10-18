@@ -221,8 +221,10 @@ These are the owner's rules for all work:
   side, ...); every success ends with hole-punch confetti (`HolePunchConfetti`, 1.6 s).
   Stories: Pip's Boat Trip (Lagoon), Sleepy Owl's Morning (Forest), The Balloon Picnic (Meadow),
   each a round stop by its land on the map (`MapAreas.spotBy`, `MapTarget.Story`, unit-tested with
-  the cave and next stop). The owl story's stop is its own paper picture (sleepy owl before a
-  rising sun on a night-blue badge, `sleepyOwlBadge`), never the 🦉 emoji used elsewhere. Existing chapters follow it too: no magic word, 3x model with the 3rd
+  the cave and next stop). Extra stops always sit on the island, grass or beach (`MapAreas.onIsland`, sharing
+  `ISLAND_*` with IslandMap's coast); the cave is placed before the stories (the Forest's corner
+  is tight), else it and the owl ended up in the sea. The owl story's stop is its own paper picture (sleepy owl before a
+  rising sun on a night-blue badge, `sleepyOwlBadge`, clipped to its circle), never the 🦉 emoji used elsewhere. Existing chapters follow it too: no magic word, 3x model with the 3rd
   slower, and the set piece changes the moment he speaks (`SpeakMoment(onAction)`).
 - **Echo Cave** (`logic/EchoCave.kt`, `ui/screens/EchoCave.kt`): 8 tries; Rory says a word (own
   words, then target-sound words, then everyday words at his speech step), he says it into the

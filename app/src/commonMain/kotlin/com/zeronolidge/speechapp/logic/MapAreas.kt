@@ -117,8 +117,27 @@ object MapAreas {
         val a = of(land)
         val gap = r * 0.4f
         return place(land, a.markX + 0.02f, a.markY + 0.21f, w, h, r, labelHalfW, labelH) { x, y ->
-            avoid.all { sqrt(sq(x - it.x) + sq(y - it.y)) >= it.r + r + gap }
+            onIsland(x, y, w, h, r) && avoid.all { sqrt(sq(x - it.x) + sq(y - it.y)) >= it.r + r + gap }
         }
+    }
+
+    /** The island's shape on the map (fractions of its width and height; IslandMap draws it). */
+    const val ISLAND_CX = 0.45f
+    const val ISLAND_CY = 0.53f
+    const val ISLAND_RX = 0.40f
+    const val ISLAND_RY = 0.43f
+
+    /**
+     * True when a stop of radius [r] at ([x], [y]) sits wholly on the island (grass or beach) (never out
+     * in the sea, where the cave and owl stops once ended up when the Forest's zone pushed them).
+     */
+    fun onIsland(x: Float, y: Float, w: Float, h: Float, r: Float): Boolean {
+        // The beach edge is the coast at 1.0 (grass at 0.93), and the coast wobbles down to 0.92.
+        val k = 0.99f * 0.92f
+        val rx = ISLAND_RX * k * w - r
+        val ry = ISLAND_RY * k * h - r
+        if (rx <= 0f || ry <= 0f) return false
+        return sq((x - ISLAND_CX * w) / rx) + sq((y - ISLAND_CY * h) / ry) <= 1f
     }
 
     private fun place(

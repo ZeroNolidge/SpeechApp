@@ -220,31 +220,31 @@ fun IslandMap(
             }
         }
         val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
-        // The voice stories' stops, each by its land, then the crystal cave just past the Forest:
-        // all clear of every area, of the next stop and of each other.
         val storyNode = node * 0.7f
         val caveNode = node * 0.8f
+        val cavePx = with(LocalDensity.current) {
+            val wPx = w.toPx()
+            val hPx = h.toPx()
+            val labelH = (label * 1.45f + 6f).dp.toPx()
+            remember(cave, stopPx, wPx, hPx, labelH) {
+                if (!cave) null
+                else MapAreas.caveSpot(wPx, hPx, (caveNode / 2).toPx(), stopPx.x, stopPx.y, (node / 2).toPx(), 64.dp.toPx(), labelH).let { (x, y) -> Offset(x, y) }
+            }
+        }
         val storySpots = with(LocalDensity.current) {
             val wPx = w.toPx()
             val hPx = h.toPx()
             val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(stories.map { it.id }, stopPx, wPx, hPx, labelH) {
+            remember(stories.map { it.id }, stopPx, cavePx, wPx, hPx, labelH) {
                 val placed = mutableListOf(MapSpot(MapTarget.Stop, stopPx.x, stopPx.y, (node / 2).toPx()))
+                // The cave goes first (the Forest's corner is tight), so it's always right by the Forest.
+                cavePx?.let { placed += MapSpot(MapTarget.Cave, it.x, it.y, (caveNode / 2).toPx()) }
                 stories.forEach { st ->
                     val r = (storyNode / 2).toPx()
                     val (x, y) = MapAreas.spotBy(st.land, wPx, hPx, r, placed, 64.dp.toPx(), labelH)
                     placed += MapSpot(MapTarget.Story(st.id), x, y, r)
                 }
-                placed.drop(1)
-            }
-        }
-        val cavePx = with(LocalDensity.current) {
-            val wPx = w.toPx()
-            val hPx = h.toPx()
-            val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(cave, stopPx, storySpots, wPx, hPx, labelH) {
-                if (!cave) null
-                else MapAreas.caveSpot(wPx, hPx, (caveNode / 2).toPx(), stopPx.x, stopPx.y, (node / 2).toPx(), 64.dp.toPx(), labelH, storySpots).let { (x, y) -> Offset(x, y) }
+                placed.filter { it.target is MapTarget.Story }
             }
         }
         Box(
@@ -618,7 +618,7 @@ private fun StoryStop(modifier: Modifier, id: String, emoji: String, done: Boole
             // Sleepy Owl's Morning: its own paper picture (a sleepy owl in front of a rising sun on
             // a night-blue badge), so it never looks like any other owl in the game.
             Box(Modifier.fillMaxSize().paperCard(Color(0xFF283593), circle = true).border(4.dp, Color(0xFFFFCA28), CircleShape)) {
-                Canvas(Modifier.fillMaxSize()) { sleepyOwlBadge() }
+                Canvas(Modifier.fillMaxSize().clip(CircleShape)) { sleepyOwlBadge() }
             }
         } else {
             Box(Modifier.fillMaxSize().paperCard(Color(0xFFFFF8E1), circle = true).border(4.dp, Color(0xFFFFCA28), CircleShape), contentAlignment = Alignment.Center) {
@@ -738,10 +738,10 @@ private fun smooth(pts: List<Offset>): Path {
     return path
 }
 
-private const val CX = 0.45f
-private const val CY = 0.53f
-private const val RX = 0.40f
-private const val RY = 0.43f
+private const val CX = MapAreas.ISLAND_CX
+private const val CY = MapAreas.ISLAND_CY
+private const val RX = MapAreas.ISLAND_RX
+private const val RY = MapAreas.ISLAND_RY
 private val wobble = listOf(1.0f, 0.95f, 1.05f, 0.98f, 0.92f, 1.04f, 1.0f, 0.94f, 1.06f, 0.97f, 1.02f, 0.93f, 1.05f, 0.99f, 0.96f)
 
 private fun DrawScope.coast(scale: Float): Path = smooth(
