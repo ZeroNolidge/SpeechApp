@@ -18,6 +18,7 @@ import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
