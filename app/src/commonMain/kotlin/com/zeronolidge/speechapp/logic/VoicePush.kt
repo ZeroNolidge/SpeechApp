@@ -107,6 +107,9 @@ class VoicePush(val mode: Mode = Mode.LOUDNESS) {
         /** "I said it!" plays at least this strong (medium). */
         const val PRESSED = 0.5f
 
+        /** The same for a word or line with no named sound: its first consonant's. */
+        fun modeForLine(line: String, sound: String?): Mode = modeFor(sound ?: Swaps.firstSound(line.trim().lowercase()))
+
         /** Which way his voice moves the action for a word practising [sound]. */
         fun modeFor(sound: String?): Mode = when (sound?.lowercase()) {
             "p", "b", "t", "d", "g", "k" -> Mode.BURSTS

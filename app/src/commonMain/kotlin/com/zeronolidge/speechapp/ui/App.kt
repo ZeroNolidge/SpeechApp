@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import com.zeronolidge.speechapp.ui.components.LocalScreenWidth
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.positionInWindow
@@ -112,6 +113,7 @@ fun TalkAndLearnApp(
                         awaitPointerEventScope {
                             while (true) {
                                 val e = awaitPointerEvent(PointerEventPass.Final)
+                                if (e.changes.any { it.changedToDownIgnoreConsumed() }) services.touches++
                                 e.changes.forEach { c ->
                                     if (c.changedToUp()) services.puff(origin.x + c.position.x, origin.y + c.position.y)
                                 }

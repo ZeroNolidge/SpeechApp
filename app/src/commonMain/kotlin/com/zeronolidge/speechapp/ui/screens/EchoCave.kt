@@ -93,6 +93,8 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
     var phase by remember { mutableStateOf(CavePhase.INTRO) }
     var lit by remember { mutableIntStateOf(0) }
     var level by remember { mutableFloatStateOf(0f) }
+    /** How much the next crystal glimmers from his voice this try (0 to 1). */
+    var glimmer by remember { mutableFloatStateOf(0f) }
     var session by remember { mutableIntStateOf(0) }
     val echoAnim = remember { Animatable(1f) }
     val still = LocalReduceMotion.current
@@ -134,25 +136,70 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         }
     }
 
+    /** This word's voice push (pops and holds make the next crystal glimmer); reset each word. */
+    val push = remember { arrayOf(com.zeronolidge.speechapp.logic.VoicePush()) }
+
+    lateinit var listen: (Int) -> Unit
+    listen = { i ->
+        val s = session
+        val w = words[i]
+        val model = push[0]
+        phase = CavePhase.LISTEN
+        app.listening = true
+        // Word listening (listen-only here): a small record of what was heard.
+        val check = app.wordCheck(w.text, null, modeled = !model.waiting)
+        app.voice.listenTry(
+            4000, onLevel = { level = it; app.listenLevel = it }, onVoice = null,
+            // His voice makes the next crystal glimmer: a flicker per pop, a glow while a sound is held.
+            onPush = { v -> if (s == session && v > 0f) { model.feed(v, 50); glimmer = model.progress } },
+            mode = model.mode,
+            words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } },
+        ) { t ->
+            if (s != session || phase != CavePhase.LISTEN) return@listenTry
+            level = 0f
+            app.listenLevel = 0f
+            if (t == com.zeronolidge.speechapp.audio.VoiceTry.NO_MIC) {
+                phase = CavePhase.WAIT_TAP
+                app.speaker.say("Say it out loud into the cave! Then tap the big green I said it button.")
+                return@listenTry
+            }
+            when (model.afterTry(heard = t == com.zeronolidge.speechapp.audio.VoiceTry.HEARD, soft = t == com.zeronolidge.speechapp.audio.VoiceTry.SOFT)) {
+                com.zeronolidge.speechapp.logic.VoicePush.Next.FINISH_GENTLY -> echo(i, t == com.zeronolidge.speechapp.audio.VoiceTry.HEARD, micUsed = true)
+                // Quiet (a whisper still makes the crystal glimmer a little): say it together, one more listen.
+                com.zeronolidge.speechapp.logic.VoicePush.Next.AGAIN_TOGETHER -> {
+                    glimmer = maxOf(glimmer, model.progress)
+                    phase = CavePhase.PROMPT
+                    app.listening = false
+                    app.speaker.say("Let's say it together!")
+                    app.speaker.then(w.text, slow = true) { if (s == session) listen(i) }
+                }
+                // Still quiet: it waits for his voice or "I said it!" and never moves on by itself.
+                com.zeronolidge.speechapp.logic.VoicePush.Next.WAIT -> if (model.tries > com.zeronolidge.speechapp.logic.VoicePush.MAX_TRIES) {
+                    listen(i)
+                } else {
+                    phase = CavePhase.PROMPT
+                    app.listening = false
+                    app.speaker.say("Say it out loud into the cave! Then tap the big green I said it button.") { if (s == session) listen(i) }
+                }
+            }
+        }
+    }
+
     ask = { i ->
         val s = session
         index = i
         phase = CavePhase.PROMPT
+        glimmer = 0f
         val w = words[i]
+        push[0] = com.zeronolidge.speechapp.logic.VoicePush(com.zeronolidge.speechapp.logic.VoicePush.modeForLine(w.text, null))
         val line = "${w.text}! Say ${w.text} into the cave!"
         app.rememberInstruction(line)
+        // The word slowly first, and only when it has finished, the invitation.
         app.speaker.say(w.text, slow = true)
-        app.speaker.say(line) {
-            if (s != session || phase != CavePhase.PROMPT) return@say
+        app.speaker.then(line) {
+            if (s != session || phase != CavePhase.PROMPT) return@then
             if (micOk()) {
-                phase = CavePhase.LISTEN
-                app.listening = true
-                // Word listening (listen-only here): a small record of what was heard.
-                val check = app.wordCheck(w.text, null, modeled = true)
-                app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }, words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } }) { heard ->
-                    if (s != session || phase != CavePhase.LISTEN) return@listen
-                    echo(i, heard == true, micUsed = true)
-                }
+                listen(i)
             } else {
                 phase = CavePhase.WAIT_TAP
                 app.listening = true
@@ -178,7 +225,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         }
     }
 
-    ScreenFrame(onHome = nav.home, background = { CaveBackdrop(lit, words.size, echoAnim.value) }, top = {
+    ScreenFrame(onHome = nav.home, background = { CaveBackdrop(lit, words.size, echoAnim.value, glimmer) }, top = {
         PaperChip("💎", fontSize = 26.sp, maxLines = 1)
     }) {
         ContinueHost {
@@ -247,7 +294,7 @@ private fun Modifier.paperCardLite() = this.paperCard(PaperStyle.chip, 22.dp).pa
  * out of it, and a crystal round the arch for every try (lit ones shine in rainbow colours).
  */
 @Composable
-private fun CaveBackdrop(lit: Int, total: Int, echo: Float) {
+private fun CaveBackdrop(lit: Int, total: Int, echo: Float, glimmer: Float = 0f) {
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -279,6 +326,8 @@ private fun CaveBackdrop(lit: Int, total: Int, echo: Float) {
             val on = i < lit
             val c = if (on) Color(colours[i % colours.size]) else Color(0xFF7E78A8)
             if (on) drawCircle(c.copy(alpha = 0.35f), r * 2f, Offset(cx, cy))
+            // The next crystal glimmers while his voice reaches it (pops flicker it, holds glow).
+            if (i == lit && glimmer > 0f) drawCircle(Color(0xFFFFF59D).copy(alpha = 0.25f + 0.45f * glimmer.coerceIn(0f, 1f)), r * (1.4f + glimmer), Offset(cx, cy))
             val gem = Path().apply {
                 moveTo(cx, cy - r * 1.4f); lineTo(cx + r * 0.8f, cy); lineTo(cx, cy + r * 1.1f); lineTo(cx - r * 0.8f, cy); close()
             }

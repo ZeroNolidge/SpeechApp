@@ -40,7 +40,7 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
 
     /**
      * The first talk turn of a sitting: a short quiet check of the room, done in the pause
-     * before Rory's prompt (never while he talks). Calls [then] at once if the room is already
+     * before Rory's prompt, once anything still being said (the story's title) has finished. Calls [then] at once if the room is already
      * known, or without a microphone; never hangs.
      */
     fun checkRoom(then: () -> Unit) {
@@ -61,18 +61,26 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
             then()
         }
         guard = scope.launch {
+            // Only once Rory (or the story title) has finished: the microphone would hear him.
+            var waited = 0
+            while (isSpeaking() && waited < 8000) {
+                delay(100)
+                waited += 100
+            }
+            delay(200)
+            if (s != session) return@launch
+            mic.start(
+                onLevel = { rms ->
+                    if (s == session) {
+                        levels += rms
+                        if (levels.size * MicLevels.STEP_MS >= VoiceMeter.ROOM_CHECK_MS) done()
+                    }
+                },
+                onFail = { done() },
+            )
             delay(VoiceMeter.ROOM_CHECK_MS + 1500L)
             done()
         }
-        mic.start(
-            onLevel = { rms ->
-                if (s == session) {
-                    levels += rms
-                    if (levels.size * MicLevels.STEP_MS >= VoiceMeter.ROOM_CHECK_MS) done()
-                }
-            },
-            onFail = { done() },
-        )
     }
 
     fun listen(
@@ -82,9 +90,9 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         onWords: ((List<Pair<String, Float>>?) -> Unit)? = null,
         onResult: (heard: Boolean?) -> Unit,
     ) =
-        listenTry(windowMs, onLevel, onVoice = null, words = words, onWords = onWords) { t ->
+        listenTry(windowMs, onLevel, onVoice = null, words = words, onWords = onWords, onResult = { t ->
             onResult(when (t) { VoiceTry.HEARD -> true; VoiceTry.NO_MIC -> null; else -> false })
-        }
+        })
 
     /**
      * Like [listen], with more detail: [onVoice] fires the moment a clear voice is heard (about
@@ -101,11 +109,13 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         words: List<String>? = null,
         /** What the recogniser heard (null: nothing, not ready or failed), shortly after [onResult]. */
         onWords: ((List<Pair<String, Float>>?) -> Unit)? = null,
+        /** Pop sounds (p b t d g k): one short burst is a clear try; others need a little longer. */
+        mode: com.zeronolidge.speechapp.logic.VoicePush.Mode = com.zeronolidge.speechapp.logic.VoicePush.Mode.LOUDNESS,
         onResult: (VoiceTry) -> Unit,
     ) {
         cancel()
         val s = ++session
-        val meter = VoiceMeter(windowMs, knownRoom = room)
+        val meter = VoiceMeter(windowMs, needMs = if (mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS) 50 else 150, knownRoom = room)
         var voiced = false
         val listenWords = words != null && this.words.ready
         fun done(result: VoiceTry) {

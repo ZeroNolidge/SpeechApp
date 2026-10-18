@@ -283,11 +283,12 @@ fun IslandMap(
                     // A forgiving tap (young fingers wobble): it counts if the finger comes up
                     // within a finger's width of where it went down, even if dragging the map
                     // noticed the wobble first. A plain tap detector dropped those first taps.
-                    val slop = 28.dp.toPx()
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        down.consume()
                         val p0 = down.position
-                        when (val t = targetAt(p0)) {
+                        val t = targetAt(p0)
+                        when (t) {
                             is MapTarget.Area -> pressedLand = t.land
                             MapTarget.Stop -> pressedStop = true
                             MapTarget.Cave -> pressedCave = true
@@ -296,12 +297,28 @@ fun IslandMap(
                         }
                         // The stop button crinkles by itself (PaperButton); everything else here too.
                         if (pressedLand != null || pressedCave || pressedStory != null) app.sfx.crinkle()
-                        var up: Offset? = null
+                        // It acts the moment the finger touches (a first tap on an iPad always
+                        // counts, however the finger then slides).
+                        println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
+                        if (t != MapTarget.Sea && !still) {
+                            wiggled = t
+                            scope.launch {
+                                for (a in listOf(9f, -8f, 5f, -3f, 0f)) wiggleTurn.animateTo(a, tween(55))
+                            }
+                        }
+                        if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
+                        when (t) {
+                            is MapTarget.Area -> onArea(t.land)
+                            MapTarget.Stop -> onStopTap()
+                            MapTarget.Cave -> onCaveTap()
+                            is MapTarget.Story -> onStoryTap(t.id)
+                            MapTarget.Sea -> app.puff(islandOrigin.x + p0.x, islandOrigin.y + p0.y)
+                        }
+                        // Shown pressed until the finger lifts.
                         while (true) {
                             val e = awaitPointerEvent()
                             val c = e.changes.firstOrNull { it.id == down.id } ?: break
                             if (!c.pressed) {
-                                if ((c.position - p0).getDistance() <= slop) up = c.position
                                 c.consume()
                                 break
                             }
@@ -310,25 +327,6 @@ fun IslandMap(
                         pressedStop = false
                         pressedCave = false
                         pressedStory = null
-                        val p = up ?: return@awaitEachGesture
-                        run {
-                            val t = targetAt(p0)
-                            println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
-                            if (t != MapTarget.Sea && !still) {
-                                wiggled = t
-                                scope.launch {
-                                    for (a in listOf(9f, -8f, 5f, -3f, 0f)) wiggleTurn.animateTo(a, tween(55))
-                                }
-                            }
-                            if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
-                            when (t) {
-                                is MapTarget.Area -> onArea(t.land)
-                                MapTarget.Stop -> onStopTap()
-                                MapTarget.Cave -> onCaveTap()
-                                is MapTarget.Story -> onStoryTap(t.id)
-                                MapTarget.Sea -> app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
-                            }
-                        }
                     }
                 },
         ) {
@@ -556,7 +554,7 @@ fun IslandMap(
                 val st = stories.first { it.id == id }
                 val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
                 StoryStop(
-                    Modifier.offset(x = sd.x - storyNode / 2, y = sd.y - storyNode / 2).size(storyNode).zIndex(2f),
+                    Modifier.offset(x = sd.x - storyNode / 2, y = sd.y - storyNode / 2).size(storyNode).zIndex(2f).popIn("story-$id"),
                     id, st.emoji, done = st.done, pressed = pressedStory == id,
                     wiggle = { if (wiggled == MapTarget.Story(id)) wiggleTurn.value else 0f },
                 )

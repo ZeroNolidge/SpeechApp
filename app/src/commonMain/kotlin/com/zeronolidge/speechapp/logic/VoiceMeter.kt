@@ -28,7 +28,9 @@ class VoiceMeter(
     private var t = 0
     private var roomSum = knownRoom ?: 0f
     private var roomCount = if (knownRoom != null) 1 else 0
-    private val quiet = ArrayList<Float>()
+    private val all = ArrayList<Float>()
+    private val lead = ArrayList<Float>()
+    private val recent = ArrayDeque<Float>()
     private var voiceMs = 0
     private var lastVoiceAt = -1
     private var loudest = 0f
@@ -64,29 +66,49 @@ class VoiceMeter(
             if (measuresRoom) {
                 roomSum += rms
                 roomCount++
+            } else {
+                lead += rms
+                // The room got louder since the saved level (a TV came on): even the quietest
+                // moment before he speaks is over the bar, so the bar goes up with it.
+                // (Only for room-like levels: a loud start is him answering straight away.)
+                if (t + stepMs > settleMs && lead.isNotEmpty() && lead.min() > threshold && lead.min() <= LOUD_ROOM) setRoom(lead.min())
             }
-        } else {
-            loudest = maxOf(loudest, rms)
+            return false
         }
-        if (t > settleMs && rms > threshold) {
+        loudest = maxOf(loudest, rms)
+        all += rms
+        recent.addLast(rms)
+        if (recent.size * stepMs > NOISE_MS) recent.removeFirst()
+        // Steady sound with no dip for 2 seconds is the room, not him (a child's word is short):
+        // it raises the bar and never counts as his try, so noise can't finish a story.
+        if (recent.size * stepMs >= NOISE_MS && recent.min() > threshold) {
+            setRoom(recent.min())
+            voiceMs = 0
+            lastVoiceAt = -1
+            loudest = 0f
+        }
+        if (rms > threshold) {
             voiceMs += stepMs
             lastVoiceAt = t
-        } else if (t > settleMs) {
-            quiet += rms
         }
         return (heard && t - lastVoiceAt >= tailMs) || t >= windowMs
     }
 
+    private fun setRoom(v: Float) {
+        roomSum = v
+        roomCount = 1
+    }
+
     /**
-     * The room's loudness to keep for the next turn: the quieter half of this turn's readings
-     * that weren't voice (so his quiet voice never raises the bar), never more than 1.5 times
-     * the room it started from. Null when there weren't enough quiet readings.
+     * The room's loudness to keep for the next turn: the quietest fifth of this turn's readings
+     * (his voice is short, so these are the room between and after his words). It follows the
+     * room both ways: down when it's quieter, and up when it's louder, so the bar keeps up with
+     * background noise. Null when there were too few readings.
      */
     fun roomAfter(): Float? {
-        if (quiet.size < 4) return if (roomCount > 0) room else null
-        val low = quiet.sorted().take(quiet.size / 2)
-        val est = low.sum() / low.size
-        return if (roomCount > 0) minOf(est, maxOf(room, 0.001f) * 1.5f) else est
+        if (all.size < 4) return if (roomCount > 0) room else null
+        val low = all.sorted().take(maxOf(1, all.size / 5))
+        return low.sum() / low.size
     }
 
     companion object {
@@ -95,6 +117,12 @@ class VoiceMeter(
 
         /** With a known room, the start of a turn where nothing counts yet. */
         const val LEAD_MS = 150
+
+        /** Steady sound this long with no dip is background noise, not his voice. */
+        const val NOISE_MS = 2000
+
+        /** Louder than this at the very start of a turn is his voice, not the room. */
+        const val LOUD_ROOM = 0.035f
 
         /** A whisper close to a tablet is above this; a quiet room is below it. */
         const val MIN_VOICE = 0.012f

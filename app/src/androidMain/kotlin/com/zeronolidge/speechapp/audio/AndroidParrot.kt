@@ -55,6 +55,64 @@ class AndroidParrot(private val context: Context) : Parrot {
         }, seconds * 1000L)
     }
 
+    override fun listenThenPlay(waitMs: Int, onLevel: (Float) -> Unit, onPlaying: () -> Unit, onQuiet: () -> Unit, onDone: () -> Unit) {
+        stop()
+        val rec = try {
+            (if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()).apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)
+                setAudioEncodingBitRate(96000)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            stop()
+            onDone()
+            return
+        }
+        recorder = rec
+        var t = 0
+        var voiceMs = 0
+        var quietMs = 0
+        var heard = false
+        val room = ArrayList<Float>()
+        // Polls the recorder's loudness: plays back 0.7 s after he stops talking, or gives up quietly.
+        val tick = object : Runnable {
+            override fun run() {
+                if (recorder !== rec) return
+                val level = (rec.maxAmplitude / 32767f).coerceIn(0f, 1f)
+                onLevel(level)
+                t += 50
+                if (t <= 300) room += level else {
+                    val bar = maxOf(0.04f, 2.5f * (room.sum() / room.size.coerceAtLeast(1)))
+                    if (level > bar) { voiceMs += 50; quietMs = 0; if (voiceMs >= 100) heard = true } else quietMs += 50
+                }
+                val end = (heard && quietMs >= 700) || voiceMs >= 6000 || (!heard && t >= waitMs)
+                if (!end) { main.postDelayed(this, 50); return }
+                if (!stopRecording() || !heard) {
+                    if (heard) onDone() else onQuiet()
+                    return
+                }
+                try {
+                    val p = MediaPlayer()
+                    p.setDataSource(file.absolutePath)
+                    p.setOnCompletionListener { stop(); onDone() }
+                    p.prepare()
+                    p.start()
+                    player = p
+                    onPlaying()
+                } catch (e: Exception) {
+                    stop()
+                    onDone()
+                }
+            }
+        }
+        main.postDelayed(tick, 50)
+    }
+
     private fun stopRecording(): Boolean {
         val rec = recorder ?: return false
         recorder = null

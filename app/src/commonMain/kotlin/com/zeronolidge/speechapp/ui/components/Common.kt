@@ -222,6 +222,15 @@ class AppServices(
         gift = null
     }
 
+    /**
+     * The welcome-back present, waiting in the closet: it never pops up over the map by itself
+     * (that took over the screen when nobody was tapping); the buddy badge shows a 🎁 instead.
+     */
+    var newPiece by mutableStateOf<com.zeronolidge.speechapp.logic.Cosmetic?>(null)
+
+    /** Bumped on every touch anywhere (the app's root watches; nothing is taken from the tap). */
+    var touches by mutableIntStateOf(0)
+
         /** What the big 🔊 "hear it again" button says: the current screen's instruction. */
     var instruction by mutableStateOf("")
         private set

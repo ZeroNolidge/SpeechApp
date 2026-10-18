@@ -146,9 +146,66 @@ private fun jsRecordThenPlay(seconds: Int, onPlaying: () -> Unit, onDone: () -> 
     })()"""
 )
 
+private fun jsListenThenPlay(waitMs: Int, onLevel: (Double) -> Unit, onPlaying: () -> Unit, onQuiet: () -> Unit, onDone: () -> Unit): JsAny = js(
+    """(() => {
+        const st = { stopped: false, rec: null, audio: null, stream: null, timer: null };
+        if (!navigator.mediaDevices || !window.MediaRecorder) { onDone(); return st; }
+        navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(stream => {
+            if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+            st.stream = stream;
+            const C = window.AudioContext || window.webkitAudioContext;
+            window.__tlAudio = window.__tlAudio || new C();
+            const ctx = window.__tlAudio;
+            try { ctx.resume(); } catch (e) {}
+            const src = ctx.createMediaStreamSource(stream);
+            const an = ctx.createAnalyser();
+            an.fftSize = 1024;
+            src.connect(an);
+            const buf = new Float32Array(an.fftSize);
+            const chunks = [];
+            const rec = new MediaRecorder(stream);
+            st.rec = rec;
+            let heard = false, voiceMs = 0, quietMs = 0, t = 0, room = [], quiet = false;
+            rec.ondataavailable = e => chunks.push(e.data);
+            rec.onstop = () => {
+                try { src.disconnect(); } catch (e) {}
+                stream.getTracks().forEach(tr => tr.stop());
+                if (st.stopped) return;
+                if (quiet) { onQuiet(); return; }
+                const url = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType }));
+                const a = new Audio(url);
+                st.audio = a;
+                a.onended = () => onDone();
+                a.onerror = () => onDone();
+                a.play().then(() => onPlaying()).catch(() => onDone());
+            };
+            rec.start();
+            st.timer = setInterval(() => {
+                an.getFloatTimeDomainData(buf);
+                let sum = 0;
+                for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+                const rms = Math.sqrt(sum / buf.length);
+                onLevel(Math.min(1, rms / 0.15));
+                t += 50;
+                if (t <= 300) { room.push(rms); return; }
+                const bar = Math.max(0.012, 2.2 * (room.reduce((a, b) => a + b, 0) / Math.max(1, room.length)));
+                if (rms > bar) { voiceMs += 50; quietMs = 0; if (voiceMs >= 100) heard = true; } else { quietMs += 50; }
+                // Stop 0.7 s after he stops talking, or after 6 s of talking; no voice in time: quiet.
+                if ((heard && quietMs >= 700) || voiceMs >= 6000 || (!heard && t >= waitMs)) {
+                    clearInterval(st.timer);
+                    quiet = !heard;
+                    if (rec.state !== 'inactive') rec.stop();
+                }
+            }, 50);
+        }).catch(() => onDone());
+        return st;
+    })()"""
+)
+
 private fun jsStopParrot(st: JsAny): Unit = js(
     """(() => {
         st.stopped = true;
+        try { if (st.timer) clearInterval(st.timer); } catch (e) {}
         try { if (st.rec && st.rec.state !== 'inactive') st.rec.stop(); } catch (e) {}
         try { if (st.audio) st.audio.pause(); } catch (e) {}
         try { if (st.stream) st.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
@@ -161,6 +218,17 @@ class WebParrot : Parrot {
     override fun recordThenPlay(seconds: Int, onPlaying: () -> Unit, onDone: () -> Unit) {
         stop()
         current = jsRecordThenPlay(seconds, onPlaying) {
+            current = null
+            onDone()
+        }
+    }
+
+    override fun listenThenPlay(waitMs: Int, onLevel: (Float) -> Unit, onPlaying: () -> Unit, onQuiet: () -> Unit, onDone: () -> Unit) {
+        stop()
+        current = jsListenThenPlay(waitMs, { onLevel(it.toFloat()) }, onPlaying, {
+            current = null
+            onQuiet()
+        }) {
             current = null
             onDone()
         }

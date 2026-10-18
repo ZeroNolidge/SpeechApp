@@ -23,6 +23,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -176,10 +177,18 @@ fun SpeakMoment(
     var heardIt by remember(key) { mutableStateOf(false) }
     /** Two quiet tries: listening carries on until his voice or "I said it!". */
     var waitingVoice by remember(key) { mutableStateOf(false) }
+    /** His voice's push on the picture this word (0 to 1, see VoicePush): pops hop, holds grow. */
+    val pushModel = remember(key) { com.zeronolidge.speechapp.logic.VoicePush(com.zeronolidge.speechapp.logic.VoicePush.modeForLine(word.text, sound?.id)) }
+    var pushed by remember(key) { mutableFloatStateOf(0f) }
     /** Rory has modelled a near-miss once for this word (never more). */
     var modelledOnce by remember(key) { mutableStateOf(false) }
     /** The sound whose mouth shape Rory is showing while he models it. */
     var mouthCue by remember(key) { mutableStateOf<String?>(null) }
+    /** Rory's echo with one word added ("A big dog!"), sliding in under the word once he's said it. */
+    var expansion by remember(key) { mutableStateOf<String?>(null) }
+    /** Rory modelling the word: a pulse of the word card for each time he says it (the 3rd bigger). */
+    var modelBeat by remember(key) { mutableIntStateOf(0) }
+    var modelBig by remember(key) { mutableStateOf(false) }
     fun micUsable() = p.useMic && app.voice.available && micPermission.granted() && !micBroken
     val yourTurn = "Your turn!"
 
@@ -225,8 +234,17 @@ fun SpeakMoment(
         }
         // Voice heard: Rory says the target word back, slowly and clearly, then expands it
         // ("Ball! ... A big red ball!").
-        if (heard) app.speaker.say("${word.text}!", slow = true)
-        app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, gemLine, afterLine).joinToString(" "), onDone = { afterTry() })
+        val praiseNow = { app.reward(Progress.AREA_SPEECH, listOfNotNull(praise, gemLine, afterLine).joinToString(" "), onDone = { afterTry() }) }
+        // The slow echo of his word ("Climb!") plays to the end first, then the praise, which
+        // adds a word ("A big climb!"), shown sliding in under the word.
+        if (heard) {
+            app.speaker.say("${word.text}!", slow = true) {
+                expansion = Echo.expansion(word.text, stat.tries)
+                praiseNow()
+            }
+        } else {
+            praiseNow()
+        }
         if (piece != null) app.showGift(piece)
     }
 
@@ -252,13 +270,27 @@ fun SpeakMoment(
             if (useMic) listen() else askOutLoud()
             return
         }
+        // Each time Rory says the word itself, the card pulses once (bigger and slower when he
+        // says it slowly), so his modelling is something to watch, not just hear.
+        fun isWord(t: String) = t == word.text || t == word.syllables
+        fun pulseFor(k: Int) {
+            if (k in all.indices && isWord(all[k].first)) {
+                modelBig = all[k].second
+                modelBeat++
+            }
+        }
         all.forEachIndexed { i, (text, slow) ->
-            val cb: (() -> Unit)? = if (i == all.lastIndex) ({
+            val cb: (() -> Unit) = if (i == all.lastIndex) ({
                 if (s == session && state != Speak.DONE) {
                     if (useMic) listen() else askOutLoud()
                 }
-            }) else null
-            if (i == 0) app.speaker.say(text, slow, cb) else app.speaker.then(text, slow, cb)
+            }) else ({ if (s == session) pulseFor(i + 1) })
+            if (i == 0) {
+                pulseFor(0)
+                app.speaker.say(text, slow, cb)
+            } else {
+                app.speaker.then(text, slow, cb)
+            }
         }
     }
 
@@ -291,6 +323,8 @@ fun SpeakMoment(
             if (s != session || state == Speak.DONE) return@handle
             level = 0f
             app.listenLevel = 0f
+            // A whispered try still gives the picture a small nudge, never nothing.
+            if (t == com.zeronolidge.speechapp.audio.VoiceTry.SOFT) pushed = maxOf(pushed, 0.3f)
             // After Rory modelled the sound: this was the one more try; the word is done either way.
             if (modelledOnce && heard == false) {
                 finish(heard = false, micUsed = true)
@@ -339,8 +373,13 @@ fun SpeakMoment(
                 }
             }
         }
+        val mode = com.zeronolidge.speechapp.logic.VoicePush.modeForLine(word.text, sound?.id)
         app.voice.listenTry(
             4000, onLevel = { level = it; app.listenLevel = it }, onVoice = { if (s == session) act() },
+            // His voice pushes the picture: a hop for each pop (p b t d g k), growing while a
+            // long sound (s m f sh) is held.
+            onPush = { push -> if (s == session && push > 0f) { pushModel.feed(push, 50); pushed = pushModel.progress } },
+            mode = mode,
             words = check?.grammar,
             onWords = { heard ->
                 val judged = check?.let { app.wordHeard(it, heard) }
@@ -356,14 +395,26 @@ fun SpeakMoment(
 
     fun parrotNow() {
         stopAll()
-        state = Speak.PARROT_RECORDING
+        val s = session
+        state = Speak.MODELLING
+        // The copy-me parrot waits for him with the same listening look (never a fixed few
+        // seconds): it copies him as soon as he has spoken, and keeps waiting through quiet.
+        lateinit var wait: () -> Unit
+        wait = {
+            if (s == session && state == Speak.PARROT_RECORDING) {
+                app.parrot.listenThenPlay(
+                    6000,
+                    onLevel = { level = it; app.listenLevel = it },
+                    onPlaying = { if (s == session) { level = 0f; app.listenLevel = 0f; state = Speak.PARROT_PLAYING } },
+                    onQuiet = { wait() },
+                    onDone = { if (s == session) state = Speak.WAITING_TAP },
+                )
+            }
+        }
         app.speaker.say("Say ${word.text} and I'll copy you!") {
-            if (state != Speak.PARROT_RECORDING) return@say
-            app.parrot.recordThenPlay(
-                seconds = 3,
-                onPlaying = { state = Speak.PARROT_PLAYING },
-                onDone = { state = Speak.WAITING_TAP },
-            )
+            if (s != session || state != Speak.MODELLING) return@say
+            state = Speak.PARROT_RECORDING
+            wait()
         }
     }
 
@@ -377,7 +428,7 @@ fun SpeakMoment(
     DisposableEffect(key) { onDispose { stopAll(); app.listening = false } }
     // His turn to talk: the scene behind dims slightly.
     // His turn (listening, or waiting for "I said it!" without a microphone): the listening look.
-    LaunchedEffect(state) { app.listening = state == Speak.LISTENING || state == Speak.WAITING_TAP }
+    LaunchedEffect(state) { app.listening = state == Speak.LISTENING || state == Speak.WAITING_TAP || state == Speak.PARROT_RECORDING }
     val inStory = LocalHasStage.current
 
     // The word card and its big icon buttons: on a phone the buttons sit in a row under the card;
@@ -412,14 +463,19 @@ fun SpeakMoment(
             }
         }
         val card: @Composable ColumnScope.() -> Unit = {
-            val t = rememberInfiniteTransition(label = "model")
-            val beat by t.loop(1f, 1.08f, 500, label = "beat")
+            // One pulse per word Rory says (the slow third one bigger and longer).
+            val beatPulse = remember { Animatable(1f) }
+            LaunchedEffect(modelBeat) {
+                if (modelBeat > 0) {
+                    beatPulse.animateTo(if (modelBig) 1.22f else 1.1f, tween(if (modelBig) 420 else 160))
+                    beatPulse.animateTo(1f, tween(if (modelBig) 480 else 220))
+                }
+            }
             val pulse by animateFloatAsState(
                 when (state) {
                     Speak.LISTENING -> 1f + level * 0.25f
-                    Speak.MODELLING -> beat
                     else -> 1f
-                },
+                } * (1f + 0.18f * pushed),
                 label = "pulse",
             )
             // The picture card: tap it to hear the word again. On its own (Talk) the card is the
@@ -442,7 +498,10 @@ fun SpeakMoment(
                         color = PaperStyle.ink,
                         maxLines = 1,
                         softWrap = false,
+                        modifier = Modifier.graphicsLayer { scaleX = beatPulse.value; scaleY = beatPulse.value },
                     )
+                    // Rory's echo with a word added: the new words slide in on paper.
+                    expansion?.let { ExpandChip(word.text, it, Modifier.padding(top = 4.dp)) }
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.height(if (small) 84.dp else 124.dp), contentAlignment = Alignment.Center) {
                         when (state) {
@@ -450,7 +509,8 @@ fun SpeakMoment(
                             Speak.LISTENING ->
                                 if (textW >= (if (small) 170.dp else 220.dp)) PaperChip("👂 Your turn!", fontSize = if (small) 18.sp else 24.sp, maxLines = 1)
                                 else Text("👂", fontSize = 52.sp)
-                            Speak.PARROT_RECORDING -> ListeningBadge(level, if (small) 56.dp else 84.dp)
+                            // The copy-me parrot listens with Rory's listening look too; here just the cue.
+                            Speak.PARROT_RECORDING -> Text("🦜", fontSize = 52.sp)
                             Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
                             Speak.MODELLING -> Text("👂", fontSize = 52.sp)
                             Speak.WAITING_TAP -> Text("🗣️", fontSize = 52.sp)
@@ -469,7 +529,7 @@ fun SpeakMoment(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            WordPicture(word, picture, pulse, Modifier.weight(1f).fillMaxWidth())
+                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.weight(1f).fillMaxWidth())
                             wordAndState()
                         }
                     } else {
@@ -478,10 +538,17 @@ fun SpeakMoment(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            WordPicture(word, picture, pulse, Modifier.weight(1.3f).fillMaxHeight())
+                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.weight(1.3f).fillMaxHeight())
                             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { wordAndState() }
                         }
                     }
+                }
+                // While Rory models the word, there he is, talking, in the card's top-left corner.
+                if (state == Speak.MODELLING) {
+                    Critter(
+                        Species.ROBOT, Modifier.align(Alignment.TopStart).padding(8.dp).size(width = if (small) 48.dp else 70.dp, height = if (small) 60.dp else 88.dp),
+                        Color(0xFFFFCC80), mood = Mood.HAPPY, talking = true,
+                    )
                 }
                 // Rory models a sound: his mouth shape for it, big, in the card's corner.
                 mouthCue?.let { MouthCue(it, Modifier.align(Alignment.TopEnd).padding(10.dp).popIn("mouth")) }
@@ -540,7 +607,7 @@ fun SpeakMoment(
     // child tapping it again and again skipped every word of a story); "I said it!" shows at once.
     // On his turn (listening, or waiting without a microphone) the button is "I said it!" and
     // counts as his try; while Rory is still modelling it is the plain skip, after 3 s.
-    val saidIt = roryWaiting || state == Speak.LISTENING || waitingVoice
+    val saidIt = roryWaiting || state == Speak.LISTENING || state == Speak.WAITING_TAP || state == Speak.PARROT_RECORDING || waitingVoice
     ContinueAction(
         enabled = state != Speak.DONE,
         hint = state == Speak.WAITING_TAP || waitingVoice,
@@ -615,12 +682,12 @@ internal fun RoryListens(level: Float, size: Dp) {
             drawCircle(Color.White, r, style = Stroke(4.dp.toPx()))
             drawCircle(Color(0xFFFFC94A).copy(alpha = 0.6f), r * 0.86f, style = Stroke(3.dp.toPx()))
         }
-        Critter(Species.ROBOT, Modifier.fillMaxHeight(0.8f), Color(0xFFFFCC80), mood = Mood.LISTEN)
+        Critter(Species.ROBOT, Modifier.fillMaxHeight(0.9f), Color(0xFFFFCC80), mood = Mood.LISTEN)
         // The ear, at the side of Rory's head where his hand is raised: a soft gold glow, a big
         // paper ear and the cupped hand behind it.
         Canvas(Modifier.fillMaxSize()) {
             val s = size.toPx() * 1.35f
-            val h = s * 0.8f
+            val h = s * 0.9f
             val w = h * 100f / 140f
             val left = (s - w) / 2
             // Big enough to read as an ear at a glance: about half Rory's width, sticking out
@@ -672,7 +739,8 @@ internal fun ListeningStage(
         aboveDim?.invoke(this)
         if (k > 0.001f) {
             // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
-            val rory = minOf(maxOf(h * 0.28f, 100.dp), w * 0.7f / 1.35f)
+            // Rory himself about a quarter of the scene's height or a little more (big, not a badge).
+            val rory = minOf(maxOf(h * 0.3f, 120.dp), w * 0.75f / 1.35f)
             val box = rory * 1.35f
             val startX = 0.dp
             val startY = h - box
@@ -687,33 +755,6 @@ internal fun ListeningStage(
                         alpha = k
                     },
             ) { RoryListens(app.listenLevel, rory) }
-        }
-    }
-}
-
-/** A big red microphone that throbs with the child's voice (for the copy-me parrot). */
-@Composable
-private fun ListeningBadge(level: Float, size: Dp) {
-    val t = rememberInfiniteTransition(label = "listen")
-    val ring by t.loop(1f, 1.35f, 700, mode = RepeatMode.Restart, label = "ring")
-    val ringAlpha by t.loop(0.6f, 0f, 700, mode = RepeatMode.Restart, label = "ringAlpha")
-    Box(contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .size(size)
-                .scale(ring)
-                .clip(CircleShape)
-                .background(Color(0xFFE53935).copy(alpha = ringAlpha)),
-        )
-        Box(
-            Modifier
-                .size(size)
-                .scale(1f + level * 0.3f)
-                .clip(CircleShape)
-                .background(Color(0xFFE53935)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("🎤", fontSize = (size.value * 0.5f).sp)
         }
     }
 }
@@ -787,6 +828,42 @@ internal fun MouthCue(sound: String, modifier: Modifier = Modifier) {
                     paperRect(teeth, Offset(w * 0.18f, h * 0.42f), Size(w * 0.64f, h * 0.16f))
                 }
             }
+        }
+    }
+}
+
+/**
+ * Rory's echo with a word added ("go" to "go, boat"): the words he already said sit still, and
+ * each new word slides in on its own paper scrap, one after another (under half a second each).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ExpandChip(base: String, full: String, modifier: Modifier = Modifier) {
+    val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
+    val had = base.lowercase().split(Regex("[^a-z']+")).filter { it.isNotBlank() }.toSet()
+    val words = full.split(" ").filter { it.isNotBlank() }
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        var newIndex = 0
+        words.forEach { w ->
+            val isNew = w.lowercase().trim { !it.isLetter() } !in had
+            val order = if (isNew) newIndex++ else 0
+            val slide = remember(full, w) { Animatable(if (isNew && !still) 0f else 1f) }
+            LaunchedEffect(full, w) {
+                if (isNew && !still) {
+                    kotlinx.coroutines.delay(250L * order)
+                    slide.animateTo(1f, tween(380))
+                }
+            }
+            Text(
+                w, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = PaperStyle.ink, maxLines = 1,
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationX = (1f - slide.value) * 60.dp.toPx()
+                        alpha = slide.value
+                    }
+                    .paperCard(if (isNew) Color(0xFFFFF59D) else PaperStyle.chip, 10.dp)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
         }
     }
 }

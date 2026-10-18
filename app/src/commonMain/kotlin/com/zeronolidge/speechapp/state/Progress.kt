@@ -408,6 +408,15 @@ class Progress(private val prefs: Prefs) {
         focusSounds = prefs.getStringSet("focus", emptySet())!!.toSet()
     }
 
+    /** Rory has announced that Sleepy Owl's story stop is open (once). */
+    var owlAnnounced by mutableStateOf(prefs.getBoolean("owlAnnounced", false))
+        private set
+
+    fun markOwlAnnounced() {
+        owlAnnounced = true
+        prefs.edit().putBoolean("owlAnnounced", true).apply()
+    }
+
     // ---------- Word listening (on-device recognition; small records only, never audio or text) ----------
 
     /** Recognition listens on each talk turn (records only, "listen-only", unless modelling is on). */

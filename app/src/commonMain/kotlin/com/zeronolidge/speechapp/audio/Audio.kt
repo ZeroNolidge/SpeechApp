@@ -73,6 +73,16 @@ interface MicLevels {
  */
 interface Parrot {
     fun recordThenPlay(seconds: Int = 3, onPlaying: () -> Unit, onDone: () -> Unit)
+
+    /**
+     * The copy-me parrot that waits for him: records, and as soon as he has spoken (and stopped)
+     * plays it back. [onLevel] gives his loudness (0 to 1) for the listening look. If there's no
+     * voice within [waitMs], nothing is played and [onQuiet] is called (the caller keeps
+     * listening). [onDone] after the playback.
+     */
+    fun listenThenPlay(waitMs: Int, onLevel: (Float) -> Unit, onPlaying: () -> Unit, onQuiet: () -> Unit, onDone: () -> Unit) =
+        recordThenPlay(3, onPlaying, onDone)
+
     fun stop()
 }
 

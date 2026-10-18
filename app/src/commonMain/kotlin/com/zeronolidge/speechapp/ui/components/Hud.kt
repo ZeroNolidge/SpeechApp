@@ -47,6 +47,8 @@ fun HeroBadge(modifier: Modifier = Modifier, onClick: () -> Unit) {
             ) {
                 Critter(species, Modifier.fillMaxHeight(), p.heroColor(species), p.outfit, animate = false)
             }
+            // A new paper piece waiting in the closet (the welcome-back present): a little gift tag.
+            if (LocalApp.current.newPiece != null) Text("🎁", fontSize = 26.sp)
             Spacer(Modifier.width(10.dp))
             BackpackMeter()
         }

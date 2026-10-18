@@ -1131,17 +1131,38 @@ class RoomLevelTest {
     }
 
     @Test
-    fun theSavedRoomIgnoresHisVoiceAndNeverJumps() {
+    fun theSavedRoomFollowsTheRoomUpAndDownButNotHisVoice() {
+        // His word (short) doesn't raise the saved room.
         val m = VoiceMeter(knownRoom = 0.005f)
         repeat(10) { m.feed(0.005f, 50) }
         repeat(10) { m.feed(0.08f, 50) }
-        repeat(10) { m.feed(0.006f, 50) }
+        repeat(30) { m.feed(0.006f, 50) }
         val r = m.roomAfter()!!
-        assertTrue(r in 0.004f..0.0075f, "room $r")
-        // A noisier turn raises it at most 1.5 times.
+        assertTrue(r in 0.004f..0.007f, "room $r")
+        // A louder room raises it all the way (no cap), so the bar keeps up.
         val n = VoiceMeter(knownRoom = 0.004f)
-        repeat(30) { n.feed(0.0085f, 50) }
-        assertTrue(n.roomAfter()!! <= 0.006f + 1e-6f)
+        repeat(60) { n.feed(0.02f, 50) }
+        assertTrue(n.roomAfter()!! >= 0.019f, "${n.roomAfter()}")
+    }
+
+    @Test
+    fun backgroundNoiseNeverCountsAsHisTry() {
+        // The room got louder before the turn (TV on): the lead sees it, and noise isn't voice.
+        val tv = VoiceMeter(knownRoom = 0.004f)
+        var done = false
+        repeat(80) { if (!done) done = tv.feed(0.03f, 50) }
+        assertTrue(!tv.heard, "steady noise counted as voice")
+        // Noise that starts mid-turn and never dips: after 2 s it's the room, not his try.
+        val mid = VoiceMeter(knownRoom = 0.004f)
+        repeat(6) { mid.feed(0.004f, 50) }
+        repeat(74) { mid.feed(0.05f, 50) }
+        assertTrue(!mid.heard)
+        // He still gets heard over the louder room.
+        val over = VoiceMeter(knownRoom = 0.004f)
+        repeat(4) { over.feed(0.03f, 50) }
+        repeat(6) { over.feed(0.03f, 50) }
+        repeat(6) { over.feed(0.2f, 50) }
+        assertTrue(over.heard)
     }
 }
 

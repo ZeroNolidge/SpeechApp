@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
 import com.zeronolidge.speechapp.data.SpeechContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -100,6 +101,16 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val modelledBeat = remember { arrayOf(false) }
     /** The sound whose mouth shape Rory shows while he models it. */
     var mouthCue by remember { mutableStateOf<String?>(null) }
+    /** One pulse of the word chip per word Rory models (the slow third one bigger). */
+    var chipBeat by remember { mutableIntStateOf(0) }
+    var chipBig by remember { mutableStateOf(false) }
+    val chipPulse = remember { Animatable(1f) }
+    LaunchedEffect(chipBeat) {
+        if (chipBeat > 0 && !still) {
+            chipPulse.animateTo(if (chipBig) 1.25f else 1.12f, tween(if (chipBig) 420 else 160))
+            chipPulse.animateTo(1f, tween(if (chipBig) 480 else 220))
+        }
+    }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
@@ -229,6 +240,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     val judged = check?.let { app.wordHeard(it, heard) }
                     if (waitWords) loud?.let { handle(it, judged) }
                 },
+                mode = model[0].mode,
             ) { t -> if (waitWords) loud = t else handle(t, null) }
             handle = handle@{ t, judged ->
                 if (s != session || phase != VPhase.LISTEN) return@handle
@@ -299,10 +311,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val b = beats[k]
         val say = line(k)
         app.rememberInstruction("${b.problem} $say. $say. $say.")
-        // Rory names the problem, then says the word three times, slower the third time.
-        app.speaker.say(b.problem)
-        app.speaker.then(say)
-        app.speaker.then(say)
+        // Rory names the problem, then says the word three times, slower the third time; the
+        // word chip pulses once as he starts each one (the slow third one bigger and longer).
+        fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
+        app.speaker.say(b.problem) { pulse(false) }
+        app.speaker.then(say) { pulse(false) }
+        app.speaker.then(say) { pulse(true) }
         app.speaker.then(say, slow = true) { if (s == session && phase == VPhase.MODEL) listen(k) }
     }
 
@@ -329,7 +343,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory slides in where he covers nothing his voice moves: below a sliding prop, left of
             // one that rises, sinks, grows, pops or shakes in the middle.
             val beat = beats[index.coerceAtLeast(0)]
-            val (endX, endY) = if (beat.move == Move.SLIDE) 0.5f to 0.84f else 0.18f to 0.62f
+            val (endX, endY) = if (beat.move == Move.SLIDE) 0.5f to 0.8f else 0.32f to 0.6f
             ListeningStage(
                 Modifier.fillMaxSize(), endX = endX, endY = endY,
                 aboveDim = {
@@ -361,7 +375,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     ) {
                         val species = p.hero ?: Species.KID
                         HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == VPhase.END) Mood.CHEER else Mood.HAPPY)
-                        if (!narrow && !app.listening) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
+                        // Rory beside the buddy, his mouth going as he models each word (on a phone
+                        // too while he talks; the big listening Rory takes over on his turn).
+                        if (!app.listening && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
                     }
                 }
             }
@@ -369,12 +385,27 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // prop), so it's never hidden. When the prop starts high (it sinks), the word sits
             // top-left, clear of it.
             val k = index
+            // After the action: Rory's echo adds a word, and the new words slide in on paper
+            // ("go" to "go, boat").
+            if (k >= 0 && phase == VPhase.ACT) {
+                val more = beats[k].line(p.speechStep + 1)
+                Row(
+                    Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
+                        .padding(top = 8.dp, start = 8.dp).widthIn(max = 560.dp).zIndex(4f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(beats[k].emoji, fontSize = 34.sp)
+                    Spacer(Modifier.width(8.dp))
+                    ExpandChip(line(k), more)
+                }
+            }
             if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT) {
                 Row(
                     Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
                         .padding(top = 8.dp, start = 8.dp)
                         .widthIn(max = 560.dp)
                         .zIndex(4f)
+                        .graphicsLayer { scaleX = chipPulse.value; scaleY = chipPulse.value }
                         .paperCard(PaperStyle.chip, 22.dp)
                         .padding(horizontal = 18.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,

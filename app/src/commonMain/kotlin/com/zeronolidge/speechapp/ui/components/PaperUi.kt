@@ -105,9 +105,10 @@ fun PaperButton(
     val interaction = remember { MutableInteractionSource() }
     val ownPress by interaction.collectIsPressedAsState()
     val pressed = pressedBy ?: ownPress
-    // Every press lands with a soft paper crinkle.
+    // Every press lands with a soft paper crinkle: at the touch itself (kidTap), or for a button
+    // a parent handles (the map's stop), when it shows pressed.
     val sfx = LocalApp.current.sfx
-    LaunchedEffect(pressed) { if (pressed && enabled) sfx.crinkle() }
+    LaunchedEffect(pressed) { if (pressed && enabled && pressedBy != null) sfx.crinkle() }
     val press by animateFloatAsState(if (pressed) 1f else 0f, tween(90), label = "press")
     Box(
         modifier
@@ -118,7 +119,7 @@ fun PaperButton(
                 scaleY = 1f - 0.04f * press
             }
             .then(if (enabled) Modifier.raisedPaperBase(color, corner, circle) { press } else Modifier)
-            .then(if (pressedBy == null) Modifier.kidTap(interaction, enabled, onClick) else Modifier),
+            .then(if (pressedBy == null) Modifier.kidTap(interaction, enabled, onClick, onPress = { sfx.crinkle() }) else Modifier),
         propagateMinConstraints = true,
     ) {
         Box(
@@ -352,39 +353,39 @@ fun Modifier.wiggleOnTap(): Modifier = composed {
 }
 
 /**
- * A tap that young fingers can always land: it counts if the finger comes up anywhere on the
- * button or within [slop] of it, however much it wobbled on the way (a plain click is cancelled
- * by a wobble or by the map's drag noticing the movement, so first taps were often lost), and
- * shows the press (crinkle and press-down) from the first touch.
+ * A tap that young fingers can always land: it acts the moment the finger touches (not when it
+ * lifts, and not after any delay), so a first tap on an iPad always counts, however much the
+ * finger then wobbles or slides. [onPress] (the crinkle) runs first, then [onClick]. The press
+ * shows (press-down) until the finger lifts.
  */
-fun Modifier.kidTap(interaction: MutableInteractionSource, enabled: Boolean = true, onClick: () -> Unit, slop: androidx.compose.ui.unit.Dp = 24.dp): Modifier = composed {
+fun Modifier.kidTap(
+    interaction: MutableInteractionSource,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    onPress: (() -> Unit)? = null,
+): Modifier = composed {
     val latest = androidx.compose.runtime.rememberUpdatedState(onClick)
+    val pressLatest = androidx.compose.runtime.rememberUpdatedState(onPress)
     val scope = rememberCoroutineScope()
     if (!enabled) return@composed this
     pointerInput(interaction) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            down.consume()
             val press = androidx.compose.foundation.interaction.PressInteraction.Press(down.position)
             scope.launch { interaction.emit(press) }
-            val pad = slop.toPx()
-            var tapped = false
+            pressLatest.value?.invoke()
+            latest.value()
+            // Shown pressed until the finger lifts (or the button goes away).
             while (true) {
                 val e = awaitPointerEvent()
-                val c = e.changes.firstOrNull { it.id == down.id } ?: e.changes.first()
+                val c = e.changes.firstOrNull { it.id == down.id } ?: break
                 if (!c.pressed) {
-                    val q = c.position
-                    tapped = q.x >= -pad && q.y >= -pad && q.x <= size.width + pad && q.y <= size.height + pad
                     c.consume()
                     break
                 }
             }
-            scope.launch {
-                interaction.emit(
-                    if (tapped) androidx.compose.foundation.interaction.PressInteraction.Release(press)
-                    else androidx.compose.foundation.interaction.PressInteraction.Cancel(press),
-                )
-            }
-            if (tapped) latest.value()
+            scope.launch { interaction.emit(androidx.compose.foundation.interaction.PressInteraction.Release(press)) }
         }
     }
 }

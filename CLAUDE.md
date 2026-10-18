@@ -22,6 +22,11 @@ These are the owner's rules for all work:
   Grown-up controls (settings, reset) sit behind `ParentGateScreen`: three numbers written as
   words, never spoken, and no 🔊 button there (`ScreenFrame(showHear = false)`).
 - **Reward pop-ups** (`GiftOverlay`, e.g. "Hero cape") close by themselves after 4 s or on any tap.
+  **Nothing ever takes over the screen when nobody taps:** the welcome-back present no longer pops
+  up over the map (it waits in the closet: a 🎁 on the buddy badge, `AppServices.newPiece`); the
+  map's only idle reminder is Rory peeking in and waving after ~20 s (`MapWave`, max 3, any touch
+  tucks him away; touches counted at the app root, `AppServices.touches`). No spoken nags on the
+  map. The closet has a green ▶ back to the map.
 - **No ads, outside links, buy buttons, timers, lives, streaks or buzzer sounds.** Gentle only:
   wrong answers fold away with "try again".
 - Must keep working as a static site on GitHub Pages.
@@ -54,7 +59,8 @@ These are the owner's rules for all work:
   dims and Rory with his cupped ear grows to ~25% of the scene's height and slides from the
   bottom-left toward the middle (Pip: the left, clear of Pip's path), ear pulsing, ring growing with
   `app.listenLevel`. In a story the story scene is the stage (`LocalHasStage`); in Talk the card is.
-- **No double skips:** a continue tap is ignored within 0.7 s of the last one taken (`SettleMs`,
+- **No double skips:** a newly shown "I said it!" ignores taps for 0.5 s (`LabelSettleMs`, so a
+  start tap landing there can't count); a continue tap is ignored within 0.7 s of the last one taken (`SettleMs`,
   from the last tap, not from the button appearing: first taps on a new button always count), a
   word card's ▶ skip appears after 3 s, and the chapter moves on only from the step that asked
   (`next(from)`). Before this, tapping ▶ repeatedly skipped every word of Penny's all-words chapter.
@@ -93,7 +99,7 @@ These are the owner's rules for all work:
   key-to-file record. `make_voice.py` checks every clip has sound (`sound_seconds`, read from the
   MP3 frames' global gain, no extra software; under 0.2 s = silent) and remakes silent ones (last
   try with tts-1); `--check` lists them. **After the owner's batch run, run
-  `python3 tools/finish_clips.py` here** (needs ffmpeg + numpy, which the owner may not have): it
+  `python3 tools/finish_clips.py` here** (it also fades the long held sounds in and out, `FADE_KEYS`, manifest `faded`) (needs ffmpeg + numpy, which the owner may not have): it
   trims each clip to 0.03 s lead and 0.3 s tail, evens loudness to a normal speaking level (RMS
   0.1), renames to `-f1` and lists finished keys in manifest `finished` (make_voice keeps that list
   for unchanged files); then commit. The web player rejects clips under normal loudness (voiced
@@ -103,10 +109,12 @@ These are the owner's rules for all work:
   element at the trimmed end), so his turn starts right after Rory. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
   (tools/voice_overrides.json). Android still uses its own TTS.
 - **Room noise** (`VoiceDetector.room`): the room's loudness is saved from each talk turn (the
-  quieter half of its non-voice readings, rising at most 1.5x per turn, `VoiceMeter.roomAfter`)
-  and reused by the next (`VoiceMeter(knownRoom)`: no settling, only a 150 ms lead). Only the
-  first turn of a sitting measures, with `checkRoom` (0.4 s) in the quiet before Rory's first
-  line (story/Pip/cave intro, `SpeakMoment` start). Never measure while Rory talks.
+  quietest fifth of all its readings, `VoiceMeter.roomAfter`, following the room up as well as
+  down) and reused by the next (`VoiceMeter(knownRoom)`: no settling, only a 150 ms lead; if the
+  lead is already over the bar at a room-like level, ≤ `LOUD_ROOM`, the bar rises at once). Steady
+  sound with no dip for 2 s (`NOISE_MS`) is the room, never his try, so background noise can't
+  finish a story. Only the first turn of a sitting measures, with `checkRoom` (0.4 s), which
+  waits until nothing is being said (the story title included). Never measure while Rory talks.
 - **Word listening (on-device recognition, listen-only by default)** (`logic/WordCheck.kt`,
   unit-tested; `audio/WordListener.kt`; web: `audio/WebWords.kt`, Vosk via vosk-browser 0.0.8 +
   vosk-model-small-en-us-0.15, downloaded by CI into the site's `vosk/` folder, never in the repo,
@@ -236,6 +244,16 @@ These are the owner's rules for all work:
   and "I said it!" always finish at a gentle speed, so no beat needs a loud voice. While listening
   the target glows with paper sparkles and three torn cream paper wind strips stream from Rory to it
   (`VoiceListenExtras`, `voiceTarget`, drawn above the dim via `ListeningStage(aboveDim)`).
+  **Pops vs holds everywhere** (voice stories, chapter cards/Talk via `SpeakMoment`, Pip, cave;
+  `listenTry(mode)`, `VoicePush.modeForLine`): pop words count as heard after one 50 ms burst
+  (others 150 ms); in `SpeakMoment` the picture hops per pop and grows while held (`pushed`), in
+  Pip each pop rustles the hiding spot, in the cave the next crystal glimmers; a whisper always
+  gives a small nudge. Pip and the cave follow the voice-story pattern: quiet → "together" + one
+  more listen → wait (listening) for any sound or "I said it!" (never "I called!"); the 🦜 copy-me
+  parrot waits too (`Parrot.listenThenPlay`: plays back once he has spoken, keeps waiting through
+  quiet, with the listening look). Rory's modelling is visible: the word card/chip pulses once
+  per word he says (the slow third bigger), a small talking Rory sits in the card corner, and his
+  echo + added word slides in on paper (`ExpandChip`). The slow echo finishes before the praise.
   **Pops vs holds** (`VoicePush.Mode`, `modeFor(beat.sound)`): p b t d g k words count each
   separate burst as one push ("pop! pop!" = 2, about a third each; 100 ms of quiet between
   bursts); s m f sh go by how long he holds the sound; others by loudness x time. After 2 quiet
@@ -248,7 +266,7 @@ These are the owner's rules for all work:
   the cave and next stop). Extra stops always sit on the island, grass or beach (`MapAreas.onIsland`, sharing
   `ISLAND_*` with IslandMap's coast); the cave is placed before the stories (the Forest's corner
   is tight), else it and the owl ended up in the sea. The owl story's stop is its own paper picture (sleepy owl before a
-  rising sun on a night-blue badge, `sleepyOwlBadge`, clipped to its circle), never the 🦉 emoji used elsewhere. Existing chapters follow it too: no magic word, 3x model with the 3rd
+  rising sun on a night-blue badge, `sleepyOwlBadge`, clipped to its circle), never the 🦉 emoji used elsewhere; it appears only once the first Forest chapter is done (`owlOpen`, announced once). Existing chapters follow it too: no magic word, 3x model with the 3rd
   slower, and the set piece changes the moment he speaks (`SpeakMoment(onAction)`).
 - **Echo Cave** (`logic/EchoCave.kt`, `ui/screens/EchoCave.kt`): 8 tries; Rory says a word (own
   words, then target-sound words, then everyday words at his speech step), he says it into the
@@ -275,10 +293,11 @@ These are the owner's rules for all work:
 - **Answers live in one place** (`logic/AnswerKey.kt`); every quiz goes through `QuizState.tap`
   and `AnswerRow(key = AnswerKey.x(c))`. `PlayEveryQuizTest` plays every quiz kind with a right and
   wrong tap and fails if a wrong tap is ever marked right.
-- **Every tap reacts and every first tap counts:** `PaperButton` uses `Modifier.kidTap` (counts
-  if the finger lifts on the button or within 24dp, however it wobbled; a plain click was
-  cancelled by wobbles and the map's drag), crinkles (`Sfx`) and presses down; the map's one tap
-  handler is just as forgiving (28dp) and its stops wiggle and crinkle when tapped; scenery decor wiggles
+- **Every tap reacts and every first tap counts:** `PaperButton` uses `Modifier.kidTap`, which
+  acts on touch-down (not on lift, no delay: first taps on iPad kept getting lost), crinkles
+  (`Sfx`) and presses down; the map's one tap handler also acts on touch-down, and its stops wiggle
+  and crinkle. Never put a full-screen pointer layer on top (MapWave first had one and ate every
+  map tap): watch touches at the app root instead; scenery decor wiggles
   (`WigglyDecor`); pictures that aren't buttons (the word picture, story characters, quiz pictures,
   Pip and its hiding spots) wiggle (`Modifier.wiggleOnTap`, watches only); any unclaimed tap leaves
   a paper puff and a pop (`PuffOverlay`). Listening dims the

@@ -31,6 +31,10 @@ TARGET_RMS = 0.1   # a normal speaking level for these clips (their median befor
 MAX_PEAK = 0.9
 SOUND = 0.02       # anything above this counts as sound when trimming
 SUFFIX = "-f1"     # change this if the finishing changes, so tablets fetch the new clips
+# Long held sounds start and stop abruptly; they get a short fade in and out (seconds).
+FADE_KEYS = {"thhhh", "thhhhh", "sssss", "ssss", "fffff", "shhhhh", "mmmmm", "rrrrr", "rrrr"}
+FADE_IN, FADE_OUT = 0.06, 0.12
+FADE_SUFFIX = "-fd"
 
 
 def decode(path):
@@ -65,6 +69,36 @@ def finish(x):
     end = min(len(x), e + int(TAIL * RATE))
     gain = min(TARGET_RMS / max(rms, 1e-6), MAX_PEAK / max(peak, 1e-6))
     return x[start:end] * gain
+
+
+def fade(x):
+    import numpy as np
+    n_in, n_out = int(FADE_IN * RATE), int(FADE_OUT * RATE)
+    y = x.copy()
+    if len(y) > n_in + n_out:
+        y[:n_in] *= np.linspace(0, 1, n_in)
+        # Fade out over the end of the sound, not the silent tail after it.
+        m = measure(y)
+        end = m[1] + 1 if m else len(y)
+        a = max(0, end - n_out)
+        y[a:end] *= np.linspace(1, 0, end - a)
+        y[end:] = 0
+    return y
+
+
+def fade_new(clips, done_fades):
+    """Fades the long held sounds that haven't been faded yet (renamed, so tablets fetch them)."""
+    for k in sorted(FADE_KEYS & set(clips)):
+        if k in done_fades:
+            continue
+        old = clips[k]
+        y = fade(decode(os.path.join(OUT, old)))
+        new = old[:-4] + FADE_SUFFIX + ".mp3"
+        encode(y, os.path.join(OUT, new))
+        os.remove(os.path.join(OUT, old))
+        clips[k] = new
+        done_fades.add(k)
+        print("  faded in and out: %s" % k)
 
 
 def main():
@@ -105,6 +139,9 @@ def main():
         if n % 100 == 0:
             print("  %d / %d" % (n, len(todo)))
     manifest["finished"] = sorted(done)
+    fades = set(k for k in manifest.get("faded", []) if k in done)
+    fade_new(clips, fades)
+    manifest["faded"] = sorted(fades)
     json.dump(manifest, open(path, "w", encoding="utf-8"), indent=0, sort_keys=True)
     print("Done.")
 

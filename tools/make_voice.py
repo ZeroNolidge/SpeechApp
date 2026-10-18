@@ -476,7 +476,8 @@ def main():
         # Clips trimmed and evened out by tools/finish_clips.py stay marked as finished while
         # their file is unchanged; remade ones get finished again next time.
         finished = sorted(k for k in old.get("finished", []) if k in made and made[k] == old_clips.get(k))
-        json.dump({"voice": voice, "model": state["model"], "clips": made, "finished": finished},
+        faded = sorted(k for k in old.get("faded", []) if k in finished)
+        json.dump({"voice": voice, "model": state["model"], "clips": made, "finished": finished, "faded": faded},
                   open(manifest_path, "w", encoding="utf-8"), indent=0, sort_keys=True)
         write_letters_page(made)
 

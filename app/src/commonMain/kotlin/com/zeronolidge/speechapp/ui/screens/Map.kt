@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
+import com.zeronolidge.speechapp.ui.components.popIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -117,12 +118,17 @@ fun MapScreen(nav: Nav) {
     val hintLine = "Tap the big yellow button by ${land.hint}, where the hand is pointing!"
     LaunchedEffect(Unit) {
         val present = p.checkIn(today())
-        present?.let { app.showGift(it) }
-        val welcome = present?.let { "Welcome back, ${p.heroName}! Your buddy found a present for coming to play: the ${it.name}! " } ?: ""
+        // The present waits in the closet (a 🎁 on the buddy badge); nothing pops up by itself.
+        present?.let { app.newPiece = it }
+        val welcome = present?.let { "Welcome back, ${p.heroName}! Your buddy found a present for coming to play: the ${it.name}! It's in the closet. " } ?: ""
         // Back after a few days away: no streaks, nothing lost, just a happy hello.
         val missed = if (p.daysAway >= 1) "I missed you, ${p.heroName}! I'm so happy you're back! " else ""
         val cave = if (p.echoReady) "A secret crystal cave! Tap the glowing purple cave by the trees to play. " else ""
-        val line = missed + cave + when {
+        val owl = if (owlOpen(p) && "owl" !in p.voiceStoriesDone && !p.owlAnnounced) {
+            p.markOwlAnnounced()
+            "Look! Sleepy Owl has a story for you, by the trees! "
+        } else ""
+        val line = missed + cave + owl + when {
             p.chapter == 0 -> "This is the map! Let's start the adventure. $hintLine"
             unfoldNew && Trail.opensLand(p.chapter) -> "Look, the map is opening up! A new place to explore. $hintLine"
             unfoldNew -> "The trail goes on! $hintLine"
@@ -131,7 +137,8 @@ fun MapScreen(nav: Nav) {
         app.rememberInstruction(line)
         if (present != null) app.celebrate(welcome + line) else app.instruct(line)
     }
-    Nudge("map", hintLine, everyMs = 12000)
+    // No spoken nagging and never a jump to another screen when nobody taps: after about 20
+    // seconds of quiet, Rory just waves from the corner (see MapWave), and that's all.
     val species = p.hero ?: Species.KID
     var hintFrom by remember { mutableStateOf<Land?>(null) }
     var hintKey by remember { mutableStateOf(0) }
@@ -201,7 +208,9 @@ fun MapScreen(nav: Nav) {
                 nav.go(Screen.EchoCave())
             },
             // The voice stories, each a stop by its land (always in the same order, so they stay put).
-            stories = com.zeronolidge.speechapp.logic.VoiceStories.all.map {
+            // Sleepy Owl's Morning is a reward stop, like the cave: it appears once the first
+            // Forest chapter is done (the other stories are there from the start).
+            stories = com.zeronolidge.speechapp.logic.VoiceStories.all.filter { it.id != "owl" || owlOpen(p) }.map {
                 com.zeronolidge.speechapp.ui.art.MapStoryStop(it.id, it.emoji, it.land, it.id in p.voiceStoriesDone)
             },
             onStory = { id ->
@@ -233,6 +242,7 @@ fun MapScreen(nav: Nav) {
             pointer = { m, size, fromLeft -> if (showHand) PointingHand(m, size = size, pointRight = fromLeft, pointLeft = !fromLeft) },
         )
         MapCorners(nav, startChapter)
+        MapWave()
     }
 }
 
@@ -302,3 +312,34 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
 /** Below this width, the Adventure button gets its own row above the other bottom buttons. */
 private fun mapNarrow(width: Dp) = width < 600.dp
 
+/**
+ * After about 20 seconds with no taps, Rory peeks in at the left edge and waves (no words, no
+ * moving to another screen). Any tap tucks him away and starts the wait again. At most 3 times.
+ */
+@Composable
+private fun MapWave() {
+    val app = LocalApp.current
+    var waving by remember { mutableStateOf(false) }
+    var waves by remember { mutableStateOf(0) }
+    // Every touch anywhere (counted at the app's root, so no layer here ever takes a tap).
+    LaunchedEffect(app.touches) {
+        waving = false
+        if (waves >= 3) return@LaunchedEffect
+        kotlinx.coroutines.delay(20_000)
+        waving = true
+        waves++
+        kotlinx.coroutines.delay(4_000)
+        waving = false
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+        if (waving) {
+            Critter(
+                Species.ROBOT, Modifier.padding(start = 6.dp).size(width = 90.dp, height = 110.dp).popIn("wave$waves"),
+                Color(0xFFFFCC80), mood = Mood.CHEER, talking = true,
+            )
+        }
+    }
+}
+
+/** Sleepy Owl's Morning opens once the first Forest chapter is done. */
+private fun owlOpen(p: com.zeronolidge.speechapp.state.Progress) = p.chaptersDone >= 1

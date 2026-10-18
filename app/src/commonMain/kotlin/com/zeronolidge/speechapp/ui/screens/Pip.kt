@@ -69,7 +69,7 @@ private enum class PipPhase { INTRO, PROMPT, LISTEN, WAIT_TAP, REACT, END }
  * bush, the rock and the log rustle, show two floppy ears and fold open, until Pip jumps out of
  * the log. Then it gets dark, he says goodnight, and Pip falls asleep. Every try works: a call the
  * microphone hears gets Rory's echo ("Pip! Hi, Pip!"), a quiet one still counts, and with no
- * microphone a big "I called!" button stands in. Finding Pip puts a new tag on Pip's collar.
+ * microphone a big "I said it!" button stands in. Finding Pip puts a new tag on Pip's collar.
  */
 @Composable
 fun PipStoryScreen(nav: Nav) {
@@ -151,15 +151,58 @@ fun PipStoryScreen(nav: Nav) {
         }
     }
 
-    fun listen(k: Int) {
+    /** This call's voice push (pops hop Pip a little, holds keep it coming); reset each call. */
+    val push = remember { arrayOf(com.zeronolidge.speechapp.logic.VoicePush()) }
+
+    lateinit var listen: (Int) -> Unit
+    listen = { k ->
         val s = session
         phase = PipPhase.LISTEN
         app.listening = true
+        val call = turns[k].call
+        val model = push[0]
         // Word listening (listen-only here): a small record of what was heard.
-        val check = app.wordCheck(turns[k].call, null, modeled = true)
-        app.voice.listen(4000, onLevel = { level = it; app.listenLevel = it }, words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } }) { heard ->
-            if (s != session || phase != PipPhase.LISTEN) return@listen
-            react(k, heard == true)
+        val check = app.wordCheck(call, null, modeled = !model.waiting)
+        var lastBurst = 0
+        app.voice.listenTry(
+            4000, onLevel = { level = it; app.listenLevel = it }, onVoice = null,
+            // Each pop (or a held sound) rustles Pip's hiding spot: his voice is reaching Pip.
+            onPush = { v ->
+                if (s == session && v > 0f) {
+                    model.feed(v, 50)
+                    if (model.mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS && model.bursts > lastBurst) { lastBurst = model.bursts; rustle++ }
+                }
+            },
+            mode = model.mode,
+            words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } },
+        ) { t ->
+            if (s != session || phase != PipPhase.LISTEN) return@listenTry
+            level = 0f
+            app.listenLevel = 0f
+            if (t == com.zeronolidge.speechapp.audio.VoiceTry.NO_MIC) {
+                phase = PipPhase.WAIT_TAP
+                app.speaker.say("Call Pip out loud! Then tap the big green I said it button.")
+                return@listenTry
+            }
+            when (model.afterTry(heard = t == com.zeronolidge.speechapp.audio.VoiceTry.HEARD, soft = t == com.zeronolidge.speechapp.audio.VoiceTry.SOFT)) {
+                com.zeronolidge.speechapp.logic.VoicePush.Next.FINISH_GENTLY -> react(k, true)
+                // Quiet (or a whisper, which still rustles the spot): call together, then one more listen.
+                com.zeronolidge.speechapp.logic.VoicePush.Next.AGAIN_TOGETHER -> {
+                    if (t == com.zeronolidge.speechapp.audio.VoiceTry.SOFT) rustle++
+                    phase = PipPhase.PROMPT
+                    app.listening = false
+                    app.speaker.say("Let's call together!")
+                    app.speaker.then(call, slow = true) { if (s == session) listen(k) }
+                }
+                // Still quiet: it waits for his voice or "I said it!" and never moves on by itself.
+                com.zeronolidge.speechapp.logic.VoicePush.Next.WAIT -> if (model.tries > com.zeronolidge.speechapp.logic.VoicePush.MAX_TRIES) {
+                    listen(k)
+                } else {
+                    phase = PipPhase.PROMPT
+                    app.listening = false
+                    app.speaker.say("Call Pip out loud! Then tap the big green I said it button.") { if (s == session) listen(k) }
+                }
+            }
         }
     }
 
@@ -168,15 +211,16 @@ fun PipStoryScreen(nav: Nav) {
         index = k
         phase = PipPhase.PROMPT
         val turn = turns[k]
+        push[0] = com.zeronolidge.speechapp.logic.VoicePush(com.zeronolidge.speechapp.logic.VoicePush.modeForLine(turn.call, null))
         line = "🗣️ ${turn.call}"
         app.rememberInstruction(turn.prompt)
         app.speaker.say(turn.prompt) {
             if (s != session || phase != PipPhase.PROMPT) return@say
             if (micOk()) listen(k) else {
                 phase = PipPhase.WAIT_TAP
-                // No microphone: Rory still listens the same way, beside the "I called!" button.
+                // No microphone: Rory still listens the same way, beside the "I said it!" button.
                 app.listening = true
-                app.speaker.say("Call Pip out loud! Then tap the big green I called button.")
+                app.speaker.say("Call Pip out loud! Then tap the big green I said it button.")
             }
         }
     }
@@ -204,7 +248,7 @@ fun PipStoryScreen(nav: Nav) {
         ContinueHost {
             val nightness by animateFloatAsState(if (night) 1f else 0f, tween(450), label = "night")
             // His turn: the listening look, with Rory sliding in on the left, clear of Pip's path.
-            ListeningStage(Modifier.fillMaxSize(), endX = 0.17f, endY = 0.66f) {
+            ListeningStage(Modifier.fillMaxSize(), endX = 0.24f, endY = 0.62f) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
@@ -309,11 +353,11 @@ fun PipStoryScreen(nav: Nav) {
                 if (line.isNotEmpty()) PaperChip(line, Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = w * 0.6f), fontSize = 24.sp)
             }
             }
-            // The big "I called!" button is always there, in the same spot every turn (the way
+            // The big "I said it!" button is always there, in the same spot every turn (the way
             // on without a microphone, or any time); the big green arrow back at the end.
             ContinueAction(
                 hint = phase == PipPhase.WAIT_TAP,
-                label = if (phase == PipPhase.END) null else "I called!",
+                label = if (phase == PipPhase.END) null else "I said it!",
             ) {
                 when (phase) {
                     PipPhase.INTRO -> {

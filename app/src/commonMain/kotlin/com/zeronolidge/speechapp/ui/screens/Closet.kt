@@ -2,6 +2,8 @@ package com.zeronolidge.speechapp.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import com.zeronolidge.speechapp.ui.components.GoButton
+import com.zeronolidge.speechapp.ui.components.ContinueSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -56,9 +58,12 @@ fun ClosetScreen(nav: Nav) {
     val species = p.hero ?: Species.KID
     val items = p.pieces.map { ClosetItem.Piece(it) } + ClosetItem.NewBuddy
     SpeakOnOpen(
-        if (p.pieces.size <= 1) "Your buddy's closet! Finish adventures, and your buddy gets new paper hats, wings and capes."
-        else "Your buddy's closet! Tap a piece to put it on. Tap it again to take it off.",
+        (if (p.pieces.size <= 1) "Your buddy's closet! Finish adventures, and your buddy gets new paper hats, wings and capes."
+        else "Your buddy's closet! Tap a piece to put it on. Tap it again to take it off.") +
+            " Tap the big green arrow to go back to the map.",
     )
+    // The present waiting here has been seen.
+    LaunchedEffect(Unit) { app.newPiece = null }
     LaunchedEffect(cheer) {
         if (cheer) {
             kotlinx.coroutines.delay(1500)
@@ -81,13 +86,14 @@ fun ClosetScreen(nav: Nav) {
         onHome = nav.home,
         background = { Scenery(Land.MEADOW, Modifier.fillMaxSize(), seed = 7) },
     ) {
+        Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             HeroWithPet(
                 species, p.heroColor(species), p.outfit, p.pet,
                 Modifier.weight(0.34f).fillMaxHeight(),
                 if (cheer) Mood.CHEER else Mood.HAPPY,
             )
-            PagedChoices(items, perPage = 3, modifier = Modifier.weight(0.66f).fillMaxHeight().padding(vertical = 30.dp), spacing = 16.dp) { item, m ->
+            PagedChoices(items, perPage = 3, modifier = Modifier.weight(0.66f).fillMaxHeight().padding(top = 30.dp, bottom = ContinueSize + 12.dp), spacing = 16.dp) { item, m ->
                 when (item) {
                     is ClosetItem.Piece -> {
                         val c = item.c
@@ -109,6 +115,9 @@ fun ClosetScreen(nav: Nav) {
                     }
                 }
             }
+        }
+        // The green arrow: back to the map.
+        GoButton(Modifier.align(Alignment.BottomEnd), size = ContinueSize, hint = false, onClick = nav.home)
         }
     }
 }

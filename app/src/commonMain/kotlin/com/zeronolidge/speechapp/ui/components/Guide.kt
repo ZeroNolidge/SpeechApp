@@ -137,6 +137,8 @@ class ContinueSlot {
     internal var owner: Any? = null
     /** When the last continue tap was taken: a second tap in the moment after is ignored. */
     internal var lastTap: kotlin.time.TimeMark? = null
+    /** When the labelled button ("I said it!") appeared: taps in its first half second are ignored. */
+    internal var labelSince: kotlin.time.TimeMark? = null
 }
 
 val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
@@ -153,13 +155,19 @@ val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
  */
 private const val SettleMs = 700L
 
+/** How long a newly shown "I said it!" ignores taps. */
+private const val LabelSettleMs = 500L
+
 @Composable
 fun ContinueHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val slot = remember { ContinueSlot() }
     // A quick second tap on the same spot must not skip the step that just opened.
     val action = slot.onClick?.let { a ->
         {
-            if ((slot.lastTap?.elapsedNow()?.inWholeMilliseconds ?: SettleMs) >= SettleMs) {
+            // A tap still landing from a start tap mustn't count as "I said it!" (it appears where
+            // the green arrow was): its first half second is ignored.
+            val fresh = slot.label != null && (slot.labelSince?.elapsedNow()?.inWholeMilliseconds ?: LabelSettleMs) < LabelSettleMs
+            if (!fresh && (slot.lastTap?.elapsedNow()?.inWholeMilliseconds ?: SettleMs) >= SettleMs) {
                 slot.lastTap = kotlin.time.TimeSource.Monotonic.markNow()
                 a()
             }
@@ -245,6 +253,7 @@ fun ContinueAction(
     SideEffect {
         if (visible) {
             if (slot.owner !== token) slot.touched = false
+            if (label != null && (slot.owner !== token || slot.label != label)) slot.labelSince = kotlin.time.TimeSource.Monotonic.markNow()
             slot.owner = token
             slot.onClick = stable
             slot.label = label
