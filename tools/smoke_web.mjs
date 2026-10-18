@@ -267,6 +267,10 @@ if (started) {
             await listenShot('#test=story-boat', 1180, 820, 'listen-story-boat');
             await listenShot('#test=story-owl', 1180, 820, 'listen-story-owl');
             await listenShot('#test=story-balloon', 1180, 820, 'listen-story-balloon');
+            // Every talk turn gets the listening look: the balloon's "blow" and "down", a chapter's "climb".
+            await listenShot('#test=story-balloon@3', 1180, 820, 'listen-balloon-down');
+            await listenShot('#test=saybeat-climb', 1180, 820, 'listen-climb');
+            await listenShot('#test=saybeat-climb', 1280, 800, 'listen-climb-tablet');
             await listenShot('#test=story-boat', 400, 860, 'listen-story-boat-phone');
             // Then "I said it!" (bottom-right): the action happens, and the next problem.
             await page.mouse.click(400 - 70, 860 - 60);

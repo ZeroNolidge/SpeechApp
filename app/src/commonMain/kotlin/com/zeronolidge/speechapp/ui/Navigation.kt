@@ -32,7 +32,9 @@ sealed interface Screen {
     data class EchoCave(val rest: Boolean = false) : Screen
     data object Rest : Screen
     /** A voice story (logic/VoiceStories.kt), from its stop on the map. */
-    data class VoiceStory(val id: String) : Screen
+    data class VoiceStory(val id: String, val startBeat: Int = 0) : Screen
     /** Test hook only: a story say-a-word step. */
     data object SayCheck : Screen
+    /** Test hook only: a chapter step where he says [word] (a story word like "climb"). */
+    data class SayBeatCheck(val word: String) : Screen
 }

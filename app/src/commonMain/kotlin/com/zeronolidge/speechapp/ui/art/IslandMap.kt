@@ -13,7 +13,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.rememberCoroutineScope
@@ -112,6 +113,8 @@ fun IslandMap(
     pointer: @Composable (Modifier, Dp, Boolean) -> Unit = { _, _, _ -> },
     /** The crystal cave is open (Pip was found): a glowing paper cave stop just past the Forest. */
     cave: Boolean = false,
+    /** The cave has new tries waiting (just unlocked by finding Pip): it glows. */
+    caveFresh: Boolean = cave,
     onCave: () -> Unit = {},
     /** The voice stories' stops (id, emoji, its land, finished), each a round paper stop by its land. */
     stories: List<MapStoryStop> = emptyList(),
@@ -153,6 +156,9 @@ fun IslandMap(
     var pressedStop by remember { mutableStateOf(false) }
     var pressedCave by remember { mutableStateOf(false) }
     var pressedStory by remember { mutableStateOf<String?>(null) }
+    /** The stop just tapped wiggles (with the crinkle), so every first tap visibly lands. */
+    var wiggled by remember { mutableStateOf<MapTarget?>(null) }
+    val wiggleTurn = remember { Animatable(0f) }
     /** The place to go glows and sparkles until he taps it (or its stop button). */
     var guide by remember(current) { mutableStateOf(true) }
     var lastAreaLog by remember { mutableStateOf("") }
@@ -274,24 +280,46 @@ fun IslandMap(
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
                         spots = storySpots,
                     )
-                    detectTapGestures(
-                        onPress = { p ->
-                            when (val t = targetAt(p)) {
-                                is MapTarget.Area -> pressedLand = t.land
-                                MapTarget.Stop -> pressedStop = true
-                                MapTarget.Cave -> pressedCave = true
-                                is MapTarget.Story -> pressedStory = t.id
-                                MapTarget.Sea -> {}
+                    // A forgiving tap (young fingers wobble): it counts if the finger comes up
+                    // within a finger's width of where it went down, even if dragging the map
+                    // noticed the wobble first. A plain tap detector dropped those first taps.
+                    val slop = 28.dp.toPx()
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val p0 = down.position
+                        when (val t = targetAt(p0)) {
+                            is MapTarget.Area -> pressedLand = t.land
+                            MapTarget.Stop -> pressedStop = true
+                            MapTarget.Cave -> pressedCave = true
+                            is MapTarget.Story -> pressedStory = t.id
+                            MapTarget.Sea -> {}
+                        }
+                        // The stop button crinkles by itself (PaperButton); everything else here too.
+                        if (pressedLand != null || pressedCave || pressedStory != null) app.sfx.crinkle()
+                        var up: Offset? = null
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            val c = e.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!c.pressed) {
+                                if ((c.position - p0).getDistance() <= slop) up = c.position
+                                c.consume()
+                                break
                             }
-                            tryAwaitRelease()
-                            pressedLand = null
-                            pressedStop = false
-                            pressedCave = false
-                            pressedStory = null
-                        },
-                        onTap = { p ->
-                            val t = targetAt(p)
-                            println("MAPTAP ${p.x.toInt()},${p.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
+                        }
+                        pressedLand = null
+                        pressedStop = false
+                        pressedCave = false
+                        pressedStory = null
+                        val p = up ?: return@awaitEachGesture
+                        run {
+                            val t = targetAt(p0)
+                            println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
+                            if (t != MapTarget.Sea && !still) {
+                                wiggled = t
+                                scope.launch {
+                                    for (a in listOf(9f, -8f, 5f, -3f, 0f)) wiggleTurn.animateTo(a, tween(55))
+                                }
+                            }
                             if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
                             when (t) {
                                 is MapTarget.Area -> onArea(t.land)
@@ -300,8 +328,8 @@ fun IslandMap(
                                 is MapTarget.Story -> onStoryTap(t.id)
                                 MapTarget.Sea -> app.puff(islandOrigin.x + p.x, islandOrigin.y + p.y)
                             }
-                        },
-                    )
+                        }
+                    }
                 },
         ) {
             BakedLayer(listOf("map-island", current, lap), depth = 4.dp) {
@@ -518,7 +546,7 @@ fun IslandMap(
                         }
                         .border(6.dp, PaperColors.tomato, CircleShape),
                 )
-                PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f), circle = true, pressedBy = pressedStop, onClick = onStop) {
+                PaperButton(Color(0xFFFFD54F), Modifier.size(node * 0.78f).graphicsLayer { rotationZ = if (wiggled == MapTarget.Stop) wiggleTurn.value else 0f }, circle = true, pressedBy = pressedStop, onClick = onStop) {
                     ArrowIcon(node * 0.36f, color = Color(0xFF2E7D32))
                 }
             }
@@ -529,16 +557,19 @@ fun IslandMap(
                 val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
                 StoryStop(
                     Modifier.offset(x = sd.x - storyNode / 2, y = sd.y - storyNode / 2).size(storyNode).zIndex(2f),
-                    st.emoji, done = st.done, pressed = pressedStory == id,
+                    id, st.emoji, done = st.done, pressed = pressedStory == id,
+                    wiggle = { if (wiggled == MapTarget.Story(id)) wiggleTurn.value else 0f },
                 )
             }
             // The crystal cave stop (its taps go through the island's one tap handler too).
             cavePx?.let { cp ->
                 val cd = with(LocalDensity.current) { DpOffset(cp.x.toDp(), cp.y.toDp()) }
                 CaveStop(
-                    Modifier.offset(x = cd.x - caveNode / 2, y = cd.y - caveNode / 2).size(caveNode).zIndex(2f),
+                    Modifier.offset(x = cd.x - caveNode / 2, y = cd.y - caveNode / 2).size(caveNode).zIndex(2f)
+                        .graphicsLayer { rotationZ = if (wiggled == MapTarget.Cave) wiggleTurn.value else 0f },
                     pressed = pressedCave,
-                    glow = { pulse },
+                    // It glows while it has new tries waiting (after finding Pip), and stays put after.
+                    glow = { if (caveFresh) pulse else 0f },
                 )
             }
             val heroOnRight = cx < 0.5f
@@ -573,20 +604,58 @@ data class MapStoryStop(val id: String, val emoji: String, val land: Land, val d
  * tomato red, which stays the next stop's ring) and a little star once he has played it.
  */
 @Composable
-private fun StoryStop(modifier: Modifier, emoji: String, done: Boolean, pressed: Boolean) {
+private fun StoryStop(modifier: Modifier, id: String, emoji: String, done: Boolean, pressed: Boolean, wiggle: () -> Float) {
     Box(
         modifier.graphicsLayer {
             val s = if (pressed) 0.92f else 1f
             scaleX = s
             scaleY = s
+            rotationZ = wiggle()
         },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxSize().paperCard(Color(0xFFFFF8E1), circle = true).border(4.dp, Color(0xFFFFCA28), CircleShape), contentAlignment = Alignment.Center) {
-            Text(emoji, fontSize = 30.sp)
+        if (id == "owl") {
+            // Sleepy Owl's Morning: its own paper picture (a sleepy owl in front of a rising sun on
+            // a night-blue badge), so it never looks like any other owl in the game.
+            Box(Modifier.fillMaxSize().paperCard(Color(0xFF283593), circle = true).border(4.dp, Color(0xFFFFCA28), CircleShape)) {
+                Canvas(Modifier.fillMaxSize()) { sleepyOwlBadge() }
+            }
+        } else {
+            Box(Modifier.fillMaxSize().paperCard(Color(0xFFFFF8E1), circle = true).border(4.dp, Color(0xFFFFCA28), CircleShape), contentAlignment = Alignment.Center) {
+                Text(emoji, fontSize = 30.sp)
+            }
         }
         if (done) Text("⭐", fontSize = 18.sp, modifier = Modifier.align(Alignment.TopEnd))
     }
+}
+
+/** The owl story's badge art: dawn sky, a half sun rising behind a hill, a sleepy paper owl. */
+private fun DrawScope.sleepyOwlBadge() {
+    val w = size.width
+    val h = size.height
+    // The sun coming up, and a little star still out.
+    paperCircle(Color(0xFFFFB74D), w * 0.3f, Offset(w * 0.5f, h * 0.72f))
+    paperCircle(Color(0xFFFFF59D), w * 0.035f, Offset(w * 0.24f, h * 0.24f))
+    paperCircle(Color(0xFFFFF59D), w * 0.025f, Offset(w * 0.78f, h * 0.3f))
+    // The hill (a branch for the owl), across the bottom.
+    paperOval(Color(0xFF2E7D32), Offset(-w * 0.1f, h * 0.7f), Size(w * 1.2f, h * 0.5f))
+    // The owl: a round brown body with ear tufts, cream face, closed sleepy eyes and a beak.
+    val cx = w * 0.5f
+    val tuft = Path().apply {
+        moveTo(cx - w * 0.17f, h * 0.36f); lineTo(cx - w * 0.2f, h * 0.2f); lineTo(cx - w * 0.06f, h * 0.31f); close()
+        moveTo(cx + w * 0.17f, h * 0.36f); lineTo(cx + w * 0.2f, h * 0.2f); lineTo(cx + w * 0.06f, h * 0.31f); close()
+    }
+    paperPath(tuft, Color(0xFF6D4C41))
+    paperOval(Color(0xFF8D6E63), Offset(cx - w * 0.21f, h * 0.27f), Size(w * 0.42f, h * 0.5f))
+    paperOval(Color(0xFFFFE0B2), Offset(cx - w * 0.16f, h * 0.33f), Size(w * 0.32f, h * 0.2f))
+    val lid = Stroke(width = w * 0.025f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawArc(Color(0xFF3E2723), 20f, 140f, false, Offset(cx - w * 0.13f, h * 0.37f), Size(w * 0.1f, h * 0.07f), style = lid)
+    drawArc(Color(0xFF3E2723), 20f, 140f, false, Offset(cx + w * 0.03f, h * 0.37f), Size(w * 0.1f, h * 0.07f), style = lid)
+    val beak = Path().apply { moveTo(cx - w * 0.03f, h * 0.47f); lineTo(cx + w * 0.03f, h * 0.47f); lineTo(cx, h * 0.53f); close() }
+    paperPath(beak, Color(0xFFFFA000))
+    // Feet on the hill.
+    paperOval(Color(0xFFFFA000), Offset(cx - w * 0.11f, h * 0.74f), Size(w * 0.08f, h * 0.04f))
+    paperOval(Color(0xFFFFA000), Offset(cx + w * 0.03f, h * 0.74f), Size(w * 0.08f, h * 0.04f))
 }
 
 /**

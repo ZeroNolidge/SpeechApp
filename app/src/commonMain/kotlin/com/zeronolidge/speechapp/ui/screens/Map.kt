@@ -60,7 +60,6 @@ import com.zeronolidge.speechapp.ui.components.PointingHand
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.SpeakOnOpen
-import com.zeronolidge.speechapp.ui.components.popIn
 
 /** Pick a buddy: three at a time, then the big green arrow. Shown on first launch (and from the closet). */
 @Composable
@@ -193,8 +192,10 @@ fun MapScreen(nav: Nav) {
             unfoldNew = unfoldNew,
             onUnfolded = { p.markUnfoldSeen() },
             onStop = startChapter,
-            // Once Pip is found: the crystal cave, a glowing stop just past the Forest.
-            cave = p.echoReady,
+            // Once Pip is found: the crystal cave, a stop just past the Forest, there for good
+            // (glowing while it has new tries waiting). It lives only here, on the map.
+            cave = p.echoReady || p.pipTags > 0,
+            caveFresh = p.echoReady,
             onCave = {
                 app.speaker.say("The crystal cave!")
                 nav.go(Screen.EchoCave())
@@ -269,14 +270,8 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             if (narrow) {
+                // (The crystal cave lives only on the map, as a glowing stop on the path.)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (p.echoReady) {
-                        PaperIconButton("💎", Color(0xFFD1C4E9), size = 84.dp, modifier = Modifier.popIn("cave")) {
-                            app.speaker.say("The crystal cave!")
-                            nav.go(Screen.EchoCave())
-                        }
-                        Spacer(Modifier.width(14.dp))
-                    }
                     adventure(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(14.dp))
@@ -288,14 +283,6 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
                     nav.go(Screen.Gate)
                 }
                 Spacer(Modifier.width(24.dp))
-                // The crystal cave, a reward stop after finding Pip: a big purple crystal.
-                if (p.echoReady && !narrow) {
-                    PaperIconButton("💎", Color(0xFFD1C4E9), size = 84.dp, modifier = Modifier.popIn("cave")) {
-                        app.speaker.say("The crystal cave!")
-                        nav.go(Screen.EchoCave())
-                    }
-                    Spacer(Modifier.width(18.dp))
-                }
                 if (!narrow) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         adventure(Modifier.widthIn(max = 460.dp).fillMaxWidth())

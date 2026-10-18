@@ -5,6 +5,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.MaxMotionMs
@@ -116,7 +118,7 @@ fun PaperButton(
                 scaleY = 1f - 0.04f * press
             }
             .then(if (enabled) Modifier.raisedPaperBase(color, corner, circle) { press } else Modifier)
-            .then(if (pressedBy == null) Modifier.clickable(interaction, indication = null, enabled = enabled, onClick = onClick) else Modifier),
+            .then(if (pressedBy == null) Modifier.kidTap(interaction, enabled, onClick) else Modifier),
         propagateMinConstraints = true,
     ) {
         Box(
@@ -347,6 +349,44 @@ fun Modifier.wiggleOnTap(): Modifier = composed {
             }
         }
         .graphicsLayer { rotationZ = turn.value }
+}
+
+/**
+ * A tap that young fingers can always land: it counts if the finger comes up anywhere on the
+ * button or within [slop] of it, however much it wobbled on the way (a plain click is cancelled
+ * by a wobble or by the map's drag noticing the movement, so first taps were often lost), and
+ * shows the press (crinkle and press-down) from the first touch.
+ */
+fun Modifier.kidTap(interaction: MutableInteractionSource, enabled: Boolean = true, onClick: () -> Unit, slop: androidx.compose.ui.unit.Dp = 24.dp): Modifier = composed {
+    val latest = androidx.compose.runtime.rememberUpdatedState(onClick)
+    val scope = rememberCoroutineScope()
+    if (!enabled) return@composed this
+    pointerInput(interaction) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val press = androidx.compose.foundation.interaction.PressInteraction.Press(down.position)
+            scope.launch { interaction.emit(press) }
+            val pad = slop.toPx()
+            var tapped = false
+            while (true) {
+                val e = awaitPointerEvent()
+                val c = e.changes.firstOrNull { it.id == down.id } ?: e.changes.first()
+                if (!c.pressed) {
+                    val q = c.position
+                    tapped = q.x >= -pad && q.y >= -pad && q.x <= size.width + pad && q.y <= size.height + pad
+                    c.consume()
+                    break
+                }
+            }
+            scope.launch {
+                interaction.emit(
+                    if (tapped) androidx.compose.foundation.interaction.PressInteraction.Release(press)
+                    else androidx.compose.foundation.interaction.PressInteraction.Cancel(press),
+                )
+            }
+            if (tapped) latest.value()
+        }
+    }
 }
 
 /** Pops up like a paper cut-out being stood up: a quick springy grow with a little twist. */

@@ -71,7 +71,7 @@ private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END }
  * adds one more ("Go! Go, boat!"). A calm goodbye beat, then a sticker.
  */
 @Composable
-fun VoiceStoryScreen(id: String, nav: Nav) {
+fun VoiceStoryScreen(id: String, nav: Nav, startBeat: Int = 0) {
     val app = LocalApp.current
     val p = app.progress
     val story = remember(id) { VoiceStories.ready(VoiceStories.byId(id) ?: VoiceStories.boat, p.customWords) }
@@ -212,6 +212,17 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
                         app.speaker.say("Again, together!")
                         app.speaker.then(line(k), slow = true) { if (s == session) listen(k) }
                     }
+                    // Still quiet after two tries: it waits for his voice or "I said it!" and
+                    // never moves on by itself. Rory asks once (not listening while he talks),
+                    // then just listens.
+                    VoicePush.Next.WAIT -> if (model[0].tries > VoicePush.MAX_TRIES) {
+                        listen(k)
+                    } else {
+                        phase = VPhase.MODEL
+                        app.listening = false
+                        app.speaker.say("Say it out loud! Then tap the big green I said it button.") { if (s == session) listen(k) }
+                        app.rememberInstruction("${line(k)}! Say it out loud! Then tap the big green I said it button.")
+                    }
                 }
             }
         }
@@ -221,7 +232,7 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
         session++
         val s = session
         index = k
-        model[0] = VoicePush()
+        model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
         phase = VPhase.MODEL
@@ -239,7 +250,10 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
     LaunchedEffect(Unit) {
         app.rememberInstruction(story.setup)
         val s = session
-        app.speaker.say(story.setup) { if (s == session && phase == VPhase.INTRO) startBeat(0) }
+        // The first talk turn of a sitting: a quick quiet check of the room before Rory talks.
+        val first = startBeat.coerceIn(0, beats.lastIndex)
+        val go = { if (s == session) app.speaker.say(story.setup) { if (s == session && phase == VPhase.INTRO) startBeat(first) } }
+        if (micOk()) app.voice.checkRoom(go) else go()
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -306,7 +320,7 @@ fun VoiceStoryScreen(id: String, nav: Nav) {
             }
             // "I said it!" is always there in the same spot: it does the same action as his voice.
             ContinueAction(
-                hint = phase == VPhase.WAIT_TAP || phase == VPhase.END,
+                hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),
                 label = if (phase == VPhase.END || phase == VPhase.INTRO) null else "I said it!",
             ) {
                 when (phase) {

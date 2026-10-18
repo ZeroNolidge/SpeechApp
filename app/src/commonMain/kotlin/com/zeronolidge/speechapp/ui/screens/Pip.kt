@@ -183,7 +183,9 @@ fun PipStoryScreen(nav: Nav) {
         val intro = PipStory.intro(p.heroName)
         app.rememberInstruction(intro)
         val s = session
-        app.speaker.say(intro) { if (s == session) prompt(0) }
+        // The first talk turn of a sitting: a quick quiet check of the room before Rory talks.
+        val go = { if (s == session) app.speaker.say(intro) { if (s == session) prompt(0) } }
+        if (micOk()) app.voice.checkRoom(go) else go()
     }
     DisposableEffect(Unit) {
         onDispose {

@@ -1047,8 +1047,11 @@ class VoicePushTest {
         val p = VoicePush()
         assertEquals(VoicePush.Next.AGAIN_TOGETHER, p.afterTry(heard = false, soft = true))
         assertTrue(p.progress > 0f && p.progress <= VoicePush.NUDGE_CAP)
-        // Never a miss: the second try finishes, whatever happens.
-        assertEquals(VoicePush.Next.FINISH_GENTLY, p.afterTry(heard = false, soft = false))
+        // After two quiet tries it waits (never moves on by itself), and then any sound finishes it.
+        assertEquals(VoicePush.Next.WAIT, p.afterTry(heard = false, soft = false))
+        assertTrue(p.waiting)
+        assertEquals(VoicePush.Next.WAIT, p.afterTry(heard = false, soft = false))
+        assertEquals(VoicePush.Next.FINISH_GENTLY, p.afterTry(heard = false, soft = true))
         // Any clear voice finishes (the rest gently), even if it didn't push all the way.
         val q = VoicePush().apply { feed(0.3f, 50) }
         assertEquals(VoicePush.Next.FINISH_GENTLY, q.afterTry(heard = true, soft = false))
@@ -1056,5 +1059,85 @@ class VoicePushTest {
         val r = VoicePush()
         r.afterTry(false, true)
         assertTrue(r.progress < 1f)
+    }
+
+    @Test
+    fun popSoundsCountEachBurst() {
+        assertEquals(VoicePush.Mode.BURSTS, VoicePush.modeFor("p"))
+        assertEquals(VoicePush.Mode.HOLD, VoicePush.modeFor("sh"))
+        assertEquals(VoicePush.Mode.LOUDNESS, VoicePush.modeFor(null))
+        // "pop! pop!" = two pushes, whatever the length of each.
+        val p = VoicePush(VoicePush.Mode.BURSTS)
+        repeat(4) { p.feed(0.6f, 50) }
+        repeat(4) { p.feed(0f, 50) }
+        repeat(2) { p.feed(0.6f, 50) }
+        assertEquals(2, p.bursts)
+        // Holding one pop sound doesn't keep pushing.
+        val held = VoicePush(VoicePush.Mode.BURSTS).apply { repeat(30) { feed(0.6f, 50) } }
+        assertEquals(1, held.bursts)
+        assertTrue(held.progress < 0.5f)
+        // A one-reading dip inside a word isn't a second pop.
+        val dip = VoicePush(VoicePush.Mode.BURSTS).apply { feed(0.6f, 50); feed(0f, 50); feed(0.6f, 50) }
+        assertEquals(1, dip.bursts)
+        // Three pops get there.
+        val three = VoicePush(VoicePush.Mode.BURSTS)
+        repeat(3) { three.feed(0.3f, 50); repeat(3) { three.feed(0f, 50) } }
+        assertEquals(1f, three.progress)
+    }
+
+    @Test
+    fun longSoundsGoByHowLongTheyAreHeld() {
+        // A quiet "ssss" held for 2 s gets there; a loud short one doesn't.
+        val quietLong = VoicePush(VoicePush.Mode.HOLD).apply { repeat(40) { feed(0.15f, 50) } }
+        val loudShort = VoicePush(VoicePush.Mode.HOLD).apply { repeat(6) { feed(1f, 50) } }
+        assertEquals(1f, quietLong.progress)
+        assertTrue(loudShort.progress < 0.5f)
+    }
+
+    @Test
+    fun iSaidItIsAtLeastMedium() {
+        val faint = VoicePush().apply { feed(0.1f, 50) }
+        val before = faint.strength
+        faint.pressed()
+        assertTrue(faint.strength > before)
+        assertTrue(faint.strength >= 0.45f + 0.55f * VoicePush.PRESSED)
+        // A big voice stays big.
+        val loud = VoicePush().apply { feed(0.9f, 50) }
+        val s = loud.strength
+        loud.pressed()
+        assertEquals(s, loud.strength)
+    }
+}
+
+/** The room's loudness is reused between turns, so it's never measured while Rory talks. */
+class RoomLevelTest {
+    @Test
+    fun aKnownRoomNeedsNoSettling() {
+        // No 300 ms settle: after a short lead (Rory's last echo), voice counts at once.
+        val m = VoiceMeter(knownRoom = 0.004f)
+        assertEquals(0.004f, m.room)
+        repeat(4) { m.feed(0.05f, 50) }
+        assertTrue(m.push(0.05f) > 0f)
+        repeat(3) { m.feed(0.05f, 50) }
+        assertTrue(m.heard)
+        assertEquals(0.004f, m.room)
+        // Without it, the first readings only measure the room (here: his voice, setting the bar too high).
+        val fresh = VoiceMeter()
+        repeat(6) { fresh.feed(0.05f, 50) }
+        assertTrue(fresh.threshold > 0.1f)
+    }
+
+    @Test
+    fun theSavedRoomIgnoresHisVoiceAndNeverJumps() {
+        val m = VoiceMeter(knownRoom = 0.005f)
+        repeat(10) { m.feed(0.005f, 50) }
+        repeat(10) { m.feed(0.08f, 50) }
+        repeat(10) { m.feed(0.006f, 50) }
+        val r = m.roomAfter()!!
+        assertTrue(r in 0.004f..0.0075f, "room $r")
+        // A noisier turn raises it at most 1.5 times.
+        val n = VoiceMeter(knownRoom = 0.004f)
+        repeat(30) { n.feed(0.0085f, 50) }
+        assertTrue(n.roomAfter()!! <= 0.006f + 1e-6f)
     }
 }

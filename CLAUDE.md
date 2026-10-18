@@ -36,8 +36,11 @@ These are the owner's rules for all work:
   including after "Not now"). Never mid-story. `MicPermission.status` is ON / BLOCKED / NOT_ASKED; the grown-ups
   page shows it with steps to re-enable (iPad Settings → Safari → Microphone).
 - **Speech:** spoken words make the story happen (`SpeakMoment`). The word is played slowly, then
-  "Your turn!" and ~4 s of listening; quiet → "Let's say it together!", replay, one more listen
-  (max 2 tries), then move on. Whispers/partial words count (generous `VoiceMeter`). No mic: Rory +
+  "Your turn!" and ~4 s of listening; quiet → "Let's say it together!", replay, one more listen;
+  still quiet → Rory asks once ("Say it out loud to me! Then tap ... I said it") and keeps
+  listening until any sound or "I said it!". **A talk turn never moves on by itself** (Penny's
+  "thumb" did). On his turn the continue button is "I said it!" (counts as a try); while Rory
+  models it's the plain ▶ skip after 3 s. Whispers/partial words count (generous `VoiceMeter`). No mic: Rory +
   big "I said it!" button. Listening is **voice detection by loudness**
   (`VoiceDetector` + `logic/VoiceMeter.kt`), NOT speech recognition (unreliable on iPhone/iPad and
   with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
@@ -47,7 +50,8 @@ These are the owner's rules for all work:
   dims and Rory with his cupped ear grows to ~25% of the scene's height and slides from the
   bottom-left toward the middle (Pip: the left, clear of Pip's path), ear pulsing, ring growing with
   `app.listenLevel`. In a story the story scene is the stage (`LocalHasStage`); in Talk the card is.
-- **No double skips:** a step's continue button ignores taps for its first 0.7 s (`SettleMs`), a
+- **No double skips:** a continue tap is ignored within 0.7 s of the last one taken (`SettleMs`,
+  from the last tap, not from the button appearing: first taps on a new button always count), a
   word card's ▶ skip appears after 3 s, and the chapter moves on only from the step that asked
   (`next(from)`). Before this, tapping ▶ repeatedly skipped every word of Penny's all-words chapter.
 - **Say-a-word card after the try:** it stays fully visible while Rory praises (taps do nothing);
@@ -84,11 +88,21 @@ These are the owner's rules for all work:
   download once. A remade clip gets a new name (`-` + sound fingerprint); manifest.json is the only
   key-to-file record. `make_voice.py` checks every clip has sound (`sound_seconds`, read from the
   MP3 frames' global gain, no extra software; under 0.2 s = silent) and remakes silent ones (last
-  try with tts-1); `--check` lists them. The player loads and checks a whole line first: a missing,
+  try with tts-1); `--check` lists them. **After the owner's batch run, run
+  `python3 tools/finish_clips.py` here** (needs ffmpeg + numpy, which the owner may not have): it
+  trims each clip to 0.03 s lead and 0.3 s tail, evens loudness to a normal speaking level (RMS
+  0.1), renames to `-f1` and lists finished keys in manifest `finished` (make_voice keeps that list
+  for unchanged files); then commit. The web player rejects clips under normal loudness (voiced
+  RMS < 0.03), so they use the browser voice. The player loads and checks a whole line first: a missing,
   failed or silent clip makes that part fall back to the browser voice (`ClipVoiceEngine`), and is
   remembered as missing. Both players trim each clip to its sound (slow mode cuts the audio
   element at the trimmed end), so his turn starts right after Rory. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
   (tools/voice_overrides.json). Android still uses its own TTS.
+- **Room noise** (`VoiceDetector.room`): the room's loudness is saved from each talk turn (the
+  quieter half of its non-voice readings, rising at most 1.5x per turn, `VoiceMeter.roomAfter`)
+  and reused by the next (`VoiceMeter(knownRoom)`: no settling, only a 150 ms lead). Only the
+  first turn of a sitting measures, with `checkRoom` (0.4 s) in the quiet before Rory's first
+  line (story/Pip/cave intro, `SpeakMoment` start). Never measure while Rory talks.
 - **Speech never blocks:** all talking goes through `QueueSpeaker` (one utterance at a time, a time
   limit on each). If speech doesn't finish in time the flow carries on and the top-right 🔊 pulses
   in its own spot until tapped (`HearAgainButton`, `app.audioTrouble`); no overlay covers anything. Chrome sometimes never fires `onend`; that used to freeze the story.
@@ -163,7 +177,9 @@ These are the owner's rules for all work:
   rustle and fold open as extras. One goodnight turn ends with Pip asleep: 10 turns. Finishing
   opens the Echo Cave reward stop (`Progress.echoReady`): a glowing paper-cave stop just past the
   Forest on the island (`MapAreas.caveSpot`/`MapTarget.Cave`, through the one tap handler, clear of
-  the next stop; bounces in) plus the 💎 button. It stays until he finishes all the tries. His own words, then target-sound
+  the next stop; bounces in). It lives only on the map (no 💎 button) and stays there for good once
+  Pip has been found (`pipTags > 0`), glowing while new tries wait (`echoReady`, cleared when he
+  finishes them). His own words, then target-sound
   words, are the "ears" call at each spot ("Pip loves Grandma! Say: Grandma!"). Every try works
   (heard: Rory's `Echo`; quiet: "Pip heard you!"). The big "I called!" button is always shown in
   the same spot (ContinueAction label). Finishing adds a tag on Pip's collar (`Progress.pipTags`).
@@ -191,12 +207,18 @@ These are the owner's rules for all work:
   (the rest gently); a quiet try nudges partway (never past 60%) + "Again, together!"; the 2nd try
   and "I said it!" always finish at a gentle speed, so no beat needs a loud voice. While listening
   the target glows with paper sparkles and three torn cream paper wind strips stream from Rory to it
-  (`VoiceListenExtras`, `voiceTarget`, drawn above the dim via `ListeningStage(aboveDim)`); one
+  (`VoiceListenExtras`, `voiceTarget`, drawn above the dim via `ListeningStage(aboveDim)`).
+  **Pops vs holds** (`VoicePush.Mode`, `modeFor(beat.sound)`): p b t d g k words count each
+  separate burst as one push ("pop! pop!" = 2, about a third each; 100 ms of quiet between
+  bursts); s m f sh go by how long he holds the sound; others by loudness x time. After 2 quiet
+  tries it waits (`Next.WAIT`), listening, for any sound or "I said it!", which always plays at
+  least medium strength (`PRESSED`). One
   paper effect per beat (sail bellies out, bubble layers burst apart, leaves flip to their darker
   side, ...); every success ends with hole-punch confetti (`HolePunchConfetti`, 1.6 s).
   Stories: Pip's Boat Trip (Lagoon), Sleepy Owl's Morning (Forest), The Balloon Picnic (Meadow),
   each a round stop by its land on the map (`MapAreas.spotBy`, `MapTarget.Story`, unit-tested with
-  the cave and next stop). Existing chapters follow it too: no magic word, 3x model with the 3rd
+  the cave and next stop). The owl story's stop is its own paper picture (sleepy owl before a
+  rising sun on a night-blue badge, `sleepyOwlBadge`), never the 🦉 emoji used elsewhere. Existing chapters follow it too: no magic word, 3x model with the 3rd
   slower, and the set piece changes the moment he speaks (`SpeakMoment(onAction)`).
 - **Echo Cave** (`logic/EchoCave.kt`, `ui/screens/EchoCave.kt`): 8 tries; Rory says a word (own
   words, then target-sound words, then everyday words at his speech step), he says it into the
@@ -223,7 +245,10 @@ These are the owner's rules for all work:
 - **Answers live in one place** (`logic/AnswerKey.kt`); every quiz goes through `QuizState.tap`
   and `AnswerRow(key = AnswerKey.x(c))`. `PlayEveryQuizTest` plays every quiz kind with a right and
   wrong tap and fails if a wrong tap is ever marked right.
-- **Every tap reacts:** `PaperButton` crinkles (`Sfx`) and presses down; scenery decor wiggles
+- **Every tap reacts and every first tap counts:** `PaperButton` uses `Modifier.kidTap` (counts
+  if the finger lifts on the button or within 24dp, however it wobbled; a plain click was
+  cancelled by wobbles and the map's drag), crinkles (`Sfx`) and presses down; the map's one tap
+  handler is just as forgiving (28dp) and its stops wiggle and crinkle when tapped; scenery decor wiggles
   (`WigglyDecor`); pictures that aren't buttons (the word picture, story characters, quiz pictures,
   Pip and its hiding spots) wiggle (`Modifier.wiggleOnTap`, watches only); any unclaimed tap leaves
   a paper puff and a pop (`PuffOverlay`). Listening dims the
@@ -328,7 +353,7 @@ Kotlin Multiplatform module `app` with three source sets:
   the web job log. Fetch the log with `get_job_logs` (return_content, ~400 tail lines; a subagent can
   decode the saved output into JPEGs) and look at them. It also taps the Meadow and Forest
   labels (printing `CHECK map tap ...: ok/FAIL`) and opens screens at iPad portrait, iPad landscape
-  and phone sizes (`#test=ADD`, `#test=talk`, `#test=land-MEADOW` URL hooks in `Main.kt`) to check
+  and phone sizes (`#test=ADD`, `#test=talk`, `#test=land-MEADOW`, `#test=story-balloon@3` (a voice story from beat 4), `#test=saybeat-climb` (the first chapter step saying that word) URL hooks in `Main.kt`) to check
   the two-column switch for real. GitHub Pages itself is blocked from here.
 - The service worker is network-first, so the PWA updates on the next launch when online.
   Speech can't play until the first tap, hence the start screen.

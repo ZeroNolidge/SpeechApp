@@ -135,8 +135,8 @@ class ContinueSlot {
     /** The child has tapped something since this step started: the hand hides. */
     internal var touched by mutableStateOf(false)
     internal var owner: Any? = null
-    /** When the current step's button took over: taps in the first moment after are ignored. */
-    internal var since = kotlin.time.TimeSource.Monotonic.markNow()
+    /** When the last continue tap was taken: a second tap in the moment after is ignored. */
+    internal var lastTap: kotlin.time.TimeMark? = null
 }
 
 val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
@@ -146,15 +146,25 @@ val LocalContinue = staticCompositionLocalOf<ContinueSlot?> { null }
  * the same size, pinned to the same bottom-right spot inside the screen edges. Steps say what it
  * does with [ContinueAction].
  */
-/** How long a new step's continue button ignores taps (a double tap mustn't skip two steps). */
+/**
+ * How long after a continue tap the next one is ignored (a double tap mustn't skip two steps).
+ * Measured from the last tap taken, not from when the button appeared: a first tap on a button
+ * that just popped up always counts.
+ */
 private const val SettleMs = 700L
 
 @Composable
 fun ContinueHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val slot = remember { ContinueSlot() }
-    // A quick second tap (or a tap still landing from the last step) on the same spot must not
-    // skip the step that just opened: the button only listens once it has been there a moment.
-    val action = slot.onClick?.let { a -> { if (slot.since.elapsedNow().inWholeMilliseconds >= SettleMs) a() } }
+    // A quick second tap on the same spot must not skip the step that just opened.
+    val action = slot.onClick?.let { a ->
+        {
+            if ((slot.lastTap?.elapsedNow()?.inWholeMilliseconds ?: SettleMs) >= SettleMs) {
+                slot.lastTap = kotlin.time.TimeSource.Monotonic.markNow()
+                a()
+            }
+        }
+    }
     Box(
         modifier
             .fillMaxSize()
@@ -234,10 +244,7 @@ fun ContinueAction(
     val visible = shown && enabled
     SideEffect {
         if (visible) {
-            if (slot.owner !== token) {
-                slot.touched = false
-                slot.since = kotlin.time.TimeSource.Monotonic.markNow()
-            }
+            if (slot.owner !== token) slot.touched = false
             slot.owner = token
             slot.onClick = stable
             slot.label = label

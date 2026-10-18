@@ -118,9 +118,9 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
  *     checks for a voice (loudness), not the exact word, so a whisper or part of the word counts.
  *     It works with young voices and on iPhones and iPads.
  *  3. Voice heard: a celebration and a shiny sticker. Nothing heard: "Let's say it together!",
- *     the word again, and one more listen; then the story moves on either way (never more than
- *     two tries per word). No microphone (or it's blocked): Rory says "Say it out loud to me!"
- *     and shows a big "I said it!" button.
+ *     the word again, and one more listen; still quiet: Rory asks once more and keeps listening
+ *     until any sound or "I said it!" (the card never moves on by itself). No microphone (or
+ *     it's blocked): Rory says "Say it out loud to me!" and shows a big "I said it!" button.
  *  4. The continue button (bottom-right, as on every step) skips at any time. Every try (not a
  *     skip) puts a gem in the backpack. The microphone is never asked for here, mid-story.
  * The microphone never blocks the story and quiet is never a fail.
@@ -172,6 +172,8 @@ fun SpeakMoment(
     /** The "Tap the B!" letters, once the word has been said; and whether a voice was heard. */
     var letterKey by remember(key) { mutableStateOf<Key<String>?>(null) }
     var heardIt by remember(key) { mutableStateOf(false) }
+    /** Two quiet tries: listening carries on until his voice or "I said it!". */
+    var waitingVoice by remember(key) { mutableStateOf(false) }
     fun micUsable() = p.useMic && app.voice.available && micPermission.granted() && !micBroken
     val yourTurn = "Your turn!"
 
@@ -268,18 +270,33 @@ fun SpeakMoment(
         state = Speak.LISTENING
         tries++
         app.voice.listenTry(4000, onLevel = { level = it; app.listenLevel = it }, onVoice = { if (s == session) act() }) { t ->
-            val heard = when (t) { com.zeronolidge.speechapp.audio.VoiceTry.HEARD -> true; com.zeronolidge.speechapp.audio.VoiceTry.NO_MIC -> null; else -> false }
+            val heard = when (t) {
+                com.zeronolidge.speechapp.audio.VoiceTry.HEARD -> true
+                com.zeronolidge.speechapp.audio.VoiceTry.NO_MIC -> null
+                // While waiting, any sound at all counts.
+                com.zeronolidge.speechapp.audio.VoiceTry.SOFT -> tries > 2
+                else -> false
+            }
             if (s != session || state == Speak.DONE) return@listenTry
             level = 0f
             app.listenLevel = 0f
             when (heard) {
                 true -> finish(heard = true, micUsed = true)
                 false ->
-                    // Quiet: say it together and listen once more; after two tries, move on anyway.
-                    if (tries < 2) {
-                        speakThen(listOf("Let's say it together!" to false, word.syllables to true, word.text to false), true)
-                    } else {
-                        finish(heard = false, micUsed = true)
+                    when {
+                        // Quiet: say it together and listen once more.
+                        tries < 2 -> speakThen(listOf("Let's say it together!" to false, word.syllables to true, word.text to false), true)
+                        // Still quiet: the card waits for his voice or "I said it!" and never
+                        // moves on by itself. Rory asks once (not listening while he talks),
+                        // then just keeps listening.
+                        tries == 2 -> {
+                            state = Speak.MODELLING
+                            waitingVoice = true
+                            app.speaker.say("Say it out loud to me! Then tap the big green I said it button.") {
+                                if (s == session && state != Speak.DONE) listen()
+                            }
+                        }
+                        else -> listen()
                     }
                 null -> {
                     // The microphone couldn't be opened: carry on without it.
@@ -312,7 +329,8 @@ fun SpeakMoment(
     LaunchedEffect(key) {
         app.rememberInstruction("${word.syllables}. ${word.text}. Your turn! Say ${word.text}!")
         val lines = listOfNotNull(intro?.let { it to false }) + model()
-        speakThen(lines, micUsable())
+        // The first talk turn of a sitting: a quick quiet check of the room before Rory talks.
+        if (micUsable()) app.voice.checkRoom { if (state == Speak.MODELLING) speakThen(lines, micUsable()) } else speakThen(lines, false)
     }
     DisposableEffect(key) { onDispose { stopAll(); app.listening = false } }
     // His turn to talk: the scene behind dims slightly.
@@ -476,13 +494,16 @@ fun SpeakMoment(
     // It is pointed at only when it's the way forward, so it doesn't pull attention while listening.
     // The skip arrow waits a few seconds (it sits where the last step's continue arrow was, and a
     // child tapping it again and again skipped every word of a story); "I said it!" shows at once.
+    // On his turn (listening, or waiting without a microphone) the button is "I said it!" and
+    // counts as his try; while Rory is still modelling it is the plain skip, after 3 s.
+    val saidIt = roryWaiting || state == Speak.LISTENING || waitingVoice
     ContinueAction(
         enabled = state != Speak.DONE,
-        hint = state == Speak.WAITING_TAP,
-        label = if (roryWaiting) "I said it!" else null,
-        delayMs = if (roryWaiting) 0 else 3000,
+        hint = state == Speak.WAITING_TAP || waitingVoice,
+        label = if (saidIt) "I said it!" else null,
+        delayMs = if (saidIt) 0 else 3000,
     ) {
-        if (state == Speak.WAITING_TAP) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
+        if (saidIt) finish(heard = false, micUsed = false) else finish(heard = false, micUsed = false, skipped = true)
     }
 }
 

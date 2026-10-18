@@ -163,7 +163,9 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         val intro = "A secret crystal cave! When you talk into the cave, it talks back, and a crystal lights up. Let's try!"
         app.rememberInstruction(intro)
         val s = session
-        app.speaker.say(intro) { if (s == session) ask(0) }
+        // The first talk turn of a sitting: a quick quiet check of the room before Rory talks.
+        val go = { if (s == session) app.speaker.say(intro) { if (s == session) ask(0) } }
+        if (micOk()) app.voice.checkRoom(go) else go()
     }
     DisposableEffect(Unit) {
         onDispose {

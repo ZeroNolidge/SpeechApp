@@ -20,6 +20,51 @@ class VoiceDetector(private val mic: MicLevels) {
 
     val available: Boolean get() = mic.available
 
+    /**
+     * The room's loudness, saved from the last talk turn and reused by the next one, so the room
+     * is never measured while (or right after) Rory talks. Only the first turn of a sitting
+     * needs [checkRoom].
+     */
+    var room: Float? = null
+        private set
+
+    /**
+     * The first talk turn of a sitting: a short quiet check of the room, done in the pause
+     * before Rory's prompt (never while he talks). Calls [then] at once if the room is already
+     * known, or without a microphone; never hangs.
+     */
+    fun checkRoom(then: () -> Unit) {
+        if (room != null || !mic.available) {
+            then()
+            return
+        }
+        cancel()
+        val s = ++session
+        val levels = ArrayList<Float>()
+        fun done() {
+            if (s != session) return
+            cancel()
+            if (levels.size >= 3) {
+                val low = levels.sorted().take(maxOf(1, levels.size * 3 / 4))
+                room = low.sum() / low.size
+            }
+            then()
+        }
+        guard = scope.launch {
+            delay(VoiceMeter.ROOM_CHECK_MS + 1500L)
+            done()
+        }
+        mic.start(
+            onLevel = { rms ->
+                if (s == session) {
+                    levels += rms
+                    if (levels.size * MicLevels.STEP_MS >= VoiceMeter.ROOM_CHECK_MS) done()
+                }
+            },
+            onFail = { done() },
+        )
+    }
+
     fun listen(windowMs: Int = 4000, onLevel: (Float) -> Unit, onResult: (heard: Boolean?) -> Unit) =
         listenTry(windowMs, onLevel, onVoice = null) { t ->
             onResult(when (t) { VoiceTry.HEARD -> true; VoiceTry.NO_MIC -> null; else -> false })
@@ -40,11 +85,12 @@ class VoiceDetector(private val mic: MicLevels) {
     ) {
         cancel()
         val s = ++session
-        val meter = VoiceMeter(windowMs)
+        val meter = VoiceMeter(windowMs, knownRoom = room)
         var voiced = false
         fun done(result: VoiceTry) {
             if (s != session) return
             cancel()
+            if (result != VoiceTry.NO_MIC) meter.roomAfter()?.let { room = it }
             onResult(result)
         }
         fun outcome() = when {

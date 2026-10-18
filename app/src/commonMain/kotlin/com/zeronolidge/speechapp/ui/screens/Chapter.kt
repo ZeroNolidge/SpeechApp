@@ -202,6 +202,27 @@ fun SayStepCheck(nav: Nav) {
     }
 }
 
+/** Test hook only: the first chapter step (Forest, Meadow, ...) where he says [word]. */
+@Composable
+fun SayBeatCheck(nav: Nav, word: String) {
+    val p = LocalApp.current.progress
+    val found = remember(word) {
+        var hit: Pair<Quest, Int>? = null
+        for (seed in 1..400) {
+            val land = Trail.lands[seed % 3]
+            val q = StoryGen.make(land, p.storyParams(), Random(seed))
+            val i = q.beats.indexOfFirst { (it.challenge as? Challenge.Say)?.word?.text?.lowercase() == word.lowercase() }
+            if (i >= 0) { hit = q to i; break }
+        }
+        hit
+    }
+    println("SAYBEAT $word ${if (found == null) "not found" else "found"}")
+    val (quest, index) = found ?: return
+    ScreenFrame(onHome = nav.home, background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = 9) }) {
+        ContinueHost { BeatScene(quest, index, p.hero ?: Species.KID, false, { _, _, _ -> }, {}) }
+    }
+}
+
 /** Footprints across the top: one per obstacle, ending at the goal. */
 @Composable
 private fun RowScope.Footprints(quest: Quest, phase: Phase) {

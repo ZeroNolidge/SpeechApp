@@ -11,13 +11,24 @@ package com.zeronolidge.speechapp.logic
  */
 class VoiceMeter(
     private val windowMs: Int = 4000,
-    private val settleMs: Int = 300,
+    settleMs: Int = 300,
     private val needMs: Int = 150,
     private val tailMs: Int = 700,
+    /**
+     * The room's loudness saved from an earlier turn (see [roomAfter]). With it there's no
+     * settling: his voice counts from the first reading, and the room is never measured right
+     * after Rory talks, when the child may already be answering.
+     */
+    knownRoom: Float? = null,
 ) {
+    // With a known room: no settling, only a short lead in which nothing counts (the last
+    // moment of Rory's voice can still be in the room as his turn starts).
+    private val settleMs = if (knownRoom != null) LEAD_MS else settleMs
+    private val measuresRoom = knownRoom == null
     private var t = 0
-    private var roomSum = 0f
-    private var roomCount = 0
+    private var roomSum = knownRoom ?: 0f
+    private var roomCount = if (knownRoom != null) 1 else 0
+    private val quiet = ArrayList<Float>()
     private var voiceMs = 0
     private var lastVoiceAt = -1
     private var loudest = 0f
@@ -46,19 +57,41 @@ class VoiceMeter(
     fun feed(rms: Float, stepMs: Int): Boolean {
         t += stepMs
         if (t <= settleMs) {
-            roomSum += rms
-            roomCount++
+            if (measuresRoom) {
+                roomSum += rms
+                roomCount++
+            }
         } else {
             loudest = maxOf(loudest, rms)
         }
         if (t > settleMs && rms > threshold) {
             voiceMs += stepMs
             lastVoiceAt = t
+        } else if (t > settleMs) {
+            quiet += rms
         }
         return (heard && t - lastVoiceAt >= tailMs) || t >= windowMs
     }
 
+    /**
+     * The room's loudness to keep for the next turn: the quieter half of this turn's readings
+     * that weren't voice (so his quiet voice never raises the bar), never more than 1.5 times
+     * the room it started from. Null when there weren't enough quiet readings.
+     */
+    fun roomAfter(): Float? {
+        if (quiet.size < 4) return if (roomCount > 0) room else null
+        val low = quiet.sorted().take(quiet.size / 2)
+        val est = low.sum() / low.size
+        return if (roomCount > 0) minOf(est, maxOf(room, 0.001f) * 1.5f) else est
+    }
+
     companion object {
+        /** How long the room is measured when nothing is saved (before Rory's first prompt). */
+        const val ROOM_CHECK_MS = 400
+
+        /** With a known room, the start of a turn where nothing counts yet. */
+        const val LEAD_MS = 150
+
         /** A whisper close to a tablet is above this; a quiet room is below it. */
         const val MIN_VOICE = 0.012f
 

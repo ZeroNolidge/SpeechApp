@@ -83,7 +83,9 @@ private fun testStart(): Screen? {
             v == "say" -> Screen.SayCheck
             v == "cave" -> Screen.EchoCave()
             v == "rest" -> Screen.Rest
-            v.startsWith("story-") -> Screen.VoiceStory(v.removePrefix("story-"))
+            // "story-balloon@3": that story, starting at its 4th beat.
+            v.startsWith("story-") -> v.removePrefix("story-").split("@").let { Screen.VoiceStory(it[0], it.getOrNull(1)?.toIntOrNull() ?: 0) }
+            v.startsWith("saybeat-") -> Screen.SayBeatCheck(v.removePrefix("saybeat-"))
             else -> Screen.PracticeGame(PracticeKind.valueOf(v))
         }
     }.getOrNull()

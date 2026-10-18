@@ -221,10 +221,11 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         Screen.Alphabet -> AlphabetScreen(nav)
         Screen.NumberLine -> NumberLineScreen(nav)
         Screen.Pip -> PipStoryScreen(nav)
-        is Screen.VoiceStory -> VoiceStoryScreen(s.id, nav)
+        is Screen.VoiceStory -> VoiceStoryScreen(s.id, nav, s.startBeat)
         is Screen.EchoCave -> EchoCaveScreen(nav, s.rest)
         Screen.Rest -> RestScreen(nav)
         Screen.SayCheck -> SayStepCheck(nav)
+        is Screen.SayBeatCheck -> SayBeatCheck(nav, s.word)
     }
 }
 
