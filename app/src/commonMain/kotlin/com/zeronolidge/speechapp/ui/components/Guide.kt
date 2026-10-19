@@ -198,7 +198,9 @@ fun ContinueHost(modifier: Modifier = Modifier, content: @Composable BoxScope.()
             // The hand sits beside the button (in the step's reserved corner), never over anything else.
             Row(Modifier.align(Alignment.BottomEnd).zIndex(5f), verticalAlignment = Alignment.CenterVertically) {
                 if (slot.hint && !slot.touched) PointingHand(Modifier.padding(end = 6.dp), size = 52.dp, pointRight = true)
-                val label = slot.label
+                // A labelled button ("I said it!") shows only on his turn, with the listening look;
+                // otherwise (Rory talking) it's the plain green arrow, doing the same.
+                val label = slot.label?.takeIf { app.listening }
                 if (label == null) {
                     GoButton(Modifier.popIn("go"), size = ContinueSize, hint = false, onClick = action)
                 } else {

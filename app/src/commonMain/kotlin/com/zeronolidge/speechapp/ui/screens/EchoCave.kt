@@ -233,7 +233,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         ContinueHost {
             // His turn: the listening look (Rory in the one listening spot, clear of the crystal
             // his voice makes glimmer).
-            ListeningStage(Modifier.fillMaxSize(), avoid = listOf(crystalArea(lit, words.size))) {
+            ListeningStage(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
@@ -296,14 +296,6 @@ private fun Modifier.paperCardLite() = this.paperCard(PaperStyle.chip, 22.dp).pa
  * The cave in paper: a deep purple wall, a darker cave mouth in the middle with echo rings coming
  * out of it, and a crystal round the arch for every try (lit ones shine in rainbow colours).
  */
-/** Where crystal [i] of [total] sits round the arch (parts of the screen), for the listening Rory to stand clear of. */
-private fun crystalArea(i: Int, total: Int): androidx.compose.ui.geometry.Rect {
-    val a = kotlin.math.PI.toFloat() * (0.08f + 0.84f * i.coerceAtMost(total - 1) / (total - 1).coerceAtLeast(1))
-    val cx = 0.5f - kotlin.math.cos(a) * 0.3f
-    val cy = 0.62f - kotlin.math.sin(a) * 0.42f
-    return androidx.compose.ui.geometry.Rect(cx - 0.07f, cy - 0.1f, cx + 0.07f, cy + 0.1f)
-}
-
 @Composable
 private fun CaveBackdrop(lit: Int, total: Int, echo: Float, glimmer: Float = 0f) {
     Canvas(Modifier.fillMaxSize()) {

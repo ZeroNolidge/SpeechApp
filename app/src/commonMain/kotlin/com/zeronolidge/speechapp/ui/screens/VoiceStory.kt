@@ -49,8 +49,6 @@ import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
 import com.zeronolidge.speechapp.ui.art.voiceTarget
-import com.zeronolidge.speechapp.ui.art.voicePathArea
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
@@ -349,17 +347,17 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory stands in the one listening spot, moved aside only if he'd cover the path of
             // the thing his voice moves.
             val beat = beats[index.coerceAtLeast(0)]
-            var sceneSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size(1000f, 600f)) }
             ListeningStage(
-                Modifier.fillMaxSize().onSizeChanged { sceneSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) },
-                avoid = listOf(voicePathArea(beat, sceneSize.width, sceneSize.height)),
+                Modifier.fillMaxSize(),
                 aboveDim = { rory ->
                     // The thing to move glows; his voice streams to it as paper wind strips.
                     if (index >= 0 && phase != VPhase.END) {
                         VoiceListenExtras(
                             target = { voiceTarget(beat, act.value, strength(index)) },
                             fromX = rory.x, fromY = rory.y,
-                            glowing = app.listening,
+                            // The glow shows what will move while Rory names it, and hides on his
+                            // turn so it never overlaps Rory's ear.
+                            glowing = phase == VPhase.MODEL && !app.listening,
                             push = { pushNow },
                         )
                     }

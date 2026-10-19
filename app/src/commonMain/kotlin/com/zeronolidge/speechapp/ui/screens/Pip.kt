@@ -305,7 +305,6 @@ fun PipStoryScreen(nav: Nav) {
                             Modifier
                                 .offset(x = pipX - pipH * 0.4f, y = pipY - pipH * 0.8f - jump)
                                 .size(pipH * 0.8f, pipH)
-                                .listenAvoid()
                                 .wiggleOnTap(),
                             mood = Mood.CHEER,
                             mirrored = b.first < a.first,
@@ -329,7 +328,6 @@ fun PipStoryScreen(nav: Nav) {
                         Modifier
                             .offset(x = logX - pipH * 0.4f, y = logY - pipH * 0.75f)
                             .size(pipH * 0.8f, pipH)
-                            .listenAvoid()
                             .popIn("pip"),
                     ) {
                         if (asleep) {
@@ -420,7 +418,6 @@ private fun PipHidingSpot(spot: PipSpot, cx: Dp, cy: Dp, size: Dp, current: Bool
         Modifier
             .offset(x = cx - size / 2, y = cy - size / 2)
             .size(size)
-            .listenAvoid()
             .wiggleOnTap()
             .graphicsLayer {
                 rotationZ = shake.value

@@ -75,23 +75,6 @@ fun voiceTarget(beat: VoiceBeat, f: Float, strength: Float = 1f): Offset {
     return Offset(p.x, p.y)
 }
 
-/**
- * The part of a [w] x [h] scene that the thing his word moves passes through (parts of the
- * scene, 0 to 1), so the listening Rory never stands over it.
- */
-fun voicePathArea(beat: VoiceBeat, w: Float, h: Float): androidx.compose.ui.geometry.Rect {
-    val unit = minOf(w, h * 1.4f)
-    var l = 1f; var t = 1f; var r = 0f; var b = 0f
-    for (i in 0..10) {
-        val p = pose(beat.move, beat.prop, i / 10f, 1f, 0f, 0f)
-        // The paper art fills about 80% of its box.
-        val half = unit * propSize(beat.prop) * 0.4f * maxOf(1f, p.scale)
-        l = minOf(l, p.x - half / w); r = maxOf(r, p.x + half / w)
-        t = minOf(t, p.y - half / h); b = maxOf(b, p.y + half / h)
-    }
-    return androidx.compose.ui.geometry.Rect(l, t, r, b)
-}
-
 /** Where a still prop stands: under a falling thing to catch it, otherwise off to the side. */
 private fun stillSpot(move: Move) = if (move == Move.SINK) Offset(0.5f, 0.8f) else Offset(0.8f, 0.74f)
 
