@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import com.zeronolidge.speechapp.ui.components.awaitKidTapUp
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.rememberCoroutineScope
@@ -280,9 +281,9 @@ fun IslandMap(
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
                         spots = storySpots,
                     )
-                    // A forgiving tap (young fingers wobble): it counts if the finger comes up
-                    // within a finger's width of where it went down, even if dragging the map
-                    // noticed the wobble first. A plain tap detector dropped those first taps.
+                    // Feedback the moment the finger touches (press-down, crinkle, wiggle); the tap
+                    // itself counts when the finger lifts, and only if it didn't drag the map or
+                    // rest there like a palm (awaitKidTapUp).
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         down.consume()
@@ -297,30 +298,22 @@ fun IslandMap(
                         }
                         // The stop button crinkles by itself (PaperButton); everything else here too.
                         if (pressedLand != null || pressedCave || pressedStory != null) app.sfx.crinkle()
-                        // It acts the moment the finger touches (a first tap on an iPad always
-                        // counts, however the finger then slides).
-                        println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
                         if (t != MapTarget.Sea && !still) {
                             wiggled = t
                             scope.launch {
                                 for (a in listOf(9f, -8f, 5f, -3f, 0f)) wiggleTurn.animateTo(a, tween(55))
                             }
                         }
-                        if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
-                        when (t) {
-                            is MapTarget.Area -> onArea(t.land)
-                            MapTarget.Stop -> onStopTap()
-                            MapTarget.Cave -> onCaveTap()
-                            is MapTarget.Story -> onStoryTap(t.id)
-                            MapTarget.Sea -> app.puff(islandOrigin.x + p0.x, islandOrigin.y + p0.y)
-                        }
-                        // Shown pressed until the finger lifts.
-                        while (true) {
-                            val e = awaitPointerEvent()
-                            val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!c.pressed) {
-                                c.consume()
-                                break
+                        val tapped = awaitKidTapUp(down)
+                        println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}${if (tapped) "" else " (not a tap: dragged or resting)"}")
+                        if (tapped) {
+                            if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
+                            when (t) {
+                                is MapTarget.Area -> onArea(t.land)
+                                MapTarget.Stop -> onStopTap()
+                                MapTarget.Cave -> onCaveTap()
+                                is MapTarget.Story -> onStoryTap(t.id)
+                                MapTarget.Sea -> app.puff(islandOrigin.x + p0.x, islandOrigin.y + p0.y)
                             }
                         }
                         pressedLand = null

@@ -161,9 +161,12 @@ private const val LabelSettleMs = 500L
 @Composable
 fun ContinueHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val slot = remember { ContinueSlot() }
+    val app = LocalApp.current
     // A quick second tap on the same spot must not skip the step that just opened.
     val action = slot.onClick?.let { a ->
-        {
+        tap@{
+            // The first second of a listening turn: taps don't count yet.
+            if (app.tapsSettling) return@tap
             // A tap still landing from a start tap mustn't count as "I said it!" (it appears where
             // the green arrow was): its first half second is ignored.
             val fresh = slot.label != null && (slot.labelSince?.elapsedNow()?.inWholeMilliseconds ?: LabelSettleMs) < LabelSettleMs

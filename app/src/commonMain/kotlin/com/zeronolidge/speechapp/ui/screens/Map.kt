@@ -335,7 +335,8 @@ private fun MapWave() {
         if (waving) {
             Critter(
                 Species.ROBOT, Modifier.padding(start = 6.dp).size(width = 90.dp, height = 110.dp).popIn("wave$waves"),
-                Color(0xFFFFCC80), mood = Mood.CHEER, talking = true,
+                // A real wave: hand up, side to side twice, then down.
+                Color(0xFFFFCC80), mood = Mood.HAPPY, waving = true,
             )
         }
     }

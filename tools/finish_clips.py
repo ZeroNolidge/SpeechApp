@@ -33,6 +33,9 @@ SOUND = 0.02       # anything above this counts as sound when trimming
 SUFFIX = "-f1"     # change this if the finishing changes, so tablets fetch the new clips
 # Long held sounds start and stop abruptly; they get a short fade in and out (seconds).
 FADE_KEYS = {"thhhh", "thhhhh", "sssss", "ssss", "fffff", "shhhhh", "mmmmm", "rrrrr", "rrrr"}
+# Fade in only (the hum starts softly) and fade out only (the buzz ends softly).
+FADE_IN_KEYS = {"mmm", "nnn", "lll"}
+FADE_OUT_KEYS = {"zzz"}
 FADE_IN, FADE_OUT = 0.06, 0.12
 FADE_SUFFIX = "-fd"
 
@@ -71,34 +74,40 @@ def finish(x):
     return x[start:end] * gain
 
 
-def fade(x):
+def fade(x, fade_in=True, fade_out=True):
     import numpy as np
     n_in, n_out = int(FADE_IN * RATE), int(FADE_OUT * RATE)
     y = x.copy()
     if len(y) > n_in + n_out:
-        y[:n_in] *= np.linspace(0, 1, n_in)
-        # Fade out over the end of the sound, not the silent tail after it.
-        m = measure(y)
-        end = m[1] + 1 if m else len(y)
-        a = max(0, end - n_out)
-        y[a:end] *= np.linspace(1, 0, end - a)
-        y[end:] = 0
+        if fade_in:
+            # Fade in from where the sound starts (the clip keeps a short silent lead).
+            m = measure(y)
+            s = m[0] if m else 0
+            y[:s] = 0
+            y[s:s + n_in] *= np.linspace(0, 1, len(y[s:s + n_in]))
+        if fade_out:
+            # Fade out over the end of the sound, not the silent tail after it.
+            m = measure(y)
+            end = m[1] + 1 if m else len(y)
+            a = max(0, end - n_out)
+            y[a:end] *= np.linspace(1, 0, end - a)
+            y[end:] = 0
     return y
 
 
 def fade_new(clips, done_fades):
     """Fades the long held sounds that haven't been faded yet (renamed, so tablets fetch them)."""
-    for k in sorted(FADE_KEYS & set(clips)):
+    for k in sorted((FADE_KEYS | FADE_IN_KEYS | FADE_OUT_KEYS) & set(clips)):
         if k in done_fades:
             continue
         old = clips[k]
-        y = fade(decode(os.path.join(OUT, old)))
+        y = fade(decode(os.path.join(OUT, old)), fade_in=k not in FADE_OUT_KEYS, fade_out=k not in FADE_IN_KEYS)
         new = old[:-4] + FADE_SUFFIX + ".mp3"
         encode(y, os.path.join(OUT, new))
         os.remove(os.path.join(OUT, old))
         clips[k] = new
         done_fades.add(k)
-        print("  faded in and out: %s" % k)
+        print("  faded: %s" % k)
 
 
 def main():

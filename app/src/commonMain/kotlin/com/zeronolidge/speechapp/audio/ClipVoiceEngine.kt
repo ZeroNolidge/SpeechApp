@@ -15,6 +15,8 @@ interface ClipPlayer {
     /** Plays [keys] back to back with no gap; [slow] plays them slower without changing the voice's pitch. */
     fun play(keys: List<String>, slow: Boolean, onEnd: (ok: Boolean) -> Unit)
     fun stop()
+    /** The clip playing right now: how loud it is at this moment and its text (null when none). */
+    fun mouth(): MouthNow? = null
 }
 
 /**
@@ -65,6 +67,8 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
         }
         run(0)
     }
+
+    override fun mouth(): MouthNow? = clips.mouth() ?: voice.mouth()
 
     override fun cancel() {
         token++

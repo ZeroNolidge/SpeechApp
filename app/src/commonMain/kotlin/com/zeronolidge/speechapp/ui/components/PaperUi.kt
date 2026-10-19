@@ -352,11 +352,39 @@ fun Modifier.wiggleOnTap(): Modifier = composed {
         .graphicsLayer { rotationZ = turn.value }
 }
 
+/** A finger can wobble this far and still tap (young fingers wobble); further is a drag. */
+val TapSlop = 24.dp
+
+/** A touch held longer than this is a resting hand (a palm), not a tap. */
+const val TapMaxMs = 1200L
+
 /**
- * A tap that young fingers can always land: it acts the moment the finger touches (not when it
- * lifts, and not after any delay), so a first tap on an iPad always counts, however much the
- * finger then wobbles or slides. [onPress] (the crinkle) runs first, then [onClick]. The press
- * shows (press-down) until the finger lifts.
+ * After a touch went [down]: waits for the finger to lift and says whether it was a tap. Not a
+ * tap: it moved more than [TapSlop] (dragging the map), it rested longer than [TapMaxMs] (a palm
+ * on the glass), or another finger or the palm touched too.
+ */
+suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.awaitKidTapUp(
+    down: androidx.compose.ui.input.pointer.PointerInputChange,
+): Boolean {
+    val slop = TapSlop.toPx()
+    var ok = true
+    while (true) {
+        val e = awaitPointerEvent()
+        if (e.changes.count { it.pressed } > 1) ok = false
+        val c = e.changes.firstOrNull { it.id == down.id } ?: return false
+        if ((c.position - down.position).getDistance() > slop) ok = false
+        if (!c.pressed) {
+            c.consume()
+            return ok && c.uptimeMillis - down.uptimeMillis <= TapMaxMs
+        }
+    }
+}
+
+/**
+ * A tap for young fingers: the feedback starts the moment the finger touches ([onPress], the
+ * crinkle, and the press-down), so it feels instant; the tap itself counts when the finger
+ * lifts ([onClick]), and only if it was a tap (see [awaitKidTapUp]: not a drag, not a resting
+ * palm).
  */
 fun Modifier.kidTap(
     interaction: MutableInteractionSource,
@@ -375,17 +403,9 @@ fun Modifier.kidTap(
             val press = androidx.compose.foundation.interaction.PressInteraction.Press(down.position)
             scope.launch { interaction.emit(press) }
             pressLatest.value?.invoke()
-            latest.value()
-            // Shown pressed until the finger lifts (or the button goes away).
-            while (true) {
-                val e = awaitPointerEvent()
-                val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                if (!c.pressed) {
-                    c.consume()
-                    break
-                }
-            }
+            val tapped = awaitKidTapUp(down)
             scope.launch { interaction.emit(androidx.compose.foundation.interaction.PressInteraction.Release(press)) }
+            if (tapped) latest.value()
         }
     }
 }

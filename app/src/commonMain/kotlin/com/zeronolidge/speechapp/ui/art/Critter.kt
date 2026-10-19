@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.animation.core.Animatable
+import com.zeronolidge.speechapp.logic.LipSync
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -83,6 +89,8 @@ fun Critter(
     animate: Boolean = true,
     scarf: Boolean = false,
     talking: Boolean = false,
+    /** A real wave: the right hand comes up and goes side to side twice, then down. */
+    waving: Boolean = false,
 ) {
     val still = LocalReduceMotion.current || !animate
     val t = rememberInfiniteTransition(label = "critter")
@@ -104,7 +112,41 @@ fun Critter(
     val app = LocalApp.current
     val speaking = talking && !still && app.speaker.speaking
     val talk = animateFloatAsState(if (speaking) 1f else 0f, tween(150), label = "talk")
-    val motion = remember(bob, blink, wiggle, talk) { PuppetMotion(bob, blink, wiggle, talk) }
+    // Rory's mouth follows the loudness of the clip playing right now (logic/LipSync.kt):
+    // -1 = his usual baked smile (not talking), -3 = lips pressed (a p, b or m word starting),
+    // else how open, 0 to 1. With the device's own voice (no clip) it chatters gently.
+    val mouthOpen = remember { mutableFloatStateOf(-1f) }
+    val liveMouth = species.boxy && talking && !still
+    LaunchedEffect(liveMouth) {
+        if (!liveMouth) {
+            mouthOpen.floatValue = -1f
+            return@LaunchedEffect
+        }
+        val lip = LipSync()
+        var last = 0L
+        while (true) {
+            withFrameMillis { now ->
+                val dt = if (last == 0L) 16 else (now - last).toInt().coerceIn(1, 100)
+                last = now
+                mouthOpen.floatValue = if (!app.speaker.speaking) -1f else {
+                    val m = app.speaker.mouth()
+                    if (m == null) 0.15f + 0.55f * (0.5f + 0.5f * sin(now / 1000.0 * 2 * PI * 3.5).toFloat())
+                    else lip.step(m.level, m.text, dt).let { if (lip.closed) -3f else it }
+                }
+            }
+        }
+    }
+    val waveAnim = remember { Animatable(0f) }
+    LaunchedEffect(waving, still) {
+        waveAnim.snapTo(0f)
+        if (waving && !still) {
+            delay(300)
+            waveAnim.animateTo(1f, tween(1700, easing = LinearEasing))
+            waveAnim.snapTo(0f)
+        }
+    }
+    val waveState = waveAnim.asState()
+    val motion = remember(bob, blink, wiggle, talk) { PuppetMotion(bob, blink, wiggle, talk, mouthOpen, waveState) }
     Spacer(
         modifier
             .aspectRatio(W / H)
@@ -148,9 +190,17 @@ private data class PuppetSpec(
     val still: Boolean,
 )
 
-private class PuppetMotion(val bob: State<Float>, val blink: State<Float>, val wiggle: State<Float>, val talk: State<Float>)
+private class PuppetMotion(
+    val bob: State<Float>,
+    val blink: State<Float>,
+    val wiggle: State<Float>,
+    val talk: State<Float>,
+    val mouth: State<Float>,
+    val wave: State<Float>,
+)
 
-private enum class Part { BODY, HEAD, HEAD_BLINK, FRONT, ARM_L, ARM_R }
+// HEAD_TALK(_BLINK): the head without its mouth, which is drawn live while Rory talks.
+private enum class Part { BODY, HEAD, HEAD_BLINK, HEAD_TALK, HEAD_TALK_BLINK, FRONT, ARM_L, ARM_R }
 
 private class PuppetElement(val spec: PuppetSpec, val motion: PuppetMotion) : ModifierNodeElement<PuppetNode>() {
     override fun create() = PuppetNode(spec, motion)
@@ -211,14 +261,25 @@ private class PuppetNode(var spec: PuppetSpec, var motion: PuppetMotion) : Modif
                 Mood.LISTEN -> 6f
                 else -> 0f
             }
+            val mouth = if (boxy) m.mouth.value else -1f
             rotate(tilt + wig * 4f, o(50f, if (boxy) 86f else 90f)) {
-                drawBaked(part(if (blinking) Part.HEAD_BLINK else Part.HEAD))
+                if (mouth == -1f) {
+                    drawBaked(part(if (blinking) Part.HEAD_BLINK else Part.HEAD))
+                } else {
+                    drawBaked(part(if (blinking) Part.HEAD_TALK_BLINK else Part.HEAD_TALK))
+                    robotMouth(o(50f, 65f), u, mouth)
+                }
             }
             drawBaked(part(Part.FRONT))
             val (l, r) = armAngles(s.mood)
             val wave = if (s.mood == Mood.CHEER) (bob - 0.5f) * 16f else 0f
+            // A real wave: up, side to side twice, down.
+            val w = if (still) 0f else m.wave.value
+            val up = if (w <= 0f || w >= 1f) 0f else minOf(w / 0.15f, (1f - w) / 0.12f, 1f)
+            val swing = if (w in 0.15f..0.85f) sin((w - 0.15f) / 0.7f * 2f * PI.toFloat() * 2f) * 26f else 0f
+            val rWave = (r - wave + wig * 14f) * (1f - up) + (-150f + swing) * up
             rotate(l + wave - wig * 4f, shoulder(u, boxy, false)) { drawBaked(part(Part.ARM_L)) }
-            rotate(r - wave + wig * 14f, shoulder(u, boxy, true)) { drawBaked(part(Part.ARM_R)) }
+            rotate(rWave, shoulder(u, boxy, true)) { drawBaked(part(Part.ARM_R)) }
         }
         drawContent()
     }
@@ -281,7 +342,8 @@ private fun DrawScope.drawPuppetPart(
     val body = color
     val belly = if (kid) lighter(color, 0.35f) else Color(sp.bellyColor)
     val dark = darker(body)
-    val blink = if (part == Part.HEAD_BLINK) 1f else 0f
+    val blink = if (part == Part.HEAD_BLINK || part == Part.HEAD_TALK_BLINK) 1f else 0f
+    val noMouth = part == Part.HEAD_TALK || part == Part.HEAD_TALK_BLINK
 
     when (part) {
         Part.BODY -> {
@@ -376,7 +438,7 @@ private fun DrawScope.drawPuppetPart(
             oval(39f, 119f, 17f, 9f, foot); oval(61f, 119f, 17f, 9f, foot)
 
         }
-        Part.HEAD, Part.HEAD_BLINK -> {
+        Part.HEAD, Part.HEAD_BLINK, Part.HEAD_TALK, Part.HEAD_TALK_BLINK -> {
             // ---- Ears behind the head ----
             when (sp.ears) {
                 Ears.ROUND -> {
@@ -468,7 +530,7 @@ private fun DrawScope.drawPuppetPart(
                     circle(39f, 56f, 6f, glow); circle(61f, 56f, 6f, glow)
                     circle(41f, 54f, 2f, Color.White); circle(63f, 54f, 2f, Color.White)
                 }
-                mouth(o(50f, 65f), 8f * u, glow, mood)
+                if (!noMouth) mouth(o(50f, 65f), 8f * u, glow, mood)
             } else {
                 val eyeH = 15f * (1f - blink * 0.9f)
                 if (mood == Mood.SLEEP) {
@@ -645,6 +707,23 @@ private fun DrawScope.drawPuppetPart(
             splitPin(o(pin.x, pin.y), 2.6f * u)
         }
     }
+}
+
+/**
+ * Rory's live mouth on his screen face: [open] 0 to 1 (an oval that opens with the sound), or -3
+ * for lips pressed together (the start of a p, b or m word).
+ */
+private fun DrawScope.robotMouth(center: Offset, u: Float, open: Float) {
+    val glow = Color(0xFF4DD0E1)
+    if (open == -3f || open < 0.06f) {
+        val half = if (open == -3f) 6.5f * u else 5.5f * u
+        drawLine(glow, Offset(center.x - half, center.y), Offset(center.x + half, center.y), (if (open == -3f) 3.4f else 2.6f) * u, cap = StrokeCap.Round)
+        return
+    }
+    val w = (11f - 2f * open) * u
+    val h = (2.5f + 9.5f * open) * u
+    drawOval(Color(0xFF0E2A3A), Offset(center.x - w / 2, center.y - h / 2), Size(w, h))
+    drawOval(glow, Offset(center.x - w / 2, center.y - h / 2), Size(w, h), style = Stroke(1.8f * u))
 }
 
 private fun DrawScope.mouth(center: Offset, r: Float, color: Color, mood: Mood) {

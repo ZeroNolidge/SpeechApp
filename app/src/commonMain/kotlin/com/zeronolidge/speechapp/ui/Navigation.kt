@@ -38,3 +38,47 @@ sealed interface Screen {
     /** Test hook only: a chapter step where he says [word] (a story word like "climb"). */
     data class SayBeatCheck(val word: String) : Screen
 }
+
+/**
+ * Where he is, as a short saved key (the screen, and for a voice story its beat), so a page that
+ * reloads by itself (the tablet's screen went off and the browser dropped the page) opens back
+ * at the same place instead of the title screen. Null for places not worth returning to
+ * (grown-up pages, test hooks, the rest screen).
+ */
+fun Screen.placeKey(): String? = when (this) {
+    Screen.Map -> "map"
+    is Screen.Chapter -> "chapter:" + (visit?.name ?: "")
+    is Screen.LandGames -> "land:" + land.name
+    Screen.Closet -> "closet"
+    Screen.Stickers -> "stickers"
+    Screen.Practice -> "practice"
+    is Screen.PracticeGame -> "game:" + kind.name
+    Screen.TalkMenu -> "talk"
+    is Screen.TalkPractice -> "talk:" + sound.id
+    Screen.Alphabet -> "alphabet"
+    Screen.NumberLine -> "numbers"
+    Screen.Pip -> "pip"
+    is Screen.EchoCave -> "cave:" + rest
+    is Screen.VoiceStory -> "story:$id@$startBeat"
+    else -> null
+}
+
+fun screenForPlace(key: String): Screen? = runCatching {
+    val (kind, arg) = key.split(":", limit = 2).let { it[0] to it.getOrNull(1) }
+    when (kind) {
+        "map" -> Screen.Map
+        "chapter" -> Screen.Chapter(arg?.takeIf { it.isNotEmpty() }?.let { Land.valueOf(it) })
+        "land" -> Screen.LandGames(Land.valueOf(arg!!))
+        "closet" -> Screen.Closet
+        "stickers" -> Screen.Stickers
+        "practice" -> Screen.Practice
+        "game" -> Screen.PracticeGame(PracticeKind.valueOf(arg!!))
+        "talk" -> if (arg == null) Screen.TalkMenu else com.zeronolidge.speechapp.data.SpeechContent.sounds.firstOrNull { it.id == arg }?.let { Screen.TalkPractice(it) }
+        "alphabet" -> Screen.Alphabet
+        "numbers" -> Screen.NumberLine
+        "pip" -> Screen.Pip
+        "cave" -> Screen.EchoCave(arg == "true")
+        "story" -> arg!!.split("@").let { Screen.VoiceStory(it[0], it.getOrNull(1)?.toIntOrNull() ?: 0) }
+        else -> null
+    }
+}.getOrNull()

@@ -65,6 +65,26 @@
     }
     // Chrome/Android: keep the "install" offer so the grown-ups page can show an Install button.
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__tlInstall = e; });
+    // After the page reloaded by itself, the app opens straight back where he was (no start
+    // screen), so his first touch anywhere turns the sound back on.
+    window.addEventListener('pointerdown', function unlock() {
+        window.removeEventListener('pointerdown', unlock, true);
+        try { if (window.__tlAudio && window.__tlAudio.state === 'suspended') window.__tlAudio.resume(); } catch (e) {}
+        try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
+    }, true);
+    // Keep the screen on while he plays, so the tablet doesn't sleep in the middle of a story
+    // (and the browser doesn't drop the page). After 10 minutes with no touch it may sleep again.
+    (function () {
+        let lock = null, lastTouch = Date.now();
+        function want() { return document.visibilityState === 'visible' && Date.now() - lastTouch < 10 * 60 * 1000; }
+        function take() {
+            if (lock || !want() || !navigator.wakeLock) return;
+            navigator.wakeLock.request('screen').then(l => { lock = l; l.addEventListener('release', () => { lock = null; }); }).catch(() => {});
+        }
+        window.addEventListener('pointerdown', () => { lastTouch = Date.now(); take(); }, true);
+        document.addEventListener('visibilitychange', take);
+        setInterval(() => { if (lock && !want()) { lock.release().catch(() => {}); lock = null; } }, 30000);
+    })();
     // Keep progress safe: ask the browser not to clear this app's saved data (on the first tap,
     // which some browsers need before they'll say yes).
     window.addEventListener('pointerdown', function once() {

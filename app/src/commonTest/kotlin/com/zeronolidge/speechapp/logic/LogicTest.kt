@@ -1152,11 +1152,12 @@ class RoomLevelTest {
         var done = false
         repeat(80) { if (!done) done = tv.feed(0.03f, 50) }
         assertTrue(!tv.heard, "steady noise counted as voice")
-        // Noise that starts mid-turn and never dips: after 2 s it's the room, not his try.
+        // Noise that starts mid-turn and never dips: past the longest hold it's the room, not his try.
         val mid = VoiceMeter(knownRoom = 0.004f)
         repeat(6) { mid.feed(0.004f, 50) }
-        repeat(74) { mid.feed(0.05f, 50) }
-        assertTrue(!mid.heard)
+        var midDone = false
+        repeat(140) { if (!midDone) midDone = mid.feed(0.05f, 50) }
+        assertTrue(midDone && !mid.heard)
         // He still gets heard over the louder room.
         val over = VoiceMeter(knownRoom = 0.004f)
         repeat(4) { over.feed(0.03f, 50) }
@@ -1288,5 +1289,99 @@ class WordCheckTest {
         assertEquals(3, focus.single().second.size)
         // Developing sounds never get a card.
         assertTrue(SoundCards.cards(List(30) { rec(100, false).copy(sound = "r", scored = false) }, 100).isEmpty())
+    }
+}
+
+/** Round 15: long held sounds count, pops must sound like a voice and last a moment. */
+class HoldAndPopTest {
+    @Test
+    fun aLongHeldSssssCountsAndKeepsListening() {
+        // 0.5 s quiet, then "sssss" for 4 s: still his, the room isn't raised, listening waits for it.
+        val m = VoiceMeter(knownRoom = 0.004f)
+        repeat(10) { m.feed(0.004f, 50) }
+        var done = false
+        var pushes = 0
+        repeat(80) { if (!done) { done = m.feed(0.03f, 50); if (m.lastPush > 0f) pushes++ } }
+        assertTrue(m.heard, "a 4 s hold must count")
+        assertEquals(80, pushes, "every reading of the hold pushes")
+        assertTrue(!done, "listening ends only after he stops")
+        assertTrue(m.room < 0.01f, "the room was raised during his sound: ${m.room}")
+        repeat(30) { if (!done) done = m.feed(0.004f, 50) }
+        assertTrue(done && m.heard)
+        assertTrue(m.roomAfter()!! < 0.01f, "the saved room took in his sound: ${m.roomAfter()}")
+    }
+
+    @Test
+    fun noiseFromTheStartIsStillTheRoomAfterTwoSeconds() {
+        // Sound with no quiet before it at all (a TV louder than even the lead allows) is room after 2 s.
+        val tv = VoiceMeter(knownRoom = 0.004f)
+        var done = false
+        repeat(80) { if (!done) done = tv.feed(0.06f, 50) }
+        assertTrue(!tv.heard)
+    }
+
+    @Test
+    fun aPopMustSoundLikeAVoiceAndLastAMoment() {
+        fun pops(vararg readings: Triple<Float, Float, Float>): VoiceMeter {
+            val m = VoiceMeter(knownRoom = 0.004f, needMs = 50, pops = true)
+            repeat(6) { m.feed(0.004f, 50) }
+            readings.forEach { (rms, band, per) -> m.feed(rms, 50, band, per) }
+            repeat(20) { m.feed(0.004f, 50) }
+            return m
+        }
+        val voice = Triple(0.08f, 0.7f, 0.8f)
+        // "Pop!": two voiced readings (about 100 ms).
+        assertTrue(pops(voice, voice).heard)
+        // A tap on the glass: one short reading, however loud.
+        assertTrue(!pops(Triple(0.3f, 0.5f, 0.6f)).heard)
+        // A cough: loud, not voiced.
+        assertTrue(!pops(Triple(0.1f, 0.5f, 0.15f), Triple(0.1f, 0.5f, 0.15f), Triple(0.1f, 0.5f, 0.15f)).heard)
+        // A rumble or hiss outside the voice range.
+        assertTrue(!pops(Triple(0.08f, 0.1f, 0.8f), Triple(0.08f, 0.1f, 0.8f)).heard)
+        // A whispered pop isn't voiced but is quiet: it counts.
+        assertTrue(pops(Triple(0.02f, 0.5f, 0.1f), Triple(0.02f, 0.5f, 0.1f)).heard)
+    }
+
+    @Test
+    fun onlyTheSecondReadingOfAPopPushes() {
+        val m = VoiceMeter(knownRoom = 0.004f, needMs = 50, pops = true)
+        repeat(6) { m.feed(0.004f, 50) }
+        m.feed(0.08f, 50, 0.7f, 0.8f)
+        assertEquals(0f, m.lastPush)
+        m.feed(0.08f, 50, 0.7f, 0.8f)
+        assertTrue(m.lastPush > 0f)
+    }
+}
+
+/** Rory's mouth follows the clip's loudness; p, b and m words start with closed lips. */
+class LipSyncTest {
+    @Test
+    fun theMouthOpensWithTheSoundAndClosesInQuiet() {
+        val lip = LipSync()
+        var o = 0f
+        repeat(5) { o = lip.step(0.12f, "go boat", 16) }
+        assertTrue(o > 0.5f, "open $o")
+        repeat(10) { o = lip.step(0.002f, "go boat", 16) }
+        assertTrue(o < 0.05f, "closed $o")
+    }
+
+    @Test
+    fun pbmWordsStartWithClosedLipsForAMoment() {
+        val lip = LipSync()
+        // "pig": the first 80 ms closed, then open.
+        lip.step(0.12f, "pig", 16)
+        assertTrue(lip.closed)
+        repeat(4) { lip.step(0.12f, "pig", 16) }
+        assertTrue(lip.closed)
+        repeat(3) { lip.step(0.12f, "pig", 16) }
+        assertTrue(!lip.closed)
+        // "go, ball": the second word (after a short quiet) closes its lips; "go" didn't.
+        val two = LipSync()
+        two.step(0.12f, "go ball", 16)
+        assertTrue(!two.closed)
+        repeat(6) { two.step(0.12f, "go ball", 16) }
+        repeat(5) { two.step(0.001f, "go ball", 16) }
+        two.step(0.12f, "go ball", 16)
+        assertTrue(two.closed)
     }
 }

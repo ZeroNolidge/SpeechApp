@@ -7,4 +7,5 @@ actual object AppHome {
     actual fun canInstall(): Boolean = false
     actual fun install() {}
     actual fun storageProtected(): Boolean = true
+    actual fun onMobileData(): Boolean = false
 }

@@ -174,6 +174,8 @@ fun PipStoryScreen(nav: Nav) {
                 }
             },
             mode = model.mode,
+            // Only his voice calls (a tap on the glass or a cough doesn't), or "I said it!".
+            voiceOnly = true,
             words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } },
         ) { t ->
             if (s != session || phase != PipPhase.LISTEN) return@listenTry
@@ -247,8 +249,9 @@ fun PipStoryScreen(nav: Nav) {
     }) {
         ContinueHost {
             val nightness by animateFloatAsState(if (night) 1f else 0f, tween(450), label = "night")
-            // His turn: the listening look, with Rory sliding in on the left, clear of Pip's path.
-            ListeningStage(Modifier.fillMaxSize(), endX = 0.24f, endY = 0.62f) {
+            // His turn: the listening look (Rory in the one listening spot, clear of Pip and the
+            // hiding spot his voice rustles).
+            ListeningStage(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
@@ -302,6 +305,7 @@ fun PipStoryScreen(nav: Nav) {
                             Modifier
                                 .offset(x = pipX - pipH * 0.4f, y = pipY - pipH * 0.8f - jump)
                                 .size(pipH * 0.8f, pipH)
+                                .listenAvoid()
                                 .wiggleOnTap(),
                             mood = Mood.CHEER,
                             mirrored = b.first < a.first,
@@ -325,6 +329,7 @@ fun PipStoryScreen(nav: Nav) {
                         Modifier
                             .offset(x = logX - pipH * 0.4f, y = logY - pipH * 0.75f)
                             .size(pipH * 0.8f, pipH)
+                            .listenAvoid()
                             .popIn("pip"),
                     ) {
                         if (asleep) {

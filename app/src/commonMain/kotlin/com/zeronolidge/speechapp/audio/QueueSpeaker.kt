@@ -86,6 +86,8 @@ class QueueSpeaker(private val engine: VoiceEngine) : Speaker {
         queue.clear()
     }
 
+    override fun mouth(): MouthNow? = if (speaking) engine.mouth() else null
+
     override fun stop() {
         clear()
         engine.cancel()

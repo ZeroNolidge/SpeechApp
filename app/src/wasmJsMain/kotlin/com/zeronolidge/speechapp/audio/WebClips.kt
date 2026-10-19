@@ -78,6 +78,7 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
         // a sentence said twice.
         Promise.all(keys.map(load)).then(parts => {
             if (gen !== st.gen) return;
+            st.track = null;
             if (slow) {
                 // Slow: an audio element per clip, slower at the same pitch, cut to its sound.
                 let i = 0;
@@ -90,6 +91,8 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
                     const a = new Audio(url(k));
                     a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
                     st.playing.push(a);
+                    // Rory's mouth follows this clip: its position in the decoded sound.
+                    st.track = { gen, el: a, buf: c.buf, key: k };
                     let done = false, timer = 0;
                     const after = () => { if (done) return; done = true; clearTimeout(timer); try { a.pause(); } catch (e) {} next(); };
                     a.onended = after;
@@ -110,13 +113,16 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
             }
             let t = ctx.currentTime + 0.03;
             let last = null;
-            parts.forEach(c => {
+            const segs = [];
+            st.track = { gen, segs };
+            parts.forEach((c, i) => {
                 if (c.pause) { t += c.pause; return; }
                 const src = ctx.createBufferSource();
                 src.buffer = c.buf;
                 src.connect(ctx.destination);
                 const dur = Math.max(0.01, c.end - c.start);
                 src.start(t, c.start, dur);
+                segs.push({ t0: t, off: c.start, dur, buf: c.buf, key: keys[i] });
                 t += dur;
                 st.playing.push(src);
                 last = src;
@@ -129,6 +135,31 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
     })()"""
 )
 
+// How loud the clip playing right now is at this moment (RMS over 30 ms of the decoded sound), and
+// its text, for Rory's mouth: "level<tab>key", or "" when no clip is playing.
+private fun jsClipsMouth(): String = js(
+    """(() => {
+        const st = window.__tlClips;
+        const tr = st && st.track;
+        if (!tr || tr.gen !== st.gen) return '';
+        let buf = null, pos = 0, key = '';
+        if (tr.el) {
+            if (tr.el.paused || tr.el.ended) return '';
+            buf = tr.buf; pos = tr.el.currentTime; key = tr.key;
+        } else {
+            const now = window.__tlAudio ? window.__tlAudio.currentTime : 0;
+            const s = tr.segs.find(s => now >= s.t0 && now < s.t0 + s.dur);
+            if (!s) return '';
+            buf = s.buf; pos = s.off + (now - s.t0); key = s.key;
+        }
+        const d = buf.getChannelData(0), sr = buf.sampleRate;
+        const half = Math.floor(sr * 0.015), c = Math.floor(pos * sr);
+        let sum = 0, n = 0;
+        for (let i = Math.max(0, c - half); i < Math.min(d.length, c + half); i += 2) { sum += d[i] * d[i]; n++; }
+        return Math.sqrt(sum / Math.max(1, n)).toFixed(4) + '\t' + key;
+    })()"""
+)
+
 private fun jsClipsStop(): Unit = js(
     """(() => {
         const st = window.__tlClips;
@@ -136,6 +167,7 @@ private fun jsClipsStop(): Unit = js(
         st.gen++;
         st.playing.forEach(p => { try { if (p.stop) p.stop(); else { p.pause(); p.src = ''; } } catch (e) {} });
         st.playing = [];
+        st.track = null;
     })()"""
 )
 
@@ -148,4 +180,8 @@ class WebClips : ClipPlayer {
     override fun has(key: String): Boolean = jsClipsHas(key)
     override fun play(keys: List<String>, slow: Boolean, onEnd: (ok: Boolean) -> Unit) = jsClipsPlay(keys.joinToString("\n"), slow, onEnd)
     override fun stop() = jsClipsStop()
+    override fun mouth(): MouthNow? = jsClipsMouth().takeIf { it.isNotEmpty() }?.let { s ->
+        val tab = s.indexOf('\t')
+        s.substring(0, tab).toFloatOrNull()?.let { MouthNow(it, s.substring(tab + 1)) }
+    }
 }

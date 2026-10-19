@@ -45,6 +45,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.composed
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -439,7 +443,7 @@ fun SpeakMoment(
         val size = 68.dp
         // Once the word is done the card and buttons stay fully visible (faded ones looked broken
         // while Rory praises him); taps just do nothing until the story moves on.
-        fun whileActive(action: () -> Unit) { if (state != Speak.DONE) action() }
+        fun whileActive(action: () -> Unit) { if (state != Speak.DONE && !app.tapsSettling) action() }
         val icons: @Composable () -> Unit = {
             RoundIcon("🔊", PaperColorsUi.hear, size = size) { whileActive { speakThen(model(), true) } }
             RoundIcon("🐢", Color(0xFFC8E6C9), size = size) {
@@ -479,8 +483,9 @@ fun SpeakMoment(
                 label = "pulse",
             )
             // The picture card: tap it to hear the word again. On its own (Talk) the card is the
-            // scene for the listening look; in a story the story scene beside it is.
-            ListeningStage(Modifier.weight(1f).fillMaxWidth(), endX = 0.14f, endY = 0.72f, enabled = !inStory) {
+            // scene for the listening look; in a story the story scene beside it is. Rory stands
+            // clear of the picture, which his voice makes hop and grow.
+            ListeningStage(Modifier.weight(1f).fillMaxWidth(), enabled = !inStory) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val small = maxHeight < 240.dp
                 val cardW = maxWidth
@@ -529,7 +534,7 @@ fun SpeakMoment(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.weight(1f).fillMaxWidth())
+                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.listenAvoid().weight(1f).fillMaxWidth())
                             wordAndState()
                         }
                     } else {
@@ -538,7 +543,7 @@ fun SpeakMoment(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.weight(1.3f).fillMaxHeight())
+                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.listenAvoid().weight(1.3f).fillMaxHeight())
                             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) { wordAndState() }
                         }
                     }
@@ -711,41 +716,45 @@ internal fun RoryListens(level: Float, size: Dp) {
 internal val LocalHasStage = androidx.compose.runtime.compositionLocalOf { false }
 
 /**
- * The listening look, the same on every talk turn (story word cards, Talk, Pip, the crystal
- * cave): while it's his turn ([AppServices.listening]) the scene dims and Rory, with his big
- * cupped paper ear, grows to about a quarter of the scene's height and slides from the bottom-left
- * corner towards the middle ([endX], [endY]: where Rory's centre ends up, as parts of the scene's
- * width and height). His ear pulses and the ring grows with the voice. It scales with the scene,
- * so it is big on a tablet, and takes no taps from anything.
+ * The listening look, the same everywhere: the scene dims and Rory, his ear cupped, grows to
+ * about a third of the scene's height and slides from the bottom-left to one spot, near the
+ * middle and a little low. He never covers the thing his voice moves: [avoid] (parts of the
+ * stage, 0 to 1) and anything marked with [listenAvoid] inside it; if the spot would cover one,
+ * he stands as close to the middle as he can beside it (smaller only if there's no room).
  */
 @Composable
 internal fun ListeningStage(
     modifier: Modifier = Modifier,
-    endX: Float = 0.5f,
-    endY: Float = 0.6f,
     enabled: Boolean = true,
+    avoid: List<androidx.compose.ui.geometry.Rect> = emptyList(),
     /** Drawn over the dimmed scene, under Rory (a voice story's glow, wind strips and confetti). */
-    aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
+    aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.(roryAt: Offset) -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val app = LocalApp.current
     val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
     val k by animateFloatAsState(if (enabled && app.listening) 1f else 0f, tween(if (still) 0 else 450), label = "stage")
-    BoxWithConstraints(modifier) {
+    val marks = remember { ListenAvoid() }
+    BoxWithConstraints(modifier.onGloballyPositioned { marks.stage = it }) {
         val w = maxWidth
         val h = maxHeight
-        content()
+        CompositionLocalProvider(LocalListenAvoid provides marks) { content() }
+        // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
+        val wPx = with(LocalDensity.current) { w.toPx() }
+        val hPx = with(LocalDensity.current) { h.toPx() }
+        val spot = listenSpot(
+            w.value, h.value,
+            avoid + marks.rects.values.map { r -> androidx.compose.ui.geometry.Rect(r.left / wPx, r.top / hPx, r.right / wPx, r.bottom / hPx) },
+        )
+        val rory = spot.size.dp
+        val box = rory * 1.35f
         if (k > 0.001f) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
-        aboveDim?.invoke(this)
+        aboveDim?.invoke(this, Offset(spot.cx, spot.cy))
         if (k > 0.001f) {
-            // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
-            // Rory himself about a quarter of the scene's height or a little more (big, not a badge).
-            val rory = minOf(maxOf(h * 0.3f, 120.dp), w * 0.75f / 1.35f)
-            val box = rory * 1.35f
             val startX = 0.dp
             val startY = h - box
-            val endLeft = (w * endX - box / 2).coerceIn(0.dp, (w - box).coerceAtLeast(0.dp))
-            val endTop = (h * endY - box / 2).coerceIn(0.dp, (h - box).coerceAtLeast(0.dp))
+            val endLeft = (w * spot.cx - box / 2).coerceIn(0.dp, (w - box).coerceAtLeast(0.dp))
+            val endTop = (h * spot.cy - box / 2).coerceIn(0.dp, (h - box).coerceAtLeast(0.dp))
             Box(
                 Modifier
                     .align(Alignment.TopStart)
@@ -757,6 +766,55 @@ internal fun ListeningStage(
             ) { RoryListens(app.listenLevel, rory) }
         }
     }
+}
+
+/** Things inside a [ListeningStage] that his voice moves, so Rory stands clear of them. */
+internal class ListenAvoid {
+    var stage: androidx.compose.ui.layout.LayoutCoordinates? = null
+    val rects = androidx.compose.runtime.mutableStateMapOf<Any, androidx.compose.ui.geometry.Rect>()
+}
+
+internal val LocalListenAvoid = androidx.compose.runtime.staticCompositionLocalOf<ListenAvoid?> { null }
+
+/** Marks something his voice moves (the word picture, Pip): the listening Rory never covers it. */
+internal fun Modifier.listenAvoid(): Modifier = composed {
+    val holder = LocalListenAvoid.current ?: return@composed this
+    val key = remember { Any() }
+    DisposableEffect(holder) { onDispose { holder.rects.remove(key) } }
+    onGloballyPositioned { c ->
+        val st = holder.stage
+        if (st != null && st.isAttached && c.isAttached) {
+            val r = st.localBoundingBoxOf(c, false)
+            if (holder.rects[key] != r) holder.rects[key] = r
+        }
+    }
+}
+
+/** Where the listening Rory stands (centre, parts of the stage) and how big he is (dp). */
+internal class ListenSpot(val cx: Float, val cy: Float, val size: Float)
+
+/**
+ * The one listening spot: near the middle and a little low, Rory about a third of the stage's
+ * height. If he'd cover something in [avoid] (parts of the stage), the nearest clear spot to
+ * the middle, sideways first, then a little higher or lower; smaller only if nothing is clear.
+ */
+internal fun listenSpot(w: Float, h: Float, avoid: List<androidx.compose.ui.geometry.Rect>): ListenSpot {
+    var size = minOf(maxOf(h * 0.31f, 120f), w * 0.75f / 1.35f)
+    val xs = listOf(0f, -0.06f, 0.06f, -0.12f, 0.12f, -0.18f, 0.18f, -0.24f, 0.24f, -0.3f, 0.3f, -0.36f, 0.36f)
+    val ys = listOf(0f, 0.08f, -0.1f)
+    repeat(3) {
+        val bw = size * 1.35f / w
+        val bh = size * 1.35f / h
+        for (dy in ys) for (dx in xs) {
+            val cx = (0.5f + dx).coerceIn(bw / 2, 1f - bw / 2)
+            val cy = (0.64f + dy).coerceIn(bh / 2, 1f - bh / 2)
+            // Rory's own outline is smaller than his box (the ring round him is see-through).
+            val me = androidx.compose.ui.geometry.Rect(cx - bw * 0.36f, cy - bh * 0.4f, cx + bw * 0.36f, cy + bh * 0.42f)
+            if (avoid.none { it.overlaps(me) }) return ListenSpot(cx, cy, size)
+        }
+        size *= 0.82f
+    }
+    return ListenSpot(0.5f, 0.64f, size)
 }
 
 /** Makes the practised sound stand out in the word, e.g. the "sh" in "fish". */

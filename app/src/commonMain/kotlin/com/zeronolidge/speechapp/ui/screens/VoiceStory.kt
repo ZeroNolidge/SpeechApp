@@ -38,6 +38,7 @@ import com.zeronolidge.speechapp.logic.VoicePush
 import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.Screen
+import com.zeronolidge.speechapp.ui.placeKey
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.HeroWithPet
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
@@ -48,6 +49,8 @@ import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
 import com.zeronolidge.speechapp.ui.art.voiceTarget
+import com.zeronolidge.speechapp.ui.art.voicePathArea
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
 import com.zeronolidge.speechapp.ui.art.paperCard
@@ -300,6 +303,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         session++
         val s = session
         index = k
+        // A page reload carries on from this beat.
+        app.notePlace(com.zeronolidge.speechapp.ui.Screen.VoiceStory(id, k).placeKey())
         model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
         modelSound[0] = null
         modelledBeat[0] = false
@@ -340,18 +345,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
 
     ScreenFrame(onHome = nav.home, background = {}, top = { PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1) }) {
         ContinueHost {
-            // Rory slides in where he covers nothing his voice moves: below a sliding prop, left of
-            // one that rises, sinks, grows, pops or shakes in the middle.
+            // Rory stands in the one listening spot, moved aside only if he'd cover the path of
+            // the thing his voice moves.
             val beat = beats[index.coerceAtLeast(0)]
-            val (endX, endY) = if (beat.move == Move.SLIDE) 0.5f to 0.8f else 0.32f to 0.6f
+            var sceneSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size(1000f, 600f)) }
             ListeningStage(
-                Modifier.fillMaxSize(), endX = endX, endY = endY,
-                aboveDim = {
+                Modifier.fillMaxSize().onSizeChanged { sceneSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) },
+                avoid = listOf(voicePathArea(beat, sceneSize.width, sceneSize.height)),
+                aboveDim = { rory ->
                     // The thing to move glows; his voice streams to it as paper wind strips.
                     if (index >= 0 && phase != VPhase.END) {
                         VoiceListenExtras(
                             target = { voiceTarget(beat, act.value, strength(index)) },
-                            fromX = endX, fromY = endY,
+                            fromX = rory.x, fromY = rory.y,
                             glowing = app.listening,
                             push = { pushNow },
                         )

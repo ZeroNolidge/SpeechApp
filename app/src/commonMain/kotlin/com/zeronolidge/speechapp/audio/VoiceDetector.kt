@@ -28,6 +28,10 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         private set
     var lastVoicedMs = 0
         private set
+
+    /** When the last listening turn's microphone opened (taps right after are ignored). */
+    var turnMark: kotlin.time.TimeMark? = null
+        private set
     private var wordsOn = false
 
     /**
@@ -37,6 +41,19 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
      */
     var room: Float? = null
         private set
+
+    /** Called with each newly saved room level, so it's remembered across page loads. */
+    var onRoom: (Float) -> Unit = {}
+
+    /** A room level remembered from an earlier visit (capped, see [VoiceMeter.SAVED_ROOM_MAX]). */
+    fun restoreRoom(saved: Float?) {
+        if (room == null && saved != null && saved > 0f) room = minOf(saved, VoiceMeter.SAVED_ROOM_MAX)
+    }
+
+    private fun saveRoom(v: Float) {
+        room = v
+        onRoom(v)
+    }
 
     /**
      * The first talk turn of a sitting: a short quiet check of the room, done in the pause
@@ -56,7 +73,7 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
             cancel()
             if (levels.size >= 3) {
                 val low = levels.sorted().take(maxOf(1, levels.size * 3 / 4))
-                room = low.sum() / low.size
+                saveRoom(low.sum() / low.size)
             }
             then()
         }
@@ -111,17 +128,20 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         onWords: ((List<Pair<String, Float>>?) -> Unit)? = null,
         /** Pop sounds (p b t d g k): one short burst is a clear try; others need a little longer. */
         mode: com.zeronolidge.speechapp.logic.VoicePush.Mode = com.zeronolidge.speechapp.logic.VoicePush.Mode.LOUDNESS,
+        /** Only a voice counts (Pip, the cave): the pop word checks apply to every word (no taps, coughs or thumps). */
+        voiceOnly: Boolean = false,
         onResult: (VoiceTry) -> Unit,
     ) {
         cancel()
         val s = ++session
-        val meter = VoiceMeter(windowMs, needMs = if (mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS) 50 else 150, knownRoom = room)
+        val pops = mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS
+        val meter = VoiceMeter(windowMs, needMs = if (pops) 50 else 150, knownRoom = room, pops = pops || voiceOnly)
         var voiced = false
         val listenWords = words != null && this.words.ready
         fun done(result: VoiceTry) {
             if (s != session) return
             stopMic()
-            if (result != VoiceTry.NO_MIC) meter.roomAfter()?.let { room = it }
+            if (result != VoiceTry.NO_MIC) meter.roomAfter()?.let { saveRoom(it) }
             lastPeak = meter.peak
             lastVoicedMs = meter.voicedMs
             onResult(result)
@@ -151,6 +171,7 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
                 waited += 100
             }
             if (s != session) return@launch
+            turnMark = kotlin.time.TimeSource.Monotonic.markNow()
             if (listenWords) {
                 this@VoiceDetector.words.begin(words!!)
                 wordsOn = true
@@ -159,8 +180,8 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
                 onLevel = { rms ->
                     if (s == session) {
                         onLevel(VoiceMeter.display(rms))
-                        val finished = meter.feed(rms, MicLevels.STEP_MS)
-                        onPush?.invoke(meter.push(rms))
+                        val finished = meter.feed(rms, MicLevels.STEP_MS, mic.band, mic.periodic)
+                        onPush?.invoke(meter.lastPush)
                         if (meter.heard && !voiced) {
                             voiced = true
                             onVoice?.invoke()
@@ -171,7 +192,8 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
                 onFail = { done(VoiceTry.NO_MIC) },
             )
             // If the microphone never starts sending (a stuck permission prompt, say), give up kindly.
-            delay(windowMs + 3000L)
+            // (A long held sound can keep listening past the window, up to HOLD_MAX_MS.)
+            delay(windowMs + VoiceMeter.HOLD_MAX_MS + 2000L)
             done(VoiceTry.NO_MIC)
         }
     }

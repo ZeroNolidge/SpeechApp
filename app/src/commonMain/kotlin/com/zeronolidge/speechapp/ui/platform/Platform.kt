@@ -42,4 +42,6 @@ expect object AppHome {
     fun install()
     /** The browser agreed not to clear this app's saved progress. */
     fun storageProtected(): Boolean
+    /** On mobile data or "save data" (as far as the device says; unknown counts as Wi-Fi). */
+    fun onMobileData(): Boolean
 }

@@ -109,7 +109,14 @@ private fun WebRoot(services: AppServices) {
         }
     }
     // Browsers only let a page talk after the first tap, so start with a big "play" button.
-    var started by remember { mutableStateOf(false) }
+    // Except when the page reloaded by itself mid-play (the tablet's screen went off and the
+    // browser dropped the page): then it opens straight back where he was, and his first tap
+    // anywhere turns the sound back on (index.html).
+    val resume = remember {
+        if (locationHash().startsWith("#test=") || !services.progress.micAsked || services.progress.hero == null) null
+        else services.placeToResume()
+    }
+    var started by remember { mutableStateOf(resume != null) }
     when {
         // The start screen's ▶ is a paper button, which reads the app's services (its crinkle).
         !started || !fontsReady -> CompositionLocalProvider(LocalApp provides services) { StartScreen(ready = fontsReady) {
@@ -124,7 +131,7 @@ private fun WebRoot(services: AppServices) {
             // Automatic check only ("#test=...+words"): load word listening straight away.
             if (locationHash().endsWith("+words")) services.voice.words.prepare()
         } }
-        else -> TalkAndLearnApp(services, start = remember { testStart() })
+        else -> TalkAndLearnApp(services, start = remember { testStart() ?: resume })
     }
 }
 

@@ -82,6 +82,9 @@ import kotlinx.coroutines.delay
 /** How long a play lasts before Rory suggests a rest (after the chapter and one mini game). */
 const val SESSION_MINUTES = 12
 
+/** Taps in the first second of a listening turn are ignored (see AppServices.tapsSettling). */
+const val ListenTapGuardMs = 1000L
+
 class AppServices(
     val speaker: Speaker,
     /** "Did the child say something?" from microphone loudness. */
@@ -97,8 +100,19 @@ class AppServices(
         set(v) {
             // Logged for the smoke test, which waits for it to photograph the listening look.
             if (v != listeningState.value) println("LISTENING $v")
+            if (v && !listeningState.value) listenMark = kotlin.time.TimeSource.Monotonic.markNow()
             listeningState.value = v
         }
+
+    private var listenMark: kotlin.time.TimeMark? = null
+
+    /**
+     * True in the first second of a listening turn (the look appearing, or the microphone
+     * opening again): taps then are ignored, so a tap still landing from before can't count as
+     * "I said it!" or end his turn.
+     */
+    val tapsSettling: Boolean
+        get() = listening && listOfNotNull(listenMark, voice.turnMark).any { it.elapsedNow().inWholeMilliseconds < ListenTapGuardMs }
     private val listeningState = mutableStateOf(false)
 
     /** How loud his voice is right now while listening (0 to 1), for Rory's ear and ring. */
@@ -116,6 +130,16 @@ class AppServices(
         }
 
     init { progress.playSession = session }
+
+    /** Saves where he is now (see Screen.placeKey), so a page reload opens back there. */
+    fun notePlace(key: String?) {
+        if (key != null) progress.savePlace(key, nowMillis())
+    }
+
+    /** Where to carry on after the page reloaded by itself during this sitting, if anywhere. */
+    fun placeToResume(): com.zeronolidge.speechapp.ui.Screen? =
+        progress.recentPlace(nowMillis(), com.zeronolidge.speechapp.logic.PlaySession.GAP_MINUTES * 60_000L)
+            ?.let { com.zeronolidge.speechapp.ui.screenForPlace(it) }
 
     /** Still playing: keeps the sitting going (called now and then, and at every check). */
     fun touchSession() {
@@ -158,6 +182,9 @@ class AppServices(
         speaker.onTrouble = { audioTrouble = true }
         // The microphone never listens while Rory is talking.
         voice.isSpeaking = { speaker.speaking }
+        // The room's loudness is remembered across visits, so even the first turn needs no check.
+        voice.restoreRoom(progress.savedRoom)
+        voice.onRoom = { progress.saveRoom(it) }
     }
 
     // ---------- Word listening (see logic/WordCheck.kt) ----------

@@ -153,6 +153,8 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
             // His voice makes the next crystal glimmer: a flicker per pop, a glow while a sound is held.
             onPush = { v -> if (s == session && v > 0f) { model.feed(v, 50); glimmer = model.progress } },
             mode = model.mode,
+            // Only his voice calls (a tap on the glass or a cough doesn't), or "I said it!".
+            voiceOnly = true,
             words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } },
         ) { t ->
             if (s != session || phase != CavePhase.LISTEN) return@listenTry
@@ -229,8 +231,9 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         PaperChip("💎", fontSize = 26.sp, maxLines = 1)
     }) {
         ContinueHost {
-            // His turn: the listening look, Rory sliding in towards the cave mouth.
-            ListeningStage(Modifier.fillMaxSize(), endX = 0.5f, endY = 0.6f) {
+            // His turn: the listening look (Rory in the one listening spot, clear of the crystal
+            // his voice makes glimmer).
+            ListeningStage(Modifier.fillMaxSize(), avoid = listOf(crystalArea(lit, words.size))) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
@@ -294,6 +297,14 @@ private fun Modifier.paperCardLite() = this.paperCard(PaperStyle.chip, 22.dp).pa
  * out of it, and a crystal round the arch for every try (lit ones shine in rainbow colours).
  */
 @Composable
+/** Where crystal [i] of [total] sits round the arch (parts of the screen), for the listening Rory to stand clear of. */
+private fun crystalArea(i: Int, total: Int): androidx.compose.ui.geometry.Rect {
+    val a = kotlin.math.PI.toFloat() * (0.08f + 0.84f * i.coerceAtMost(total - 1) / (total - 1).coerceAtLeast(1))
+    val cx = 0.5f - kotlin.math.cos(a) * 0.3f
+    val cy = 0.62f - kotlin.math.sin(a) * 0.42f
+    return androidx.compose.ui.geometry.Rect(cx - 0.07f, cy - 0.1f, cx + 0.07f, cy + 0.1f)
+}
+
 private fun CaveBackdrop(lit: Int, total: Int, echo: Float, glimmer: Float = 0f) {
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width

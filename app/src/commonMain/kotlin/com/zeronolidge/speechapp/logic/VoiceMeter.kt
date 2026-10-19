@@ -20,6 +20,12 @@ class VoiceMeter(
      * after Rory talks, when the child may already be answering.
      */
     knownRoom: Float? = null,
+    /**
+     * Pop words (p b t d g k): a reading counts only if it sounds like a voice (energy in the
+     * voice range, and voiced unless it's a whisper), and a burst counts only once it has lasted
+     * [POP_MIN_MS], so a cough or a tap on the glass isn't a pop.
+     */
+    private val pops: Boolean = false,
 ) {
     // With a known room: no settling, only a short lead in which nothing counts (the last
     // moment of Rory's voice can still be in the room as his turn starts).
@@ -28,12 +34,23 @@ class VoiceMeter(
     private var t = 0
     private var roomSum = knownRoom ?: 0f
     private var roomCount = if (knownRoom != null) 1 else 0
-    private val all = ArrayList<Float>()
     private val lead = ArrayList<Float>()
     private val recent = ArrayDeque<Float>()
     private var voiceMs = 0
     private var lastVoiceAt = -1
     private var loudest = 0f
+    // The current run of sound: when it started, and whether there was quiet before it in this
+    // turn (an onset: him starting a sound, not a room that was noisy all along).
+    private var runStart = -1
+    private var runOnset = false
+    private var sawQuiet = measuresRoom
+    private var popRunMs = 0
+    // Readings that weren't his voice: the room, for [roomAfter].
+    private val quiet = ArrayList<Float>()
+
+    /** How hard the last reading pushed (see [push]), with the pop rules applied. */
+    var lastPush = 0f
+        private set
 
     val heard: Boolean get() = voiceMs >= needMs
 
@@ -59,39 +76,84 @@ class VoiceMeter(
      */
     fun push(rms: Float): Float = if (t <= settleMs || rms <= threshold) 0f else display(rms).coerceAtLeast(0.08f)
 
-    /** Adds a reading covering [stepMs]. Returns true when listening is finished. */
-    fun feed(rms: Float, stepMs: Int): Boolean {
+    /**
+     * Adds a reading covering [stepMs]. [band] is the share of its energy in the voice range and
+     * [periodic] how voiced it is (both 0 to 1; 1 when the microphone can't tell). Returns true
+     * when listening is finished.
+     */
+    fun feed(rms: Float, stepMs: Int, band: Float = 1f, periodic: Float = 1f): Boolean {
         t += stepMs
+        lastPush = 0f
         if (t <= settleMs) {
             if (measuresRoom) {
                 roomSum += rms
                 roomCount++
             } else {
                 lead += rms
+                if (rms <= threshold) sawQuiet = true
                 // The room got louder since the saved level (a TV came on): even the quietest
                 // moment before he speaks is over the bar, so the bar goes up with it.
                 // (Only for room-like levels: a loud start is him answering straight away.)
-                if (t + stepMs > settleMs && lead.isNotEmpty() && lead.min() > threshold && lead.min() <= LOUD_ROOM) setRoom(lead.min())
+                if (t + stepMs > settleMs && lead.isNotEmpty() && lead.min() > threshold && lead.min() <= LOUD_ROOM) {
+                    setRoom(lead.min())
+                    sawQuiet = true
+                }
             }
             return false
         }
         loudest = maxOf(loudest, rms)
-        all += rms
+        val over = rms > threshold
         recent.addLast(rms)
         if (recent.size * stepMs > NOISE_MS) recent.removeFirst()
-        // Steady sound with no dip for 2 seconds is the room, not him (a child's word is short):
-        // it raises the bar and never counts as his try, so noise can't finish a story.
-        if (recent.size * stepMs >= NOISE_MS && recent.min() > threshold) {
+        if (over) {
+            if (runStart < 0) {
+                runStart = t - stepMs
+                runOnset = sawQuiet
+            }
+        } else {
+            runStart = -1
+            sawQuiet = true
+            quiet += rms
+        }
+        // Steady sound that never dips is the room, not him: it raises the bar and never counts
+        // as his try, so noise can't finish a story. A sound he starts (quiet before it) is his
+        // until it has lasted [HOLD_MAX_MS], so a long "sssss" counts; the room is never updated
+        // while he's making a sound. Sound that was there from the start is room after [NOISE_MS].
+        val runMs = if (runStart < 0) 0 else t - runStart
+        if (over && runMs >= (if (runOnset) HOLD_MAX_MS else NOISE_MS) && recent.min() > threshold) {
             setRoom(recent.min())
             voiceMs = 0
             lastVoiceAt = -1
             loudest = 0f
+            runStart = -1
+            popRunMs = 0
+            return t >= windowMs
         }
-        if (rms > threshold) {
-            voiceMs += stepMs
-            lastVoiceAt = t
+        if (over) {
+            if (pops) {
+                val voiceLike = band >= POP_BAND && (periodic >= POP_PERIODIC || rms < WHISPER_MAX)
+                if (voiceLike) {
+                    popRunMs += stepMs
+                    // A burst counts once it has lasted long enough; then all of it counts.
+                    if (popRunMs >= POP_MIN_MS) {
+                        voiceMs += if (popRunMs - stepMs < POP_MIN_MS) popRunMs else stepMs
+                        lastVoiceAt = t
+                        lastPush = push(rms)
+                    }
+                } else {
+                    popRunMs = 0
+                }
+            } else {
+                voiceMs += stepMs
+                lastVoiceAt = t
+                lastPush = push(rms)
+            }
+        } else {
+            popRunMs = 0
         }
-        return (heard && t - lastVoiceAt >= tailMs) || t >= windowMs
+        // He's still holding a sound he started: keep listening (up to [HOLD_MAX_MS] past the window).
+        val holding = runStart >= 0 && runOnset && t < windowMs + HOLD_MAX_MS
+        return (heard && t - lastVoiceAt >= tailMs) || (t >= windowMs && !holding)
     }
 
     private fun setRoom(v: Float) {
@@ -101,13 +163,14 @@ class VoiceMeter(
 
     /**
      * The room's loudness to keep for the next turn: the quietest fifth of this turn's readings
-     * (his voice is short, so these are the room between and after his words). It follows the
-     * room both ways: down when it's quieter, and up when it's louder, so the bar keeps up with
-     * background noise. Null when there were too few readings.
+     * that weren't his voice (so a long held sound never raises it). It follows the room both
+     * ways: down when it's quieter, and up when it's louder (steady noise becomes the room, see
+     * [feed]), so the bar keeps up with background noise. With too few quiet readings it keeps
+     * the room it had; null when there's nothing to go on.
      */
     fun roomAfter(): Float? {
-        if (all.size < 4) return if (roomCount > 0) room else null
-        val low = all.sorted().take(maxOf(1, all.size / 5))
+        if (quiet.size < 4) return if (roomCount > 0) room else null
+        val low = quiet.sorted().take(maxOf(1, quiet.size / 5))
         return low.sum() / low.size
     }
 
@@ -118,8 +181,24 @@ class VoiceMeter(
         /** With a known room, the start of a turn where nothing counts yet. */
         const val LEAD_MS = 150
 
-        /** Steady sound this long with no dip is background noise, not his voice. */
+        /** Steady sound this long with no dip, there from the start of the turn, is background noise. */
         const val NOISE_MS = 2000
+
+        /** A sound he starts can be held this long and still be his (Rory's own "sssss" is 2.25 s). */
+        const val HOLD_MAX_MS = 5000
+
+        /** A pop counts only once it has lasted this long (a tap on the glass is shorter). */
+        const val POP_MIN_MS = 70
+
+        /** A pop's share of energy in the voice range, at least. */
+        const val POP_BAND = 0.35f
+
+        /** A pop is voiced at least this much (a cough isn't), unless it's as quiet as a whisper. */
+        const val POP_PERIODIC = 0.35f
+        const val WHISPER_MAX = 0.03f
+
+        /** A room level saved on another day is used at most this loud (it follows the room after one turn). */
+        const val SAVED_ROOM_MAX = 0.02f
 
         /** Louder than this at the very start of a turn is his voice, not the room. */
         const val LOUD_ROOM = 0.035f

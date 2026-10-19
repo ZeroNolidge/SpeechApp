@@ -212,6 +212,18 @@ class Progress(private val prefs: Prefs) {
     val sessionNo: Int = prefs.getInt("sessionNo", 0) + 1
 
     /** The current sitting of play (see [com.zeronolidge.speechapp.logic.PlaySession]), kept so a reload carries on. */
+    /** Where he was (Screen.placeKey) and when, so a page reload carries on there. */
+    fun savePlace(key: String, at: Long) {
+        prefs.edit().putString("place", key).putString("placeAt", at.toString()).apply()
+    }
+
+    /** The saved place, if it was saved within [withinMs] of [now]. */
+    fun recentPlace(now: Long, withinMs: Long): String? {
+        val at = prefs.getString("placeAt", "").toLongOrNull() ?: return null
+        val key = prefs.getString("place", "")
+        return key.takeIf { it.isNotEmpty() && now - at in 0..withinMs }
+    }
+
     var playSession: com.zeronolidge.speechapp.logic.PlaySession?
         get() = com.zeronolidge.speechapp.logic.PlaySession.decode(prefs.getString("playSession", ""))
         set(v) { prefs.edit().putString("playSession", v?.encode() ?: "").apply() }
@@ -420,12 +432,39 @@ class Progress(private val prefs: Prefs) {
     // ---------- Word listening (on-device recognition; small records only, never audio or text) ----------
 
     /** Recognition listens on each talk turn (records only, "listen-only", unless modelling is on). */
-    var wordListening by mutableStateOf(prefs.getBoolean("wordListening", true))
+    // Off until a grown-up turns it on: the word model is a 41 MB download.
+    var wordListening by mutableStateOf(prefs.getBoolean("wordListening", false))
         private set
 
     fun updateWordListening(v: Boolean) {
         wordListening = v
         prefs.edit().putBoolean("wordListening", v).apply()
+    }
+
+    /** The word model downloads only on Wi-Fi (default), or on any connection. */
+    var wordModelWifiOnly by mutableStateOf(prefs.getBoolean("wordModelWifiOnly", true))
+        private set
+
+    fun updateWordModelWifiOnly(v: Boolean) {
+        wordModelWifiOnly = v
+        prefs.edit().putBoolean("wordModelWifiOnly", v).apply()
+    }
+
+    /** The word model has been downloaded and saved on this device once (later loads need no internet). */
+    var wordModelSaved by mutableStateOf(prefs.getBoolean("wordModelSaved", false))
+        private set
+
+    fun markWordModelSaved() {
+        if (wordModelSaved) return
+        wordModelSaved = true
+        prefs.edit().putBoolean("wordModelSaved", true).apply()
+    }
+
+    /** The room's loudness from the last talk turn, kept across visits (see VoiceDetector.room). */
+    val savedRoom: Float? get() = prefs.getFloat("roomLevel", -1f).takeIf { it > 0f }
+
+    fun saveRoom(v: Float) {
+        prefs.edit().putFloat("roomLevel", v).apply()
     }
 
     /** Grown-up test mode: after each try the grown-up taps "right" or "off". */

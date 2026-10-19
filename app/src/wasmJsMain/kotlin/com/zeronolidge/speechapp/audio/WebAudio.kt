@@ -59,7 +59,7 @@ class WebVoiceEngine : VoiceEngine {
 
 private fun jsMicAvailable(): Boolean = js("!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))")
 
-private fun jsMicStart(onLevel: (Double) -> Unit, onFail: () -> Unit): JsAny = js(
+private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> Unit): JsAny = js(
     """(() => {
         const st = { stopped: false, stream: null, timer: null, src: null };
         try {
@@ -72,17 +72,47 @@ private fun jsMicStart(onLevel: (Double) -> Unit, onFail: () -> Unit): JsAny = j
                 try { ctx.resume(); } catch (e) {}
                 const src = ctx.createMediaStreamSource(stream);
                 const an = ctx.createAnalyser();
-                an.fftSize = 1024;
+                // About 43 ms of sound per reading (most of each 50 ms step).
+                an.fftSize = 2048;
+                an.smoothingTimeConstant = 0;
                 src.connect(an);
                 st.src = src;
                 // Word listening (WebWords.kt) hears the same stream, when a turn asked for it.
                 try { if (window.__tlWords && window.__tlWords.attach) window.__tlWords.attach(ctx, src); } catch (e) {}
                 const buf = new Float32Array(an.fftSize);
+                const spec = new Float32Array(an.frequencyBinCount);
+                const hz = ctx.sampleRate / an.fftSize;
+                const k = Math.max(1, Math.round(ctx.sampleRate / 16000));
+                const n = Math.floor(buf.length / k);
+                const d = new Float32Array(n);
                 st.timer = setInterval(() => {
                     an.getFloatTimeDomainData(buf);
                     let sum = 0;
                     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-                    onLevel(Math.sqrt(sum / buf.length));
+                    const rms = Math.sqrt(sum / buf.length);
+                    // Share of the energy in the voice range (150 to 2000 Hz) of 50 to 8000 Hz.
+                    an.getFloatFrequencyData(spec);
+                    let inV = 0, all = 0;
+                    for (let b = 1; b < spec.length; b++) {
+                        const f = b * hz;
+                        if (f < 50 || f > 8000) continue;
+                        const pw = Math.pow(10, spec[b] / 10);
+                        all += pw;
+                        if (f >= 150 && f <= 2000) inV += pw;
+                    }
+                    const band = all > 0 ? inV / all : 0;
+                    // How voiced: the best normalised self-match at a child's or grown-up's pitch
+                    // (80 to 600 Hz), on the sound brought down to about 16 kHz.
+                    for (let i = 0; i < n; i++) { let a = 0; for (let j = 0; j < k; j++) a += buf[i * k + j]; d[i] = a / k; }
+                    const sr = ctx.sampleRate / k;
+                    const lo = Math.floor(sr / 600), hi = Math.min(Math.floor(sr / 80), n - 64);
+                    let best = 0;
+                    for (let lag = lo; lag <= hi; lag++) {
+                        let xy = 0, xx = 0, yy = 0;
+                        for (let i = 0; i + lag < n; i++) { const x = d[i], y = d[i + lag]; xy += x * y; xx += x * x; yy += y * y; }
+                        if (xx > 0 && yy > 0) { const r = xy / Math.sqrt(xx * yy); if (r > best) best = r; }
+                    }
+                    onLevel(rms, band, best);
                 }, 50);
             }).catch(() => { if (!st.stopped) onFail(); });
         } catch (e) { onFail(); }
@@ -104,10 +134,18 @@ private fun jsMicStop(st: JsAny): Unit = js(
 class WebMicLevels : MicLevels {
     private var current: JsAny? = null
     override val available: Boolean get() = jsMicAvailable()
+    override var band = 1f
+        private set
+    override var periodic = 1f
+        private set
 
     override fun start(onLevel: (Float) -> Unit, onFail: () -> Unit) {
         stop()
-        current = jsMicStart({ onLevel(it.toFloat()) }, onFail)
+        current = jsMicStart({ rms, b, p ->
+            band = b.toFloat()
+            periodic = p.toFloat()
+            onLevel(rms.toFloat())
+        }, onFail)
     }
 
     override fun stop() {

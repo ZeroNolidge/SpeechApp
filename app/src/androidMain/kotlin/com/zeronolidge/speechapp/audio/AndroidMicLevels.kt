@@ -7,6 +7,8 @@ import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
 import kotlin.concurrent.thread
+import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.sqrt
 
 /**
@@ -19,6 +21,10 @@ class AndroidMicLevels : MicLevels {
     @Volatile private var generation = 0
 
     override val available: Boolean = true
+    @Volatile override var band = 1f
+        private set
+    @Volatile override var periodic = 1f
+        private set
 
     @SuppressLint("MissingPermission")
     override fun start(onLevel: (Float) -> Unit, onFail: () -> Unit) {
@@ -50,7 +56,15 @@ class AndroidMicLevels : MicLevels {
                         sum += v * v
                     }
                     val rms = sqrt(sum / n).toFloat()
-                    main.post { if (generation == token) onLevel(rms) }
+                    val b = voiceBand(buf, n, rate)
+                    val p = voiced(buf, n, rate)
+                    main.post {
+                        if (generation == token) {
+                            band = b
+                            periodic = p
+                            onLevel(rms)
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 main.post { if (generation == token) onFail() }
@@ -63,5 +77,45 @@ class AndroidMicLevels : MicLevels {
 
     override fun stop() {
         generation++
+    }
+
+    /** Share of the energy between about 150 and 2000 Hz (two simple one-pole filters). */
+    private fun voiceBand(buf: ShortArray, n: Int, rate: Int): Float {
+        val aHp = exp(-2.0 * PI * 150 / rate)
+        val aLp = 1 - exp(-2.0 * PI * 2000 / rate)
+        var lpHp = 0.0
+        var lp = 0.0
+        var all = 0.0
+        var inV = 0.0
+        for (i in 0 until n) {
+            val x = buf[i] / 32768.0
+            lpHp = aHp * lpHp + (1 - aHp) * x
+            val hp = x - lpHp
+            lp += aLp * (hp - lp)
+            all += x * x
+            inV += lp * lp
+        }
+        return if (all > 0) (inV / all).toFloat().coerceIn(0f, 1f) else 0f
+    }
+
+    /** How voiced: the best normalised self-match at a pitch of 80 to 600 Hz. */
+    private fun voiced(buf: ShortArray, n: Int, rate: Int): Float {
+        val lo = rate / 600
+        val hi = minOf(rate / 80, n - 64)
+        var best = 0.0
+        for (lag in lo..hi) {
+            var xy = 0.0
+            var xx = 0.0
+            var yy = 0.0
+            for (i in 0 until n - lag) {
+                val x = buf[i].toDouble()
+                val y = buf[i + lag].toDouble()
+                xy += x * y
+                xx += x * x
+                yy += y * y
+            }
+            if (xx > 0 && yy > 0) best = maxOf(best, xy / sqrt(xx * yy))
+        }
+        return best.toFloat().coerceIn(0f, 1f)
     }
 }

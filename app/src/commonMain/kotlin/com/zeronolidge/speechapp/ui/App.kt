@@ -121,13 +121,28 @@ fun TalkAndLearnApp(
                         }
                     },
             ) {
-                // Word listening: the recogniser loads quietly in the background a little after
-                // start (once; about 45 MB the first time, then from the device), only when
-                // listening is on and the microphone is allowed.
+                // Word listening: never downloads by itself. Once a grown-up turns it on, the
+                // recogniser loads quietly in the background (41 MB the first time, only on Wi-Fi
+                // unless they chose any connection; after that from the device), when the
+                // microphone is allowed. While it waits for Wi-Fi it checks again every minute.
                 val mic = com.zeronolidge.speechapp.ui.platform.rememberMicPermission()
-                LaunchedEffect(services.progress.wordListening, services.progress.useMic, mic.status) {
+                val pr = services.progress
+                LaunchedEffect(pr.wordListening, pr.wordModelWifiOnly, pr.useMic, mic.status) {
                     kotlinx.coroutines.delay(5000)
-                    if (services.progress.wordListening && services.progress.useMic && mic.granted()) services.voice.words.prepare()
+                    while (pr.wordListening && pr.useMic && mic.granted()) {
+                        if (pr.wordModelSaved || !pr.wordModelWifiOnly || !com.zeronolidge.speechapp.ui.platform.AppHome.onMobileData()) {
+                            services.voice.words.prepare()
+                            // Once it's ready it's saved on the device: later visits load it even on mobile data.
+                            var waited = 0
+                            while (!services.voice.words.ready && waited < 600) {
+                                kotlinx.coroutines.delay(2000)
+                                waited++
+                            }
+                            if (services.voice.words.ready) pr.markWordModelSaved()
+                            break
+                        }
+                        kotlinx.coroutines.delay(60_000)
+                    }
                 }
                 // Keeps this sitting of play going while he plays (saved, so a reload carries on).
                 LaunchedEffect(Unit) {
@@ -182,7 +197,7 @@ class Nav(val go: (Screen) -> Unit, val back: () -> Unit, val home: () -> Unit, 
 @Composable
 private fun Screens(start: Screen? = null) {
     val app = LocalApp.current
-    val stack = remember { mutableStateListOf<Screen>(Screen.Map).apply { if (start != null) add(start) } }
+    val stack = remember { mutableStateListOf<Screen>(Screen.Map).apply { if (start != null && start != Screen.Map) add(start) } }
     val nav = remember {
         Nav(
             go = { stack.add(it) },
@@ -213,6 +228,8 @@ private fun Screens(start: Screen? = null) {
 
     // A fresh key per back-stack entry, so every visit to a game starts clean.
     val s = stack.last()
+    // Remembered, so a page that reloads by itself opens back here (see Screen.placeKey).
+    LaunchedEffect(s) { app.notePlace(s.placeKey()) }
     key(stack.size, s) {
         Box(Modifier.fillMaxSize().paperEnter(s)) { ShowScreen(s, nav) }
     }

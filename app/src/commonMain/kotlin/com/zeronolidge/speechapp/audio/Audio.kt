@@ -28,7 +28,13 @@ interface Speaker {
     fun stop()
 
     fun shutdown()
+
+    /** What's being said right now, for Rory's mouth (null: not known, e.g. the device's own voice). */
+    fun mouth(): MouthNow? = null
 }
+
+/** The voice at this moment: its loudness ([level], RMS of the clip's sound) and the text of the piece being played. */
+class MouthNow(val level: Float, val text: String)
 
 /**
  * The platform's voice, one utterance at a time. [QueueSpeaker] does the queueing, interrupting
@@ -43,6 +49,8 @@ interface VoiceEngine {
     /** Stops talking now. A pending [onEnd] may still arrive; callers ignore it. */
     fun cancel()
     fun shutdown()
+    /** See [Speaker.mouth]. */
+    fun mouth(): MouthNow? = null
 }
 
 /**
@@ -61,6 +69,15 @@ interface MicLevels {
     fun start(onLevel: (Float) -> Unit, onFail: () -> Unit)
 
     fun stop()
+
+    /**
+     * What the last reading (just before [start]'s onLevel call) sounded like: the share of its
+     * energy in the voice range (about 150 to 2000 Hz), and how voiced it is (0 noise to 1 a
+     * clear voice). 1 when this microphone can't tell. Pop words use these so a cough or a tap
+     * on the glass doesn't count.
+     */
+    val band: Float get() = 1f
+    val periodic: Float get() = 1f
 
     companion object {
         const val STEP_MS = 50

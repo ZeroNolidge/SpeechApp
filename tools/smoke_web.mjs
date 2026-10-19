@@ -293,6 +293,25 @@ if (started) {
             await open('#test=say', 1180, 820, 'say-ipad-landscape');
             await open('#test=say', 820, 1180, 'say-ipad-portrait');
             await open('#test=say', 400, 860, 'say-phone');
+            // Left alone in a story for 95 s: the page must stay put (no reload back to the
+            // title screen). Prints the memory used along the way, to spot a leak.
+            {
+                await page.setViewport({ width: 1180, height: 820 });
+                await page.goto(url + '#test=story-boat', { waitUntil: 'load' });
+                await page.reload({ waitUntil: 'load' });
+                await page.waitForFunction(() => !document.getElementById('loading'), { timeout: 45000 });
+                await wait(3000);
+                await page.mouse.click(590, 410);
+                await page.evaluate(() => { window.__tlMark = 1; });
+                const mem = [];
+                for (let i = 0; i < 19; i++) {
+                    await wait(5000);
+                    mem.push(await page.evaluate(() => (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : -1)));
+                }
+                const kept = await page.evaluate(() => window.__tlMark === 1 && !document.getElementById('loading'));
+                console.log(`IDLE story 95 s: ${kept ? 'kept its place' : 'PAGE RELOADED'}; heap MB every 5 s: ${mem.join(' ')}`);
+                await shot('idle-story-95s');
+            }
             // Word listening: Vosk and its model load in a real browser (it's optional, so this
             // never fails the build; it just reports).
             {

@@ -29,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -431,16 +432,33 @@ private fun WordListeningSection() {
     val app = LocalApp.current
     val p = app.progress
     val dim = Kid.ink.copy(alpha = 0.7f)
-    val status = when (app.voice.words.status) {
-        com.zeronolidge.speechapp.audio.WordListener.Status.READY -> "Ready (on this device, works offline)"
-        com.zeronolidge.speechapp.audio.WordListener.Status.LOADING -> "Getting ready (a one-time 45 MB download)…"
-        com.zeronolidge.speechapp.audio.WordListener.Status.UNAVAILABLE -> "Not available on this device: listening by loudness only, as before"
-        com.zeronolidge.speechapp.audio.WordListener.Status.OFF -> if (p.wordListening) "Starts a few seconds after the app opens, once the microphone is on" else "Off"
+    // Re-read the download state every couple of seconds while this page is open.
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(2000)
+            tick++
+        }
+    }
+    val waitingForWifi = p.wordListening && p.wordModelWifiOnly && !p.wordModelSaved &&
+        com.zeronolidge.speechapp.ui.platform.AppHome.onMobileData()
+    val status = tick.let {
+        when (app.voice.words.status) {
+            com.zeronolidge.speechapp.audio.WordListener.Status.READY -> "Ready (saved on this device, works offline)"
+            com.zeronolidge.speechapp.audio.WordListener.Status.LOADING -> if (p.wordModelSaved) "Loading from this device…" else "Downloading (41 MB, one time)…"
+            com.zeronolidge.speechapp.audio.WordListener.Status.UNAVAILABLE -> "Not available on this device: listening by loudness only, as before"
+            com.zeronolidge.speechapp.audio.WordListener.Status.OFF -> when {
+                !p.wordListening -> "Off. Nothing is downloaded until you turn it on."
+                waitingForWifi -> "Waiting for Wi-Fi to download (41 MB, one time)."
+                !p.useMic -> "Starts once listening (the microphone) is on."
+                else -> "Starts a few seconds after the app opens."
+            }
+        }
     }
     Text(
-        "Besides hearing that your child spoke, the app can now try to recognise the word, on this device only. " +
+        "Besides hearing that your child spoke, the app can try to recognise the word, on this device only. " +
             "It keeps no recordings and no text: just a small note per try (the word, its sound, what it heard and how sure). " +
-            "Right now it only listens: Rory reacts exactly as before.",
+            "Right now it only listens: Rory reacts exactly as before. Turning it on downloads a 41 MB word model once.",
         fontSize = 14.sp, color = dim,
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -448,6 +466,15 @@ private fun WordListeningSection() {
         Switch(checked = p.wordListening, onCheckedChange = { p.updateWordListening(it) })
     }
     Text(status, fontSize = 14.sp, color = dim)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Download on Wi-Fi only", fontSize = 18.sp, modifier = Modifier.weight(1f))
+        Switch(checked = p.wordModelWifiOnly, onCheckedChange = { p.updateWordModelWifiOnly(it) })
+    }
+    Text(
+        if (p.wordModelWifiOnly) "On mobile data it waits for Wi-Fi. (iPads can't tell the app which they're on, so they download straight away.)"
+        else "Downloads on any connection, including mobile data.",
+        fontSize = 14.sp, color = dim,
+    )
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Test mode: I'll rate each try", fontSize = 18.sp, modifier = Modifier.weight(1f))

@@ -13,4 +13,8 @@ actual object AppHome {
     actual fun canInstall(): Boolean = jsCanInstall()
     actual fun install() = jsInstall()
     actual fun storageProtected(): Boolean = jsPersisted()
+    actual fun onMobileData(): Boolean = jsMobileData()
 }
+
+// Chrome on Android says the connection type; iPad Safari says nothing (counted as Wi-Fi: most iPads are).
+private fun jsMobileData(): Boolean = js("(() => { const c = navigator.connection; return !!(c && (c.saveData || c.type === 'cellular')); })()")
