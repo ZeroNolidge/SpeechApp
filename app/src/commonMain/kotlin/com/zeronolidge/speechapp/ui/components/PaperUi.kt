@@ -357,23 +357,30 @@ fun Modifier.wiggleOnTap(): Modifier = composed {
 /** A finger can wobble this far and still tap (young fingers wobble); further is a drag. */
 val TapSlop = 24.dp
 
-/** Touches starting this close to the screen's edge are a hand holding the tablet: ignored. */
+/** Touches starting this close to the screen's edge may be a hand holding the tablet (see [detectKidTaps]). */
 val EdgeIgnore = 40.dp
 
 /**
- * The touches that started near the screen's edge (a hand holding the tablet), noted at the app's
- * root before anything else sees them. They never tap anything and never cancel another tap.
+ * The touches that started near the screen's edge (maybe a hand holding the tablet), noted at
+ * the app's root before anything else sees them. They still tap what they land on, but never
+ * cancel a tap another finger is making.
  */
 object EdgeTouches {
     val ids = HashSet<Long>()
 }
 
+/** A press longer than this is a palm resting on the button, not a tap: it doesn't count when it lifts. */
+const val TapMaxMs = 3000L
+
 /**
  * Taps for young fingers, each touch followed on its own: [onPress] the moment a finger touches
- * (the feedback), [onTap] when it lifts if it didn't slide more than [TapSlop] (a slow press
- * counts), [onRelease] when the press ends either way. Touches from the screen's edge are
- * ignored. A new touch always takes over from an old one, so a finger whose lift the browser
- * lost can never fire later (that used to open the wrong map stop on a later tap).
+ * (the feedback), [onTap] when it lifts if it didn't slide more than [TapSlop] and was held under
+ * [TapMaxMs] (a slow press counts, a palm resting for ages doesn't), [onRelease] when the press
+ * ends either way. A touch that lands on the button always counts, right out to its edge, even
+ * near the screen's edge. A finger resting near the screen's edge (a hand holding the tablet)
+ * never cancels a tap made with another finger. Otherwise a new touch takes over from an old one,
+ * so a finger whose lift the browser lost can never fire later (that used to open the wrong map
+ * stop on a later tap).
  */
 suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectKidTaps(
     onPress: (Offset) -> Unit,
@@ -384,15 +391,18 @@ suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectKidTaps(
     awaitPointerEventScope {
         var id: androidx.compose.ui.input.pointer.PointerId? = null
         var start = Offset.Zero
+        var downAt = 0L
         var valid = false
         while (true) {
             val e = awaitPointerEvent()
             for (c in e.changes) {
                 if (c.changedToDownIgnoreConsumed()) {
-                    if (c.id.value in EdgeTouches.ids) continue
+                    // A resting edge finger never takes over (or cancels) a press already going.
+                    if (id != null && c.id.value in EdgeTouches.ids) continue
                     if (id != null) onRelease()
                     id = c.id
                     start = c.position
+                    downAt = c.uptimeMillis
                     valid = true
                     c.consume()
                     onPress(c.position)
@@ -402,7 +412,7 @@ suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectKidTaps(
                         c.consume()
                         id = null
                         onRelease()
-                        if (valid) onTap(start)
+                        if (valid && c.uptimeMillis - downAt <= TapMaxMs) onTap(start)
                     }
                 }
             }

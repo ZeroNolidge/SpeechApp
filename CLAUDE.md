@@ -322,11 +322,13 @@ These are the owner's rules for all work:
   wrong tap and fails if a wrong tap is ever marked right.
 - **Every tap reacts; a tap counts on lift:** `PaperButton` uses `Modifier.kidTap`: the feedback
   starts on touch (crinkle, press-down; map stops wiggle) so it feels instant, and the tap counts
-  when the finger lifts (`detectKidTaps`), however slowly, unless it slid more than `TapSlop`
+  when the finger lifts (`detectKidTaps`), slow presses too, unless it slid more than `TapSlop`
   (24dp, a map drag). Each touch is followed on its own and a new touch takes over, so a lift the
   browser lost can never fire later (it used to open the wrong map stop). Touches starting within
-  `EdgeIgnore` (40dp) of the screen edge (a hand holding the iPad) are noted at the app root
-  (`EdgeTouches`, Initial pass) and never tap or cancel anything. The map's one tap handler
+  `EdgeIgnore` (40dp) of the screen edge are noted at the app root (`EdgeTouches`, Initial pass):
+  they still tap what they land on (🏠, 🔊 and "I said it!" count right out to their edges), but a
+  resting edge finger never cancels another finger's tap. A press held over `TapMaxMs` (3 s, a
+  palm) doesn't count. The map's one tap handler
   uses the same `detectKidTaps`. Leaving any screen ends its listening turn (`Screens`). Taps in the first second of a listening turn are ignored
   (`AppServices.tapsSettling`, `ListenTapGuardMs`: the continue/"I said it!" button and the Talk
   card). Never put a full-screen pointer layer on top (MapWave first had one and ate every
