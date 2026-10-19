@@ -174,8 +174,6 @@ fun PipStoryScreen(nav: Nav) {
                 }
             },
             mode = model.mode,
-            // Only his voice calls (a tap on the glass or a cough doesn't), or "I said it!".
-            voiceOnly = true,
             words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } },
         ) { t ->
             if (s != session || phase != PipPhase.LISTEN) return@listenTry
@@ -192,7 +190,8 @@ fun PipStoryScreen(nav: Nav) {
                 com.zeronolidge.speechapp.logic.VoicePush.Next.AGAIN_TOGETHER -> {
                     if (t == com.zeronolidge.speechapp.audio.VoiceTry.SOFT) rustle++
                     phase = PipPhase.PROMPT
-                    app.listening = false
+                    // Still his turn: the listening look and "I said it!" stay while Rory calls
+                    // with him (the microphone reopens after Rory is done).
                     app.speaker.say("Let's call together!")
                     app.speaker.then(call, slow = true) { if (s == session) listen(k) }
                 }
@@ -201,7 +200,8 @@ fun PipStoryScreen(nav: Nav) {
                     listen(k)
                 } else {
                     phase = PipPhase.PROMPT
-                    app.listening = false
+                    // Still his turn: the listening look and "I said it!" stay while Rory calls
+                    // with him (the microphone reopens after Rory is done).
                     app.speaker.say("Call Pip out loud! Then tap the big green I said it button.") { if (s == session) listen(k) }
                 }
             }

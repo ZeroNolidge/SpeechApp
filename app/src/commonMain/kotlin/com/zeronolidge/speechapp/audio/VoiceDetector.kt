@@ -128,14 +128,12 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         onWords: ((List<Pair<String, Float>>?) -> Unit)? = null,
         /** Pop sounds (p b t d g k): one short burst is a clear try; others need a little longer. */
         mode: com.zeronolidge.speechapp.logic.VoicePush.Mode = com.zeronolidge.speechapp.logic.VoicePush.Mode.LOUDNESS,
-        /** Only a voice counts (Pip, the cave): the pop word checks apply to every word (no taps, coughs or thumps). */
-        voiceOnly: Boolean = false,
         onResult: (VoiceTry) -> Unit,
     ) {
         cancel()
         val s = ++session
         val pops = mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS
-        val meter = VoiceMeter(windowMs, needMs = if (pops) 50 else 150, knownRoom = room, pops = pops || voiceOnly)
+        val meter = VoiceMeter(windowMs, needMs = if (pops) 50 else 150, knownRoom = room, pops = pops)
         var voiced = false
         val listenWords = words != null && this.words.ready
         fun done(result: VoiceTry) {

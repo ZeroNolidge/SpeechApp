@@ -21,9 +21,13 @@ class VoiceMeter(
      */
     knownRoom: Float? = null,
     /**
-     * Pop words (p b t d g k): a reading counts only if it sounds like a voice (energy in the
-     * voice range, and voiced unless it's a whisper), and a burst counts only once it has lasted
-     * [POP_MIN_MS], so a cough or a tap on the glass isn't a pop.
+     * Pop words (p b t d g k), each burst of sound judged as a whole:
+     *  - voiced (a vowel in it) for [POP_MIN_MS]: his word, counted at once;
+     *  - one short burst (under 70 ms) in the voice range: a bare "p" puff, counted;
+     *  - a longer unvoiced burst that holds its loudness: a (loud) whisper, counted;
+     *  - a longer unvoiced burst that dies straight away (a cough, soft or loud), a short pair
+     *    of unvoiced bursts (a soft cough), or a click outside the voice range (a clap, a tap
+     *    on the glass): not counted.
      */
     private val pops: Boolean = false,
 ) {
@@ -45,6 +49,11 @@ class VoiceMeter(
     private var runOnset = false
     private var sawQuiet = measuresRoom
     private var popRunMs = 0
+    // The current burst for pop words: its readings, whether it already counted, its first
+    // reading's voice-range share, and the readings' loudness.
+    private var burstCounted = false
+    private var burstBand = 0f
+    private val burst = ArrayList<Float>()
     // Readings that weren't his voice: the room, for [roomAfter].
     private val quiet = ArrayList<Float>()
 
@@ -127,21 +136,26 @@ class VoiceMeter(
             loudest = 0f
             runStart = -1
             popRunMs = 0
+            burst.clear()
+            burstCounted = false
             return t >= windowMs
         }
         if (over) {
             if (pops) {
-                val voiceLike = band >= POP_BAND && (periodic >= POP_PERIODIC || rms < WHISPER_MAX)
-                if (voiceLike) {
-                    popRunMs += stepMs
-                    // A burst counts once it has lasted long enough; then all of it counts.
-                    if (popRunMs >= POP_MIN_MS) {
-                        voiceMs += if (popRunMs - stepMs < POP_MIN_MS) popRunMs else stepMs
-                        lastVoiceAt = t
-                        lastPush = push(rms)
-                    }
-                } else {
-                    popRunMs = 0
+                if (burst.isEmpty()) burstBand = band
+                burst += rms
+                val voiced = band >= POP_BAND && periodic >= POP_PERIODIC
+                if (voiced) popRunMs += stepMs
+                if (burstCounted) {
+                    voiceMs += stepMs
+                    lastVoiceAt = t
+                    lastPush = push(rms)
+                } else if (popRunMs >= POP_MIN_MS) {
+                    // His word: voiced long enough. All of the burst so far counts.
+                    burstCounted = true
+                    voiceMs += burst.size * stepMs
+                    lastVoiceAt = t
+                    lastPush = push(burst.max())
                 }
             } else {
                 voiceMs += stepMs
@@ -149,6 +163,16 @@ class VoiceMeter(
                 lastPush = push(rms)
             }
         } else {
+            if (pops && burst.isNotEmpty()) {
+                // The burst has ended: judge it as a whole if it didn't count already.
+                if (!burstCounted && Pops.counts(burst, burstBand)) {
+                    voiceMs += burst.size * stepMs
+                    lastVoiceAt = t
+                    lastPush = push(burst.max())
+                }
+                burst.clear()
+                burstCounted = false
+            }
             popRunMs = 0
         }
         // He's still holding a sound he started: keep listening (up to [HOLD_MAX_MS] past the window).
@@ -187,15 +211,17 @@ class VoiceMeter(
         /** A sound he starts can be held this long and still be his (Rory's own "sssss" is 2.25 s). */
         const val HOLD_MAX_MS = 5000
 
-        /** A pop counts only once it has lasted this long (a tap on the glass is shorter). */
+        /** A voiced burst counts as his word once it has lasted this long. */
         const val POP_MIN_MS = 70
 
         /** A pop's share of energy in the voice range, at least. */
         const val POP_BAND = 0.35f
 
-        /** A pop is voiced at least this much (a cough isn't), unless it's as quiet as a whisper. */
+        /** A pop's vowel is voiced at least this much. */
         const val POP_PERIODIC = 0.35f
-        const val WHISPER_MAX = 0.03f
+
+        /** A longer unvoiced burst is a whisper if the rest of it stays at least this loud (a part of its start); a cough dies away. */
+        const val WHISPER_HOLD = 0.5f
 
         /** A room level saved on another day is used at most this loud (it follows the room after one turn). */
         const val SAVED_ROOM_MAX = 0.02f
@@ -208,5 +234,23 @@ class VoiceMeter(
 
         /** Loudness on a 0 to 1 scale for the listening animation. */
         fun display(rms: Float): Float = (rms / 0.15f).coerceIn(0f, 1f)
+    }
+}
+
+/** How a finished unvoiced burst on a pop word is judged (see VoiceMeter's pops). */
+object Pops {
+    /**
+     * [levels]: the burst's readings (RMS, 50 ms each); [band]: its first reading's share of
+     * energy in the voice range. True for a bare "p" puff or a whisper, false for a cough, a
+     * soft cough or a click.
+     */
+    fun counts(levels: List<Float>, band: Float): Boolean = when {
+        levels.isEmpty() -> false
+        // One short burst: a "p" puff if it's in the voice range (a clap or a tap isn't).
+        levels.size == 1 -> band >= VoiceMeter.POP_BAND
+        // Two unvoiced readings: a soft cough.
+        levels.size == 2 -> false
+        // Longer: a whisper holds its loudness; a cough bursts and dies away.
+        else -> levels.drop(1).average() >= VoiceMeter.WHISPER_HOLD * levels.first()
     }
 }

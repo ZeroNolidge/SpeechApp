@@ -107,12 +107,13 @@ class AppServices(
     private var listenMark: kotlin.time.TimeMark? = null
 
     /**
-     * True in the first second of a listening turn (the look appearing, or the microphone
-     * opening again): taps then are ignored, so a tap still landing from before can't count as
+     * True in the first second of a listening turn (the listening look appearing): taps then are ignored, so a tap still landing from before can't count as
      * "I said it!" or end his turn.
      */
     val tapsSettling: Boolean
-        get() = listening && listOfNotNull(listenMark, voice.turnMark).any { it.elapsedNow().inWholeMilliseconds < ListenTapGuardMs }
+        // Only from the start of the turn: when the microphone reopens mid-turn (after a quiet
+        // try), "I said it!" stays live.
+        get() = listening && (listenMark?.elapsedNow()?.inWholeMilliseconds ?: ListenTapGuardMs) < ListenTapGuardMs
     private val listeningState = mutableStateOf(false)
 
     /** How loud his voice is right now while listening (0 to 1), for Rory's ear and ring. */

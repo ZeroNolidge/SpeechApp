@@ -124,11 +124,15 @@ These are the owner's rules for all work:
   to 5 s (`HOLD_MAX_MS`), and listening waits while he holds it, so a long "sssss" (Rory's model is
   2.25 s) always counts. Only the first turn ever measures, with `checkRoom` (0.4 s), which waits
   until nothing is being said. Never measure while Rory talks.
-- **Pops must sound like a voice** (`VoiceMeter(pops = true)`, BURSTS mode, and every word in Pip
-  and the cave via `listenTry(voiceOnly = true)`): a reading counts only with energy in the voice
-  range (`MicLevels.band` ≥ 0.35, 150-2000 Hz) and voiced (`periodic` ≥ 0.35) unless whisper-quiet,
-  and a burst counts only after 70 ms (`POP_MIN_MS`), so a cough or a tap on the glass isn't a pop
-  or a call. The web mic (FFT 2048) and Android work out band and voicing per 50 ms reading.
+- **Pops** (`VoiceMeter(pops = true)`, BURSTS mode, p b t d g k words): each burst is judged as a
+  whole. Voiced (`periodic` ≥ 0.35, `band` ≥ 0.35) for 70 ms (`POP_MIN_MS`) = his word, counted at
+  once; otherwise when it ends (`Pops.counts`): one short burst in the voice range = a bare "p"
+  puff (counts); two unvoiced readings = a soft cough (no); longer and holding its loudness = a
+  (loud) whisper (counts); longer but dying away = a cough (no); a click outside the voice range =
+  a clap or tap (no). Pip and the cave listen like the voice stories (a loud whisper counts), and
+  keep the listening look and "I said it!" for the whole turn, through Rory's "together" re-model
+  (the 1 s tap guard is only at the turn's start). The web mic (FFT 2048) and Android work out
+  band and voicing per 50 ms reading.
 - **Word listening (on-device recognition, listen-only by default)** (`logic/WordCheck.kt`,
   unit-tested; `audio/WordListener.kt`; web: `audio/WebWords.kt`, Vosk via vosk-browser 0.0.8 +
   vosk-model-small-en-us-0.15, downloaded by CI into the site's `vosk/` folder, never in the repo,
@@ -207,9 +211,10 @@ These are the owner's rules for all work:
   (HAPPY, CHEER, THINK, SAD, SLEEP), and `talking = true` gives a small hinge wiggle while speech is
   playing. Rory's mouth is drawn live while he talks (`HEAD_TALK` parts + `robotMouth`): it opens
   with the loudness of the clip playing right now (`ClipPlayer.mouth`, read from the decoded clip
-  at its play position, so the slow third model is slower) through `logic/LipSync.kt`; a word
-  starting with p, b or m shows closed lips for its first 80 ms; with the browser voice it chatters
-  gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
+  at its play position, so the slow third model is slower) through `logic/LipSync.kt`: words are
+  found by quiets and by dips ("pop pop pop" has only dips), the lips close for 80 ms at the start
+  of a p/b/m word and at the end of a word ending in one, and stay closed through a held "mmm";
+  with the browser voice it chatters gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
   a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
   `paperArc`, `paperPath`, `Modifier.paperCard`), not raw `drawCircle` etc. They give rough torn

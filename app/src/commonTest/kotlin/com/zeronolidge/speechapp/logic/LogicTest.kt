@@ -1321,7 +1321,7 @@ class HoldAndPopTest {
     }
 
     @Test
-    fun aPopMustSoundLikeAVoiceAndLastAMoment() {
+    fun popWordsCountPuffsWhispersAndWordsButNotCoughsOrClaps() {
         fun pops(vararg readings: Triple<Float, Float, Float>): VoiceMeter {
             val m = VoiceMeter(knownRoom = 0.004f, needMs = 50, pops = true)
             repeat(6) { m.feed(0.004f, 50) }
@@ -1330,16 +1330,18 @@ class HoldAndPopTest {
             return m
         }
         val voice = Triple(0.08f, 0.7f, 0.8f)
-        // "Pop!": two voiced readings (about 100 ms).
+        // "Pop!": voiced for about 100 ms.
         assertTrue(pops(voice, voice).heard)
-        // A tap on the glass: one short reading, however loud.
-        assertTrue(!pops(Triple(0.3f, 0.5f, 0.6f)).heard)
-        // A cough: loud, not voiced.
-        assertTrue(!pops(Triple(0.1f, 0.5f, 0.15f), Triple(0.1f, 0.5f, 0.15f), Triple(0.1f, 0.5f, 0.15f)).heard)
-        // A rumble or hiss outside the voice range.
-        assertTrue(!pops(Triple(0.08f, 0.1f, 0.8f), Triple(0.08f, 0.1f, 0.8f)).heard)
-        // A whispered pop isn't voiced but is quiet: it counts.
-        assertTrue(pops(Triple(0.02f, 0.5f, 0.1f), Triple(0.02f, 0.5f, 0.1f)).heard)
+        // A bare "p" puff: one short burst in the voice range.
+        assertTrue(pops(Triple(0.06f, 0.5f, 0.1f)).heard)
+        // A clap or a tap on the glass: one short click outside the voice range.
+        assertTrue(!pops(Triple(0.3f, 0.15f, 0.1f)).heard)
+        // A cough: a burst that dies straight away.
+        assertTrue(!pops(Triple(0.12f, 0.5f, 0.15f), Triple(0.05f, 0.5f, 0.1f), Triple(0.03f, 0.5f, 0.1f)).heard)
+        // A soft cough: two short unvoiced readings.
+        assertTrue(!pops(Triple(0.03f, 0.5f, 0.1f), Triple(0.025f, 0.5f, 0.1f)).heard)
+        // A loud whispered "Pip!": unvoiced, but it holds its loudness.
+        assertTrue(pops(Triple(0.05f, 0.5f, 0.1f), Triple(0.045f, 0.5f, 0.1f), Triple(0.045f, 0.5f, 0.1f), Triple(0.035f, 0.5f, 0.1f)).heard)
     }
 
     @Test
@@ -1383,5 +1385,33 @@ class LipSyncTest {
         repeat(5) { two.step(0.001f, "go ball", 16) }
         two.step(0.12f, "go ball", 16)
         assertTrue(two.closed)
+    }
+
+    @Test
+    fun popPopPopClosesTheLipsOnEveryP() {
+        val lip = LipSync()
+        val text = "pop, pop, pop!"
+        fun word(): Boolean {
+            // Starts closed (p), opens, then dips (no quiet) into the next word: closed at the end (p).
+            val start = lip.step(0.12f, text, 16).let { lip.closed }
+            repeat(7) { lip.step(0.12f, text, 16) }
+            val opened = !lip.closed
+            lip.step(0.03f, text, 16)
+            val end = lip.closed
+            lip.step(0.03f, text, 16)
+            return start && opened && end
+        }
+        assertTrue(word(), "first pop")
+        assertTrue(word(), "second pop")
+        assertTrue(word(), "third pop")
+    }
+
+    @Test
+    fun aHeldMmmKeepsTheLipsClosed() {
+        val lip = LipSync()
+        repeat(60) {
+            lip.step(0.1f, "mmmmm", 16)
+            assertTrue(lip.closed, "open at frame $it")
+        }
     }
 }

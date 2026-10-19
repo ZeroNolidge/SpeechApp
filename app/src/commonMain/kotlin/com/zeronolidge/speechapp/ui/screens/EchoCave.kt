@@ -153,8 +153,6 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
             // His voice makes the next crystal glimmer: a flicker per pop, a glow while a sound is held.
             onPush = { v -> if (s == session && v > 0f) { model.feed(v, 50); glimmer = model.progress } },
             mode = model.mode,
-            // Only his voice calls (a tap on the glass or a cough doesn't), or "I said it!".
-            voiceOnly = true,
             words = check?.grammar, onWords = { h -> check?.let { app.wordHeard(it, h) } },
         ) { t ->
             if (s != session || phase != CavePhase.LISTEN) return@listenTry
@@ -171,7 +169,8 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                 com.zeronolidge.speechapp.logic.VoicePush.Next.AGAIN_TOGETHER -> {
                     glimmer = maxOf(glimmer, model.progress)
                     phase = CavePhase.PROMPT
-                    app.listening = false
+                    // Still his turn: the listening look and "I said it!" stay while Rory calls
+                    // with him (the microphone reopens after Rory is done).
                     app.speaker.say("Let's say it together!")
                     app.speaker.then(w.text, slow = true) { if (s == session) listen(i) }
                 }
@@ -180,7 +179,8 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                     listen(i)
                 } else {
                     phase = CavePhase.PROMPT
-                    app.listening = false
+                    // Still his turn: the listening look and "I said it!" stay while Rory calls
+                    // with him (the microphone reopens after Rory is done).
                     app.speaker.say("Say it out loud into the cave! Then tap the big green I said it button.") { if (s == session) listen(i) }
                 }
             }
