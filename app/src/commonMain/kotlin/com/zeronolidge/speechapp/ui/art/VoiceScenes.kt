@@ -57,7 +57,7 @@ fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble:
     val live = push * 7f * sin(wobble * 2f * PI.toFloat() * 6f)
     return when (move) {
         Move.RISE -> Pose(0.5f, lerp(0.74f, 0.3f, f) - 0.04f * bump(f) * strength, rotation = live)
-        Move.SINK -> Pose(0.5f, lerp(0.16f, 0.62f, f), rotation = live + 10f * bump(f) * strength)
+        Move.SINK -> Pose(0.5f, lerp(0.3f, 0.64f, f), rotation = live + 10f * bump(f) * strength)
         Move.SLIDE -> Pose(lerp(0.22f, 0.66f, f), 0.6f - 0.06f * bump(f) * strength, rotation = live - 6f * bump(f))
         Move.POP -> Pose(0.5f, 0.45f, scale = if (prop == Prop.BUBBLE) 1f else 1f + 0.3f * f, alpha = if (prop == Prop.BUBBLE) 1f else 1f - f, rotation = live)
         Move.GROW -> Pose(0.5f, 0.52f, scale = if (growsInside(prop)) 1f else 0.62f + (0.38f + 0.2f * strength) * f, rotation = live)
@@ -84,7 +84,8 @@ fun voicePathArea(beat: VoiceBeat, w: Float, h: Float): androidx.compose.ui.geom
     var l = 1f; var t = 1f; var r = 0f; var b = 0f
     for (i in 0..10) {
         val p = pose(beat.move, beat.prop, i / 10f, 1f, 0f, 0f)
-        val half = unit * propSize(beat.prop) * 0.5f * maxOf(1f, p.scale)
+        // The paper art fills about 80% of its box.
+        val half = unit * propSize(beat.prop) * 0.4f * maxOf(1f, p.scale)
         l = minOf(l, p.x - half / w); r = maxOf(r, p.x + half / w)
         t = minOf(t, p.y - half / h); b = maxOf(b, p.y + half / h)
     }
