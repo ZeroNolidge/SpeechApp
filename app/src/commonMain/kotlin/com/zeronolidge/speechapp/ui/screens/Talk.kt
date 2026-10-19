@@ -801,11 +801,13 @@ internal class ListenSpot(val cx: Float, val cy: Float, val size: Float)
 internal fun listenSpot(w: Float, h: Float, avoid: List<androidx.compose.ui.geometry.Rect>): ListenSpot {
     var size = minOf(maxOf(h * 0.31f, 120f), w * 0.75f / 1.35f)
     val xs = listOf(0f, -0.06f, 0.06f, -0.12f, 0.12f, -0.18f, 0.18f, -0.24f, 0.24f, -0.3f, 0.3f, -0.36f, 0.36f)
-    val ys = listOf(0f, 0.08f, -0.1f)
+    val ys = listOf(0f, 0.08f, 0.16f, -0.1f)
+    // Nearest the middle first: a small step down or sideways before a big step sideways.
+    val tries = ys.flatMap { dy -> xs.map { dx -> dx to dy } }.sortedBy { (dx, dy) -> kotlin.math.abs(dx) + kotlin.math.abs(dy) * 0.8f }
     repeat(3) {
         val bw = size * 1.35f / w
         val bh = size * 1.35f / h
-        for (dy in ys) for (dx in xs) {
+        for ((dx, dy) in tries) {
             val cx = (0.5f + dx).coerceIn(bw / 2, 1f - bw / 2)
             val cy = (0.64f + dy).coerceIn(bh / 2, 1f - bh / 2)
             // Rory's own outline is smaller than his box (the ring round him is see-through).

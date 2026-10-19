@@ -420,6 +420,7 @@ private fun PipHidingSpot(spot: PipSpot, cx: Dp, cy: Dp, size: Dp, current: Bool
         Modifier
             .offset(x = cx - size / 2, y = cy - size / 2)
             .size(size)
+            .then(if (current) Modifier.listenAvoid() else Modifier)
             .wiggleOnTap()
             .graphicsLayer {
                 rotationZ = shake.value
