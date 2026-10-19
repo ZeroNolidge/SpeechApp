@@ -1338,8 +1338,9 @@ class HoldAndPopTest {
         assertTrue(!pops(Triple(0.3f, 0.15f, 0.1f)).heard)
         // A cough: a burst that dies straight away.
         assertTrue(!pops(Triple(0.12f, 0.5f, 0.15f), Triple(0.05f, 0.5f, 0.1f), Triple(0.03f, 0.5f, 0.1f)).heard)
-        // A soft cough: two short unvoiced readings.
-        assertTrue(!pops(Triple(0.03f, 0.5f, 0.1f), Triple(0.025f, 0.5f, 0.1f)).heard)
+        // A puff split across two readings, or with a quiet reading between, still counts.
+        assertTrue(pops(Triple(0.03f, 0.5f, 0.1f), Triple(0.025f, 0.5f, 0.1f)).heard)
+        assertTrue(pops(Triple(0.04f, 0.5f, 0.1f), Triple(0.004f, 0.5f, 0.1f), Triple(0.03f, 0.5f, 0.1f)).heard)
         // A loud whispered "Pip!": unvoiced, but it holds its loudness.
         assertTrue(pops(Triple(0.05f, 0.5f, 0.1f), Triple(0.045f, 0.5f, 0.1f), Triple(0.045f, 0.5f, 0.1f), Triple(0.035f, 0.5f, 0.1f)).heard)
     }
@@ -1404,6 +1405,27 @@ class LipSyncTest {
         assertTrue(word(), "first pop")
         assertTrue(word(), "second pop")
         assertTrue(word(), "third pop")
+    }
+
+    @Test
+    fun repeatedClipsOfTheSameWordEachCloseTheLips() {
+        // "Pop! Pop! Pop!" plays as three clips with the same text, with a breath between.
+        val lip = LipSync()
+        repeat(3) { n ->
+            lip.step(0.12f, "pop", 16)
+            assertTrue(lip.closed, "pop ${n + 1} didn't close")
+            repeat(8) { lip.step(0.12f, "pop", 16) }
+            repeat(10) { lip.step(null, "pop", 16) }
+        }
+        // "bye bye duck": both byes close.
+        val bye = LipSync()
+        bye.step(0.12f, "bye bye duck", 16)
+        assertTrue(bye.closed)
+        repeat(8) { bye.step(0.12f, "bye bye duck", 16) }
+        bye.step(0.03f, "bye bye duck", 16)
+        bye.step(0.03f, "bye bye duck", 16)
+        bye.step(0.12f, "bye bye duck", 16)
+        assertTrue(bye.closed, "second bye didn't close")
     }
 
     @Test

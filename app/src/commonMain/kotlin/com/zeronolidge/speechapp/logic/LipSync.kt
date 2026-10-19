@@ -26,7 +26,9 @@ class LipSync {
     var closed = false
         private set
 
-    private fun current(): String? = words.getOrNull(word)
+    // Past the last word, the words come round again: "Pop! Pop! Pop!" plays as three clips of
+    // the same text "pop", so the text never changes between them, and each one still closes.
+    private fun current(): String? = if (words.isEmpty() || word < 0) null else words[word % words.size]
 
     private fun hum(w: String?) = w != null && w.all { it == 'm' }
 
@@ -99,8 +101,8 @@ class LipSync {
         const val FULL = 0.16f
         /** Quiet this long before a sound means a new word. */
         const val GAP_MS = 60
-        /** p, b and m close the lips this long. */
-        const val CLOSED_MS = 80
+        /** p, b and m close the lips this long (long enough to see). */
+        const val CLOSED_MS = 100
         /** Below this part of the word's peak, the word is ending (a dip between words). */
         const val DIP = 0.45f
         /** Back above this part of the last peak after a dip: the next word starts. */

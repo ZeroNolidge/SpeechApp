@@ -23,11 +23,12 @@ class VoiceMeter(
     /**
      * Pop words (p b t d g k), each burst of sound judged as a whole:
      *  - voiced (a vowel in it) for [POP_MIN_MS]: his word, counted at once;
-     *  - one short burst (under 70 ms) in the voice range: a bare "p" puff, counted;
+     *  - one or two short readings in the voice range (a puff can fall across two, even with a
+     *    quiet reading between): a bare "p" puff, counted (now and then a soft cough or a sniff
+     *    counts too, which is fine);
      *  - a longer unvoiced burst that holds its loudness: a (loud) whisper, counted;
-     *  - a longer unvoiced burst that dies straight away (a cough, soft or loud), a short pair
-     *    of unvoiced bursts (a soft cough), or a click outside the voice range (a clap, a tap
-     *    on the glass): not counted.
+     *  - a longer unvoiced burst that dies straight away (a cough), or a click outside the voice
+     *    range (a clap, a tap on the glass): not counted.
      */
     private val pops: Boolean = false,
 ) {
@@ -52,6 +53,8 @@ class VoiceMeter(
     // The current burst for pop words: its readings, whether it already counted, its first
     // reading's voice-range share, and the readings' loudness.
     private var burstCounted = false
+    // A short burst may have one quiet reading in it: a puff split across two readings.
+    private var burstGap = false
     private var burstBand = 0f
     private val burst = ArrayList<Float>()
     // Readings that weren't his voice: the room, for [roomAfter].
@@ -138,6 +141,7 @@ class VoiceMeter(
             popRunMs = 0
             burst.clear()
             burstCounted = false
+            burstGap = false
             return t >= windowMs
         }
         if (over) {
@@ -163,7 +167,11 @@ class VoiceMeter(
                 lastPush = push(rms)
             }
         } else {
-            if (pops && burst.isNotEmpty()) {
+            if (pops && burst.isNotEmpty() && !burstCounted && burst.size <= 2 && !burstGap) {
+                // A puff can fall across readings (about 30 ms of sound): one quiet reading
+                // doesn't end a short burst yet.
+                burstGap = true
+            } else if (pops && burst.isNotEmpty()) {
                 // The burst has ended: judge it as a whole if it didn't count already.
                 if (!burstCounted && Pops.counts(burst, burstBand)) {
                     voiceMs += burst.size * stepMs
@@ -172,6 +180,7 @@ class VoiceMeter(
                 }
                 burst.clear()
                 burstCounted = false
+                burstGap = false
             }
             popRunMs = 0
         }
@@ -241,15 +250,14 @@ class VoiceMeter(
 object Pops {
     /**
      * [levels]: the burst's readings (RMS, 50 ms each); [band]: its first reading's share of
-     * energy in the voice range. True for a bare "p" puff or a whisper, false for a cough, a
-     * soft cough or a click.
+     * energy in the voice range. True for a bare "p" puff or a whisper, false for a cough or a
+     * click.
      */
     fun counts(levels: List<Float>, band: Float): Boolean = when {
         levels.isEmpty() -> false
-        // One short burst: a "p" puff if it's in the voice range (a clap or a tap isn't).
-        levels.size == 1 -> band >= VoiceMeter.POP_BAND
-        // Two unvoiced readings: a soft cough.
-        levels.size == 2 -> false
+        // One or two short readings: a "p" puff if it's in the voice range (a clap or a tap
+        // isn't). A real puff always counts; an odd soft cough or sniff counting too is fine.
+        levels.size <= 2 -> band >= VoiceMeter.POP_BAND
         // Longer: a whisper holds its loudness; a cough bursts and dies away.
         else -> levels.drop(1).average() >= VoiceMeter.WHISPER_HOLD * levels.first()
     }

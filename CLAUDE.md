@@ -126,8 +126,9 @@ These are the owner's rules for all work:
   until nothing is being said. Never measure while Rory talks.
 - **Pops** (`VoiceMeter(pops = true)`, BURSTS mode, p b t d g k words): each burst is judged as a
   whole. Voiced (`periodic` ≥ 0.35, `band` ≥ 0.35) for 70 ms (`POP_MIN_MS`) = his word, counted at
-  once; otherwise when it ends (`Pops.counts`): one short burst in the voice range = a bare "p"
-  puff (counts); two unvoiced readings = a soft cough (no); longer and holding its loudness = a
+  once; otherwise when it ends (`Pops.counts`): one or two short readings in the voice range,
+  even with one quiet reading between (a puff split across readings) = a bare "p" puff (counts;
+  an odd soft cough or sniff counting too is fine, the owner said); longer and holding its loudness = a
   (loud) whisper (counts); longer but dying away = a cough (no); a click outside the voice range =
   a clap or tap (no). Pip and the cave listen like the voice stories (a loud whisper counts), and
   keep the listening look and "I said it!" for the whole turn, through Rory's "together" re-model
@@ -212,8 +213,10 @@ These are the owner's rules for all work:
   playing. Rory's mouth is drawn live while he talks (`HEAD_TALK` parts + `robotMouth`): it opens
   with the loudness of the clip playing right now (`ClipPlayer.mouth`, read from the decoded clip
   at its play position, so the slow third model is slower) through `logic/LipSync.kt`: words are
-  found by quiets and by dips ("pop pop pop" has only dips), the lips close for 80 ms at the start
-  of a p/b/m word and at the end of a word ending in one, and stay closed through a held "mmm";
+  found by quiets and by dips ("pop pop pop" has only dips), and past the last word the text's
+  words come round again (so "Pop! Pop! Pop!", three clips of the same text, closes each time);
+  the lips close for 100 ms at the start of a p/b/m word and at the end of a word ending in one,
+  and stay closed through a held "mmm";
   with the browser voice it chatters gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
   a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
