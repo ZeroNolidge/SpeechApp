@@ -26,7 +26,8 @@ These are the owner's rules for all work:
   up over the map (it waits in the closet: a 🎁 on the buddy badge, `AppServices.newPiece`); the
   map's only idle reminder is Rory peeking in and waving after ~20 s (`MapWave`, max 3, any touch
   tucks him away; touches counted at the app root, `AppServices.touches`). No spoken nags on the
-  map. The closet has a green ▶ back to the map.
+  map. The closet has a green ▶ back to the map. Rory's wave is a real wave
+  (`Critter(waving = true)`: hand up, side to side twice, down).
 - **No ads, outside links, buy buttons, timers, lives, streaks or buzzer sounds.** Gentle only:
   wrong answers fold away with "try again".
 - Must keep working as a static site on GitHub Pages.
@@ -55,10 +56,14 @@ These are the owner's rules for all work:
   with young kids). Voice heard: celebrate + shiny sticker. Quiet: "Let's say it together!", replay,
   carry on. No mic / denied: Rory says "Say it out loud to me!" and waits for a tap. ▶ always skips.
 - **Listening look, one everywhere** (`ListeningStage` in Talk.kt): on every talk turn (story word
-  cards, Talk, Pip, the crystal cave; also while waiting for "I said it!" with no mic) the scene
-  dims and Rory with his cupped ear grows to ~25% of the scene's height and slides from the
-  bottom-left toward the middle (Pip: the left, clear of Pip's path), ear pulsing, ring growing with
-  `app.listenLevel`. In a story the story scene is the stage (`LocalHasStage`); in Talk the card is.
+  cards, Talk, Pip, the crystal cave, voice stories; also while waiting for "I said it!" with no
+  mic) the scene dims and Rory with his cupped ear grows to about a third of the scene's height and
+  slides from the bottom-left to ONE spot (`listenSpot`: middle, a little low), ear pulsing, ring
+  growing with `app.listenLevel`. He never covers what his voice moves: `avoid` rects (a voice
+  story's prop path, `voicePathArea`; the cave's next crystal) and anything marked
+  `Modifier.listenAvoid()` (the Talk word picture, Pip); then the nearest clear spot to the middle,
+  smaller only if nothing is clear. In a story the story scene is the stage (`LocalHasStage`); in
+  Talk the card is.
 - **No double skips:** a newly shown "I said it!" ignores taps for 0.5 s (`LabelSettleMs`, so a
   start tap landing there can't count); a continue tap is ignored within 0.7 s of the last one taken (`SettleMs`,
   from the last tap, not from the button appearing: first taps on a new button always count), a
@@ -99,7 +104,8 @@ These are the owner's rules for all work:
   key-to-file record. `make_voice.py` checks every clip has sound (`sound_seconds`, read from the
   MP3 frames' global gain, no extra software; under 0.2 s = silent) and remakes silent ones (last
   try with tts-1); `--check` lists them. **After the owner's batch run, run
-  `python3 tools/finish_clips.py` here** (it also fades the long held sounds in and out, `FADE_KEYS`, manifest `faded`) (needs ffmpeg + numpy, which the owner may not have): it
+  `python3 tools/finish_clips.py` here** (it also fades the long held sounds in and out, `FADE_KEYS`; mmm nnn lll fade in only,
+  zzz out only; manifest `faded`) (needs ffmpeg + numpy, which the owner may not have): it
   trims each clip to 0.03 s lead and 0.3 s tail, evens loudness to a normal speaking level (RMS
   0.1), renames to `-f1` and lists finished keys in manifest `finished` (make_voice keeps that list
   for unchanged files); then commit. The web player rejects clips under normal loudness (voiced
@@ -109,18 +115,30 @@ These are the owner's rules for all work:
   element at the trimmed end), so his turn starts right after Rory. Letter sounds: `--list-letters` (and audio/letters.html), `--redo X --say Y`
   (tools/voice_overrides.json). Android still uses its own TTS.
 - **Room noise** (`VoiceDetector.room`): the room's loudness is saved from each talk turn (the
-  quietest fifth of all its readings, `VoiceMeter.roomAfter`, following the room up as well as
-  down) and reused by the next (`VoiceMeter(knownRoom)`: no settling, only a 150 ms lead; if the
-  lead is already over the bar at a room-like level, ≤ `LOUD_ROOM`, the bar rises at once). Steady
-  sound with no dip for 2 s (`NOISE_MS`) is the room, never his try, so background noise can't
-  finish a story. Only the first turn of a sitting measures, with `checkRoom` (0.4 s), which
-  waits until nothing is being said (the story title included). Never measure while Rory talks.
+  quietest fifth of the readings that weren't his voice, `VoiceMeter.roomAfter`, following the room
+  up as well as down; never updated while he's making a sound) and reused by the next
+  (`VoiceMeter(knownRoom)`: no settling, only a 150 ms lead; if the lead is already over the bar at
+  a room-like level, ≤ `LOUD_ROOM`, the bar rises at once). It's kept across page loads
+  (`Progress.savedRoom`, capped at `SAVED_ROOM_MAX`). Sound that was there from the start of a turn
+  and never dips for 2 s (`NOISE_MS`) is the room; a sound he starts (quiet before it) is his for up
+  to 5 s (`HOLD_MAX_MS`), and listening waits while he holds it, so a long "sssss" (Rory's model is
+  2.25 s) always counts. Only the first turn ever measures, with `checkRoom` (0.4 s), which waits
+  until nothing is being said. Never measure while Rory talks.
+- **Pops must sound like a voice** (`VoiceMeter(pops = true)`, BURSTS mode, and every word in Pip
+  and the cave via `listenTry(voiceOnly = true)`): a reading counts only with energy in the voice
+  range (`MicLevels.band` ≥ 0.35, 150-2000 Hz) and voiced (`periodic` ≥ 0.35) unless whisper-quiet,
+  and a burst counts only after 70 ms (`POP_MIN_MS`), so a cough or a tap on the glass isn't a pop
+  or a call. The web mic (FFT 2048) and Android work out band and voicing per 50 ms reading.
 - **Word listening (on-device recognition, listen-only by default)** (`logic/WordCheck.kt`,
   unit-tested; `audio/WordListener.kt`; web: `audio/WebWords.kt`, Vosk via vosk-browser 0.0.8 +
   vosk-model-small-en-us-0.15, downloaded by CI into the site's `vosk/` folder, never in the repo,
   not precached, left alone by sw.js; the script is kept in the "talkandlearn-vosk" cache and Vosk
   keeps the unpacked model in IndexedDB by its fixed URL, so it downloads once and works offline).
-  Loads 5 s after start when listening + mic are on (`#test=...+words` loads at once; the smoke
+  Never downloads by itself: word listening is off until a grown-up turns it on
+  (`Progress.wordListening`, default off), and the model then downloads only on Wi-Fi by default
+  (`wordModelWifiOnly`; `AppHome.onMobileData`, unknown = Wi-Fi, so iPads download straight away;
+  rechecks every minute; once saved, `wordModelSaved`, it loads from the device on any connection).
+  Loads 5 s after start when allowed (`#test=...+words` loads at once; the smoke
   test prints `WORD LISTENING: ...`). Each talk turn (`SpeakMoment`, voice stories, Pip, cave)
   passes a tiny grammar (`Swaps.check`: target, up to 3 swaps by the sound table, phrase words,
   "[unk]") to `VoiceDetector.listenTry(words, onWords)`; the mic stream feeds the recogniser
@@ -187,7 +205,11 @@ These are the owner's rules for all work:
 - **Characters are paper puppets** (`ui/art/Critter.kt`): body, head and arms are separate baked
   cut-outs joined by brass split pins at the shoulders and neck; moods move the arms on their pins
   (HAPPY, CHEER, THINK, SAD, SLEEP), and `talking = true` gives a small hinge wiggle while speech is
-  playing. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
+  playing. Rory's mouth is drawn live while he talks (`HEAD_TALK` parts + `robotMouth`): it opens
+  with the loudness of the clip playing right now (`ClipPlayer.mouth`, read from the decoded clip
+  at its play position, so the slow third model is slower) through `logic/LipSync.kt`; a word
+  starting with p, b or m shows closed lips for its first 80 ms; with the browser voice it chatters
+  gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
   a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
   `paperArc`, `paperPath`, `Modifier.paperCard`), not raw `drawCircle` etc. They give rough torn
@@ -293,10 +315,13 @@ These are the owner's rules for all work:
 - **Answers live in one place** (`logic/AnswerKey.kt`); every quiz goes through `QuizState.tap`
   and `AnswerRow(key = AnswerKey.x(c))`. `PlayEveryQuizTest` plays every quiz kind with a right and
   wrong tap and fails if a wrong tap is ever marked right.
-- **Every tap reacts and every first tap counts:** `PaperButton` uses `Modifier.kidTap`, which
-  acts on touch-down (not on lift, no delay: first taps on iPad kept getting lost), crinkles
-  (`Sfx`) and presses down; the map's one tap handler also acts on touch-down, and its stops wiggle
-  and crinkle. Never put a full-screen pointer layer on top (MapWave first had one and ate every
+- **Every tap reacts; a tap counts on lift:** `PaperButton` uses `Modifier.kidTap`: the feedback
+  starts on touch (crinkle, press-down; map stops wiggle) so it feels instant, and the tap counts
+  when the finger lifts (`awaitKidTapUp`), unless it moved more than `TapSlop` (24dp, a map drag),
+  rested over `TapMaxMs` (1.2 s, a palm) or another finger touched too. The map's one tap handler
+  works the same way. Taps in the first second of a listening turn are ignored
+  (`AppServices.tapsSettling`, `ListenTapGuardMs`: the continue/"I said it!" button and the Talk
+  card). Never put a full-screen pointer layer on top (MapWave first had one and ate every
   map tap): watch touches at the app root instead; scenery decor wiggles
   (`WigglyDecor`); pictures that aren't buttons (the word picture, story characters, quiz pictures,
   Pip and its hiding spots) wiggle (`Modifier.wiggleOnTap`, watches only); any unclaimed tap leaves
@@ -304,6 +329,11 @@ These are the owner's rules for all work:
   scene (`app.listening`) and Rory (`RoryListens`) cups his hand to a big glowing gold paper ear at
   his head, inside a ring that grows with his voice; with no mic he still listens that way beside
   the "I said it!" button. (The old ear was tiny and mid-body: it read as a grey dot on phones.)
+- **Never back to the title when idle:** the screen keeps a wake lock while he plays (index.html,
+  released after 10 min with no touch), and where he is (`Screen.placeKey`, a voice story with its
+  beat) is saved; if the page reloads by itself within a sitting (30 min) it opens straight back
+  there (no start screen; his first touch turns the sound back on). The smoke test idles 95 s in a
+  story and prints `IDLE story 95 s: ...` with heap sizes.
 - **Offline + install:** the CI stamp step writes every file into sw.js `PRECACHE`; the grown-ups
   page shows "works offline" / "progress protected" (`AppHome`, `navigator.storage.persist()`)
   and an add-to-home-screen button with iPad steps.
@@ -419,6 +449,10 @@ Kotlin Multiplatform module `app` with three source sets:
 - They test on a Samsung tablet in landscape and send screenshots. Ask for screenshots of art
   changes, since art is drawn blind in code.
 - They like being asked clarifying questions on big design choices (use multiple-choice).
+- The owner's copy of the repo sits in OneDrive (Windows, GitHub Desktop), which can bring back
+  clips git removed: if GitHub Desktop shows thousands of new .mp3s after a voice run, have them run
+  `python tools/tidy_clips.py` (moves clips not in manifest.json to `../SpeechApp-old-clips`) before
+  committing. Commit Summary for a voice run: "Rory's voice: new lines".
 - **Voice clips are batched:** don't ask the owner to run `tools/make_voice.py` after each change
   (lines without a clip just use the browser voice meanwhile). Keep track of how many lines are
   waiting (`python3 tools/make_voice.py --dry-run` here, no key needed) and suggest one batch run
