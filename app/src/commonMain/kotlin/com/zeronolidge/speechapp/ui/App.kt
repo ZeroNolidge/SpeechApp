@@ -164,6 +164,10 @@ fun TalkAndLearnApp(
                         kotlinx.coroutines.delay(60_000)
                     }
                 }
+                // Rory's voice for offline play: only when a grown-up turned it on.
+                LaunchedEffect(pr.saveVoiceOffline) {
+                    if (pr.saveVoiceOffline) com.zeronolidge.speechapp.ui.platform.AppHome.saveVoice()
+                }
                 // Keeps this sitting of play going while he plays (saved, so a reload carries on).
                 LaunchedEffect(Unit) {
                     while (true) {
@@ -242,7 +246,8 @@ private fun Screens(start: Screen? = null) {
 
     // First launch: pick a buddy before anything else.
     if (app.progress.hero == null) {
-        HeroPickScreen(onPicked = { nav.home() })
+        // A test link on a new device keeps its screen after the buddy is picked.
+        HeroPickScreen(onPicked = { nav.home(); if (start != null && start != Screen.Map) stack.add(start) })
         return
     }
 

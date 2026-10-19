@@ -110,7 +110,10 @@ jobs:
           python3 - <<'PY'
           import json, os
           # Word listening (vosk/) isn't saved up front: it's 45 MB, downloaded on first use instead.
-          files = sorted(os.path.relpath(os.path.join(d, f), '.') for d, _, fs in os.walk('.') for f in fs if f != 'sw.js' and not d.startswith('./vosk'))
+          # Rory's voice clips (about 30 MB) aren't either: each is kept once it has played, and all
+          # of them only when a grown-up turns on "Save Rory's voice for offline play".
+          files = sorted(os.path.relpath(os.path.join(d, f), '.') for d, _, fs in os.walk('.') for f in fs
+                         if f != 'sw.js' and not d.startswith('./vosk') and not (d.startswith('./audio') and f.endswith('.mp3')))
           s = open('sw.js').read().replace('PRECACHE_LIST', json.dumps(files))
           open('sw.js', 'w').write(s)
           print(len(files), 'files to save offline')

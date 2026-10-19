@@ -8,4 +8,6 @@ actual object AppHome {
     actual fun install() {}
     actual fun storageProtected(): Boolean = true
     actual fun onMobileData(): Boolean = false
+    actual fun saveVoice() {}
+    actual fun voiceSaved(): Pair<Int, Int> = 0 to 0
 }

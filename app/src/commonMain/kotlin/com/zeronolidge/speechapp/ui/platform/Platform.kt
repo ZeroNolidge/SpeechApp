@@ -44,4 +44,8 @@ expect object AppHome {
     fun storageProtected(): Boolean
     /** On mobile data or "save data" (as far as the device says; unknown counts as Wi-Fi). */
     fun onMobileData(): Boolean
+    /** Saves every voice clip for offline play (a grown-up asked); safe to call again. */
+    fun saveVoice()
+    /** How far saving the voice has got: saved and total clips (0, 0 before it starts). */
+    fun voiceSaved(): Pair<Int, Int>
 }

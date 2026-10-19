@@ -68,14 +68,27 @@ fun main() {
     ComposeViewport(document.body!!) { WebRoot(services) }
 }
 
-private fun locationHash(): String = js("(() => { try { return window.location.hash || ''; } catch (e) { return ''; } })()")
+// The page's #test=... hook. Kept for this tab (sessionStorage) too, so a hard reload that loses
+// the hash still opens the same test screen; a plain link with no hook clears it.
+private fun locationHash(): String = js("""(() => {
+    try {
+        const h = window.location.hash || '';
+        if (h.startsWith('#test=')) { sessionStorage.setItem('tlTest', h); return h; }
+        if (h === '' && performance && performance.getEntriesByType) {
+            const nav = performance.getEntriesByType('navigation')[0];
+            if (nav && nav.type === 'reload') return sessionStorage.getItem('tlTest') || '';
+        }
+        sessionStorage.removeItem('tlTest');
+        return h;
+    } catch (e) { return ''; }
+})()""")
 
 /**
  * For the automatic screenshot check only: "#test=ADD" opens that practice game and
  * "#test=land-MEADOW" an area's games, so layouts can be checked at different screen sizes.
  */
-private fun testStart(): Screen? {
-    val v = locationHash().removePrefix("#test=").removeSuffix("+words").takeIf { locationHash().startsWith("#test=") } ?: return null
+private fun testStart(hash: String): Screen? {
+    val v = hash.removePrefix("#test=").removeSuffix("+words").takeIf { hash.startsWith("#test=") } ?: return null
     return runCatching {
         when {
             v.startsWith("land-") -> Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
@@ -108,15 +121,17 @@ private fun WebRoot(services: AppServices) {
             fontsReady = true
         }
     }
-    // Browsers only let a page talk after the first tap, so start with a big "play" button.
-    // Except when the page reloaded by itself mid-play (the tablet's screen went off and the
-    // browser dropped the page): then it opens straight back where he was, and his first tap
-    // anywhere turns the sound back on (index.html).
+    // Browsers (iPad Safari above all) only let a page talk after a tap, so it always starts with
+    // a big "play" button, after a reload too. If the page reloaded by itself mid-play (the
+    // tablet's screen went off and the browser dropped it), that tap opens straight back where
+    // he was.
+    val testHash = remember { locationHash() }
     val resume = remember {
-        if (locationHash().startsWith("#test=") || !services.progress.micAsked || services.progress.hero == null) null
+        if (testHash.startsWith("#test=") || !services.progress.micAsked || services.progress.hero == null) null
         else services.placeToResume()
     }
-    var started by remember { mutableStateOf(resume != null) }
+    LaunchedEffect(Unit) { services.testMode = testHash.startsWith("#test=") }
+    var started by remember { mutableStateOf(false) }
     when {
         // The start screen's ▶ is a paper button, which reads the app's services (its crinkle).
         !started || !fontsReady -> CompositionLocalProvider(LocalApp provides services) { StartScreen(ready = fontsReady) {
@@ -129,9 +144,9 @@ private fun WebRoot(services: AppServices) {
             }
             started = true
             // Automatic check only ("#test=...+words"): load word listening straight away.
-            if (locationHash().endsWith("+words")) services.voice.words.prepare()
+            if (testHash.endsWith("+words")) services.voice.words.prepare()
         } }
-        else -> TalkAndLearnApp(services, start = remember { testStart() ?: resume })
+        else -> TalkAndLearnApp(services, start = remember { testStart(testHash) ?: resume })
     }
 }
 

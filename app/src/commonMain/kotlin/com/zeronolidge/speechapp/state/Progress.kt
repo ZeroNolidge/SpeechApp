@@ -438,7 +438,25 @@ class Progress(private val prefs: Prefs) {
 
     fun updateWordListening(v: Boolean) {
         wordListening = v
-        prefs.edit().putBoolean("wordListening", v).apply()
+        prefs.edit().putBoolean("wordListening", v).putBoolean("wordListeningChosen", true).apply()
+    }
+
+    init {
+        // Once: word listening used to be on by itself, and "start over" kept it on. Unless a
+        // grown-up has switched it since, it's off again (nothing downloads until they choose).
+        if (!prefs.getBoolean("wordListeningChosen", false) && wordListening) {
+            wordListening = false
+            prefs.edit().putBoolean("wordListening", false).apply()
+        }
+    }
+
+    /** Rory's voice clips are saved for offline play only when a grown-up asks (about 30 MB). */
+    var saveVoiceOffline by mutableStateOf(prefs.getBoolean("saveVoiceOffline", false))
+        private set
+
+    fun updateSaveVoiceOffline(v: Boolean) {
+        saveVoiceOffline = v
+        prefs.edit().putBoolean("saveVoiceOffline", v).apply()
     }
 
     /** The word model downloads only on Wi-Fi (default), or on any connection. */
@@ -523,7 +541,9 @@ class Progress(private val prefs: Prefs) {
         missRun = 0
         backpack = 0
         wordTries = emptyList()
-        prefs.edit().putBoolean("wordListening", wordListening).putBoolean("nearMissModeling", nearMissModeling).apply()
+        // Word listening goes back to off with everything else (a grown-up turns it on again).
+        wordListening = false
+        prefs.edit().putBoolean("nearMissModeling", nearMissModeling).putBoolean("saveVoiceOffline", saveVoiceOffline).apply()
     }
 
     companion object {

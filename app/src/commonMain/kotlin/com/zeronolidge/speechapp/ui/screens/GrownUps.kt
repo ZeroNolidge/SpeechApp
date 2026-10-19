@@ -110,9 +110,17 @@ fun GrownUpsScreen(nav: Nav) {
                     onValueChangeFinished = { app.speaker.say("This is how fast I talk.") },
                     valueRange = 0.5f..1.2f,
                 )
+                // A microphone the browser blocks shows as off, with why just under it.
+                val micBlocked = rememberMicPermission().status == MicStatus.BLOCKED
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Use the microphone", fontSize = 18.sp, modifier = Modifier.weight(1f))
-                    Switch(checked = p.useMic, onCheckedChange = { p.updateUseMic(it) })
+                    Switch(checked = p.useMic && !micBlocked, onCheckedChange = { p.updateUseMic(it) })
+                }
+                if (micBlocked) {
+                    Text(
+                        "Off: this browser has blocked the microphone. The steps to allow it again are just below.",
+                        fontSize = 14.sp, color = Color(0xFFC62828),
+                    )
                 }
                 MicStatusSection()
                 // 2 or 3 words to say together today: tricky ones first, then ones due back, then
@@ -233,9 +241,33 @@ private fun HomeScreenSection() {
         return
     }
     Text(
-        if (AppHome.offlineReady()) "Ready to play without internet." else "Saving the app for offline play (stay online for a minute).",
+        if (AppHome.offlineReady()) "The app is saved for playing without internet." else "Saving the app for offline play (stay online for a minute).",
         fontSize = 16.sp, fontWeight = FontWeight.Bold,
         color = if (AppHome.offlineReady()) Color(0xFF2E7D32) else Color(0xFFEF6C00),
+    )
+    // Rory's voice (about 30 MB) is only all saved when a grown-up asks; meanwhile each line is
+    // kept once it has played, and offline, lines not saved use the device's voice.
+    val p = LocalApp.current.progress
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(p.saveVoiceOffline) {
+        while (p.saveVoiceOffline) {
+            kotlinx.coroutines.delay(1500)
+            tick++
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Save Rory's voice for offline play (about 30 MB)", fontSize = 18.sp, modifier = Modifier.weight(1f))
+        Switch(checked = p.saveVoiceOffline, onCheckedChange = { p.updateSaveVoiceOffline(it) })
+    }
+    val (saved, total) = tick.let { AppHome.voiceSaved() }
+    Text(
+        when {
+            !p.saveVoiceOffline -> "Off: each line is kept once it has played. Without internet, other lines use the tablet's own voice."
+            total == 0 -> "Starting…"
+            saved < total -> "Saving Rory's voice: $saved of $total."
+            else -> "Rory's voice is saved on this device."
+        },
+        fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f),
     )
     Text(
         if (AppHome.storageProtected()) "This browser has agreed to keep the saved progress." else "Make a backup code below now and then, in case the browser clears its data.",

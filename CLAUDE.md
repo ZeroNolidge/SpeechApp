@@ -339,10 +339,17 @@ These are the owner's rules for all work:
   the "I said it!" button. (The old ear was tiny and mid-body: it read as a grey dot on phones.)
 - **Never back to the title when idle:** the screen keeps a wake lock while he plays (index.html,
   released after 10 min with no touch), and where he is (`Screen.placeKey`, a voice story with its
-  beat) is saved; if the page reloads by itself within a sitting (30 min) it opens straight back
-  there (no start screen; his first touch turns the sound back on). The smoke test idles 95 s in a
+  beat) is saved; if the page reloads by itself within a sitting (30 min), the start tap (always
+  shown: iPad Safari plays no sound before a tap) opens straight back there. #test= links don't
+  save places (`AppServices.testMode`) and survive a hard reload (the hash is kept in
+  sessionStorage for the tab; a fresh device keeps the test screen after the buddy pick). The smoke test idles 95 s in a
   story and prints `IDLE story 95 s: ...` with heap sizes.
-- **Offline + install:** the CI stamp step writes every file into sw.js `PRECACHE`; the grown-ups
+- **Offline + install:** the CI stamp step writes every file into sw.js `PRECACHE` except Rory's
+  voice clips (about 30 MB) and vosk/: nothing extra downloads before a grown-up turns it on.
+  Clips are kept once played (cache-first); the grown-ups switch "Save Rory's voice for offline
+  play" (`Progress.saveVoiceOffline`, `AppHome.saveVoice`) saves them all. The mic switch shows off
+  when the browser blocks the mic, with the steps under it. "Start over" and a one-time migration
+  (`wordListeningChosen`) put word listening back to off; the grown-ups
   page shows "works offline" / "progress protected" (`AppHome`, `navigator.storage.persist()`)
   and an add-to-home-screen button with iPad steps.
 - **Own words and target sounds** (grown-ups page, up to 8 words, 1 or 2 sounds) are used most of

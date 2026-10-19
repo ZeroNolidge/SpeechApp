@@ -132,9 +132,12 @@ class AppServices(
 
     init { progress.playSession = session }
 
+    /** Opened from a #test= link (the automatic check): places aren't remembered. */
+    var testMode = false
+
     /** Saves where he is now (see Screen.placeKey), so a page reload opens back there. */
     fun notePlace(key: String?) {
-        if (key != null) progress.savePlace(key, nowMillis())
+        if (key != null && !testMode) progress.savePlace(key, nowMillis())
     }
 
     /** Where to carry on after the page reloaded by itself during this sitting, if anywhere. */
