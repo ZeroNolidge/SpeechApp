@@ -3,8 +3,10 @@ package com.zeronolidge.speechapp.ui.components
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import com.zeronolidge.speechapp.ui.art.loop
@@ -355,27 +357,55 @@ fun Modifier.wiggleOnTap(): Modifier = composed {
 /** A finger can wobble this far and still tap (young fingers wobble); further is a drag. */
 val TapSlop = 24.dp
 
-/** A touch held longer than this is a resting hand (a palm), not a tap. */
-const val TapMaxMs = 1200L
+/** Touches starting this close to the screen's edge are a hand holding the tablet: ignored. */
+val EdgeIgnore = 40.dp
 
 /**
- * After a touch went [down]: waits for the finger to lift and says whether it was a tap. Not a
- * tap: it moved more than [TapSlop] (dragging the map), it rested longer than [TapMaxMs] (a palm
- * on the glass), or another finger or the palm touched too.
+ * The touches that started near the screen's edge (a hand holding the tablet), noted at the app's
+ * root before anything else sees them. They never tap anything and never cancel another tap.
  */
-suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.awaitKidTapUp(
-    down: androidx.compose.ui.input.pointer.PointerInputChange,
-): Boolean {
+object EdgeTouches {
+    val ids = HashSet<Long>()
+}
+
+/**
+ * Taps for young fingers, each touch followed on its own: [onPress] the moment a finger touches
+ * (the feedback), [onTap] when it lifts if it didn't slide more than [TapSlop] (a slow press
+ * counts), [onRelease] when the press ends either way. Touches from the screen's edge are
+ * ignored. A new touch always takes over from an old one, so a finger whose lift the browser
+ * lost can never fire later (that used to open the wrong map stop on a later tap).
+ */
+suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectKidTaps(
+    onPress: (Offset) -> Unit,
+    onRelease: () -> Unit,
+    onTap: (Offset) -> Unit,
+) {
     val slop = TapSlop.toPx()
-    var ok = true
-    while (true) {
-        val e = awaitPointerEvent()
-        if (e.changes.count { it.pressed } > 1) ok = false
-        val c = e.changes.firstOrNull { it.id == down.id } ?: return false
-        if ((c.position - down.position).getDistance() > slop) ok = false
-        if (!c.pressed) {
-            c.consume()
-            return ok && c.uptimeMillis - down.uptimeMillis <= TapMaxMs
+    awaitPointerEventScope {
+        var id: androidx.compose.ui.input.pointer.PointerId? = null
+        var start = Offset.Zero
+        var valid = false
+        while (true) {
+            val e = awaitPointerEvent()
+            for (c in e.changes) {
+                if (c.changedToDownIgnoreConsumed()) {
+                    if (c.id.value in EdgeTouches.ids) continue
+                    if (id != null) onRelease()
+                    id = c.id
+                    start = c.position
+                    valid = true
+                    c.consume()
+                    onPress(c.position)
+                } else if (c.id == id) {
+                    if ((c.position - start).getDistance() > slop) valid = false
+                    if (!c.pressed) {
+                        c.consume()
+                        id = null
+                        onRelease()
+                        if (valid) onTap(start)
+                    }
+                }
+            }
         }
     }
 }
@@ -383,8 +413,7 @@ suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.awaitKidTap
 /**
  * A tap for young fingers: the feedback starts the moment the finger touches ([onPress], the
  * crinkle, and the press-down), so it feels instant; the tap itself counts when the finger
- * lifts ([onClick]), and only if it was a tap (see [awaitKidTapUp]: not a drag, not a resting
- * palm).
+ * lifts ([onClick]), however slowly, as long as it didn't slide (see [detectKidTaps]).
  */
 fun Modifier.kidTap(
     interaction: MutableInteractionSource,
@@ -397,16 +426,20 @@ fun Modifier.kidTap(
     val scope = rememberCoroutineScope()
     if (!enabled) return@composed this
     pointerInput(interaction) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            down.consume()
-            val press = androidx.compose.foundation.interaction.PressInteraction.Press(down.position)
-            scope.launch { interaction.emit(press) }
-            pressLatest.value?.invoke()
-            val tapped = awaitKidTapUp(down)
-            scope.launch { interaction.emit(androidx.compose.foundation.interaction.PressInteraction.Release(press)) }
-            if (tapped) latest.value()
-        }
+        var press: androidx.compose.foundation.interaction.PressInteraction.Press? = null
+        detectKidTaps(
+            onPress = { p ->
+                val pr = androidx.compose.foundation.interaction.PressInteraction.Press(p)
+                press = pr
+                scope.launch { interaction.emit(pr) }
+                pressLatest.value?.invoke()
+            },
+            onRelease = {
+                press?.let { pr -> scope.launch { interaction.emit(androidx.compose.foundation.interaction.PressInteraction.Release(pr)) } }
+                press = null
+            },
+            onTap = { latest.value() },
+        )
     }
 }
 

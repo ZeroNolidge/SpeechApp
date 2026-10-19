@@ -15,7 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import com.zeronolidge.speechapp.ui.components.awaitKidTapUp
+import com.zeronolidge.speechapp.ui.components.detectKidTaps
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.runtime.rememberCoroutineScope
@@ -281,32 +281,37 @@ fun IslandMap(
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
                         spots = storySpots,
                     )
-                    // Feedback the moment the finger touches (press-down, crinkle, wiggle); the tap
-                    // itself counts when the finger lifts, and only if it didn't drag the map or
-                    // rest there like a palm (awaitKidTapUp).
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        down.consume()
-                        val p0 = down.position
-                        val t = targetAt(p0)
-                        when (t) {
-                            is MapTarget.Area -> pressedLand = t.land
-                            MapTarget.Stop -> pressedStop = true
-                            MapTarget.Cave -> pressedCave = true
-                            is MapTarget.Story -> pressedStory = t.id
-                            MapTarget.Sea -> {}
-                        }
-                        // The stop button crinkles by itself (PaperButton); everything else here too.
-                        if (pressedLand != null || pressedCave || pressedStory != null) app.sfx.crinkle()
-                        if (t != MapTarget.Sea && !still) {
-                            wiggled = t
-                            scope.launch {
-                                for (a in listOf(9f, -8f, 5f, -3f, 0f)) wiggleTurn.animateTo(a, tween(55))
+                    // Feedback the moment the finger touches (press-down, crinkle, wiggle); the stop
+                    // opens when the finger lifts, if it didn't drag the map (detectKidTaps: each
+                    // touch on its own, so a lost lift can never open a stop later).
+                    var pending: MapTarget? = null
+                    detectKidTaps(
+                        onPress = { p0 ->
+                            val t = targetAt(p0)
+                            pending = t
+                            pressedLand = (t as? MapTarget.Area)?.land
+                            pressedStop = t == MapTarget.Stop
+                            pressedCave = t == MapTarget.Cave
+                            pressedStory = (t as? MapTarget.Story)?.id
+                            // The stop button crinkles by itself (PaperButton); everything else here too.
+                            if (pressedLand != null || pressedCave || pressedStory != null) app.sfx.crinkle()
+                            if (t != MapTarget.Sea && !still) {
+                                wiggled = t
+                                scope.launch {
+                                    for (a in listOf(9f, -8f, 5f, -3f, 0f)) wiggleTurn.animateTo(a, tween(55))
+                                }
                             }
-                        }
-                        val tapped = awaitKidTapUp(down)
-                        println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}${if (tapped) "" else " (not a tap: dragged or resting)"}")
-                        if (tapped) {
+                        },
+                        onRelease = {
+                            pressedLand = null
+                            pressedStop = false
+                            pressedCave = false
+                            pressedStory = null
+                        },
+                        onTap = { p0 ->
+                            val t = pending ?: targetAt(p0)
+                            pending = null
+                            println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
                             if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
                             when (t) {
                                 is MapTarget.Area -> onArea(t.land)
@@ -315,12 +320,8 @@ fun IslandMap(
                                 is MapTarget.Story -> onStoryTap(t.id)
                                 MapTarget.Sea -> app.puff(islandOrigin.x + p0.x, islandOrigin.y + p0.y)
                             }
-                        }
-                        pressedLand = null
-                        pressedStop = false
-                        pressedCave = false
-                        pressedStory = null
-                    }
+                        },
+                    )
                 },
         ) {
             BakedLayer(listOf("map-island", current, lap), depth = 4.dp) {

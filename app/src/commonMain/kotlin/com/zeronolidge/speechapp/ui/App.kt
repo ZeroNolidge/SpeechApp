@@ -106,6 +106,26 @@ fun TalkAndLearnApp(
                         origin = it.positionInWindow()
                         screenW = with(density) { it.size.width.toDp() }
                     }
+                    // A hand holding the tablet: touches that start within EdgeIgnore of the screen's
+                    // edge are noted first (Initial pass) and ignored by every tap (detectKidTaps).
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                val m = com.zeronolidge.speechapp.ui.components.EdgeIgnore.toPx()
+                                e.changes.forEach { c ->
+                                    val p = c.position
+                                    if (c.changedToDownIgnoreConsumed()) {
+                                        if (p.x < m || p.y < m || p.x > size.width - m || p.y > size.height - m) {
+                                            com.zeronolidge.speechapp.ui.components.EdgeTouches.ids += c.id.value
+                                        }
+                                    } else if (!c.pressed) {
+                                        com.zeronolidge.speechapp.ui.components.EdgeTouches.ids -= c.id.value
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // No tap ever does nothing: a tap that nothing tappable took (on scenery, a
                     // picture, empty paper) gets a little paper puff and a soft pop. Watched last
                     // (the Final pass), so buttons, tiles and the map handle their own taps first.
@@ -230,6 +250,15 @@ private fun Screens(start: Screen? = null) {
     val s = stack.last()
     // Remembered, so a page that reloads by itself opens back here (see Screen.placeKey).
     LaunchedEffect(s) { app.notePlace(s.placeKey()) }
+    // Leaving a screen (🏠 included) always ends its listening turn: the microphone closes and
+    // the listening look goes, so nothing from the old screen can start listening on the next.
+    androidx.compose.runtime.DisposableEffect(s) {
+        onDispose {
+            app.voice.cancel()
+            app.listening = false
+            app.listenLevel = 0f
+        }
+    }
     key(stack.size, s) {
         Box(Modifier.fillMaxSize().paperEnter(s)) { ShowScreen(s, nav) }
     }

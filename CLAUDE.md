@@ -58,12 +58,12 @@ These are the owner's rules for all work:
 - **Listening look, one everywhere** (`ListeningStage` in Talk.kt): on every talk turn (story word
   cards, Talk, Pip, the crystal cave, voice stories; also while waiting for "I said it!" with no
   mic) the scene dims and Rory with his cupped ear grows to about a third of the scene's height and
-  slides from the bottom-left to ONE spot (`listenSpot`: middle, a little low), ear pulsing, ring
-  growing with `app.listenLevel`. He never covers what his voice moves: `avoid` rects (a voice
-  story's prop path, `voicePathArea`; the cave's next crystal) and anything marked
-  `Modifier.listenAvoid()` (the Talk word picture, Pip); then the nearest clear spot to the middle,
-  smaller only if nothing is clear. In a story the story scene is the stage (`LocalHasStage`); in
-  Talk the card is.
+  slides from the bottom-left to ONE spot (`listenSpot`: the middle, a little low, always; the
+  owner chose centred over stepping aside), ear pulsing, ring growing with `app.listenLevel`.
+  "I said it!" shows ONLY while listening (`ContinueHost` shows the plain ▶ otherwise, same action),
+  so every "I said it!" turn has this look. A voice story's target glow shows while Rory names it
+  and hides on his turn (never over his ear). In a story the story scene is the stage
+  (`LocalHasStage`); in Talk the card is.
 - **No double skips:** a newly shown "I said it!" ignores taps for 0.5 s (`LabelSettleMs`, so a
   start tap landing there can't count); a continue tap is ignored within 0.7 s of the last one taken (`SettleMs`,
   from the last tap, not from the button appearing: first taps on a new button always count), a
@@ -317,9 +317,12 @@ These are the owner's rules for all work:
   wrong tap and fails if a wrong tap is ever marked right.
 - **Every tap reacts; a tap counts on lift:** `PaperButton` uses `Modifier.kidTap`: the feedback
   starts on touch (crinkle, press-down; map stops wiggle) so it feels instant, and the tap counts
-  when the finger lifts (`awaitKidTapUp`), unless it moved more than `TapSlop` (24dp, a map drag),
-  rested over `TapMaxMs` (1.2 s, a palm) or another finger touched too. The map's one tap handler
-  works the same way. Taps in the first second of a listening turn are ignored
+  when the finger lifts (`detectKidTaps`), however slowly, unless it slid more than `TapSlop`
+  (24dp, a map drag). Each touch is followed on its own and a new touch takes over, so a lift the
+  browser lost can never fire later (it used to open the wrong map stop). Touches starting within
+  `EdgeIgnore` (40dp) of the screen edge (a hand holding the iPad) are noted at the app root
+  (`EdgeTouches`, Initial pass) and never tap or cancel anything. The map's one tap handler
+  uses the same `detectKidTaps`. Leaving any screen ends its listening turn (`Screens`). Taps in the first second of a listening turn are ignored
   (`AppServices.tapsSettling`, `ListenTapGuardMs`: the continue/"I said it!" button and the Talk
   card). Never put a full-screen pointer layer on top (MapWave first had one and ate every
   map tap): watch touches at the app root instead; scenery decor wiggles
