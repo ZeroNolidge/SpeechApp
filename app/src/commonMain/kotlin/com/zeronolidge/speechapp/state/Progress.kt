@@ -219,8 +219,8 @@ class Progress(private val prefs: Prefs) {
 
     /** The saved place, if it was saved within [withinMs] of [now]. */
     fun recentPlace(now: Long, withinMs: Long): String? {
-        val at = prefs.getString("placeAt", "").toLongOrNull() ?: return null
-        val key = prefs.getString("place", "")
+        val at = prefs.getString("placeAt", "")?.toLongOrNull() ?: return null
+        val key = prefs.getString("place", "") ?: return null
         return key.takeIf { it.isNotEmpty() && now - at in 0..withinMs }
     }
 
