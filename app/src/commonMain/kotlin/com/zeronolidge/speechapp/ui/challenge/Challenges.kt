@@ -473,12 +473,17 @@ private fun LetterView(c: Challenge.Letter, area: String, wand: Int, miss: () ->
                 onMiss = miss, wandTick = wand,
                 hint = "Listen: ${t.sound}, ${t.sound}, ${t.word.text}! ${t.upper} says ${t.sound}.",
             ) { l ->
+                // Two letters ("Mm") get a smaller size so both always fit on one line: a wide
+                // pair like Mm used to wrap, and the small m dropped out of sight.
+                val text = Letters.tileText(mode, l)
                 Text(
-                    Letters.tileText(mode, l),
-                    fontSize = (card.value * 0.5f).sp,
+                    text,
+                    fontSize = (card.value * if (text.length > 1) 0.36f else 0.5f).sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = LetterFont,
                     color = Kid.ink,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         },
