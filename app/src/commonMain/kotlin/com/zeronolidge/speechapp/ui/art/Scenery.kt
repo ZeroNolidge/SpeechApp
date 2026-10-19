@@ -194,6 +194,9 @@ private fun DrawScope.far(land: Land, pal: LandPalette, seed: Int) {
         Land.FOREST -> {
             hill(pal.far, -0.1f, 0.5f, 0.75f, 0.42f)
             hill(pal.far, 0.45f, 0.48f, 0.7f, 0.45f)
+            // A strip of forest floor right across, so every tree stands on ground (between and
+            // beyond the hills they used to float over the sky).
+            paperRect(pal.far, Offset(-20f, h * 0.585f), Size(w + 40f, h * 0.42f))
             var x = -0.02f
             while (x < 1.04f) {
                 val tall = 0.16f + r.nextFloat() * 0.12f

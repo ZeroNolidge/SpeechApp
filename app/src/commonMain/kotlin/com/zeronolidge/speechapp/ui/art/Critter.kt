@@ -586,8 +586,8 @@ private fun DrawScope.drawPuppetPart(
                         mouth(o(50f, 78f), 5f * u, Ink, mood)
                     }
                     Mouth.BEAK -> {
+                        // One beak, the same in every mood.
                         poly(Color(0xFFFFA726), 43f to 70f, 57f to 70f, 50f to 80f)
-                        if (mood == Mood.CHEER) poly(Color(0xFFFB8C00), 45f to 76f, 55f to 76f, 50f to 82f)
                     }
                 }
                 if (sp.whiskers) {
