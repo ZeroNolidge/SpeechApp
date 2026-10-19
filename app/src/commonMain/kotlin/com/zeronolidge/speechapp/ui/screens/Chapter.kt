@@ -1,5 +1,7 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.logic.SetPiece
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -92,6 +94,15 @@ import com.zeronolidge.speechapp.ui.components.ContinueSize
 import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import kotlin.random.Random
 
+/** The picture on screen in [phase] (null between pictures). */
+private fun pieceOf(quest: com.zeronolidge.speechapp.logic.Quest, phase: Phase): SetPiece? = when (phase) {
+    Phase.Intro -> quest.intro.piece
+    is Phase.Beat -> quest.beats.getOrNull(phase.index)?.scene?.piece
+    is Phase.Twist -> quest.twist.piece
+    Phase.Ending -> quest.ending.piece
+    Phase.Goodbye -> null
+}
+
 private sealed interface Phase {
     data object Intro : Phase
     data class Beat(val index: Int) : Phase
@@ -159,7 +170,8 @@ fun ChapterScreen(nav: Nav, visit: Land? = null) {
 
     ScreenFrame(
         onHome = nav.home,
-        background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = (phase as? Phase.Beat)?.index ?: 9) },
+        // A night-time picture (the star going home) makes the whole scene night, not just its box.
+        background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = (phase as? Phase.Beat)?.index ?: 9, night = pieceOf(quest, phase) == SetPiece.NIGHT_SKY) },
         top = { Footprints(quest, phase) },
     ) {
         // Every step's continue button is drawn by the host: same size, same bottom-right spot.

@@ -298,10 +298,13 @@ private fun DrawScope.chest(done: Float) {
 }
 
 private fun DrawScope.night(loop: Float) {
-    drawRect(Brush.verticalGradient(listOf(Color(0xE61A237E), Color(0x003949AB)), startY = 0f, endY = size.height * 0.75f))
-    // Crescent moon.
-    paperCircle(Color(0xFFFFF59D), m * 0.09f, px(0.82f, 0.14f))
-    paperCircle(Color(0xFF283593), m * 0.08f, px(0.86f, 0.12f))
+    // The sky itself goes dark behind the whole screen (Scenery(night = true)); here the moon
+    // and stars. The crescent is cut out of the moon, so no dark disc shows against the sky.
+    val c = px(0.82f, 0.14f)
+    val bite = px(0.86f, 0.12f)
+    val moon = androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, m * 0.09f)) }
+    val cut = androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(bite, m * 0.08f)) }
+    paperPath(androidx.compose.ui.graphics.Path().apply { op(moon, cut, androidx.compose.ui.graphics.PathOperation.Difference) }, Color(0xFFFFF59D))
     listOf(0.1f to 0.1f, 0.25f to 0.22f, 0.4f to 0.08f, 0.58f to 0.2f, 0.68f to 0.06f, 0.15f to 0.34f, 0.92f to 0.34f).forEachIndexed { i, (x, y) ->
         val a = ((sin((loop * 2 + i * 0.37f) * 2 * PI) + 1) / 2).toFloat()
         star(px(x, y), m * (0.018f + 0.012f * a), Color.White.copy(alpha = 0.5f + 0.5f * a))

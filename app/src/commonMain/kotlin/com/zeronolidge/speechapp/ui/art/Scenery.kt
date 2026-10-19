@@ -101,7 +101,8 @@ val Land.palette: LandPalette
  * the layers stand up one after another, back to front, in under half a second.
  */
 @Composable
-fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @Composable BoxScope.() -> Unit = {}) {
+fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boolean = false, content: @Composable BoxScope.() -> Unit = {}) {
+    val dark by androidx.compose.animation.core.animateFloatAsState(if (night) 1f else 0f, androidx.compose.animation.core.tween(motionMs(MaxMotionMs)), label = "night")
     val t = rememberInfiniteTransition(label = "sky")
     val drift by t.loop(0f, 1f, 60000, mode = RepeatMode.Restart, easing = LinearEasing, label = "drift")
     val pal = land.palette
@@ -134,6 +135,17 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, content: @
             }
         }
         BakedLayer(listOf("ground", land), Modifier.popUp(scene, 140), depth = 4.dp) { ground(land, pal) }
+        // Night: a deep blue sky over everything (hiding the sun), the land dimmed blue below.
+        if (dark > 0f) Canvas(Modifier.fillMaxSize()) {
+            drawRect(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0f to Color(0xFF1A237E).copy(alpha = 0.97f * dark),
+                    0.55f to Color(0xFF3949AB).copy(alpha = 0.9f * dark),
+                    0.7f to Color(0xFF1A237E).copy(alpha = 0.45f * dark),
+                    1f to Color(0xFF1A237E).copy(alpha = 0.35f * dark),
+                ),
+            )
+        }
         // A light wash keeps the scenery behind the raised paper buttons, so they always win.
         Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash) }
         Box(Modifier.fillMaxSize(), content = content)
