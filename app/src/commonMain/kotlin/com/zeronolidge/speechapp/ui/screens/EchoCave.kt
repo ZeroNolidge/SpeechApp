@@ -258,7 +258,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                     val species = p.hero ?: Species.KID
                     HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == CavePhase.END) Mood.CHEER else Mood.HAPPY)
                     // While listening Rory is the big one in the listening look instead.
-                    if (!narrow && !app.listening) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
+                    if (!narrow && listenLookGone()) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true)
                 }
             }
             }

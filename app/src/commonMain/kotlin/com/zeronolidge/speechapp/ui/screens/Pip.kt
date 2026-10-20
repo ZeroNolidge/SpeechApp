@@ -347,7 +347,7 @@ fun PipStoryScreen(nav: Nav) {
                     val species = p.hero ?: Species.KID
                     HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (pipOut) Mood.CHEER else Mood.HAPPY, talking = phase == PipPhase.REACT)
                     // While listening Rory is the big one in the listening look instead.
-                    if (!narrow && !app.listening) Critter(
+                    if (!narrow && listenLookGone()) Critter(
                         Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80),
                         mood = Mood.HAPPY,
                         talking = true,

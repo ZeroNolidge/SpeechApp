@@ -483,9 +483,10 @@ fun SpeakMoment(
                 label = "pulse",
             )
             // The picture card: tap it to hear the word again. On its own (Talk) the card is the
-            // scene for the listening look; in a story the story scene beside it is. Rory stands
-            // clear of the picture, which his voice makes hop and grow.
-            ListeningStage(Modifier.weight(1f).fillMaxWidth(), enabled = !inStory) {
+            // scene for the listening look, laid out in bands: the picture in the top third, the
+            // word in its own band under it, and Rory listening in the lower half, so his glow
+            // never covers either. In a story the story scene beside it is the stage.
+            ListeningStage(Modifier.weight(1f).fillMaxWidth(), enabled = !inStory, lowerHalf = !inStory) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val small = maxHeight < 240.dp
                 val cardW = maxWidth
@@ -528,7 +529,38 @@ fun SpeakMoment(
                     Modifier.fillMaxSize().padding(bottom = 8.dp),
                     onClick = { whileActive { speakThen(model(), true) } },
                 ) {
-                    if (narrowCard) {
+                    if (!inStory) {
+                        val cardH = maxHeight
+                        val bandH = cardH * 0.17f
+                        // The word fits its band: never wider than the card, never taller than the band.
+                        val talkWord = minOf(wordSize.value * (if (narrowCard) 1f else 1.25f), (cardW.value - 40f) / (word.text.length.coerceAtLeast(3) * 0.62f), bandH.value * 0.62f).sp
+                        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            WordPicture(word, picture, pulse * beatPulse.value, Modifier.fillMaxWidth().height(cardH * 0.3f))
+                            Box(Modifier.fillMaxWidth().height(bandH), contentAlignment = Alignment.Center) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        highlighted(word.text, sound?.id),
+                                        fontSize = talkWord,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = PaperStyle.ink,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.graphicsLayer { scaleX = beatPulse.value; scaleY = beatPulse.value },
+                                    )
+                                    expansion?.let { ExpandChip(word.text, it, Modifier.padding(start = 8.dp)) }
+                                }
+                            }
+                            // The lower half: Rory's place while he listens; otherwise the cue or sticker.
+                            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                if (!app.listening) when (state) {
+                                    Speak.PARROT_RECORDING, Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
+                                    Speak.MODELLING -> Text("👂", fontSize = 52.sp)
+                                    Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
+                                    else -> {}
+                                }
+                            }
+                        }
+                    } else if (narrowCard) {
                         Column(
                             Modifier.fillMaxSize().padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -548,10 +580,11 @@ fun SpeakMoment(
                         }
                     }
                 }
-                // While Rory models the word, there he is, talking, in the card's top-left corner.
+                // While Rory models the word, there he is, talking: in the card's corner (in Talk
+                // the lower-left one, clear of the picture at the top).
                 if (state == Speak.MODELLING) {
                     Critter(
-                        Species.ROBOT, Modifier.align(Alignment.TopStart).padding(8.dp).size(width = if (small) 48.dp else 70.dp, height = if (small) 60.dp else 88.dp),
+                        Species.ROBOT, Modifier.align(if (inStory) Alignment.TopStart else Alignment.BottomStart).padding(8.dp).size(width = if (small) 48.dp else 70.dp, height = if (small) 60.dp else 88.dp),
                         Color(0xFFFFCC80), mood = Mood.HAPPY, talking = true,
                     )
                 }
@@ -725,6 +758,8 @@ internal val LocalHasStage = androidx.compose.runtime.compositionLocalOf { false
 internal fun ListeningStage(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Talk practice: Rory stays in the stage's lower half (the picture and word are above). */
+    lowerHalf: Boolean = false,
     /** Drawn over the dimmed scene, under Rory (a voice story's wind strips and confetti); gets Rory's centre. */
     aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.(roryAt: Offset) -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
@@ -736,7 +771,7 @@ internal fun ListeningStage(
         val w = maxWidth
         val h = maxHeight
         content()
-        val spot = listenSpot(w.value, h.value)
+        val spot = listenSpot(w.value, h.value, lowerHalf)
         // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
         val rory = spot.size.dp
         val box = rory * 1.35f
@@ -763,9 +798,24 @@ internal fun ListeningStage(
 /** Where the listening Rory stands (centre, parts of the stage) and how big he is (dp). */
 internal class ListenSpot(val cx: Float, val cy: Float, val size: Float)
 
-/** The one listening spot: the middle, a little low, Rory about a third of the stage's height. */
-internal fun listenSpot(w: Float, h: Float): ListenSpot =
-    ListenSpot(0.5f, 0.64f, minOf(maxOf(h * 0.31f, 120f), w * 0.75f / 1.35f))
+/**
+ * The one listening spot: the middle, a little low, Rory about a third of the stage's height.
+ * With [lowerHalf] (Talk practice) he fits entirely in the lower half, under the picture and word.
+ */
+internal fun listenSpot(w: Float, h: Float, lowerHalf: Boolean = false): ListenSpot {
+    val size = minOf(maxOf(h * 0.31f, 120f), w * 0.75f / 1.35f, if (lowerHalf) h * 0.47f / 1.35f else Float.MAX_VALUE)
+    val box = size * 1.35f / h
+    return ListenSpot(0.5f, if (lowerHalf) maxOf(0.64f, 0.5f + box / 2 + 0.02f).coerceAtMost(1f - box / 2) else 0.64f, size)
+}
+
+/** True once the big listening Rory has fully gone, so the small Rory beside the buddy can come back (never both at once). */
+@Composable
+internal fun listenLookGone(): Boolean {
+    val app = LocalApp.current
+    val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
+    val k by animateFloatAsState(if (app.listening) 1f else 0f, tween(if (still) 0 else 450), label = "lookGone")
+    return !app.listening && k < 0.01f
+}
 
 /** Makes the practised sound stand out in the word, e.g. the "sh" in "fish". */
 private fun highlighted(text: String, soundId: String?) = buildAnnotatedString {

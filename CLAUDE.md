@@ -63,7 +63,10 @@ These are the owner's rules for all work:
   "I said it!" shows ONLY while listening (`ContinueHost` shows the plain ▶ otherwise, same action),
   so every "I said it!" turn has this look. A voice story's target glow shows while Rory names it
   and hides on his turn (never over his ear). In a story the story scene is the stage
-  (`LocalHasStage`); in Talk the card is.
+  (`LocalHasStage`); in Talk the card is, laid out in bands: picture in the top third, the word in
+  its own band, Rory in the lower half (`ListeningStage(lowerHalf)`), so he never covers either.
+  The small Rory beside the buddy (cave, Pip, voice stories) only comes back once the big one has
+  fully gone (`listenLookGone`): never both at once.
 - **No double skips:** a newly shown "I said it!" ignores taps for 0.5 s (`LabelSettleMs`, so a
   start tap landing there can't count); a continue tap is ignored within 0.7 s of the last one taken (`SettleMs`,
   from the last tap, not from the button appearing: first taps on a new button always count), a
