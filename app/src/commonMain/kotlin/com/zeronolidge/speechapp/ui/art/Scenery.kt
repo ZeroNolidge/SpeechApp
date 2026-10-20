@@ -154,6 +154,9 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boo
 
 // ---------------------------------------------------------------- layers
 
+/** Every daytime sun, in every area. */
+private val SunGold = Color(0xFFF7C11E)
+
 private fun DrawScope.sky(land: Land, pal: LandPalette) {
     drawRect(pal.sky)
     paperRect(pal.glow, Offset(-20f, size.height * 0.36f), Size(size.width + 40f, size.height * 0.4f))
@@ -170,9 +173,11 @@ private fun DrawScope.sky(land: Land, pal: LandPalette) {
             }
         }
         else -> {
+            // The sun is always golden yellow, whatever the area's colours (Market Town's plum
+            // highlight made a purple sun on a "sunny day").
             val sun = Offset(size.width * 0.85f, size.height * 0.15f)
-            paperCircle(lerp(pal.accent, Color.White, 0.55f), u * 0.13f, sun)
-            paperCircle(lerp(pal.accent, Color.White, 0.2f), u * 0.085f, sun)
+            paperCircle(lerp(SunGold, Color.White, 0.55f), u * 0.13f, sun)
+            paperCircle(lerp(SunGold, Color.White, 0.1f), u * 0.085f, sun)
         }
     }
 }
