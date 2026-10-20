@@ -555,7 +555,11 @@ fun SpeakMoment(
                             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                                 if (!app.listening) when (state) {
                                     Speak.PARROT_RECORDING, Speak.PARROT_PLAYING -> Text("🦜", fontSize = 52.sp)
-                                    Speak.MODELLING -> Text("👂", fontSize = 52.sp)
+                                    // Rory, talking, right where he'll listen next (no stray ear).
+                                    Speak.MODELLING -> Critter(
+                                        Species.ROBOT, Modifier.size(width = if (small) 48.dp else 80.dp, height = if (small) 60.dp else 100.dp),
+                                        Color(0xFFFFCC80), mood = Mood.HAPPY, talking = true,
+                                    )
                                     Speak.DONE -> shiny?.let { Sticker(it, if (small) 64.dp else 92.dp, Modifier.peelIn(it.text)) }
                                     else -> {}
                                 }
@@ -582,10 +586,10 @@ fun SpeakMoment(
                     }
                 }
                 // While Rory models the word, there he is, talking: in the card's corner (in Talk
-                // the lower-left one, clear of the picture at the top).
-                if (state == Speak.MODELLING) {
+                // he stands in the lower half instead, see above).
+                if (state == Speak.MODELLING && inStory) {
                     Critter(
-                        Species.ROBOT, Modifier.align(if (inStory) Alignment.TopStart else Alignment.BottomStart).padding(8.dp).size(width = if (small) 48.dp else 70.dp, height = if (small) 60.dp else 88.dp),
+                        Species.ROBOT, Modifier.align(Alignment.TopStart).padding(8.dp).size(width = if (small) 48.dp else 70.dp, height = if (small) 60.dp else 88.dp),
                         Color(0xFFFFCC80), mood = Mood.HAPPY, talking = true,
                     )
                 }

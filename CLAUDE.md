@@ -285,7 +285,7 @@ These are the owner's rules for all work:
   more listen → wait (listening) for any sound or "I said it!" (never "I called!"); the 🦜 copy-me
   parrot waits too (`Parrot.listenThenPlay`: plays back once he has spoken, keeps waiting through
   quiet, with the listening look). Rory's modelling is visible: the word card/chip pulses once
-  per word he says (the slow third bigger), a small talking Rory sits in the card corner, and his
+  per word he says (the slow third bigger), a small talking Rory sits in the card corner (in Talk, centred in the lower half where he then listens), and his
   echo + added word slides in on paper (`ExpandChip`). The slow echo finishes before the praise.
   **Pops vs holds** (`VoicePush.Mode`, `modeFor(beat.sound)`): p b t d g k words count each
   separate burst as one push ("pop! pop!" = 2, about a third each; 100 ms of quiet between
