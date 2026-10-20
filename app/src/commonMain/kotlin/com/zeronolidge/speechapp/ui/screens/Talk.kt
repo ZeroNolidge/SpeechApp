@@ -490,6 +490,7 @@ fun SpeakMoment(
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val small = maxHeight < 240.dp
                 val cardW = maxWidth
+                val cardHeight = maxHeight
                 // A narrow card (the right-hand column on an upright iPad, a phone): picture above
                 // the word instead of beside it, so the word always fits on one line.
                 val narrowCard = cardW < 400.dp
@@ -530,7 +531,7 @@ fun SpeakMoment(
                     onClick = { whileActive { speakThen(model(), true) } },
                 ) {
                     if (!inStory) {
-                        val cardH = maxHeight
+                        val cardH = cardHeight
                         val bandH = cardH * 0.17f
                         // The word fits its band: never wider than the card, never taller than the band.
                         val talkWord = minOf(wordSize.value * (if (narrowCard) 1f else 1.25f), (cardW.value - 40f) / (word.text.length.coerceAtLeast(3) * 0.62f), bandH.value * 0.62f).sp
