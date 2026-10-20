@@ -646,10 +646,10 @@ private fun StoryStop(
         if (!done) Canvas(Modifier.fillMaxSize()) {
             val tw = twinkle()
             if (tw >= 0f) {
-                val r = size.minDimension * 0.62f
+                val r = size.minDimension * 0.68f
                 for (i in 0 until 3) {
                     val ang = tw * 6.2832f + i * 2.0944f
-                    star(Offset(center.x + r * cos(ang), center.y + r * sin(ang)), size.minDimension * 0.09f, Color(0xFFFFD54F))
+                    star(Offset(center.x + r * cos(ang), center.y + r * sin(ang)), size.minDimension * 0.16f, Color(0xFFFFC107))
                 }
             }
         }
