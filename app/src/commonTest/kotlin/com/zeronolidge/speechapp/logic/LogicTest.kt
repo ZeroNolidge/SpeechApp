@@ -818,6 +818,35 @@ class MapTargetTest {
     }
 
     @Test
+    fun finishedStarsEachTakeTheirOwnTapAndNeverHidePicturesOrLabels() {
+        for (c in cases) {
+            val (w, h, half, lh, r) = c.toList()
+            if (w / r < 15f) continue
+            // A second lap: every stop finished, the next stop back at the start.
+            val (fx, fy) = Trail.position(0)
+            val (sx, sy) = MapAreas.stopSpot(Trail.landAt(0), fx, fy, w, h, r, half, lh)
+            val placed = mutableListOf(MapSpot(MapTarget.Stop, sx, sy, r))
+            val cr = r * 0.8f
+            val (cx, cy) = MapAreas.caveSpot(w, h, cr, sx, sy, r, half, lh)
+            placed += MapSpot(MapTarget.Cave, cx, cy, cr)
+            val sr = r * 0.7f
+            for (story in VoiceStories.all) {
+                val (x, y) = MapAreas.spotBy(story.land, w, h, sr, placed, half, lh)
+                placed += MapSpot(MapTarget.Story(story.id), x, y, sr)
+            }
+            val starR = r * 0.45f
+            val stars = MapAreas.doneSpots((1 until Trail.size).toList(), w, h, starR, placed, half, lh)
+            val spots = placed.filter { it.target is MapTarget.Story } + stars
+            for (st in stars) {
+                assertEquals(st.target, MapAreas.target(st.x, st.y, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "${st.target} centre at ${w}x$h")
+            }
+            MapAreas.all.forEach { a ->
+                assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "picture of ${a.land} with stars at ${w}x$h")
+            }
+        }
+    }
+
+    @Test
     fun theVoiceStoryStopsSitByTheirLandsAndNeverShareATap() {
         for (c in cases) {
             val (w, h, half, lh, r) = c.toList()

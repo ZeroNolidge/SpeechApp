@@ -11,6 +11,8 @@ sealed interface MapTarget {
     data object Cave : MapTarget
     /** A voice story's stop (logic/VoiceStories.kt). */
     data class Story(val id: String) : MapTarget
+    /** A finished stop's ⭐ on the trail: tapping it replays a story there. */
+    data class Done(val stop: Int) : MapTarget
     data object Sea : MapTarget
 }
 
@@ -121,6 +123,23 @@ object MapAreas {
         }
     }
 
+    /**
+     * Where the ⭐ of each finished stop in [stops] goes (radius [r]): on its trail spot when that's
+     * clear, otherwise the nearest clear spot by its land (clear of every picture and label, on
+     * the island, never touching [avoid] or another star), so each star takes its own taps.
+     */
+    fun doneSpots(stops: List<Int>, w: Float, h: Float, r: Float, avoid: List<MapSpot>, labelHalfW: Float, labelH: Float): List<MapSpot> {
+        val placed = avoid.toMutableList()
+        val gap = r * 0.2f
+        return stops.map { s ->
+            val (fx, fy) = Trail.position(s)
+            val (x, y) = place(Trail.landAt(s), fx, fy, w, h, r, labelHalfW, labelH, step = r * 0.75f) { x, y ->
+                onIsland(x, y, w, h, r) && placed.all { sqrt(sq(x - it.x) + sq(y - it.y)) >= it.r + r + gap }
+            }
+            MapSpot(MapTarget.Done(s), x, y, r).also { placed += it }
+        }
+    }
+
     /** The island's shape on the map (fractions of its width and height; IslandMap draws it). */
     const val ISLAND_CX = 0.45f
     const val ISLAND_CY = 0.53f
@@ -142,6 +161,7 @@ object MapAreas {
 
     private fun place(
         land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float,
+        step: Float = stopR / 4f,
         alsoOk: (Float, Float) -> Boolean,
     ): Pair<Float, Float> {
         val zones = all.map { Shape.Box(it.hitBox(w, h, labelHalfW, labelH)) }
@@ -159,7 +179,7 @@ object MapAreas {
         for ((avoid, r, margin) in tiers) {
             fun ok(cx: Float, cy: Float) = avoid.none { it.touches(cx, cy, r) } && (margin == 0f || belongsTo(land, cx, cy, w, h, margin)) && alsoOk(cx, cy)
             if (ok(sx, sy)) return sx to sy
-            nearest(sx, sy, w, h, stopR) { x, y -> ok(x, y) }?.let { return it }
+            nearest(sx, sy, w, h, stopR, step) { x, y -> ok(x, y) }?.let { return it }
         }
         return sx to sy
     }
@@ -179,8 +199,7 @@ object MapAreas {
     fun clearOfCores(x: Float, y: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float) =
         all.flatMap { it.core(w, h, labelHalfW, labelH) }.none { it.touches(x, y, stopR) }
 
-    private fun nearest(sx: Float, sy: Float, w: Float, h: Float, r: Float, ok: (Float, Float) -> Boolean): Pair<Float, Float>? {
-        val step = r / 4f
+    private fun nearest(sx: Float, sy: Float, w: Float, h: Float, r: Float, step: Float, ok: (Float, Float) -> Boolean): Pair<Float, Float>? {
         var best: Pair<Float, Float>? = null
         var bestD = Float.MAX_VALUE
         var y = r

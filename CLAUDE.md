@@ -236,6 +236,7 @@ These are the owner's rules for all work:
 - **Trail** (`Trail` in `logic/Rpg.kt`): 8 lands × 2 stops = 16 stops. Each stop is one chapter
   (`ChapterScreen`, 3 to 5 minutes) ending in "see you next time". Finishing unfolds the next stop.
   After stop 16 a new lap starts, so there's always a next chapter. Nothing locks or goes back.
+  Finished stops are ⭐ stickers that replay a fresh story in their land (`MapTarget.Done`, `MapAreas.doneSpots`: each star placed clear of pictures, labels and other stops so it takes its own tap; `Screen.Chapter(replay = true)` never moves the trail on). Voice-story badges not played yet bob gently with three circling sparkles and a small green ▶.
   New lands bring new skills: Market Town = coins, Puzzle Peaks = patterns on a rope bridge.
 - **Buddy pieces:** from a full backpack (4 gems, one per word tried) and a "welcome back" piece
   on the first visit of a new day (`Progress.checkIn`). Order is `Catalog.awardOrder`. Never taken

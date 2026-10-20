@@ -213,6 +213,11 @@ fun MapScreen(nav: Nav) {
             stories = com.zeronolidge.speechapp.logic.VoiceStories.all.filter { it.id != "owl" || owlOpen(p) }.map {
                 com.zeronolidge.speechapp.ui.art.MapStoryStop(it.id, it.emoji, it.land, it.id in p.voiceStoriesDone)
             },
+            // A finished stop's ⭐: play a story there again (a fresh one; the trail stays put).
+            onDone = { stop ->
+                app.speaker.say("Let's play it again!")
+                nav.go(Screen.Chapter(Trail.landAt(stop), replay = true))
+            },
             onStory = { id ->
                 com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
                 nav.go(Screen.VoiceStory(id))

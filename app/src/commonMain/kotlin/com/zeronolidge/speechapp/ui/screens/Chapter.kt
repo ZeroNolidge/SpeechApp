@@ -118,13 +118,14 @@ private sealed interface Phase {
  * paper piece for the buddy and the stickers earned on the way.
  */
 @Composable
-fun ChapterScreen(nav: Nav, visit: Land? = null) {
+fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
     val app = LocalApp.current
     val p = app.progress
     val chapter = remember { p.chapter }
     val land = remember { visit ?: Trail.landOf(chapter) }
     // Visiting an area already reached is a bonus story: it doesn't move the trail on.
-    val bonus = remember { land != Trail.landOf(chapter) }
+    // A replayed ⭐ stop never moves it on either, even in the land he's in now.
+    val bonus = remember { replay || land != Trail.landOf(chapter) }
     val quest = remember { StoryGen.make(land, p.storyParams(), Random(Random.nextLong()), mixed = false) }
     var phase by remember { mutableStateOf<Phase>(Phase.Intro) }
     var cheer by remember { mutableStateOf(false) }

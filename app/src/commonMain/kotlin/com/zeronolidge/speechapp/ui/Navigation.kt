@@ -9,9 +9,10 @@ sealed interface Screen {
     data object Map : Screen
     /**
      * A chapter: the next one on the trail, or (with [visit]) a fresh story in an area the trail
-     * has already reached, which doesn't move the trail on.
+     * has already reached, which doesn't move the trail on. [replay]: a finished stop's ⭐ was
+     * tapped; a fresh story in its land that never moves the trail on.
      */
-    data class Chapter(val visit: Land? = null) : Screen
+    data class Chapter(val visit: Land? = null, val replay: Boolean = false) : Screen
     /** An area's own games, opened from its label or picture on the map (Meadow: counting, adding...). */
     data class LandGames(val land: Land) : Screen
     data object Closet : Screen
@@ -47,7 +48,7 @@ sealed interface Screen {
  */
 fun Screen.placeKey(): String? = when (this) {
     Screen.Map -> "map"
-    is Screen.Chapter -> "chapter:" + (visit?.name ?: "")
+    is Screen.Chapter -> "chapter:" + (visit?.name ?: "") + (if (replay) ":replay" else "")
     is Screen.LandGames -> "land:" + land.name
     Screen.Closet -> "closet"
     Screen.Stickers -> "stickers"
@@ -67,7 +68,9 @@ fun screenForPlace(key: String): Screen? = runCatching {
     val (kind, arg) = key.split(":", limit = 2).let { it[0] to it.getOrNull(1) }
     when (kind) {
         "map" -> Screen.Map
-        "chapter" -> Screen.Chapter(arg?.takeIf { it.isNotEmpty() }?.let { Land.valueOf(it) })
+        "chapter" -> arg.orEmpty().split(":").let { parts ->
+            Screen.Chapter(parts[0].takeIf { it.isNotEmpty() }?.let { Land.valueOf(it) }, replay = parts.getOrNull(1) == "replay")
+        }
         "land" -> Screen.LandGames(Land.valueOf(arg!!))
         "closet" -> Screen.Closet
         "stickers" -> Screen.Stickers

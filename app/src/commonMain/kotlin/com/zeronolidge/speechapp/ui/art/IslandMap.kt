@@ -120,6 +120,8 @@ fun IslandMap(
     /** The voice stories' stops (id, emoji, its land, finished), each a round paper stop by its land. */
     stories: List<MapStoryStop> = emptyList(),
     onStory: (String) -> Unit = {},
+    /** A finished stop's ⭐ was tapped: replay a story there (the trail doesn't move). */
+    onDone: (Int) -> Unit = {},
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -127,6 +129,8 @@ fun IslandMap(
     val fast by t.loop(0f, 1f, 2400, mode = RepeatMode.Restart, easing = LinearEasing, label = "fast")
     val flap by t.loop(0f, 1f, 350, label = "flap")
     val pulse by t.loop(1f, 1.1f, 550, label = "pulse")
+    // Stories not played yet bob gently, so they read as things to tap.
+    val bob by t.loop(0f, 1f, 1600, mode = RepeatMode.Restart, easing = LinearEasing, label = "bob")
     val still = LocalReduceMotion.current
 
     val current = Trail.stopOf(chapter)
@@ -157,6 +161,7 @@ fun IslandMap(
     var pressedStop by remember { mutableStateOf(false) }
     var pressedCave by remember { mutableStateOf(false) }
     var pressedStory by remember { mutableStateOf<String?>(null) }
+    var pressedDone by remember { mutableStateOf<Int?>(null) }
     /** The stop just tapped wiggles (with the crinkle), so every first tap visibly lands. */
     var wiggled by remember { mutableStateOf<MapTarget?>(null) }
     val wiggleTurn = remember { Animatable(0f) }
@@ -207,6 +212,7 @@ fun IslandMap(
         val onStopTap by rememberUpdatedState(onStop)
         val onCaveTap by rememberUpdatedState(onCave)
         val onStoryTap by rememberUpdatedState(onStory)
+        val onDoneTap by rememberUpdatedState(onDone)
         val dens = LocalDensity.current.density
         // The next stop: same physical size on every screen, placed clear of every area's tap zone.
         val node = 96.dp
@@ -248,6 +254,20 @@ fun IslandMap(
                 placed.filter { it.target is MapTarget.Story }
             }
         }
+        // Finished stops: ⭐ stickers, each a tap target of its own (a replay), placed clear of
+        // every picture, label and other stop.
+        val sticker = unit * 0.085f
+        val starSpots = with(LocalDensity.current) {
+            val wPx = w.toPx()
+            val hPx = h.toPx()
+            val labelH = (label * 1.45f + 6f).dp.toPx()
+            remember(current, lap, storySpots, wPx, hPx, labelH) {
+                val done = (0 until Trail.size).filter { s -> (lap > 0 || s < current) && s != current }
+                val avoid = listOf(MapSpot(MapTarget.Stop, stopPx.x, stopPx.y, (node / 2).toPx())) +
+                    (cavePx?.let { listOf(MapSpot(MapTarget.Cave, it.x, it.y, (caveNode / 2).toPx())) } ?: emptyList()) + storySpots
+                MapAreas.doneSpots(done, wPx, hPx, (sticker / 2).toPx(), avoid, 64.dp.toPx(), labelH)
+            }
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -263,7 +283,8 @@ fun IslandMap(
                         "${a.land}@${(o.x + a.markX * c.size.width).toInt()},${(o.y + a.markY * c.size.height).toInt()}"
                     } + " STOP@${(o.x + stopPx.x).toInt()},${(o.y + stopPx.y).toInt()}" +
                         (cavePx?.let { " CAVE@${(o.x + it.x).toInt()},${(o.y + it.y).toInt()}" } ?: "") +
-                        storySpots.joinToString("") { sp -> " STORY-${(sp.target as MapTarget.Story).id}@${(o.x + sp.x).toInt()},${(o.y + sp.y).toInt()}" }
+                        storySpots.joinToString("") { sp -> " STORY-${(sp.target as MapTarget.Story).id}@${(o.x + sp.x).toInt()},${(o.y + sp.y).toInt()}" } +
+                        starSpots.joinToString("") { sp -> " DONE-${(sp.target as MapTarget.Done).stop}@${(o.x + sp.x).toInt()},${(o.y + sp.y).toInt()}" }
                     islandOrigin = o
                     if (line + marks != lastAreaLog) {
                         lastAreaLog = line + marks
@@ -271,7 +292,7 @@ fun IslandMap(
                         println("MAPMARKS $marks")
                     }
                 }
-                .pointerInput(stopPx, cavePx, storySpots, label) {
+                .pointerInput(stopPx, cavePx, storySpots, starSpots, label) {
                     // Everything on the island goes through MapAreas.target: each area's one zone
                     // (picture, label and the gap between) and the next-stop button.
                     fun targetAt(p: Offset): MapTarget = MapAreas.target(
@@ -279,7 +300,7 @@ fun IslandMap(
                         labelHalfW = 64.dp.toPx(), labelH = (label * 1.45f + 6f).dp.toPx(),
                         stopX = stopPx.x, stopY = stopPx.y, stopR = (node / 2).toPx(),
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
-                        spots = storySpots,
+                        spots = storySpots + starSpots,
                     )
                     // Feedback the moment the finger touches (press-down, crinkle, wiggle); the stop
                     // opens when the finger lifts, if it didn't drag the map (detectKidTaps: each
@@ -293,8 +314,9 @@ fun IslandMap(
                             pressedStop = t == MapTarget.Stop
                             pressedCave = t == MapTarget.Cave
                             pressedStory = (t as? MapTarget.Story)?.id
+                            pressedDone = (t as? MapTarget.Done)?.stop
                             // The stop button crinkles by itself (PaperButton); everything else here too.
-                            if (pressedLand != null || pressedCave || pressedStory != null) app.sfx.crinkle()
+                            if (pressedLand != null || pressedCave || pressedStory != null || pressedDone != null) app.sfx.crinkle()
                             if (t != MapTarget.Sea && !still) {
                                 wiggled = t
                                 scope.launch {
@@ -307,17 +329,19 @@ fun IslandMap(
                             pressedStop = false
                             pressedCave = false
                             pressedStory = null
+                            pressedDone = null
                         },
                         onTap = { p0 ->
                             val t = pending ?: targetAt(p0)
                             pending = null
-                            println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; MapTarget.Sea -> "sea" }}")
+                            println("MAPTAP ${p0.x.toInt()},${p0.y.toInt()} -> ${when (t) { is MapTarget.Area -> t.land.name; MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; is MapTarget.Done -> "DONE-${t.stop}"; MapTarget.Sea -> "sea" }}")
                             if (t == MapTarget.Stop || (t is MapTarget.Area && t.land == Trail.landAt(current))) guide = false
                             when (t) {
                                 is MapTarget.Area -> onArea(t.land)
                                 MapTarget.Stop -> onStopTap()
                                 MapTarget.Cave -> onCaveTap()
                                 is MapTarget.Story -> onStoryTap(t.id)
+                                is MapTarget.Done -> onDoneTap(t.stop)
                                 MapTarget.Sea -> app.puff(islandOrigin.x + p0.x, islandOrigin.y + p0.y)
                             }
                         },
@@ -499,21 +523,23 @@ fun IslandMap(
 
         // The stops, the buddy and the pointer ride on the island layer.
         Box(Modifier.fillMaxSize().drift(1f)) {
-            // Finished stops: flat star stickers on the trail.
-            val sticker = unit * 0.075f
-            (0 until Trail.size).forEach { s ->
-                val done = lap > 0 || s < current
-                if (done && s != current) {
-                    val (fx, fy) = Trail.position(s)
-                    Box(
-                        Modifier
-                            .offset(x = w * fx - sticker / 2, y = h * fy - sticker / 2)
-                            .size(sticker)
-                            .rotate(((s * 37) % 21 - 10).toFloat())
-                            .paperCard(Color(0xFFFFF8E1), circle = true),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("⭐", fontSize = (sticker.value * 0.55f).sp) }
-                }
+            // Finished stops: flat star stickers by the trail, each one tappable (a replay).
+            starSpots.forEach { sp ->
+                val stop = (sp.target as MapTarget.Done).stop
+                val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
+                Box(
+                    Modifier
+                        .offset(x = sd.x - sticker / 2, y = sd.y - sticker / 2)
+                        .size(sticker)
+                        .graphicsLayer {
+                            val k = if (pressedDone == stop) 0.9f else 1f
+                            scaleX = k
+                            scaleY = k
+                            rotationZ = ((stop * 37) % 21 - 10).toFloat() + if (wiggled == MapTarget.Done(stop)) wiggleTurn.value else 0f
+                        }
+                        .paperCard(Color(0xFFFFF8E1), circle = true),
+                    contentAlignment = Alignment.Center,
+                ) { Text("⭐", fontSize = (sticker.value * 0.55f).sp) }
             }
 
             // The next stop: a big raised paper button that unfolds when it is new, ringed in
@@ -547,10 +573,13 @@ fun IslandMap(
                 val id = (sp.target as MapTarget.Story).id
                 val st = stories.first { it.id == id }
                 val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
+                val phase = stories.indexOf(st) * 0.33f
                 StoryStop(
                     Modifier.offset(x = sd.x - storyNode / 2, y = sd.y - storyNode / 2).size(storyNode).zIndex(2f).popIn("story-$id"),
                     id, st.emoji, done = st.done, pressed = pressedStory == id,
                     wiggle = { if (wiggled == MapTarget.Story(id)) wiggleTurn.value else 0f },
+                    bob = { if (st.done || still) 0f else sin((bob + phase) * 2f * PI.toFloat()) },
+                    twinkle = { if (st.done || still) -1f else (bob + phase) % 1f },
                 )
             }
             // The crystal cave stop (its taps go through the island's one tap handler too).
@@ -596,16 +625,34 @@ data class MapStoryStop(val id: String, val emoji: String, val land: Land, val d
  * tomato red, which stays the next stop's ring) and a little star once he has played it.
  */
 @Composable
-private fun StoryStop(modifier: Modifier, id: String, emoji: String, done: Boolean, pressed: Boolean, wiggle: () -> Float) {
+private fun StoryStop(
+    modifier: Modifier, id: String, emoji: String, done: Boolean, pressed: Boolean, wiggle: () -> Float,
+    /** -1 to 1: a gentle up-and-down while it hasn't been played yet. */
+    bob: () -> Float = { 0f },
+    /** 0 to 1 round the badge for its sparkles; below 0 for none. */
+    twinkle: () -> Float = { -1f },
+) {
     Box(
         modifier.graphicsLayer {
             val s = if (pressed) 0.92f else 1f
             scaleX = s
             scaleY = s
             rotationZ = wiggle()
+            translationY = bob() * 5.dp.toPx()
         },
         contentAlignment = Alignment.Center,
     ) {
+        // Not played yet: three paper sparkles circle it.
+        if (!done) Canvas(Modifier.fillMaxSize()) {
+            val tw = twinkle()
+            if (tw >= 0f) {
+                val r = size.minDimension * 0.62f
+                for (i in 0 until 3) {
+                    val ang = tw * 6.2832f + i * 2.0944f
+                    star(Offset(center.x + r * cos(ang), center.y + r * sin(ang)), size.minDimension * 0.09f, Color(0xFFFFD54F))
+                }
+            }
+        }
         if (id == "owl") {
             // Sleepy Owl's Morning: its own paper picture (a sleepy owl in front of a rising sun on
             // a night-blue badge), so it never looks like any other owl in the game.
@@ -618,6 +665,12 @@ private fun StoryStop(modifier: Modifier, id: String, emoji: String, done: Boole
             }
         }
         if (done) Text("⭐", fontSize = 18.sp, modifier = Modifier.align(Alignment.TopEnd))
+        // A small green ▶ on the badge, so it looks like something to tap and play.
+        else Box(
+            Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp).size(26.dp)
+                .paperCard(Color(0xFF43A047), circle = true),
+            contentAlignment = Alignment.Center,
+        ) { ArrowIcon(12.dp) }
     }
 }
 
