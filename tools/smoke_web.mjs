@@ -44,7 +44,20 @@ try {
 if (started) {
     // Tap the start screen once (speech needs a tap), then let the first screen settle.
     await new Promise((r) => setTimeout(r, 3000));
+    // How fast the start tap answers, on a CPU slowed 4x (about a tablet): the time from the tap
+    // to Rory's wave on screen (STARTFEEDBACK). It should be well under half a second.
+    const stamps = {};
+    const stamp = (m) => { const t = m.text(); if (t === 'STARTTAP' || t === 'STARTFEEDBACK') stamps[t] = Date.now(); };
+    page.on('console', stamp);
+    await page.emulateCPUThrottling(4);
+    const tapAt = Date.now();
     await page.mouse.click(640, 400);
+    for (let i = 0; i < 100 && !stamps.STARTFEEDBACK; i++) await new Promise((r) => setTimeout(r, 50));
+    await page.emulateCPUThrottling(1);
+    page.off('console', stamp);
+    const fb = stamps.STARTFEEDBACK ? stamps.STARTFEEDBACK - tapAt : -1;
+    console.log(`START TAP (4x slower CPU): tap seen ${stamps.STARTTAP ? stamps.STARTTAP - tapAt : -1} ms, wave on screen ${fb} ms`);
+    check(`CHECK start tap answers within 1 s: ${fb >= 0 && fb < 1000 ? 'ok' : 'FAIL'}`);
     await new Promise((r) => setTimeout(r, 4000));
     console.log('The app started.');
     // Rory's voice clips: the list loads, a clip decodes as real audio, and the first screen's

@@ -348,7 +348,7 @@ These are the owner's rules for all work:
 - **Never back to the title when idle:** the screen keeps a wake lock while he plays (index.html,
   released after 10 min with no touch), and where he is (`Screen.placeKey`, a voice story with its
   beat) is saved; if the page reloads by itself within a sitting (30 min), the start tap (always
-  shown: iPad Safari plays no sound before a tap) opens straight back there. #test= links don't
+  shown: iPad Safari plays no sound before a tap) opens straight back there. The start tap answers at once: a tap anywhere on the start screen counts, Rory (already standing there) waves and ▶ pops away in the next frame, and the app is built two frames later (`starting` in Main.kt); when the map comes next it is already drawn hidden under the start screen (`WarmMap`), so it opens fast. The smoke test taps with a 4x slower CPU and prints `START TAP` (wave on screen under 1 s or the check fails). #test= links don't
   save places (`AppServices.testMode`) and survive a hard reload (the hash is kept in
   sessionStorage for the tab; a fresh device keeps the test screen after the buddy pick). The smoke test idles 95 s in a
   story and prints `IDLE story 95 s: ...` with heap sizes.

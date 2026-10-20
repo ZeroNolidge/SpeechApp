@@ -48,6 +48,17 @@ import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.ui.platform.WebMic
 import com.zeronolidge.speechapp.ui.theme.SpeechAppTheme
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import com.zeronolidge.speechapp.logic.Species
+import com.zeronolidge.speechapp.logic.Trail
+import com.zeronolidge.speechapp.ui.art.Critter
+import com.zeronolidge.speechapp.ui.art.IslandMap
+import com.zeronolidge.speechapp.ui.art.Mood
 import kotlinx.browser.document
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.preloadFont
@@ -132,33 +143,87 @@ private fun WebRoot(services: AppServices) {
     }
     LaunchedEffect(Unit) { services.testMode = testHash.startsWith("#test=") }
     var started by remember { mutableStateOf(false) }
+    // The tap is taken at once: Rory waves and the button pops away in the very next frame, and
+    // only then (two frames later, so that wave is on screen) is the rest of the app built, which
+    // can take a few seconds on a tablet.
+    var starting by remember { mutableStateOf(false) }
+    LaunchedEffect(starting) {
+        if (!starting) return@LaunchedEffect
+        withFrameNanos { }
+        println("STARTFEEDBACK")
+        withFrameNanos { }
+        started = true
+    }
     when {
         // The start screen's ▶ is a paper button, which reads the app's services (its crinkle).
-        !started || !fontsReady -> CompositionLocalProvider(LocalApp provides services) { StartScreen(ready = fontsReady) {
-            // First launch: the next screen ("Can Rory hear you?") asks for the microphone. After
-            // that, if the browser has forgotten the answer, ask again here at the start, so the
-            // question never pops up in the middle of a story.
-            if (services.progress.micAsked) {
-                services.speaker.say("Hi friend! Let's play!")
-                if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
+        !started || !fontsReady -> CompositionLocalProvider(LocalApp provides services) {
+            // While he looks at the start screen, the map is already being built underneath (out
+            // of sight, taking no taps), so it's ready when he taps. Only when the map comes next.
+            val mapNext = fontsReady && resume == null && !testHash.startsWith("#test=") &&
+                services.progress.micAsked && services.progress.hero != null
+            Box(Modifier.fillMaxSize()) {
+                if (mapNext) WarmMap(services)
+                StartScreen(ready = fontsReady, starting = starting) {
+                    if (starting) return@StartScreen
+                    println("STARTTAP")
+                    services.sfx.crinkle()
+                    // First launch: the next screen ("Can Rory hear you?") asks for the microphone. After
+                    // that, if the browser has forgotten the answer, ask again here at the start, so the
+                    // question never pops up in the middle of a story.
+                    if (services.progress.micAsked) {
+                        services.speaker.say("Hi friend! Let's play!")
+                        if (services.progress.useMic && WebMic.status == MicStatus.NOT_ASKED) WebMic.request { }
+                    }
+                    starting = true
+                    // Automatic check only ("#test=...+words"): load word listening straight away.
+                    if (testHash.endsWith("+words")) services.voice.words.prepare()
+                }
             }
-            started = true
-            // Automatic check only ("#test=...+words"): load word listening straight away.
-            if (testHash.endsWith("+words")) services.voice.words.prepare()
-        } }
+        }
         else -> TalkAndLearnApp(services, start = remember { testStart(testHash) ?: resume })
     }
 }
 
+/** The map, drawn once under the start screen so its paper art and code are warmed up. */
 @Composable
-private fun StartScreen(ready: Boolean, onStart: () -> Unit) {
+private fun WarmMap(services: AppServices) {
+    val chapter = services.progress.chapter
+    IslandMap(
+        chapter = chapter,
+        reached = { it in Trail.reached(chapter) },
+        unfoldNew = false,
+        onUnfolded = {},
+        onStop = {},
+        onElsewhere = {},
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+@Composable
+private fun StartScreen(ready: Boolean, starting: Boolean, onStart: () -> Unit) {
     SpeechAppTheme {
-        Box(Modifier.fillMaxSize().background(Kid.background), contentAlignment = Alignment.Center) {
+        // Opaque and taking every tap (so the map being built underneath never gets one): a tap
+        // anywhere starts, not only on ▶.
+        Box(
+            Modifier.fillMaxSize().background(Kid.background).pointerInput(ready) { detectTapGestures { if (ready) onStart() } },
+            contentAlignment = Alignment.Center,
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("Rory's Talk Trail", fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(24.dp))
-                if (ready) GoButton(size = 130.dp, onClick = onStart)
-                else Text("Loading…", fontSize = 24.sp, color = Kid.ink)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Rory is there from the start (already drawn), and waves the moment ▶ is tapped.
+                    if (ready) Critter(
+                        Species.ROBOT, Modifier.size(width = 110.dp, height = 140.dp), Color(0xFFFFCC80),
+                        mood = if (starting) Mood.CHEER else Mood.HAPPY, waving = starting,
+                    )
+                    Box(Modifier.size(width = 150.dp, height = 210.dp), contentAlignment = Alignment.Center) {
+                        when {
+                            !ready -> Text("Loading…", fontSize = 24.sp, color = Kid.ink)
+                            !starting -> GoButton(size = 130.dp, onClick = onStart)
+                        }
+                    }
+                }
             }
         }
     }
