@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.clickable
 import com.zeronolidge.speechapp.ui.art.paperPath
+import com.zeronolidge.speechapp.ui.art.paperCircle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -642,7 +643,7 @@ fun ChoiceTile(
                     horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                 ) {
                     Box(Modifier.weight(0.42f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        if (picture != null) picture() else Text(emoji, fontSize = tileEmojiSize(w * 0.42f, h))
+                        if (picture != null) picture() else EmojiPic(emoji, tileEmojiSize(w * 0.42f, h))
                     }
                     Box(Modifier.weight(0.58f), contentAlignment = Alignment.Center) {
                         PaperChip(label, fontSize = fittingFontSize(label, w * 0.58f - 16.dp), maxLines = 2, horizontalPadding = 8.dp)
@@ -655,7 +656,7 @@ fun ChoiceTile(
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        if (picture != null) picture() else Text(emoji, fontSize = tileEmojiSize(w, if (label != null) h - 56.dp else h))
+                        if (picture != null) picture() else EmojiPic(emoji, tileEmojiSize(w, if (label != null) h - 56.dp else h))
                     }
                     if (label != null) {
                         // Fit the words to the tile instead of wrapping them a letter at a time.
@@ -667,5 +668,17 @@ fun ChoiceTile(
     }
 }
 
+/**
+ * A picture (emoji) on a card, sitting on a cream paper circle, so it always stands out from
+ * the card's colour (the yellow money bag vanished on the yellow Market card).
+ */
+@Composable
+fun EmojiPic(emoji: String, fontSize: TextUnit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.drawBehind { paperCircle(PaperStyle.chip, maxOf(size.width, size.height) * 0.6f, center) },
+        contentAlignment = Alignment.Center,
+    ) { Text(emoji, fontSize = fontSize) }
+}
+
 /** An emoji as big as the space allows, within reason. */
-private fun tileEmojiSize(w: Dp, h: Dp): TextUnit = (minOf(w, h).value * 0.6f).coerceIn(28f, 80f).sp
+private fun tileEmojiSize(w: Dp, h: Dp): TextUnit = (minOf(w, h).value * 0.52f).coerceIn(28f, 72f).sp

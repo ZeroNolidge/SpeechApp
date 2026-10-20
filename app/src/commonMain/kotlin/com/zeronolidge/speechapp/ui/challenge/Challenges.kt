@@ -1,5 +1,6 @@
 package com.zeronolidge.speechapp.ui.challenge
 
+import com.zeronolidge.speechapp.ui.components.EmojiPic
 import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -552,7 +553,7 @@ private fun SoundOutView(c: Challenge.SoundOut, area: String, wand: Int, miss: (
                         cardModifier = Modifier.size(card),
                         onSolved = done, describe = { it.text }, onMiss = miss, wandTick = wand,
                         hint = "Listen: ${Reading.sounds(word).joinToString("... ")}... $word!",
-                    ) { w -> Text(w.emoji, fontSize = (card.value * 0.55f).sp) }
+                    ) { w -> EmojiPic(w.emoji, (card.value * 0.48f).sp) }
                 } else {
                     Text("Tap 🐢 to blend!", fontSize = 24.sp, color = Kid.ink.copy(alpha = 0.6f))
                 }
@@ -611,7 +612,7 @@ private fun PatternView(c: Challenge.Pattern, area: String, wand: Int, miss: () 
                 hint = r.shown.map { Things.nameOf(it) }.takeIf { names -> "things" !in names }
                     ?.let { names -> "Say it with me: ${names.joinToString(", ")}... What comes next?" }
                     ?: "Look at the pattern again. It goes round and round. What comes next?",
-            ) { Text(it, fontSize = (card.value * 0.5f).sp) }
+            ) { EmojiPic(it, (card.value * 0.45f).sp) }
         },
     )
 }
@@ -627,7 +628,7 @@ private fun OddOneView(c: Challenge.OddOne, area: String, wand: Int, miss: () ->
             Modifier.fillMaxWidth(), Modifier.size(card),
             onSolved = done, onMiss = miss, wandTick = wand,
             hint = if (r.items.distinct().size == 2) "Three are the same. Find the one that looks different!" else "Three of them go together. Which one doesn't belong?",
-        ) { i -> Text(r.items[i], fontSize = (card.value * 0.55f).sp) }
+        ) { i -> EmojiPic(r.items[i], (card.value * 0.48f).sp) }
     }
 }
 

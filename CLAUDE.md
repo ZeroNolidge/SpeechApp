@@ -222,6 +222,7 @@ These are the owner's rules for all work:
   and stay closed through a held "mmm";
   with the browser voice it chatters gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
   a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
+- **Pictures on coloured cards sit on a cream paper circle** (`EmojiPic` in PaperUi.kt: `ChoiceTile`, emoji answer cards), so an emoji never melts into its card (the yellow 💰 vanished on the yellow Market card). Use `EmojiPic` for any new emoji on a coloured card. The daytime sun is always `SunGold`, never the area's accent.
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
   `paperArc`, `paperPath`, `Modifier.paperCard`), not raw `drawCircle` etc. They give rough torn
   edges (deterministic, so no flicker). Strokes stay plain.
