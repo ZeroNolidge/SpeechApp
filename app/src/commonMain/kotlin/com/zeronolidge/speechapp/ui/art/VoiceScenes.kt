@@ -229,22 +229,47 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 )
             }
         }
-        Prop.SAIL -> Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            // A big sail on its mast: droopy, then filling and bellying out with his breath.
-            val fill = if (moving) f() else 1f
-            drawLine(Color(0xFF5D4037), Offset(w * 0.3f, h * 0.05f), Offset(w * 0.3f, h * 0.95f), 6.dp.toPx())
-            val tipX = w * (0.35f + 0.5f * fill)
-            val tipY = h * (0.9f - 0.15f * (1f - fill))
-            val belly = 0.18f * fill
-            val path = Path().apply {
-                moveTo(w * 0.32f, h * 0.08f)
-                quadraticTo(w * (0.4f + 0.35f * fill + belly), h * (0.45f - belly * 0.5f), tipX, tipY)
-                lineTo(w * 0.32f, h * 0.9f)
-                close()
+        Prop.SAIL -> Box(Modifier.fillMaxSize()) {
+            // The whole boat, with Pip in it (a sail on its own looked odd): the sail is droopy,
+            // then fills and bellies out with his breath, and a wake streams out behind.
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val fl = if (moving) f() else 1f
+                drawLine(Color(0xFF5D4037), Offset(w * 0.55f, h * 0.06f), Offset(w * 0.55f, h * 0.72f), 5.dp.toPx())
+                val tipX = w * (0.6f + 0.33f * fl)
+                val tipY = h * (0.68f - 0.04f * (1f - fl))
+                val belly = 0.16f * fl
+                val sail = Path().apply {
+                    moveTo(w * 0.57f, h * 0.08f)
+                    quadraticTo(w * (0.6f + 0.3f * fl + belly), h * (0.36f - belly * 0.4f), tipX, tipY)
+                    lineTo(w * 0.57f, h * 0.68f)
+                    close()
+                }
+                paperPath(sail, Color(0xFFFFF8E1))
+                // The wake: white streaks behind the boat, longer as it speeds up.
+                if (fl > 0.05f) repeat(3) { i ->
+                    val y = h * (0.8f + i * 0.05f)
+                    drawLine(Color.White.copy(alpha = 0.75f), Offset(w * (0.12f - 0.1f * fl * (1 + i % 2)), y), Offset(w * 0.12f, y), 3.dp.toPx())
+                }
+                val hull = Path().apply {
+                    moveTo(w * 0.05f, h * 0.7f)
+                    lineTo(w * 0.95f, h * 0.7f)
+                    lineTo(w * 0.8f, h * 0.92f)
+                    lineTo(w * 0.2f, h * 0.92f)
+                    close()
+                }
+                paperPath(hull, Color(0xFF26A69A))
             }
-            paperPath(path, Color(0xFFFFF8E1))
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val bw = maxWidth
+                val bh = maxHeight
+                Critter(
+                    Species.PUPPY,
+                    Modifier.offset(x = bw * 0.16f, y = bh * 0.34f).size(bw * 0.34f, bh * 0.4f),
+                    mood = Mood.HAPPY,
+                )
+            }
         }
         Prop.BUBBLE -> Canvas(Modifier.fillMaxSize()) {
             // Three paper layers: whole, then bursting apart, each flying its own way.
