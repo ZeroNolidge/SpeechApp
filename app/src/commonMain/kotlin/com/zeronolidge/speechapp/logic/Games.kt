@@ -72,7 +72,11 @@ object BalloonGame {
 
     private val shapesByStep = listOf("AB", "AAB", "ABC")
 
-    fun make(step: Int, rnd: Random): PatternRound = Patterns.fromPool(shapesByStep[step.coerceIn(0, shapesByStep.lastIndex)], colors, rnd)
+    fun make(step: Int, rnd: Random): PatternRound {
+        val round = Patterns.fromPool(shapesByStep[step.coerceIn(0, shapesByStep.lastIndex)], colors, rnd)
+        // Reshuffle the choice order with the round's own Random so the answer isn't always first.
+        return round.copy(choice = round.choice.copy(options = round.choice.options.shuffled(rnd)))
+    }
 
     /** The word he actually says once the puzzle is solved: the picked colour when it's already
      * one of his target sounds (p or b), else "pop" instead, so the speech practice is always a

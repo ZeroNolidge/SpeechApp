@@ -154,6 +154,13 @@ class BalloonGameTest {
     }
 
     @Test
+    fun theAnswerIsNotAlwaysFirst() {
+        val seenIndex = mutableSetOf<Int>()
+        repeat(60) { i -> seenIndex += BalloonGame.make(i % 3, Random(i)).let { it.choice.options.indexOf(it.choice.answer) } }
+        assertTrue(seenIndex.size > 1, "answer landed at the same index every time: $seenIndex")
+    }
+
+    @Test
     fun linesAreOneWordTwoWordsThenASentence() {
         for (c in BalloonGame.colors) {
             val lines = BalloonGame.lines(c)

@@ -621,9 +621,11 @@ private fun GapBalloon(size: Dp, color: Color?, modifier: Modifier = Modifier) {
 
 /**
  * The balloon colour-pattern puzzle, drawn right in the story scene (see [GameBeatState]): the
- * pattern so far at the top with its empty gap, and up to 3 big choice balloons at the bottom.
- * Nothing moves by itself and there's no timer; every tap on a choice goes through [onTap], and
- * [onCenter] reports each choice's screen centre (for the GAMEBEAT log the screenshot test reads).
+ * meadow stays visible behind it. The pattern so far sits at the top, its balloons tied to a
+ * little rope, with only a small soft paper strip behind the row itself for contrast (never a
+ * card over the whole scene); up to 3 big choice balloons sit at the bottom third. Nothing moves
+ * by itself and there's no timer; every tap on a choice goes through [onTap], and [onCenter]
+ * reports each choice's screen centre (for the GAMEBEAT log the screenshot test reads).
  */
 @Composable
 private fun BalloonPatternPuzzle(
@@ -636,34 +638,42 @@ private fun BalloonPatternPuzzle(
     modifier: Modifier = Modifier,
 ) {
     val answerShown = game.phase == GameBeatPhase.SHOW_ANSWER
-    Box(modifier.fillMaxSize(0.94f).paperCard(Color(0xFFFFFDF2), 28.dp), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            BoxWithConstraints(Modifier.weight(1.1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val slot = minOf(maxWidth / (round.shown.size + 1.6f), 68.dp)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    round.shown.forEach { Balloon(balloonColor(it), slot) }
-                    GapBalloon(slot, if (answerShown) balloonColor(round.choice.answer) else null)
+    Column(
+        modifier.fillMaxSize(0.94f).padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        BoxWithConstraints(Modifier.weight(1.1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val slot = minOf(maxWidth / (round.shown.size + 1.6f), 68.dp)
+            Box(
+                Modifier.fillMaxWidth(0.9f).height(slot * 1.7f).paperCard(PaperStyle.sceneryWash, 24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Canvas(Modifier.fillMaxWidth(0.8f).height(3.dp)) {
+                        drawLine(Color(0xFF8D6E63), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 3.dp.toPx())
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        round.shown.forEach { Balloon(balloonColor(it), slot) }
+                        GapBalloon(slot, if (answerShown) balloonColor(round.choice.answer) else null)
+                    }
                 }
             }
-            Row(
-                Modifier.weight(1f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                round.choice.options.forEachIndexed { i, opt ->
-                    val right = opt == round.choice.answer
-                    AnswerCard(
-                        modifier = Modifier.size(96.dp).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
-                        correct = answerShown && right,
-                        glow = game.glow && right && !answerShown,
-                        wiggle = if (i == wrongChoice) wiggleBump else 0,
-                        onClick = { onTap(i) },
-                    ) { Balloon(balloonColor(opt), 64.dp) }
-                }
+        }
+        Row(
+            Modifier.weight(1f).fillMaxWidth().padding(end = ContinueReserve),
+            horizontalArrangement = Arrangement.spacedBy(56.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            round.choice.options.forEachIndexed { i, opt ->
+                val right = opt == round.choice.answer
+                AnswerCard(
+                    modifier = Modifier.size(104.dp).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
+                    correct = answerShown && right,
+                    glow = game.glow && right && !answerShown,
+                    wiggle = if (i == wrongChoice) wiggleBump else 0,
+                    onClick = { onTap(i) },
+                ) { Balloon(balloonColor(opt), 72.dp) }
             }
         }
     }
