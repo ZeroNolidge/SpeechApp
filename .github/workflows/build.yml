@@ -47,7 +47,7 @@ jobs:
           name: SpeechApp-apk
           path: TalkAndLearn.apk
       - name: Publish to the Releases page
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/claude-loop'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-build
@@ -136,7 +136,7 @@ jobs:
   deploy:
     name: Publish to GitHub Pages
     needs: web
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref != 'refs/heads/claude-loop'
     runs-on: ubuntu-latest
     permissions:
       pages: write
