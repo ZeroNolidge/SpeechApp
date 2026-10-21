@@ -2074,7 +2074,7 @@ class KitchenLayoutTest {
     fun bearRoryBowlAndPanNeverOverlapEachOther() {
         for (landscape in listOf(false, true)) {
             val boxes = listOf(
-                "bear" to KitchenLayout.bearBox(),
+                "bear" to KitchenLayout.bearBox(landscape),
                 "rory" to KitchenLayout.roryBox(landscape),
                 "bowl" to KitchenLayout.bowlBox(landscape),
                 "pan" to KitchenLayout.panBox(landscape),
@@ -2098,7 +2098,7 @@ class KitchenLayoutTest {
             val sceneFraction = 1f - stripFraction
             val strip = KitchenLayout.stripBox(stripFraction)
             val boxes = listOf(
-                "bear" to KitchenLayout.bearBox(),
+                "bear" to KitchenLayout.bearBox(landscape),
                 "rory" to KitchenLayout.roryBox(landscape),
                 "bowl" to KitchenLayout.bowlBox(landscape),
                 "pan" to KitchenLayout.panBox(landscape),

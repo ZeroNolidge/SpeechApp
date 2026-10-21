@@ -131,9 +131,14 @@ object KitchenLayout {
     /** K2a had this at 0.3 (a short wall, mostly counter); K2d moved it down to 0.42, because the
      * landscape lift (VoiceStory's `lift`, clipping the scene's own top clear of the choice strip)
      * was eating into that short wall almost entirely, leaving Rory a sliver a few px tall above
-     * the counter. 0.42 still clears [MIN_VISIBLE_FRACTION] with room to spare and leaves a real
-     * wall band for [roryBox] to sit in once it's clipped. */
-    const val COUNTER_TOP_LANDSCAPE = 0.42f
+     * the counter. K2e moved it down again to 0.46: K2d's own wall band still wasn't quite clear
+     * of the lift on a short landscape phone (its `gameStrip` floor, `BalloonStripMinHeight`, is a
+     * much bigger share of a short screen's height), and separately Rory's own Critter had been
+     * drawn with `fillMaxWidth()`, which ignores [roryHeight] entirely and renders him several
+     * times taller than his lane (fixed in `KitchenCharacters`, now `fillMaxHeight()`), so neither
+     * fix alone was enough. 0.46 still clears [MIN_VISIBLE_FRACTION] with room to spare and stays
+     * below [COUNTER_TOP_PORTRAIT] (the wall must stay shorter than portrait's). */
+    const val COUNTER_TOP_LANDSCAPE = 0.46f
 
     /** The least share of the whole screen's height the counter must keep on screen in landscape
      * (Ruby's ask, K2a): a hard floor the VoiceStory landscape lift is tuned to clear. */
@@ -146,25 +151,34 @@ object KitchenLayout {
     // fractions of the kitchen scene's own box (0 to 1); [stageBox] rescales one onto the whole
     // stage once a choice strip is reserved below it (see VoiceStory's `gameStrip`).
 
-    /** Bear's lane (his stool), the far end of the counter from the props: sized so he reads
-     * clearly (22-30% of the scene's height) but stays inside a fifth of its width. */
+    /** Bear's lane (his stool), the far end of the counter from the props: stays inside a fifth
+     * of the scene's width, on the floor (K2e: the counter itself starts just to his right, see
+     * [BackdropExtras] in VoiceScenes.kt, so he reads as sitting *beside* it, not floating over
+     * its front). */
     private const val BEAR_RIGHT = 0.20f
-    private const val BEAR_HEIGHT = 0.27f
     private const val BEAR_BOTTOM = 0.97f
 
+    /** How far Bear's head pokes up past the counter top line (K2e): his head/shoulders should
+     * read as level with the counter, not sitting well below it, so his box's top overlaps the
+     * counter top by a little rather than stopping at [BEAR_BOTTOM] minus some fixed height. */
+    private const val BEAR_HEAD_OVERLAP = 0.04f
+
     /** Rory's lane (with his chef's hat): centred behind the props, his head and shoulders a
-     * band just above the counter top line (his lower body hidden by the counter front, so he
-     * never reaches into the props' own band). A fixed height, not the whole wall: landscape's
-     * lift (K2a) scrolls most of the wall off-screen, so a band hugging the counter line stays
-     * visible there too, instead of a tall Rory mostly cropped away. Landscape gets a shorter
-     * band than portrait (K2d): even with [COUNTER_TOP_LANDSCAPE] moved down, the lift still
-     * clips off roughly its own share of the scene's top, so a shorter Rory sits entirely below
-     * that clip line instead of a taller one straddling it (only its bottom sliver surviving). */
+     * band just above the counter top line, entirely clear of it (his own [Critter] is sized to
+     * this band exactly, `fillMaxHeight()`, so nothing of him needs hiding behind the counter).
+     * A fixed height, not the whole wall: landscape's lift (K2a) scrolls most of the wall
+     * off-screen, so a band hugging the counter line stays visible there too, instead of a tall
+     * Rory mostly cropped away. Landscape gets a shorter band than portrait (K2d, shrunk again at
+     * K2e): even with [COUNTER_TOP_LANDSCAPE] moved down, the lift still clips off roughly its
+     * own share of the scene's top (more of it on a short landscape phone, where the choice
+     * strip's own floor height is a bigger share of the screen), so a shorter Rory sits entirely
+     * below that clip line instead of a taller one straddling it (only its bottom sliver
+     * surviving, or none of it at all). */
     private const val RORY_LEFT = 0.33f
     private const val RORY_RIGHT = 0.67f
     private const val RORY_HEIGHT_PORTRAIT = 0.20f
-    private const val RORY_HEIGHT_LANDSCAPE = 0.12f
-    private const val RORY_MARGIN = 0.02f
+    private const val RORY_HEIGHT_LANDSCAPE = 0.09f
+    private const val RORY_MARGIN = 0.015f
 
     private fun roryHeight(landscape: Boolean): Float = if (landscape) RORY_HEIGHT_LANDSCAPE else RORY_HEIGHT_PORTRAIT
 
@@ -182,8 +196,10 @@ object KitchenLayout {
         fun overlaps(other: Rect): Boolean = l < other.r && r > other.l && t < other.b && b > other.t
     }
 
-    /** Bear's box (his stool), as a fraction of the kitchen scene's own box. */
-    fun bearBox(): Rect = Rect(0.01f, BEAR_BOTTOM - BEAR_HEIGHT, BEAR_RIGHT, BEAR_BOTTOM)
+    /** Bear's box (his stool), as a fraction of the kitchen scene's own box: from the floor up to
+     * just past the counter top line (K2e), so his head reads level with the counter rather than
+     * stopping well short of it. */
+    fun bearBox(landscape: Boolean): Rect = Rect(0.01f, counterTop(landscape) - BEAR_HEAD_OVERLAP, BEAR_RIGHT, BEAR_BOTTOM)
 
     /** Rory's box (with his hat), as a fraction of the kitchen scene's own box. */
     fun roryBox(landscape: Boolean): Rect {

@@ -204,6 +204,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     var kitchenEnd by remember { mutableStateOf<KitchenEndStage?>(null) }
     val kitchenSticker = remember { Animatable(0f) }
     val backpackBounce = remember { Animatable(1f) }
+    /** How far into leaning in for his bite Bear currently is, 0 to 1 (K2e): eases in then back
+     * out within [KitchenEndStage.BITE]'s own span, so he visibly reaches for the stack and
+     * settles again rather than just popping into a held lean. */
+    val bearLean = remember { Animatable(0f) }
     var backpackCenter by remember { mutableStateOf<Offset?>(null) }
     var sceneOrigin by remember { mutableStateOf<Offset?>(null) }
 
@@ -566,6 +570,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             if (s != session) return@launch
             kitchenEnd = KitchenEndStage.BITE
             println("KITCHEN end stage=BITE")
+            bearLean.snapTo(0f)
+            launch {
+                bearLean.animateTo(1f, tween(if (still) 0 else 350))
+                bearLean.animateTo(0f, tween(if (still) 0 else 450))
+            }
             delay(KitchenEnding.BITE_MS.toLong())
             if (s != session) return@launch
             kitchenEnd = KitchenEndStage.STICKER_FLY
@@ -833,7 +842,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         val stripBottomPx = stripTop + with(density) { gameStrip.toPx() }
                         val stripRect = "${origin.x.roundToInt()},${stripTop.roundToInt()},${(origin.x + sw).roundToInt()},${stripBottomPx.roundToInt()}"
                         println(
-                            "KITCHEN rects bear=${fmt(KitchenLayout.bearBox())} rory=${fmt(KitchenLayout.roryBox(sceneLandscape))} " +
+                            "KITCHEN rects bear=${fmt(KitchenLayout.bearBox(sceneLandscape))} rory=${fmt(KitchenLayout.roryBox(sceneLandscape))} " +
                                 "bowl=${fmt(KitchenLayout.bowlBox(sceneLandscape))} pan=${fmt(KitchenLayout.panBox(sceneLandscape))} strip=$stripRect",
                         )
                     }
@@ -863,7 +872,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             ) {
                                 val end = kitchenEnd
                                 if (end != null) {
-                                    KitchenEndingScene(end, landscape = true, modifier = Modifier.fillMaxSize())
+                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize())
                                 } else {
                                     VoiceBeatScene(
                                         beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
@@ -876,7 +885,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         } else {
                             val end = kitchenEnd
                             if (end != null) {
-                                KitchenEndingScene(end, landscape = false, modifier = Modifier.fillMaxSize())
+                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize())
                             } else {
                                 VoiceBeatScene(
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
