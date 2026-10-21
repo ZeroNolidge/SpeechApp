@@ -50,15 +50,21 @@ class VoiceMeter(
     private var runOnset = false
     private var sawQuiet = measuresRoom
     private var popRunMs = 0
-    // The current burst for pop words: its readings, whether it already counted, its first
-    // reading's voice-range share, and the readings' loudness.
+    // The current burst for pop words: its readings, whether it already counted, its
+    // energy-weighted voice-range share (over its first two readings), and the readings' loudness.
     private var burstCounted = false
     // A short burst may have one quiet reading in it: a puff split across two readings.
     private var burstGap = false
     private var burstBand = 0f
+    private var burstBandWeight = 0f
     private val burst = ArrayList<Float>()
     // Readings that weren't his voice: the room, for [roomAfter].
     private val quiet = ArrayList<Float>()
+    // The previous reading, so two readings that are each a bit under the threshold, but whose
+    // combined energy clears it, can still start a burst (a puff split so neither half alone
+    // reads as loud enough).
+    private var prevRms = 0f
+    private var prevBand = 1f
 
     /** How hard the last reading pushed (see [push]), with the pop rules applied. */
     var lastPush = 0f
@@ -114,7 +120,14 @@ class VoiceMeter(
             return false
         }
         loudest = maxOf(loudest, rms)
-        val over = rms > threshold
+        val single = rms > threshold
+        // Two readings that are each a bit under the threshold, but together carry more energy
+        // than one reading at the threshold: a puff split so neither half alone reads as loud
+        // enough. Only starts a burst (the voice-range check comes later, judging the burst).
+        val combo = pops && !single && burst.isEmpty() &&
+            rms >= threshold * 0.5f && prevRms >= threshold * 0.5f &&
+            kotlin.math.sqrt(rms * rms + prevRms * prevRms) > threshold
+        val over = single || combo
         recent.addLast(rms)
         if (recent.size * stepMs > NOISE_MS) recent.removeFirst()
         if (over) {
@@ -142,11 +155,24 @@ class VoiceMeter(
             burst.clear()
             burstCounted = false
             burstGap = false
+            burstBandWeight = 0f
             return t >= windowMs
         }
         if (over) {
             if (pops) {
-                if (burst.isEmpty()) burstBand = band
+                if (combo) {
+                    // The previous reading wasn't over the threshold on its own: fold it into
+                    // this burst now, so the two are judged (and their band averaged) together.
+                    burstBand = prevBand
+                    burstBandWeight = prevRms
+                    burst += prevRms
+                }
+                if (burst.size < 2) {
+                    // The burst's band, weighted by energy across its first two readings: a
+                    // puff's faint leading edge shouldn't outweigh its louder second half.
+                    burstBand = (burstBand * burstBandWeight + band * rms) / (burstBandWeight + rms)
+                    burstBandWeight += rms
+                }
                 burst += rms
                 val voiced = band >= POP_BAND && periodic >= POP_PERIODIC
                 if (voiced) popRunMs += stepMs
@@ -181,9 +207,12 @@ class VoiceMeter(
                 burst.clear()
                 burstCounted = false
                 burstGap = false
+                burstBandWeight = 0f
             }
             popRunMs = 0
         }
+        prevRms = rms
+        prevBand = band
         // He's still holding a sound he started: keep listening (up to [HOLD_MAX_MS] past the window).
         val holding = runStart >= 0 && runOnset && t < windowMs + HOLD_MAX_MS
         return (heard && t - lastVoiceAt >= tailMs) || (t >= windowMs && !holding)

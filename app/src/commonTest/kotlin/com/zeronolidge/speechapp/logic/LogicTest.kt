@@ -1372,6 +1372,13 @@ class HoldAndPopTest {
         assertTrue(pops(Triple(0.04f, 0.5f, 0.1f), Triple(0.004f, 0.5f, 0.1f), Triple(0.03f, 0.5f, 0.1f)).heard)
         // A loud whispered "Pip!": unvoiced, but it holds its loudness.
         assertTrue(pops(Triple(0.05f, 0.5f, 0.1f), Triple(0.045f, 0.5f, 0.1f), Triple(0.045f, 0.5f, 0.1f), Triple(0.035f, 0.5f, 0.1f)).heard)
+        // A puff whose first reading is mostly its faint edge (a low voice-range share) still
+        // counts once its louder second half is weighed in.
+        assertTrue(pops(Triple(0.03f, 0.2f, 0.1f), Triple(0.05f, 0.55f, 0.1f)).heard)
+        // A puff split so neither half alone is loud enough, but together they are, still counts.
+        assertTrue(pops(Triple(0.009f, 0.5f, 0.1f), Triple(0.009f, 0.5f, 0.1f)).heard)
+        // Steady room-level readings, each well under the near-threshold band, never count.
+        assertTrue(!pops(Triple(0.006f, 0.5f, 0.1f), Triple(0.006f, 0.5f, 0.1f), Triple(0.006f, 0.5f, 0.1f)).heard)
     }
 
     @Test
