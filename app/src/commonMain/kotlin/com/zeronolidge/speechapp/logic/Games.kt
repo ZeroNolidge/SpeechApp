@@ -41,17 +41,43 @@ object Patterns {
 
     fun make(level: Int, rnd: Random): PatternRound = fromShape(unitsByLevel[level.coerceIn(0, maxLevel())].random(rnd), rnd)
 
-    private fun fromShape(shape: String, rnd: Random): PatternRound {
-        val pool = (if (rnd.nextBoolean()) Things.shapes else Things.categories.random(rnd)).shuffled(rnd)
+    private fun fromShape(shape: String, rnd: Random): PatternRound =
+        fromPool(shape, if (rnd.nextBoolean()) Things.shapes else Things.categories.random(rnd), rnd)
+
+    /** A pattern round from any pool of pictures (or words): used for the usual shape/category
+     * pools above, and for [BalloonGame]'s colours. */
+    fun fromPool(shape: String, pool: List<String>, rnd: Random): PatternRound {
+        val shuffled = pool.shuffled(rnd)
         val letters = shape.toSet().sorted()
-        val pick = letters.zip(pool).toMap()
+        val pick = letters.zip(shuffled).toMap()
         val unit = shape.map { pick.getValue(it) }
         // Show at least two full repeats, then ask for the next item.
         val total = unit.size * 2 + rnd.nextInt(0, unit.size)
         val seq = List(total + 1) { unit[it % unit.size] }
         val answer = seq.last()
-        return PatternRound(seq.dropLast(1), choiceOf(answer, pool.take(letters.size + 1), 3, rnd), unit)
+        return PatternRound(seq.dropLast(1), choiceOf(answer, shuffled.take(letters.size + 1), 3, rnd), unit)
     }
+}
+
+/**
+ * The balloon colour-pattern mini game inside a voice-story beat (see [VoiceBeat.game]): finish a
+ * row of balloons with a colour pattern (a [PatternRound] of colour words, reusing [Patterns.fromPool]).
+ * Every colour starts with one of his target sounds, p or b, so the word he says afterwards (the
+ * colour he picked) is also speech practice. Its own quiet ladder (see [Ladder.GAME_PATTERN])
+ * steps AB -> AAB -> ABC, the same rule as every other difficulty step.
+ */
+object BalloonGame {
+    val colors = listOf("blue", "purple", "pink", "brown")
+
+    private val shapesByStep = listOf("AB", "AAB", "ABC")
+
+    fun make(step: Int, rnd: Random): PatternRound = Patterns.fromPool(shapesByStep[step.coerceIn(0, shapesByStep.lastIndex)], colors, rnd)
+
+    /** The word he says for [color]: one word, two words, a short sentence. */
+    fun lines(color: String): List<String> = listOf(color, "$color balloon", "Say $color!")
+
+    /** The speech sound it practises: every colour in [colors] starts with p or b. */
+    fun sound(color: String): String = color.first().toString()
 }
 
 /** Three of one kind and one that doesn't belong. */

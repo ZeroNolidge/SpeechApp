@@ -27,7 +27,9 @@ data class Ladder(val step: Int = 0, val recent: List<Pair<Int, Boolean>> = empt
         const val NUMBERS = "numbers"
         /** Patterns: AB, then ABB, then ABC. */
         const val PATTERNS = "patterns"
-        val MAX = mapOf(SPEECH to 2, NUMBERS to 2, PATTERNS to 2)
+        /** The balloon-pattern game beat (see [BalloonGame]): AB, then AAB, then ABC. */
+        const val GAME_PATTERN = "gamePattern"
+        val MAX = mapOf(SPEECH to 2, NUMBERS to 2, PATTERNS to 2, GAME_PATTERN to 2)
 
         fun decode(s: String?): Ladder {
             if (s.isNullOrBlank()) return Ladder()

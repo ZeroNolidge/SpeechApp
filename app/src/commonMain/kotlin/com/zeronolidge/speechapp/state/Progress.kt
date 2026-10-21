@@ -254,6 +254,12 @@ class Progress(private val prefs: Prefs) {
     val numbersStep: Int get() = ladder(Ladder.NUMBERS).step
     val patternStep: Int get() = ladder(Ladder.PATTERNS).step
 
+    /** The balloon-pattern game beat's quiet step (see [BalloonGame]): AB, then AAB, then ABC. */
+    val gamePatternStep: Int get() = ladder(Ladder.GAME_PATTERN).step
+
+    /** Right first time counts as right (a shown answer doesn't); see [Ladder]. */
+    fun gameBeatResult(rightFirstTry: Boolean) = ladderResult(Ladder.GAME_PATTERN, rightFirstTry)
+
     // ---------- Echo Cave, the reward stop after finding Pip ----------
 
     var echoReady by mutableStateOf(prefs.getBoolean("echoReady", false))

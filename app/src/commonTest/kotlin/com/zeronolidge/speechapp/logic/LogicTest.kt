@@ -119,6 +119,54 @@ class GamesTest {
     }
 }
 
+/** The balloon colour-pattern game beat: AB, then AAB, then ABC; every colour is p or b. */
+class BalloonGameTest {
+    @Test
+    fun everyColorStartsWithPOrB() {
+        for (c in BalloonGame.colors) assertTrue(c.first() == 'p' || c.first() == 'b', c)
+    }
+
+    @Test
+    fun theThreeStepsAreAbThenAabThenAbc() {
+        val rnd = Random(3)
+        repeat(50) {
+            assertEquals(2, BalloonGame.make(0, rnd).unit.size)
+            assertEquals(3, BalloonGame.make(1, rnd).unit.size)
+            assertEquals(2, BalloonGame.make(1, rnd).unit.distinct().size)
+            assertEquals(3, BalloonGame.make(2, rnd).unit.size)
+            assertEquals(3, BalloonGame.make(2, rnd).unit.distinct().size)
+        }
+    }
+
+    @Test
+    fun atMostThreeChoicesAndTheAnswerContinuesTheRow() {
+        val rnd = Random(4)
+        repeat(60) { i ->
+            val round = BalloonGame.make(i % 3, rnd)
+            assertTrue(round.choice.options.size <= 3)
+            assertEquals(round.choice.options.size, round.choice.options.distinct().size)
+            assertTrue(round.choice.answer in round.choice.options)
+            assertEquals(round.unit[round.shown.size % round.unit.size], round.choice.answer)
+        }
+    }
+
+    @Test
+    fun linesAreOneWordTwoWordsThenASentence() {
+        for (c in BalloonGame.colors) {
+            val lines = BalloonGame.lines(c)
+            assertEquals(3, lines.size)
+            assertEquals(1, lines[0].split(' ').size)
+            assertEquals(2, lines[1].split(' ').size)
+            assertEquals(c.first().toString(), BalloonGame.sound(c))
+        }
+    }
+
+    @Test
+    fun ladderCeilingMatchesTheThreeSteps() {
+        assertEquals(2, Ladder.MAX.getValue(Ladder.GAME_PATTERN))
+    }
+}
+
 class SpeechMatchTest {
     @Test
     fun exactWordInPhraseMatches() {
@@ -687,6 +735,156 @@ class LadderTest {
     }
 }
 
+/** An in-memory [com.zeronolidge.speechapp.state.Prefs], so [com.zeronolidge.speechapp.state.Progress] can be tested without Android or the web. */
+private class FakePrefs(
+    private val ints: MutableMap<String, Int> = mutableMapOf(),
+    private val floats: MutableMap<String, Float> = mutableMapOf(),
+    private val bools: MutableMap<String, Boolean> = mutableMapOf(),
+    private val strings: MutableMap<String, String?> = mutableMapOf(),
+    private val sets: MutableMap<String, Set<String>> = mutableMapOf(),
+) : com.zeronolidge.speechapp.state.Prefs {
+    override fun getInt(key: String, default: Int) = ints[key] ?: default
+    override fun getFloat(key: String, default: Float) = floats[key] ?: default
+    override fun getBoolean(key: String, default: Boolean) = bools[key] ?: default
+    override fun getString(key: String, default: String?) = strings[key] ?: default
+    override fun getStringSet(key: String, default: Set<String>?) = sets[key] ?: default
+    override fun edit(): com.zeronolidge.speechapp.state.Prefs.Editor = Editor()
+
+    private inner class Editor : com.zeronolidge.speechapp.state.Prefs.Editor {
+        override fun putInt(key: String, value: Int): com.zeronolidge.speechapp.state.Prefs.Editor { ints[key] = value; return this }
+        override fun putFloat(key: String, value: Float): com.zeronolidge.speechapp.state.Prefs.Editor { floats[key] = value; return this }
+        override fun putBoolean(key: String, value: Boolean): com.zeronolidge.speechapp.state.Prefs.Editor { bools[key] = value; return this }
+        override fun putString(key: String, value: String?): com.zeronolidge.speechapp.state.Prefs.Editor { strings[key] = value; return this }
+        override fun putStringSet(key: String, value: Set<String>): com.zeronolidge.speechapp.state.Prefs.Editor { sets[key] = value; return this }
+        override fun clear(): com.zeronolidge.speechapp.state.Prefs.Editor {
+            ints.clear(); floats.clear(); bools.clear(); strings.clear(); sets.clear()
+            return this
+        }
+        override fun apply() {}
+    }
+}
+
+/**
+ * The balloon game beat's quiet ladder, persisted through [com.zeronolidge.speechapp.state.Progress]
+ * exactly like speech, numbers and patterns: up after 4 of the last 5 right across two sessions
+ * (a new [com.zeronolidge.speechapp.state.Progress] over the same prefs, as a real app restart
+ * would), back one level after 2 misses in a row, never below AB or above ABC.
+ */
+class GamePatternLadderTest {
+    @Test
+    fun defaultsToAbForOldSaves() {
+        // An old save made before this feature existed has no "ladder_gamePattern" key at all.
+        assertEquals(0, com.zeronolidge.speechapp.state.Progress(FakePrefs()).gamePatternStep)
+    }
+
+    @Test
+    fun stepsUpAfterFourOfFiveAcrossTwoSessions() {
+        val prefs = FakePrefs()
+        val first = com.zeronolidge.speechapp.state.Progress(prefs)
+        repeat(4) { first.gameBeatResult(true) }
+        // Still one session: on its own, a lucky run shouldn't be enough.
+        assertEquals(0, first.gamePatternStep)
+        val second = com.zeronolidge.speechapp.state.Progress(prefs)
+        second.gameBeatResult(true)
+        assertEquals(1, second.gamePatternStep)
+    }
+
+    @Test
+    fun stepsBackAfterTwoMissesInARow() {
+        val prefs = FakePrefs()
+        val up = com.zeronolidge.speechapp.state.Progress(prefs)
+        repeat(4) { up.gameBeatResult(true) }
+        val toAab = com.zeronolidge.speechapp.state.Progress(prefs)
+        toAab.gameBeatResult(true)
+        assertEquals(1, toAab.gamePatternStep)
+        toAab.gameBeatResult(false)
+        toAab.gameBeatResult(false)
+        assertEquals(0, toAab.gamePatternStep)
+        // One miss alone doesn't step back.
+        val prefs2 = FakePrefs()
+        val p2 = com.zeronolidge.speechapp.state.Progress(prefs2)
+        repeat(4) { p2.gameBeatResult(true) }
+        val p2b = com.zeronolidge.speechapp.state.Progress(prefs2)
+        p2b.gameBeatResult(true)
+        p2b.gameBeatResult(false)
+        p2b.gameBeatResult(true)
+        assertEquals(1, p2b.gamePatternStep)
+    }
+
+    @Test
+    fun neverGoesAboveAbcOrBelowAb() {
+        val prefs = FakePrefs()
+        var last = com.zeronolidge.speechapp.state.Progress(prefs)
+        repeat(30) {
+            last = com.zeronolidge.speechapp.state.Progress(prefs)
+            last.gameBeatResult(true)
+        }
+        assertEquals(2, last.gamePatternStep)
+        repeat(6) { last.gameBeatResult(false) }
+        assertTrue(last.gamePatternStep >= 0)
+    }
+
+    @Test
+    fun survivesSavingAcrossAppRestarts() {
+        val prefs = FakePrefs()
+        val first = com.zeronolidge.speechapp.state.Progress(prefs)
+        repeat(4) { first.gameBeatResult(true) }
+        val second = com.zeronolidge.speechapp.state.Progress(prefs)
+        second.gameBeatResult(true)
+        val step = second.gamePatternStep
+        assertEquals(step, com.zeronolidge.speechapp.state.Progress(prefs).gamePatternStep)
+    }
+}
+
+/** The balloon game beat's flow (see [GameBeatState]): nothing ever fails, and every path reaches [GameBeatPhase.DONE]. */
+class GameBeatStateTest {
+    @Test
+    fun rightFirstTimeSkipsStraightToTalk() {
+        val s = GameBeatState().named().tap(true)
+        assertEquals(GameBeatPhase.TALK, s.phase)
+        assertTrue(s.rightFirstTry)
+    }
+
+    @Test
+    fun oneWrongTapWigglesThenGlowsAndCanStillSucceed() {
+        var s = GameBeatState().named()
+        s = s.tap(false)
+        assertEquals(GameBeatPhase.WIGGLE, s.phase)
+        assertTrue(s.glow)
+        s = s.wiggled()
+        assertEquals(GameBeatPhase.PUZZLE, s.phase)
+        assertTrue(s.glow)
+        s = s.tap(true)
+        assertEquals(GameBeatPhase.TALK, s.phase)
+        assertFalse(s.rightFirstTry)
+    }
+
+    @Test
+    fun twoWrongTapsShowTheAnswer() {
+        val s = GameBeatState().named().tap(false).wiggled().tap(false)
+        assertEquals(GameBeatPhase.SHOW_ANSWER, s.phase)
+        assertEquals(GameBeatPhase.TALK, s.shown().phase)
+    }
+
+    @Test
+    fun everyPathReachesDone() {
+        val paths = listOf(
+            GameBeatState().named().tap(true),
+            GameBeatState().named().tap(false).wiggled().tap(true),
+            GameBeatState().named().tap(false).wiggled().tap(false).shown(),
+        )
+        for (p in paths) assertEquals(GameBeatPhase.DONE, p.talked().closed().phase)
+    }
+
+    @Test
+    fun tapsOutsideThePuzzlePhaseAreIgnored() {
+        val start = GameBeatState()
+        assertEquals(start, start.tap(true))
+        val talking = GameBeatState().named().tap(true)
+        assertEquals(talking, talking.tap(false))
+    }
+}
+
 /** Echo Cave and the grown-ups' words for today. */
 class EchoCaveTest {
     @Test
@@ -1005,6 +1203,12 @@ class VoiceStoriesTest {
             // Later stories use sounds at the ends of words too ("up", "stop").
         }
         assertTrue(VoiceStories.boat.beats.any { b -> b.sound != null && VoiceStories.endsWith(b.word, b.sound!!) && !VoiceStories.startsWith(b.word, b.sound!!) })
+    }
+
+    @Test
+    fun atMostOneGameBeatPerStory() {
+        for (s in VoiceStories.all) assertTrue(s.beats.count { it.game } <= 1, "${s.id} has more than one game beat")
+        assertEquals(1, VoiceStories.balloon.beats.count { it.game })
     }
 
     @Test
