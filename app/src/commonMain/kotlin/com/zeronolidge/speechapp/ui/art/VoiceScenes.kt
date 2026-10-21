@@ -95,6 +95,12 @@ private fun propSize(p: Prop) = when (p) {
     Prop.CUPCAKE -> 0.13f
     Prop.MOON -> 0.2f
     Prop.GAP_BALLOON -> 0.22f
+    Prop.BOWL -> 0.26f
+    Prop.MILK -> 0.2f
+    Prop.BATTER -> 0.26f
+    Prop.PAN -> 0.34f
+    Prop.PANCAKE -> 0.24f
+    Prop.STEAM -> 0.2f
 }
 
 /** A balloon's colour, shared by the puzzle (see `BalloonPatternPuzzle` in VoiceStory.kt) and the
@@ -201,6 +207,15 @@ private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop) {
             Backdrop.SKY -> {
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.08f, h * 0.2f), Size(w * 0.18f, h * 0.08f))
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.68f, h * 0.12f), Size(w * 0.2f, h * 0.09f))
+            }
+            Backdrop.KITCHEN -> {
+                // A soft wall above, and a warm low wooden counter filling the bottom half, side view.
+                paperRect(Color(0xFFFFF3E3), Offset(0f, 0f), Size(w, h * 0.56f))
+                paperRect(Color(0xFFC9773A), Offset(0f, h * 0.5f), Size(w, h * 0.5f))
+                paperRect(Color(0xFFE6C38E), Offset(0f, h * 0.5f), Size(w, h * 0.045f))
+                listOf(0.64f, 0.76f, 0.88f).forEach { py ->
+                    drawLine(Color(0xFF8C5A3A).copy(alpha = 0.55f), Offset(0f, h * py), Offset(w, h * py), 2.dp.toPx())
+                }
             }
             Backdrop.FOREST, Backdrop.MEADOW -> {}
         }
@@ -379,6 +394,75 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
             }
             Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX = inflate; scaleY = inflate }) {
                 paperBalloon(balloonColor(beat.gapColor ?: "blue"))
+            }
+        }
+        // Rory's Kitchen: a mixing bowl, side view (a wide rim over a rounded body).
+        Prop.BOWL -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val body = Path().apply {
+                moveTo(w * 0.1f, h * 0.34f)
+                quadraticTo(w * 0.5f, h * 0.9f, w * 0.9f, h * 0.34f)
+                quadraticTo(w * 0.5f, h * 0.48f, w * 0.1f, h * 0.34f)
+                close()
+            }
+            paperPath(body, Color(0xFFFFF3E0))
+            paperOval(Color(0xFFFFFDF7), Offset(w * 0.06f, h * 0.22f), Size(w * 0.88f, h * 0.2f))
+        }
+        // A little milk jug: a straight-sided body with a pouring lip.
+        Prop.MILK -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val body = Path().apply {
+                moveTo(w * 0.28f, h * 0.16f)
+                lineTo(w * 0.7f, h * 0.16f)
+                lineTo(w * 0.82f, h * 0.3f)
+                lineTo(w * 0.7f, h * 0.9f)
+                lineTo(w * 0.3f, h * 0.9f)
+                lineTo(w * 0.18f, h * 0.3f)
+                close()
+            }
+            paperPath(body, Color(0xFFFFFFFF))
+            drawLine(Color(0xFFE0E0E0), Offset(w * 0.8f, h * 0.38f), Offset(w * 0.92f, h * 0.58f), 4.dp.toPx())
+        }
+        // The bowl, now with pale batter inside (reuses the bowl shape).
+        Prop.BATTER -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val body = Path().apply {
+                moveTo(w * 0.1f, h * 0.34f)
+                quadraticTo(w * 0.5f, h * 0.9f, w * 0.9f, h * 0.34f)
+                quadraticTo(w * 0.5f, h * 0.48f, w * 0.1f, h * 0.34f)
+                close()
+            }
+            paperPath(body, Color(0xFFFFF3E0))
+            paperOval(Color(0xFFFFE9A8), Offset(w * 0.08f, h * 0.2f), Size(w * 0.84f, h * 0.22f))
+        }
+        // A flat frying pan (side view, no dials or flame): a dark oval with one handle.
+        Prop.PAN -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            paperOval(Color(0xFF424242), Offset(w * 0.06f, h * 0.56f), Size(w * 0.7f, h * 0.22f))
+            paperRect(Color(0xFF5D4037), Offset(w * 0.72f, h * 0.6f), Size(w * 0.26f, h * 0.06f))
+        }
+        // A golden pancake, two shades for a browned edge.
+        Prop.PANCAKE -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            paperOval(Color(0xFFD08A3E), Offset(w * 0.14f, h * 0.3f), Size(w * 0.72f, h * 0.4f))
+            paperOval(Color(0xFFF2C06B), Offset(w * 0.22f, h * 0.34f), Size(w * 0.56f, h * 0.26f))
+        }
+        // Soft paper steam wisps, rising.
+        Prop.STEAM -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            listOf(0.3f, 0.5f, 0.7f).forEachIndexed { i, x ->
+                val wisp = Path().apply {
+                    moveTo(w * x, h * 0.92f)
+                    quadraticTo(w * (x - 0.1f), h * 0.6f, w * x, h * 0.4f)
+                    quadraticTo(w * (x + 0.1f), h * 0.2f, w * x, h * 0.04f)
+                }
+                drawPath(wisp, Color.White.copy(alpha = 0.55f - i * 0.1f), style = Stroke(4.dp.toPx()))
             }
         }
     }

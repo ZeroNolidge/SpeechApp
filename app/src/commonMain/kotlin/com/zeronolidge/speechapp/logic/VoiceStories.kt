@@ -92,12 +92,16 @@ enum class Move {
     SHAKE,
 }
 
-/** The props, each a piece of paper art any move can carry. */
-enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON }
+/** The props, each a piece of paper art any move can carry. [BOWL]/[MILK]/[BATTER]/[PAN]/
+ * [PANCAKE]/[STEAM] are Rory's Kitchen's own (see [Backdrop.KITCHEN]); the bubbles and berries
+ * beats there reuse [BUBBLE] and [BERRIES]. */
+enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON, BOWL, MILK, BATTER, PAN, PANCAKE, STEAM }
 
-/** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky). */
+/** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky,
+ * Rory's kitchen counter). */
 enum class Backdrop(val land: Land) {
     RIVER(Land.LAGOON), ISLAND(Land.LAGOON), FOREST(Land.FOREST), PATH(Land.FOREST), MEADOW(Land.MEADOW), SKY(Land.MEADOW),
+    KITCHEN(Land.MARKET),
 }
 
 /** How a beat's light changes with the move. */
@@ -183,37 +187,35 @@ object VoiceStories {
      * (among distractors), stir three times, count three berries in (no talk, a counting turn),
      * pop three bubbles, tap the pancake then say "flip!". The other three beats (milk, pour,
      * his taste of it) are the usual one talk-turn beat. Placed by Market Town (food, not the
-     * already-busy Meadow) though the scene itself is Rory's kitchen counter; backdrop/prop/move
-     * below are placeholders reusing existing art (see [Backdrop], [Prop], [Move]) until the
-     * kitchen counter scene is drawn (art round: step B).
+     * already-busy Meadow) though the scene itself is Rory's kitchen counter ([Backdrop.KITCHEN]).
      */
     val kitchen = VoiceStory(
         id = "kitchen", title = "Rory's Kitchen", emoji = "🥞", land = Land.MARKET, sounds = listOf("p", "b", "m"),
         setup = "Bear's hungry! Let's make pancakes!",
         beats = listOf(
             VoiceBeat(
-                Backdrop.MEADOW, "We need a bowl!", listOf("bowl", "big bowl", "Get the bowl!"), "b", Prop.CUPCAKE, Move.SLIDE,
+                Backdrop.KITCHEN, "We need a bowl!", listOf("bowl", "big bowl", "Get the bowl!"), "b", Prop.BOWL, Move.SLIDE,
                 "Bowl! The bowl slides onto the counter!", "🥣", kitchen = KitchenFlow.TAP_CHOICE, kitchenChoices = KitchenGame.distractors,
             ),
-            VoiceBeat(Backdrop.MEADOW, "The bowl is empty. Time for milk!", listOf("milk", "pour milk", "Pour in the milk!"), "m", Prop.CUPCAKE, Move.GROW, "Milk! The milk pours into the bowl!", "🥛"),
+            VoiceBeat(Backdrop.KITCHEN, "The bowl is empty. Time for milk!", listOf("milk", "pour milk", "Pour in the milk!"), "m", Prop.MILK, Move.SINK, "Milk! The milk pours into the bowl!", "🥛", still = Prop.BOWL),
             VoiceBeat(
-                Backdrop.MEADOW, "Now we stir it all up!", listOf("mix", "mix it", "Mix it all up!"), "m", Prop.CUPCAKE, Move.SHAKE,
+                Backdrop.KITCHEN, "Now we stir it all up!", listOf("mix", "mix it", "Mix it all up!"), "m", Prop.BATTER, Move.SHAKE,
                 "Mix! The batter is all ready!", "🥣", kitchen = KitchenFlow.STIR, kitchenGoal = 3,
             ),
             VoiceBeat(
-                Backdrop.MEADOW, "Let's add some berries! Help me count them in.", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
-                "Three! The berries tumble into the batter!", "🍓", kitchen = KitchenFlow.COUNT, kitchenGoal = 3,
+                Backdrop.KITCHEN, "Let's add some berries! Help me count them in.", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
+                "Three! The berries tumble into the batter!", "🍓", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.BATTER,
             ),
-            VoiceBeat(Backdrop.MEADOW, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.CUPCAKE, Move.SINK, "Pour! The batter pours into the pan!", "🥞"),
+            VoiceBeat(Backdrop.KITCHEN, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.BATTER, Move.SINK, "Pour! The batter pours into the pan!", "🥞", still = Prop.PAN),
             VoiceBeat(
-                Backdrop.MEADOW, "Look! Bubbles are popping on the pancake!", listOf("pop", "pop pop", "Pop it!"), "p", Prop.BUBBLE, Move.POP,
-                "Pop! The pancake is bubbling and ready to flip!", "🎉", kitchen = KitchenFlow.BUBBLES, kitchenGoal = 3,
+                Backdrop.KITCHEN, "Look! Bubbles are popping on the pancake!", listOf("pop", "pop pop", "Pop it!"), "p", Prop.BUBBLE, Move.POP,
+                "Pop! The pancake is bubbling and ready to flip!", "🎉", kitchen = KitchenFlow.BUBBLES, kitchenGoal = 3, still = Prop.STEAM,
             ),
             VoiceBeat(
-                Backdrop.MEADOW, "Tap the pancake, then flip it!", listOf("flip", "flip it", "Flip the pancake!"), null, Prop.CUPCAKE, Move.RISE,
-                "Flip! The pancake flips up and lands with a soft plop!", "🥞", kitchen = KitchenFlow.FLIP,
+                Backdrop.KITCHEN, "Tap the pancake, then flip it!", listOf("flip", "flip it", "Flip the pancake!"), null, Prop.PANCAKE, Move.RISE,
+                "Flip! The pancake flips up and lands with a soft plop!", "🥞", kitchen = KitchenFlow.FLIP, still = Prop.PAN,
             ),
-            VoiceBeat(Backdrop.MEADOW, "Bear takes a big bite!", listOf("mmm", "mmm good", "Mmm, so good!"), "m", Prop.CUPCAKE, Move.SHAKE, "Mmm! Bear says thank you, and gives a happy wave!", "😋", goodbye = true),
+            VoiceBeat(Backdrop.KITCHEN, "Bear takes a big bite!", listOf("mmm", "mmm good", "Mmm, so good!"), "m", Prop.PANCAKE, Move.SHAKE, "Mmm! Bear says thank you, and gives a happy wave!", "😋", goodbye = true),
         ),
         swap = null, sticker = "pancake" to "🥞",
         ending = "What a treat! You got a pancake sticker. See you next time!",
