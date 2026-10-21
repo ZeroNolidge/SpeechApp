@@ -89,9 +89,18 @@ object BalloonGame {
     /** The speech sound [word] practises (always p or b; see [talkWord]). */
     fun sound(word: String): String = word.first().toString()
 
-    /** What Rory says once the fix has played: one line shared by every colour, so solving the
-     * puzzle never needs more than one new recorded line. */
-    fun success(): String = "Pop! The balloon pops into place, and the row is complete!"
+    /** Rory's one line once the colour talk turn is done (see [GameBeatPhase.MODEL_POP]): says
+     * the colour back once, then asks for the pop he never says for him. */
+    fun modelPop(color: String): String = "${color.replaceFirstChar { it.uppercase() }}! Now... pop!"
+
+    /** The word for the pop talk turn (see [GameBeatPhase.TALK_POP]): one word, two words, a
+     * short sentence, always the "p" sound. Only his pop (or "I said it!") inflates the balloon. */
+    val popLines: List<String> = listOf("pop", "pop pop", "Pop it!")
+
+    /** What Rory says once the fix has played, after his own "pop": one line shared by every
+     * colour, so solving the puzzle never needs more than one new recorded line. Never says "pop"
+     * for him; he's already said it himself. */
+    fun success(): String = "The balloon settles into place, and the row is complete!"
 }
 
 /** Three of one kind and one that doesn't belong. */

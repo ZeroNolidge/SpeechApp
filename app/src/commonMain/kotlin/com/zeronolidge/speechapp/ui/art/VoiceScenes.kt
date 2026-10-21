@@ -50,8 +50,10 @@ private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 /** Where a move puts its prop, as parts of the scene's width and height, and how it's turned and sized. */
 class Pose(val x: Float, val y: Float, val scale: Float = 1f, val rotation: Float = 0f, val alpha: Float = 1f)
 
-/** Props that show "grow" themselves (the balloon fills, the sail bellies out) instead of just getting bigger. */
-private fun growsInside(p: Prop) = p == Prop.BALLOON || p == Prop.SAIL
+/** Props that show "grow" themselves (the balloon fills, the sail bellies out) instead of just
+ * getting bigger: the gap balloon inflates with his pop, in place, rather than the whole prop
+ * scaling up (see [Prop.GAP_BALLOON]). */
+private fun growsInside(p: Prop) = p == Prop.BALLOON || p == Prop.SAIL || p == Prop.GAP_BALLOON
 
 /** The shared moves. [wobble] is a 0 to 1 clock for the shake and the live wobble. */
 fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble: Float): Pose {
@@ -366,10 +368,15 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 }
             }
         }
-        // The puzzle's picked colour, popping into place and inflating as his voice carries it
-        // into the gap (see VoiceBeat.gapColor).
+        // The puzzle's picked colour (see VoiceBeat.gapColor): his colour talk turn slides it
+        // into place flat (Move.SLIDE); it only inflates once he says "pop" himself, in the
+        // second talk turn (Move.GROW) - never before.
         Prop.GAP_BALLOON -> {
-            val inflate = if (moving) 0.4f + 0.6f * f() else 1f
+            val inflate = when {
+                !moving -> 1f
+                beat.move == Move.GROW -> 0.4f + 0.6f * f()
+                else -> 0.4f
+            }
             Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX = inflate; scaleY = inflate }) {
                 paperBalloon(balloonColor(beat.gapColor ?: "blue"))
             }

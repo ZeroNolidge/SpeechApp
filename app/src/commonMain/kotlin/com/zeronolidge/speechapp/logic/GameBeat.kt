@@ -3,19 +3,22 @@ package com.zeronolidge.speechapp.logic
 /**
  * The phases of a game beat (see [VoiceBeat.game]), in order: Rory names the puzzle, it waits for
  * a tap (no timers), a wrong tap wiggles and comes back with the right choice glowing, a second
- * wrong tap shows the answer, then the usual talk turn plays out, the fix (and sticker) close the
- * beat, and the story carries on. Nothing ever fails: every path reaches [DONE].
+ * wrong tap shows the answer, then the usual colour talk turn plays out, Rory models the pop word
+ * once, a second talk turn waits for his pop, then the fix (and sticker) close the beat, and the
+ * story carries on. Nothing ever fails: every path reaches [DONE].
  */
-enum class GameBeatPhase { NAME, PUZZLE, WIGGLE, SHOW_ANSWER, TALK, CLOSE, DONE }
+enum class GameBeatPhase { NAME, PUZZLE, WIGGLE, SHOW_ANSWER, TALK_COLOUR, MODEL_POP, TALK_POP, CLOSE, DONE }
 
 /**
  * A game beat's state (pure, no timers; see [GameBeatPhase]):
  *  - NAME -> PUZZLE: [named].
- *  - PUZZLE, right tap: straight to TALK. Wrong tap, 1st time: WIGGLE; wrong tap, 2nd time:
- *    SHOW_ANSWER. See [tap].
+ *  - PUZZLE, right tap: straight to TALK_COLOUR. Wrong tap, 1st time: WIGGLE; wrong tap, 2nd
+ *    time: SHOW_ANSWER. See [tap].
  *  - WIGGLE -> PUZZLE, with the right choice glowing ([glow]): [wiggled].
- *  - SHOW_ANSWER -> TALK: [shown].
- *  - TALK -> CLOSE: [talked].
+ *  - SHOW_ANSWER -> TALK_COLOUR: [shown].
+ *  - TALK_COLOUR -> MODEL_POP: his colour talk turn is done: [talked].
+ *  - MODEL_POP -> TALK_POP: Rory's single "Now... pop!" line has finished: [modeled].
+ *  - TALK_POP -> CLOSE: he popped it (his voice, or "I said it!"): [popped].
  *  - CLOSE -> DONE: [closed].
  * A tap outside the PUZZLE phase is ignored, so it can never fail or get stuck.
  */
@@ -26,7 +29,7 @@ data class GameBeatState(val phase: GameBeatPhase = GameBeatPhase.NAME, val miss
     /** A tap on one of the choice tiles; [isAnswer] says whether it was the right one. */
     fun tap(isAnswer: Boolean): GameBeatState = when {
         phase != GameBeatPhase.PUZZLE -> this
-        isAnswer -> copy(phase = GameBeatPhase.TALK)
+        isAnswer -> copy(phase = GameBeatPhase.TALK_COLOUR)
         misses == 0 -> copy(phase = GameBeatPhase.WIGGLE, misses = 1)
         else -> copy(phase = GameBeatPhase.SHOW_ANSWER, misses = misses + 1)
     }
@@ -37,11 +40,17 @@ data class GameBeatState(val phase: GameBeatPhase = GameBeatPhase.NAME, val miss
     /** The wiggle has played: back to the puzzle, with the right choice now glowing. */
     fun wiggled(): GameBeatState = if (phase == GameBeatPhase.WIGGLE) copy(phase = GameBeatPhase.PUZZLE) else this
 
-    /** Rory has shown (and said) the answer: on to the usual talk turn. */
-    fun shown(): GameBeatState = if (phase == GameBeatPhase.SHOW_ANSWER) copy(phase = GameBeatPhase.TALK) else this
+    /** Rory has shown (and said) the answer: on to the colour talk turn. */
+    fun shown(): GameBeatState = if (phase == GameBeatPhase.SHOW_ANSWER) copy(phase = GameBeatPhase.TALK_COLOUR) else this
 
-    /** The talk turn is done (voice heard, or "I said it!"): the fix plays out. */
-    fun talked(): GameBeatState = if (phase == GameBeatPhase.TALK) copy(phase = GameBeatPhase.CLOSE) else this
+    /** The colour talk turn is done (voice heard, or "I said it!"): Rory models the pop word once. */
+    fun talked(): GameBeatState = if (phase == GameBeatPhase.TALK_COLOUR) copy(phase = GameBeatPhase.MODEL_POP) else this
+
+    /** Rory's single "<Colour>! Now... pop!" line is done: on to the pop talk turn. */
+    fun modeled(): GameBeatState = if (phase == GameBeatPhase.MODEL_POP) copy(phase = GameBeatPhase.TALK_POP) else this
+
+    /** He popped it (his voice, or "I said it!"): the fix plays out. */
+    fun popped(): GameBeatState = if (phase == GameBeatPhase.TALK_POP) copy(phase = GameBeatPhase.CLOSE) else this
 
     /** The close (fix + sticker) has played: the beat, and the story, carry on. */
     fun closed(): GameBeatState = if (phase == GameBeatPhase.CLOSE) copy(phase = GameBeatPhase.DONE) else this

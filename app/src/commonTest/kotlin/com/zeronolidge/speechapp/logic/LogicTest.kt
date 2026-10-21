@@ -172,6 +172,29 @@ class BalloonGameTest {
     }
 
     @Test
+    fun modelPopSaysTheColourOnceThenAsksForThePop() {
+        for (c in BalloonGame.colors) {
+            val line = BalloonGame.modelPop(c)
+            assertTrue(line.startsWith(c.replaceFirstChar { it.uppercase() }), line)
+            assertTrue(line.contains("pop", ignoreCase = true), line)
+        }
+    }
+
+    @Test
+    fun popLinesAreOneWordTwoWordsThenASentenceAndAlwaysP() {
+        assertEquals(3, BalloonGame.popLines.size)
+        assertEquals(1, BalloonGame.popLines[0].split(' ').size)
+        assertEquals(2, BalloonGame.popLines[1].split(' ').size)
+        for (line in BalloonGame.popLines) assertTrue(line.lowercase().startsWith("pop"), line)
+    }
+
+    @Test
+    fun successNeverSaysPopForHim() {
+        // He's just said "pop" himself (see GameBeatPhase.TALK_POP); Rory never says it for him.
+        assertFalse(BalloonGame.success().contains("pop", ignoreCase = true), BalloonGame.success())
+    }
+
+    @Test
     fun ladderCeilingMatchesTheThreeSteps() {
         assertEquals(2, Ladder.MAX.getValue(Ladder.GAME_PATTERN))
     }
@@ -863,7 +886,7 @@ class GameBeatStateTest {
     @Test
     fun rightFirstTimeSkipsStraightToTalk() {
         val s = GameBeatState().named().tap(true)
-        assertEquals(GameBeatPhase.TALK, s.phase)
+        assertEquals(GameBeatPhase.TALK_COLOUR, s.phase)
         assertTrue(s.rightFirstTry)
     }
 
@@ -877,7 +900,7 @@ class GameBeatStateTest {
         assertEquals(GameBeatPhase.PUZZLE, s.phase)
         assertTrue(s.glow)
         s = s.tap(true)
-        assertEquals(GameBeatPhase.TALK, s.phase)
+        assertEquals(GameBeatPhase.TALK_COLOUR, s.phase)
         assertFalse(s.rightFirstTry)
     }
 
@@ -885,7 +908,21 @@ class GameBeatStateTest {
     fun twoWrongTapsShowTheAnswer() {
         val s = GameBeatState().named().tap(false).wiggled().tap(false)
         assertEquals(GameBeatPhase.SHOW_ANSWER, s.phase)
-        assertEquals(GameBeatPhase.TALK, s.shown().phase)
+        assertEquals(GameBeatPhase.TALK_COLOUR, s.shown().phase)
+    }
+
+    @Test
+    fun colourTalkThenModelThenPopTalkThenClose() {
+        var s = GameBeatState().named().tap(true)
+        assertEquals(GameBeatPhase.TALK_COLOUR, s.phase)
+        s = s.talked()
+        assertEquals(GameBeatPhase.MODEL_POP, s.phase)
+        s = s.modeled()
+        assertEquals(GameBeatPhase.TALK_POP, s.phase)
+        s = s.popped()
+        assertEquals(GameBeatPhase.CLOSE, s.phase)
+        s = s.closed()
+        assertEquals(GameBeatPhase.DONE, s.phase)
     }
 
     @Test
@@ -895,7 +932,16 @@ class GameBeatStateTest {
             GameBeatState().named().tap(false).wiggled().tap(true),
             GameBeatState().named().tap(false).wiggled().tap(false).shown(),
         )
-        for (p in paths) assertEquals(GameBeatPhase.DONE, p.talked().closed().phase)
+        for (p in paths) assertEquals(GameBeatPhase.DONE, p.talked().modeled().popped().closed().phase)
+    }
+
+    @Test
+    fun outOfOrderCallsAreIgnored() {
+        // modeled() only fires from MODEL_POP, popped() only from TALK_POP: calling either early
+        // (before Rory's asked for the pop) is a no-op, so a stray call can never skip a turn.
+        val talking = GameBeatState().named().tap(true)
+        assertEquals(talking, talking.modeled())
+        assertEquals(talking, talking.popped())
     }
 
     @Test
@@ -1216,9 +1262,11 @@ class VoiceStoriesTest {
                 assertTrue(ClipText.normalize(b.lines[1]).split(' ').size == 2, "${s.id}: '${b.lines[1]}' is two words")
                 assertTrue(ClipText.normalize(b.lines[2]).split(' ').size >= 2, "${s.id}: '${b.lines[2]}' is a sentence")
                 // Rory says the word back first, and nothing has a blank to fill. The game beat's
-                // close is the exception: whatever colour he said, the balloon always "pops" into
-                // the gap (see BalloonGame.success), so its success line starts with "Pop!" instead.
+                // close is the exception: whatever colour he said, the balloon settles into the
+                // gap the same way (see BalloonGame.success), so its success line doesn't start
+                // with the colour; it also never says "pop" for him (he's just said it himself).
                 if (!b.game) assertTrue(ClipText.normalize(b.success).startsWith(ClipText.normalize(b.word)), "${s.id}: success '${b.success}'")
+                if (b.game) assertFalse(b.success.contains("pop", ignoreCase = true), "${s.id}: success '${b.success}'")
                 (listOf(b.problem, b.success) + b.lines).forEach { assertTrue('{' !in it, "${s.id}: blank in '$it'") }
             }
             // It ends calmly, with the goodbye beat last (and only last).

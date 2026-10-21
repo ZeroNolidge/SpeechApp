@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -206,10 +207,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
         phase = VPhase.ACT
         val b = beats[k]
-        // The puzzle's talk turn just finished: the fix is about to play (success line + sticker).
-        if (b.game) {
+        // The colour talk turn just finished: Rory models the pop once, then waits for his own
+        // pop (see GameBeatPhase.MODEL_POP); nothing here records a word or a gem yet, since the
+        // beat isn't done until he's popped it himself.
+        if (b.game && gamePhase.phase == GameBeatPhase.TALK_COLOUR) {
             p.gameBeatResult(gamePhase.rightFirstTry)
             gamePhase = gamePhase.talked()
+            logGame(gamePhase)
+            return
+        }
+        // The pop talk turn just finished (his voice, or "I said it!"): the fix is about to play
+        // (success line + sticker).
+        if (b.game) {
+            gamePhase = gamePhase.popped()
             logGame(gamePhase)
         }
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
@@ -389,7 +399,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
 
     /** The puzzle is solved (right away, or after Rory showed the answer): the word to say is
      * now known, so the usual talk turn (full listening look, "I said it!") plays out exactly
-     * like any other beat's, and the fix (and sticker) close the beat when it's done. */
+     * like any other beat's. The balloon slides into the gap flat (Move.SLIDE); it won't inflate
+     * until he pops it himself, in the second talk turn below. */
     fun startGameTalk() {
         val k = index
         val round = puzzle ?: return
@@ -397,7 +408,6 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val fixed = beats[k].copy(
             lines = BalloonGame.lines(word),
             sound = BalloonGame.sound(word),
-            success = BalloonGame.success(),
             prop = Prop.GAP_BALLOON,
             gapColor = round.choice.answer,
         )
@@ -407,6 +417,26 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         app.listening = false
         app.rememberInstruction("${fixed.line(p.speechStep)}. ${fixed.line(p.speechStep)}. ${fixed.line(p.speechStep)}.")
         modelWord(k, s)
+    }
+
+    /** Rory's asked for the pop once (see GameBeatPhase.MODEL_POP -> TALK_POP): the second talk
+     * turn plays out just like any other beat's (full listening look, "I said it!" backup, the
+     * same quiet/re-prompt rules), but never moves on by itself. Only his pop (or "I said it!")
+     * inflates the balloon (Move.GROW; see VoiceBeatScene's Prop.GAP_BALLOON look). */
+    fun startGamePop() {
+        val k = index
+        val fixed = beats[k].copy(lines = BalloonGame.popLines, sound = "p", move = Move.GROW, success = BalloonGame.success())
+        beats = beats.toMutableList().also { it[k] = fixed }
+        model[0] = VoicePush(VoicePush.modeFor("p"))
+        modelSound[0] = null
+        modelledBeat[0] = false
+        mouthCue = null
+        pushNow = 0f
+        scope.launch { act.snapTo(0f) }
+        app.listening = false
+        phase = VPhase.MODEL
+        app.rememberInstruction("${fixed.line(p.speechStep)}! Say it out loud! Then tap the big green I said it button.")
+        listen(k)
     }
 
     /** A tap on one of the puzzle's choice balloons (ignored outside the puzzle phase itself). */
@@ -443,7 +473,17 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     }
                 }
             }
-            GameBeatPhase.TALK -> startGameTalk()
+            GameBeatPhase.TALK_COLOUR -> startGameTalk()
+            GameBeatPhase.MODEL_POP -> {
+                val color = puzzle?.choice?.answer ?: ""
+                app.speaker.say(BalloonGame.modelPop(color)) {
+                    if (s == session) {
+                        gamePhase = gamePhase.modeled()
+                        logGame(gamePhase)
+                    }
+                }
+            }
+            GameBeatPhase.TALK_POP -> startGamePop()
             else -> {}
         }
     }
@@ -491,11 +531,24 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
-                    // While he's choosing, the scene shrinks to sit fully above the choice strip
-                    // (never behind it): the strip is reserved space, not an overlay.
-                    val gameStrip = if (phase == VPhase.GAME) (h * BalloonStripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
-                    Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip)) {
-                        VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize().clipToBounds(), puzzleSafe = phase == VPhase.GAME)
+                    // While he's choosing, the choice strip is reserved space, not an overlay:
+                    // the scene sits fully above it, never behind it. Landscape (wider than tall)
+                    // uses a slimmer strip (~18% of the stage); portrait keeps the taller one.
+                    val landscape = phase == VPhase.GAME && w > h
+                    val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
+                    val gameStrip = if (phase == VPhase.GAME) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
+                    Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip).clipToBounds()) {
+                        if (landscape) {
+                            // Keep the scene at its usual full-stage size (so Bear is never
+                            // shrunk) and move it up clear of the strip instead, with room to
+                            // spare above the strip's top edge; the lifted-off top is clipped.
+                            val lift = gameStrip + BalloonLandscapeGap
+                            Box(Modifier.fillMaxWidth().height(h).offset(y = -lift)) {
+                                VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = phase == VPhase.GAME)
+                            }
+                        } else {
+                            VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = phase == VPhase.GAME)
+                        }
                     }
                     // The sticker he earned, peeling on in the middle at the end.
                     sticker?.let { st ->
@@ -624,6 +677,11 @@ private fun GapBalloon(size: Dp, color: Color?, modifier: Modifier = Modifier) {
 /** The strip's share of the stage height, and its floor so it's never cramped on a short
  * landscape screen (see [BalloonPatternPuzzle]). */
 private const val BalloonStripFraction = 0.22f
+/** Landscape (stage wider than tall) uses a slimmer strip, since there's less height to spare;
+ * the scene above it is moved up, not shrunk (see the puzzle's scene box in VoiceStoryScreen). */
+private const val BalloonLandscapeStripFraction = 0.18f
+/** The least clear space kept between Bear's feet and the strip's top, in landscape. */
+private val BalloonLandscapeGap = 16.dp
 private val BalloonStripMinHeight = 128.dp
 private val BalloonChoiceSize = 88.dp
 private val BalloonChoiceGap = 24.dp
