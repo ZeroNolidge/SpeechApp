@@ -5,8 +5,13 @@ package com.zeronolidge.speechapp.logic
  * moves with every word (and slower on the slow third model, since the sound is slower).
  *
  * Words are found in the sound itself: a new word starts after a short quiet ([GAP_MS]) or after
- * the sound dips well below its last peak and comes back ("pop pop pop" has no quiet between its
- * words, only dips), and each is matched to the next word of the [step] text. The lips press
+ * the sound dips well below its last peak and comes back up ("pop pop pop" has no quiet between
+ * its words, only dips). A dip right after a word has only just started (within [MIN_WORD_MS]) is
+ * its own burst settling into its vowel, or a ripple in a short burst's tail, not a real gap to
+ * the next word, so it's kept as the same word; a rise that comes back that soon is ignored
+ * (only the dip's end-closure, already applied, stands). That also guards against ever splitting
+ * a clip into more words than its text has: once the last word has started, no further dip can
+ * start another. Each word found is matched to the next word of the [step] text. The lips press
  * together on every p, b and m: for [CLOSED_MS] at the start of a word that starts with one, and
  * at the end of a word that ends with one ("pop"), and for the whole of a held "mmm". Plain
  * Kotlin, unit-tested.
@@ -21,6 +26,9 @@ class LipSync {
     private var inSound = false
     private var peak = 0f
     private var dipping = false
+    // How long the current word has been sounding: a dip this soon after it started is the
+    // word's own burst settling, not a real gap to the next word (see [MIN_WORD_MS]).
+    private var wordMs = 0
 
     /** True while the lips are pressed together (a p, b or m, or a held "mmm"). */
     var closed = false
@@ -40,6 +48,7 @@ class LipSync {
         closedMs = if (w != null && w.first() in "pbm") CLOSED_MS else 0
         peak = 0f
         dipping = false
+        wordMs = 0
     }
 
     private fun endWord() {
@@ -73,12 +82,21 @@ class LipSync {
                 // A new word after a quiet (or the same word picking up again after a tiny gap).
                 if (quietMs >= GAP_MS || word < 0) startWord()
                 inSound = true
-            } else if (dipping && l > peak * RISE) {
-                // Back up after a dip: the next word, with no quiet between ("pop pop pop").
-                startWord()
-            } else if (!dipping && peak > 0f && l < peak * DIP) {
-                dipping = true
-                endWord()
+            } else {
+                wordMs += dtMs
+                if (dipping) {
+                    if (l > peak * RISE) {
+                        // Back up after a dip: only the next word (with no quiet between, "pop
+                        // pop pop") once the current word has sounded for a moment and there's a
+                        // word left to move to; a dip and rise this soon after it started is its
+                        // own burst settling into its vowel, or a ripple in a short burst's tail,
+                        // not a real gap, so stay on it (its end-closure, already applied, stands).
+                        if (wordMs >= MIN_WORD_MS && word + 1 < words.size) startWord() else dipping = false
+                    }
+                } else if (peak > 0f && l < peak * DIP) {
+                    dipping = true
+                    endWord()
+                }
             }
             if (!dipping) peak = maxOf(peak, l)
             quietMs = 0
@@ -107,5 +125,9 @@ class LipSync {
         const val DIP = 0.45f
         /** Back above this part of the last peak after a dip: the next word starts. */
         const val RISE = 0.7f
+        /** A word has to have sounded at least this long before a dip and rise in it can be the
+         * next word; sooner, it's the word's own burst settling into its vowel, or a ripple in a
+         * short burst's tail. */
+        const val MIN_WORD_MS = 80
     }
 }

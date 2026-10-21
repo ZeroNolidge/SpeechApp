@@ -107,7 +107,8 @@ fun TalkAndLearnApp(
                         screenW = with(density) { it.size.width.toDp() }
                     }
                     // A hand holding the tablet: touches that start within EdgeIgnore of the screen's
-                    // edge are noted first (Initial pass) and ignored by every tap (detectKidTaps).
+                    // edge are noted first (Initial pass), so detectKidTaps can stop one from
+                    // cancelling another finger's tap; they still tap whatever they land on.
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {

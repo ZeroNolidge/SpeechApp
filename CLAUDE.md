@@ -216,10 +216,12 @@ These are the owner's rules for all work:
   playing. Rory's mouth is drawn live while he talks (`HEAD_TALK` parts + `robotMouth`): it opens
   with the loudness of the clip playing right now (`ClipPlayer.mouth`, read from the decoded clip
   at its play position, so the slow third model is slower) through `logic/LipSync.kt`: words are
-  found by quiets and by dips ("pop pop pop" has only dips), and past the last word the text's
-  words come round again (so "Pop! Pop! Pop!", three clips of the same text, closes each time);
-  the lips close for 100 ms at the start of a p/b/m word and at the end of a word ending in one,
-  and stay closed through a held "mmm";
+  found by quiets and by dips ("pop pop pop" has only dips); a dip within `MIN_WORD_MS` (80 ms) of
+  the word's own start doesn't start the next word (a loud word's burst settling into its vowel,
+  or a ripple in a short burst's tail, isn't a real gap, so a run of "pop"s can't eat its own next
+  word's turn), and past the last word the text's words come round again (so "Pop! Pop! Pop!",
+  three clips of the same text, closes each time); the lips close for 100 ms at the start of a
+  p/b/m word and at the end of a word ending in one, and stay closed through a held "mmm";
   with the browser voice it chatters gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
   a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
 - **Pictures on coloured cards sit on a cream paper circle** (`EmojiPic` in PaperUi.kt: `ChoiceTile`, emoji answer cards), so an emoji never melts into its card (the yellow 💰 vanished on the yellow Market card). Use `EmojiPic` for any new emoji on a coloured card. The daytime sun is always `SunGold`, never the area's accent.

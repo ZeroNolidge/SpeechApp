@@ -1383,6 +1383,17 @@ class HoldAndPopTest {
         m.feed(0.08f, 50, 0.7f, 0.8f)
         assertTrue(m.lastPush > 0f)
     }
+
+    @Test
+    fun popsCountsMergesASplitPuffButIsNoStricter() {
+        // A bare "p" puff in one reading, or split across two (readings aren't lined up with his
+        // puff), both count once merged into a single burst.
+        assertTrue(Pops.counts(listOf(0.06f), 0.5f))
+        assertTrue(Pops.counts(listOf(0.06f, 0.04f), 0.5f))
+        // Still no stricter than before: a click outside the voice range doesn't count either way.
+        assertFalse(Pops.counts(listOf(0.3f), 0.15f))
+        assertFalse(Pops.counts(listOf(0.3f, 0.3f), 0.15f))
+    }
 }
 
 /** Rory's mouth follows the clip's loudness; p, b and m words start with closed lips. */
@@ -1434,6 +1445,26 @@ class LipSyncTest {
         assertTrue(word(), "first pop")
         assertTrue(word(), "second pop")
         assertTrue(word(), "third pop")
+    }
+
+    @Test
+    fun aRippleInAWordsTailDoesntStealTheNextWordsClosure() {
+        // "pop pop duck": a loud "pop" whose burst dips into its vowel and then ripples part way
+        // back up, soon after it started, must not be read as the next word ("duck" doesn't
+        // close, so if the ripple stole the second "pop"'s slot early, the real second "pop"
+        // would open on "duck" instead and show no closure at all).
+        val lip = LipSync()
+        val text = "pop pop duck"
+        lip.step(0.3f, text, 16) // "pop" #1 starts, closed
+        assertTrue(lip.closed)
+        lip.step(0.3f, text, 16)
+        lip.step(0.1f, text, 16) // dips into its vowel
+        lip.step(0.25f, text, 16) // a ripple back up, moments after the word started: not a new word
+        lip.step(0.2f, text, 16)
+        lip.step(0.1f, text, 16) // settles further, towards the real gap
+        lip.step(0.05f, text, 16)
+        lip.step(0.3f, text, 16) // the real "pop" #2: must close now, not land on "duck"
+        assertTrue(lip.closed, "the real second pop didn't close")
     }
 
     @Test
