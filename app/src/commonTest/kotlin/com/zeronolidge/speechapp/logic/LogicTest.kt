@@ -1890,3 +1890,161 @@ class LipSyncTest {
         }
     }
 }
+
+/** Rory's Kitchen: every target word is p/b/m, or one of the given exceptions (flip, the counting
+ * turn's number word), and its tap/talk flow is set up the way [KitchenBeatState] expects. */
+class KitchenStoryTest {
+    @Test
+    fun everyKitchenWordIsPBMOrAnAllowedException() {
+        val allowed = setOf("flip", "three")
+        for (b in VoiceStories.kitchen.beats) {
+            val first = b.word.first().lowercaseChar()
+            assertTrue(first in "pbm" || b.word in allowed, "unexpected kitchen target word '${b.word}'")
+        }
+    }
+
+    @Test
+    fun theFiveSpecialBeatsCarryTheRightFlowAndGoal() {
+        val byWord = VoiceStories.kitchen.beats.associateBy { it.word }
+        assertEquals(KitchenFlow.TAP_CHOICE, byWord.getValue("bowl").kitchen)
+        assertEquals(listOf("cup", "spoon"), byWord.getValue("bowl").kitchenChoices)
+        assertEquals(KitchenFlow.STIR, byWord.getValue("mix").kitchen)
+        assertEquals(3, byWord.getValue("mix").kitchenGoal)
+        assertEquals(KitchenFlow.COUNT, byWord.getValue("three").kitchen)
+        assertEquals(3, byWord.getValue("three").kitchenGoal)
+        assertEquals(KitchenFlow.BUBBLES, byWord.getValue("pop").kitchen)
+        assertEquals(3, byWord.getValue("pop").kitchenGoal)
+        assertEquals(KitchenFlow.FLIP, byWord.getValue("flip").kitchen)
+        // The other three beats (milk, pour, mmm) are the usual single talk turn: no kitchen flow.
+        assertEquals(3, VoiceStories.kitchen.beats.count { it.kitchen == null })
+    }
+
+    @Test
+    fun theBowlRoundAlwaysHasTheBowlAndIsNotAlwaysInTheSameSpot() {
+        val seenIndex = mutableSetOf<Int>()
+        repeat(60) { i ->
+            val round = KitchenGame.tapRound("bowl", 2 + i % 2, Random(i))
+            assertTrue(round.options.size in 2..3)
+            assertEquals(round.options.size, round.options.distinct().size)
+            assertTrue("bowl" in round.options)
+            assertEquals("bowl", round.answer)
+            seenIndex += round.options.indexOf("bowl")
+        }
+        assertTrue(seenIndex.size > 1, "the bowl landed at the same index every time: $seenIndex")
+    }
+}
+
+/** The kitchen flows' pure state machine (see [KitchenBeatState]): nothing ever fails, and every
+ * path reaches [KitchenPhase.DONE]. */
+class KitchenBeatStateTest {
+    @Test
+    fun tapChoiceRightFirstTimeSkipsStraightToTalk() {
+        val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true)
+        assertEquals(KitchenPhase.TALK, s.phase)
+        assertTrue(s.rightFirstTry)
+    }
+
+    @Test
+    fun tapChoiceOneWrongTapWigglesThenGlowsAndCanStillSucceed() {
+        var s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named()
+        assertEquals(KitchenPhase.TAP, s.phase)
+        s = s.tap(false)
+        assertEquals(KitchenPhase.WIGGLE, s.phase)
+        assertTrue(s.glow)
+        s = s.wiggled()
+        assertEquals(KitchenPhase.TAP, s.phase)
+        s = s.tap(true)
+        assertEquals(KitchenPhase.TALK, s.phase)
+        assertFalse(s.rightFirstTry)
+    }
+
+    @Test
+    fun tapChoiceTwoWrongTapsShowTheAnswerThenTalk() {
+        val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(false)
+        assertEquals(KitchenPhase.SHOW_ANSWER, s.phase)
+        assertEquals(KitchenPhase.TALK, s.shown().phase)
+    }
+
+    @Test
+    fun tapChoiceOneTalkTryThenClose() {
+        val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true).talked()
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+        assertEquals(KitchenPhase.DONE, s.closed().phase)
+    }
+
+    @Test
+    fun flipIsOneTapWithNoWrongAnswerThenOneTalkTurn() {
+        var s = KitchenBeatState(KitchenFlow.FLIP).named()
+        assertEquals(KitchenPhase.TAP, s.phase)
+        // A stray "wrong" tap is impossible for this flow: it's simply ignored, never fails.
+        assertEquals(s, s.tap(false))
+        s = s.tap(true)
+        assertEquals(KitchenPhase.TALK, s.phase)
+        s = s.talked()
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+    }
+
+    @Test
+    fun stirNeedsThreeTalkTriesWithNoTapPhaseAtAll() {
+        var s = KitchenBeatState(KitchenFlow.STIR, goal = 3).named()
+        assertEquals(KitchenPhase.TALK, s.phase)
+        repeat(2) {
+            s = s.talked()
+            assertEquals(KitchenPhase.TALK, s.phase, "stir ended early")
+        }
+        s = s.talked()
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+    }
+
+    @Test
+    fun bubblesNeedsThreePopsWithNoTapPhaseAtAll() {
+        var s = KitchenBeatState(KitchenFlow.BUBBLES, goal = 3).named()
+        assertEquals(KitchenPhase.TALK, s.phase)
+        repeat(3) { s = s.talked() }
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+    }
+
+    @Test
+    fun countNeedsThreeTapsAndNoTalkTurnAtAll() {
+        var s = KitchenBeatState(KitchenFlow.COUNT, goal = 3).named()
+        assertEquals(KitchenPhase.TAP, s.phase)
+        repeat(2) {
+            s = s.tap(true)
+            assertEquals(KitchenPhase.TAP, s.phase, "counting ended early")
+        }
+        s = s.tap(true)
+        // Straight to CLOSE: a counting turn is never a talk turn.
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+        // A stray "wrong" tap can never happen for a counting beat: ignored, never fails.
+        val counted = KitchenBeatState(KitchenFlow.COUNT, goal = 3).named().tap(true)
+        assertEquals(counted, counted.tap(false))
+    }
+
+    @Test
+    fun outOfOrderCallsAreIgnored() {
+        val talking = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true)
+        assertEquals(talking, talking.wiggled())
+        assertEquals(talking, talking.shown())
+        assertEquals(talking, talking.closed())
+        val start = KitchenBeatState(KitchenFlow.STIR, goal = 3)
+        assertEquals(start, start.talked())
+        assertEquals(start, start.tap(true))
+    }
+
+    @Test
+    fun everyFlowAndEveryPathReachesDone() {
+        val paths = listOf(
+            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true).talked(),
+            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(true).talked(),
+            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(false).shown().talked(),
+            KitchenBeatState(KitchenFlow.FLIP).named().tap(true).talked(),
+            KitchenBeatState(KitchenFlow.STIR, goal = 3).named().talked().talked().talked(),
+            KitchenBeatState(KitchenFlow.BUBBLES, goal = 3).named().talked().talked().talked(),
+            KitchenBeatState(KitchenFlow.COUNT, goal = 3).named().tap(true).tap(true).tap(true),
+        )
+        for (p in paths) {
+            assertEquals(KitchenPhase.CLOSE, p.phase)
+            assertEquals(KitchenPhase.DONE, p.closed().phase)
+        }
+    }
+}
