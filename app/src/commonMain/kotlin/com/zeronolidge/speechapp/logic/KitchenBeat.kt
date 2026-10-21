@@ -127,7 +127,13 @@ object KitchenGame {
  */
 object KitchenLayout {
     const val COUNTER_TOP_PORTRAIT = 0.5f
-    const val COUNTER_TOP_LANDSCAPE = 0.3f
+
+    /** K2a had this at 0.3 (a short wall, mostly counter); K2d moved it down to 0.42, because the
+     * landscape lift (VoiceStory's `lift`, clipping the scene's own top clear of the choice strip)
+     * was eating into that short wall almost entirely, leaving Rory a sliver a few px tall above
+     * the counter. 0.42 still clears [MIN_VISIBLE_FRACTION] with room to spare and leaves a real
+     * wall band for [roryBox] to sit in once it's clipped. */
+    const val COUNTER_TOP_LANDSCAPE = 0.42f
 
     /** The least share of the whole screen's height the counter must keep on screen in landscape
      * (Ruby's ask, K2a): a hard floor the VoiceStory landscape lift is tuned to clear. */
@@ -150,11 +156,17 @@ object KitchenLayout {
      * band just above the counter top line (his lower body hidden by the counter front, so he
      * never reaches into the props' own band). A fixed height, not the whole wall: landscape's
      * lift (K2a) scrolls most of the wall off-screen, so a band hugging the counter line stays
-     * visible there too, instead of a tall Rory mostly cropped away. */
+     * visible there too, instead of a tall Rory mostly cropped away. Landscape gets a shorter
+     * band than portrait (K2d): even with [COUNTER_TOP_LANDSCAPE] moved down, the lift still
+     * clips off roughly its own share of the scene's top, so a shorter Rory sits entirely below
+     * that clip line instead of a taller one straddling it (only its bottom sliver surviving). */
     private const val RORY_LEFT = 0.33f
     private const val RORY_RIGHT = 0.67f
-    private const val RORY_HEIGHT = 0.20f
+    private const val RORY_HEIGHT_PORTRAIT = 0.20f
+    private const val RORY_HEIGHT_LANDSCAPE = 0.12f
     private const val RORY_MARGIN = 0.02f
+
+    private fun roryHeight(landscape: Boolean): Float = if (landscape) RORY_HEIGHT_LANDSCAPE else RORY_HEIGHT_PORTRAIT
 
     /** Where the counter's props (the bowl choice, the pan and what's on it, the berries) are
      * kept: the rest of the counter's width, clear of Bear's lane, always at or below the
@@ -176,7 +188,7 @@ object KitchenLayout {
     /** Rory's box (with his hat), as a fraction of the kitchen scene's own box. */
     fun roryBox(landscape: Boolean): Rect {
         val bottom = counterTop(landscape) - RORY_MARGIN
-        return Rect(RORY_LEFT, bottom - RORY_HEIGHT, RORY_RIGHT, bottom)
+        return Rect(RORY_LEFT, bottom - roryHeight(landscape), RORY_RIGHT, bottom)
     }
 
     /** The "tap the bowl" choice's own slot, at the near end of the props band. */

@@ -917,17 +917,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     }
                     // The buddy and Rory, bottom-left, clear of the green button's corner. Hidden
                     // under the puzzle/tap panel while he's choosing: nothing else competes for taps.
+                    // Rory's Kitchen never shows this row at all (Ruby, K2d): Bear sits in that same
+                    // bottom-left corner on his stool, and the buddy avatar used to appear right over
+                    // him (including through the ending) with Bear nowhere to be seen.
                     val narrow = w < 520.dp
-                    if (!stripShown) Row(
+                    if (!stripShown && !isKitchenStory) Row(
                         Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * if (narrow) 0.24f else 0.3f).widthIn(max = (w - ContinueReserve).coerceAtLeast(0.dp)),
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         val species = p.hero ?: Species.KID
                         HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == VPhase.END) Mood.CHEER else Mood.HAPPY)
                         // Rory beside the buddy, his mouth going as he models each word (on a phone
-                        // too while he talks; the big listening Rory takes over on his turn). Rory's
-                        // Kitchen's own Rory, behind the counter, replaces him there.
-                        if (beat.backdrop != Backdrop.KITCHEN && listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
+                        // too while he talks; the big listening Rory takes over on his turn).
+                        if (listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
                     }
                     // The balloon pattern puzzle, right in the scene: Rory's named the problem, now
                     // it waits for a tap (see GameBeatState). Nothing times out, nothing else moves.

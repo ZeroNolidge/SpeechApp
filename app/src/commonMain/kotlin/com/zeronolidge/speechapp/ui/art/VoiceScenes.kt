@@ -366,12 +366,16 @@ private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talkin
         }
     }
     // The counter front, redrawn over Rory's lower body: behind the counter, only his top half
-    // shows (nothing to hide while he's not drawn at all).
+    // shows (nothing to hide while he's not drawn at all). Scoped to Rory's own lane width only
+    // (K2d fix): drawn full-width, this used to repaint straight over Bear's lane too, after his
+    // Critter had already been drawn, so he never showed at all.
     if (roryVisible) {
         val ct = KitchenLayout.counterTop(landscape)
         Canvas(Modifier.fillMaxSize()) {
-            paperRect(Color(0xFFC9773A), Offset(0f, size.height * ct), Size(size.width, size.height * (1f - ct)))
-            paperRect(Color(0xFFE6C38E), Offset(0f, size.height * ct), Size(size.width, size.height * 0.045f))
+            val left = size.width * rory.l
+            val width = size.width * (rory.r - rory.l)
+            paperRect(Color(0xFFC9773A), Offset(left, size.height * ct), Size(width, size.height * (1f - ct)))
+            paperRect(Color(0xFFE6C38E), Offset(left, size.height * ct), Size(width, size.height * 0.045f))
         }
     }
 }
@@ -672,8 +676,11 @@ fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
             layers.forEachIndexed { i, (pw, py) ->
                 val top = Path().apply { addOval(Rect(Offset(w * (0.5f - pw / 2f), h * py), Size(w * pw, h * 0.22f))) }
                 val shape = if (bitten && i == layers.lastIndex) {
+                    // Bear sits at the far left of the counter: the bite comes out of the top
+                    // pancake's left edge, nearest him (K2d fix; it was cut from the right edge,
+                    // the side away from Bear).
                     val bite = Path().apply {
-                        addOval(Rect(Offset(w * (0.5f + pw * 0.14f), h * (py - 0.01f)), Size(w * pw * 0.26f, h * 0.2f)))
+                        addOval(Rect(Offset(w * (0.5f - pw * 0.4f), h * (py - 0.01f)), Size(w * pw * 0.26f, h * 0.2f)))
                     }
                     Path().apply { op(top, bite, PathOperation.Difference) }
                 } else {

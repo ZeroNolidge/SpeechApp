@@ -673,15 +673,18 @@ private fun DrawScope.drawPuppetPart(
                         oval(50f, top + 2f, 44f, 7f, c)
                     }
                     "hat_chef" -> {
-                        // Rory's Kitchen: a simple puffy paper toque, a white band and a rounded
-                        // puffy top, thin grey outline (Ruby, K2b).
+                        // Rory's Kitchen: a toque, a white band below a puffy top made of three
+                        // overlapping rounded puffs (Ruby, K2d: one plain circle read as a big
+                        // white ball), wider than tall, thin grey outline all round.
                         val grey = Color(0xFFBDBDBD)
                         val bandTL = o(32f, top + 2f)
                         val bandSize = Size(36f * u, 11f * u)
                         paperRoundRect(c, bandTL, bandSize, CornerRadius(4f * u))
                         drawRoundRect(grey, bandTL, bandSize, CornerRadius(4f * u, 4f * u), style = Stroke(1.2f * u))
-                        circle(50f, top - 11f, 21f, c)
-                        drawCircle(grey, 21f * u, o(50f, top - 11f), style = Stroke(1.2f * u))
+                        listOf(Triple(37f, top - 6f, 14f), Triple(50f, top - 13f, 15f), Triple(63f, top - 6f, 14f)).forEach { (x, y, r) ->
+                            circle(x, y, r, c)
+                            drawCircle(grey, r * u, o(x, y), style = Stroke(1.2f * u))
+                        }
                     }
                 }
             }
