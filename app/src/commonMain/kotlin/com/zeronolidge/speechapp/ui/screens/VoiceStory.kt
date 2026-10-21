@@ -41,15 +41,23 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.audio.VoiceTry
+import com.zeronolidge.speechapp.logic.VoiceBeat
 import com.zeronolidge.speechapp.logic.BalloonGame
+import com.zeronolidge.speechapp.logic.Choice
 import com.zeronolidge.speechapp.logic.GameBeatPhase
 import com.zeronolidge.speechapp.logic.GameBeatState
+import com.zeronolidge.speechapp.logic.KitchenBeatState
+import com.zeronolidge.speechapp.logic.KitchenFlow
+import com.zeronolidge.speechapp.logic.KitchenGame
+import com.zeronolidge.speechapp.logic.KitchenPhase
+import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.logic.PatternRound
 import com.zeronolidge.speechapp.logic.Prop
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceStories
 import com.zeronolidge.speechapp.logic.VoicePush
 import com.zeronolidge.speechapp.logic.WordStat
+import com.zeronolidge.speechapp.logic.talkGoal
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.placeKey
@@ -90,7 +98,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
-private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END, GAME }
+private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END, GAME, KITCHEN }
 
 /**
  * A voice story (logic/VoiceStories.kt): his word makes each thing happen. Every beat: Rory names
@@ -152,11 +160,26 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val pts = choiceCenters.joinToString(";") { "${it.x.toInt()},${it.y.toInt()}" }
         println("GAMEBEAT phase=${g.phase} choices=$pts answerIndex=$answerIndex")
     }
+    // Rory's Kitchen's tap/talk flow (see KitchenBeatState), for the beats with `kitchen != null`.
+    var kitchenPhase by remember { mutableStateOf(KitchenBeatState(KitchenFlow.FLIP)) }
+    var kitchenRound by remember { mutableStateOf<Choice<String>?>(null) }
+    var kitchenHopped by remember { mutableStateOf(setOf<Int>()) }
+    var kitchenWrong by remember { mutableIntStateOf(-1) }
+    var kitchenWiggleBump by remember { mutableIntStateOf(0) }
+    // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below.
+    val kitchenCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero) }
+    fun logKitchen(k: KitchenBeatState) {
+        val b = beats.getOrNull(index) ?: return
+        val tiles = kitchenTiles(b, k.flow, kitchenRound)
+        val pts = tiles.indices.joinToString(";") { i -> kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" } }
+        println("KITCHEN step=$index phase=${k.phase} targets=$pts")
+    }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
 
     lateinit var startBeat: (Int) -> Unit
+    lateinit var startKitchenTalk: () -> Unit
 
     fun finish() {
         phase = VPhase.END
@@ -222,12 +245,25 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             gamePhase = gamePhase.popped()
             logGame(gamePhase)
         }
+        // A kitchen talk turn just finished (his voice, or "I said it!"): one more counted; a
+        // flow with several tries (stir, bubbles) repeats the same listening turn, otherwise the
+        // fix below plays, same as any other beat.
+        if (b.kitchen != null) {
+            val next = kitchenPhase.talked()
+            kitchenPhase = next
+            logKitchen(next)
+            if (next.phase == KitchenPhase.TALK) {
+                startKitchenTalk()
+                return
+            }
+        }
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
         if (micUsed) p.speechResult(heard)
         p.addGem()?.let { app.showGift(it) }
         app.speaker.say(b.success) {
             if (s != session) return@say
             if (b.game) { gamePhase = gamePhase.closed(); logGame(gamePhase) }
+            if (b.kitchen != null) { kitchenPhase = kitchenPhase.closed(); logKitchen(kitchenPhase) }
             when {
                 k + 1 >= beats.size -> finish()
                 // After about 12 minutes of play: straight to the calm goodbye beat.
@@ -379,7 +415,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         scope.launch { act.snapTo(0f) }
         app.listening = false
         val b = beats[k]
-        if (b.game) {
+        if (b.kitchen != null) {
+            // Rory names the problem, then its tap or talk flow plays out (see KitchenBeatState);
+            // the kitchen effect below drives it on from there.
+            kitchenPhase = KitchenBeatState(flow = b.kitchen, goal = b.kitchenGoal)
+            kitchenRound = if (b.kitchen == KitchenFlow.TAP_CHOICE) KitchenGame.tapRound(b.word, b.kitchenChoices.size + 1, gameRnd) else null
+            kitchenHopped = emptySet()
+            kitchenWrong = -1
+            phase = VPhase.KITCHEN
+            app.rememberInstruction(b.problem)
+            logKitchen(kitchenPhase)
+            app.speaker.say(b.problem) { if (s == session) { kitchenPhase = kitchenPhase.named(); logKitchen(kitchenPhase) } }
+        } else if (b.game) {
             // The puzzle comes first: Rory names it, then waits for a tap (see GameBeatState).
             // Which word he ends up saying isn't known until it's solved, so the usual "say the
             // word three times" wait till then.
@@ -437,6 +484,105 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         phase = VPhase.MODEL
         app.rememberInstruction("${fixed.line(p.speechStep)}! Say it out loud! Then tap the big green I said it button.")
         listen(k)
+    }
+
+    /** A kitchen talk turn's single model line (not three; see KitchenFlow), then the usual listen. */
+    fun modelKitchenWord(k: Int, s: Int) {
+        val say = line(k)
+        if (s == session) { chipBig = false; chipBeat++ }
+        app.speaker.say(say) { if (s == session && phase == VPhase.MODEL) listen(k) }
+    }
+
+    startKitchenTalk = {
+        val k = index
+        val s = session
+        // A flow with several tries (stir, bubbles) calls this again for each one: a fresh push
+        // and a fresh action, same as any new talk turn, so each stir or pop plays out in full.
+        model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
+        modelSound[0] = null
+        modelledBeat[0] = false
+        mouthCue = null
+        pushNow = 0f
+        scope.launch { act.snapTo(0f) }
+        app.listening = false
+        phase = VPhase.MODEL
+        app.rememberInstruction("${line(k)}! Say it out loud! Then tap the big green I said it button.")
+        modelKitchenWord(k, s)
+    }
+
+    /** A tap on one of the kitchen flow's tiles (ignored outside its TAP phase; see KitchenBeatState). */
+    fun tapKitchen(i: Int) {
+        if (kitchenPhase.phase != KitchenPhase.TAP) return
+        when (beats[index].kitchen) {
+            KitchenFlow.TAP_CHOICE -> {
+                val round = kitchenRound ?: return
+                val right = round.options.getOrNull(i) == round.answer
+                val next = kitchenPhase.tap(right)
+                if (!right && next.phase == KitchenPhase.WIGGLE) kitchenWiggleBump++
+                if (!right) kitchenWrong = i
+                kitchenPhase = next
+                logKitchen(next)
+            }
+            KitchenFlow.COUNT -> {
+                if (i in kitchenHopped) return
+                kitchenHopped = kitchenHopped + i
+                val next = kitchenPhase.tap(true)
+                kitchenPhase = next
+                app.speaker.say(Numbers.word(next.tapsDone))
+                logKitchen(next)
+            }
+            KitchenFlow.FLIP -> {
+                val next = kitchenPhase.tap(true)
+                kitchenPhase = next
+                logKitchen(next)
+            }
+            else -> {}
+        }
+    }
+
+    // The kitchen flow's wiggle and shown-answer settle on their own, same as the balloon puzzle;
+    // its talk turn (one model line, then listen) starts once its taps are done, or at once for
+    // the stir/bubbles flows (no taps at all); the count flow has no talk turn, so its fix plays
+    // here too, straight from its last tap.
+    LaunchedEffect(kitchenPhase.phase) {
+        val s = session
+        val b = beats.getOrNull(index) ?: return@LaunchedEffect
+        when (kitchenPhase.phase) {
+            KitchenPhase.WIGGLE -> {
+                app.speaker.say("Try again!")
+                delay(650)
+                if (s == session) {
+                    kitchenPhase = kitchenPhase.wiggled()
+                    logKitchen(kitchenPhase)
+                }
+            }
+            KitchenPhase.SHOW_ANSWER -> {
+                val answer = kitchenRound?.answer ?: b.word
+                app.speaker.say(revealLine(answer)) {
+                    if (s == session) {
+                        kitchenPhase = kitchenPhase.shown()
+                        logKitchen(kitchenPhase)
+                    }
+                }
+            }
+            KitchenPhase.TALK -> startKitchenTalk()
+            KitchenPhase.CLOSE -> if (b.kitchen?.talkGoal(b.kitchenGoal) == 0) {
+                // The count flow: no talk turn happened, so the fix plays straight from here.
+                phase = VPhase.ACT
+                app.speaker.then(b.success) {
+                    if (s == session) {
+                        kitchenPhase = kitchenPhase.closed()
+                        logKitchen(kitchenPhase)
+                        when {
+                            index + 1 >= beats.size -> finish()
+                            !beats[index + 1].goodbye && app.sessionLong() -> startBeat(beats.lastIndex)
+                            else -> startBeat(index + 1)
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
     }
 
     /** A tap on one of the puzzle's choice balloons (ignored outside the puzzle phase itself). */
@@ -531,12 +677,14 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
-                    // While he's choosing, the choice strip is reserved space, not an overlay:
-                    // the scene sits fully above it, never behind it. Landscape (wider than tall)
-                    // uses a slimmer strip (~18% of the stage); portrait keeps the taller one.
-                    val landscape = phase == VPhase.GAME && w > h
+                    // While he's choosing or tapping, the choice strip is reserved space, not an
+                    // overlay: the scene sits fully above it, never behind it. Landscape (wider
+                    // than tall) uses a slimmer strip (~18% of the stage); portrait keeps the
+                    // taller one. The kitchen's tap tiles share the same strip as the balloon puzzle.
+                    val stripShown = phase == VPhase.GAME || phase == VPhase.KITCHEN
+                    val landscape = stripShown && w > h
                     val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
-                    val gameStrip = if (phase == VPhase.GAME) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
+                    val gameStrip = if (stripShown) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
                     Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip).clipToBounds()) {
                         if (landscape) {
                             // Keep the scene at its usual full-stage size (so Bear is never
@@ -544,10 +692,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             // spare above the strip's top edge; the lifted-off top is clipped.
                             val lift = gameStrip + BalloonLandscapeGap
                             Box(Modifier.fillMaxWidth().height(h).offset(y = -lift)) {
-                                VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = phase == VPhase.GAME)
+                                VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown)
                             }
                         } else {
-                            VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = phase == VPhase.GAME)
+                            VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown)
                         }
                     }
                     // The sticker he earned, peeling on in the middle at the end.
@@ -555,9 +703,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         Box(Modifier.align(Alignment.Center)) { Sticker(st, minOf(h * 0.35f, 180.dp), Modifier.peelIn(st.text)) }
                     }
                     // The buddy and Rory, bottom-left, clear of the green button's corner. Hidden
-                    // under the puzzle panel while he's choosing: nothing else competes for taps.
+                    // under the puzzle/tap panel while he's choosing: nothing else competes for taps.
                     val narrow = w < 520.dp
-                    if (phase != VPhase.GAME) Row(
+                    if (!stripShown) Row(
                         Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * if (narrow) 0.24f else 0.3f).widthIn(max = (w - ContinueReserve).coerceAtLeast(0.dp)),
                         verticalAlignment = Alignment.Bottom,
                     ) {
@@ -577,6 +725,14 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    // Rory's Kitchen's tap tiles (bowl choices, berries to count, the pancake to
+                    // flip), right in the scene, same as the balloon puzzle above.
+                    if (phase == VPhase.KITCHEN) KitchenTapRow(
+                        beat, kitchenPhase, kitchenRound, kitchenHopped, kitchenWrong, kitchenWiggleBump, gameStrip,
+                        onTap = ::tapKitchen,
+                        onCenter = { i, c -> kitchenCenters[i] = c },
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
             // The word to say, big, at the top: drawn over everything (scene, dim and the glowing
@@ -597,7 +753,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     ExpandChip(line(k), more)
                 }
             }
-            if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT && phase != VPhase.GAME) {
+            if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT && phase != VPhase.GAME && phase != VPhase.KITCHEN) {
                 Row(
                     Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
                         .padding(top = 8.dp, start = 8.dp)
@@ -616,8 +772,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory models a sound: his mouth shape for it, big, top-right.
             mouthCue?.let { MouthCue(it, Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).zIndex(4f).popIn("mouth")) }
             // "I said it!" is always there in the same spot: it does the same action as his voice.
-            // The puzzle has no continue button at all (a quiz step moves on by answering).
-            if (phase != VPhase.GAME) ContinueAction(
+            // The puzzle and the kitchen's tap tiles have no continue button at all (a quiz step
+            // moves on by answering).
+            if (phase != VPhase.GAME && phase != VPhase.KITCHEN) ContinueAction(
                 hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),
                 label = if (phase == VPhase.END || phase == VPhase.INTRO) null else "I said it!",
             ) {
@@ -635,7 +792,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         model[0].pressed()
                         finishGently(k, heard = false, micUsed = false)
                     }
-                    VPhase.ACT, VPhase.GAME -> {}
+                    VPhase.ACT, VPhase.GAME, VPhase.KITCHEN -> {}
                     VPhase.END -> if (app.sessionLong()) nav.go(Screen.Rest) else nav.home()
                 }
             }
@@ -752,6 +909,71 @@ private fun BalloonPatternPuzzle(
                     wiggle = if (i == wrongChoice) wiggleBump else 0,
                     onClick = { onTap(i) },
                 ) { Balloon(balloonColor(opt), 64.dp) }
+            }
+        }
+    }
+}
+
+/** The emoji for a kitchen tap choice word: the bowl beat's own word and its two distractors
+ * (see [KitchenGame.distractors]); nothing else ever shows here. */
+private fun kitchenWordEmoji(word: String): String = when (word) {
+    "bowl" -> "🥣"
+    "cup" -> "☕"
+    "spoon" -> "🥄"
+    else -> "❓"
+}
+
+/** The kitchen flow's tap tiles, in order: the bowl choice's shuffled options, three berries to
+ * count in, or the pancake to flip (its own emoji); [KitchenFlow.STIR]/[KitchenFlow.BUBBLES] have
+ * none (no tap phase at all; see [KitchenFlow.tapGoal]). */
+private fun kitchenTiles(beat: VoiceBeat, flow: KitchenFlow, round: Choice<String>?): List<String> = when (flow) {
+    KitchenFlow.TAP_CHOICE -> round?.options?.map(::kitchenWordEmoji) ?: emptyList()
+    KitchenFlow.COUNT -> List(3) { "🍓" }
+    KitchenFlow.FLIP -> listOf(beat.emoji)
+    KitchenFlow.STIR, KitchenFlow.BUBBLES -> emptyList()
+}
+
+private val KitchenChoiceGap = 32.dp
+
+/**
+ * Rory's Kitchen's tap tiles (see [KitchenBeatState]), drawn in the same reserved bottom strip as
+ * the balloon puzzle above: "Tap the bowl!" among its distractors (wrong taps wiggle, the right
+ * one glows after a first miss, same as [BalloonPatternPuzzle]'s choices), three berries that hop
+ * in as he taps each one, or the pancake to flip. Empty (and drawn nothing) for the stir/bubbles
+ * flows, which have no tap phase. [onCenter] reports each tile's screen centre for the KITCHEN log
+ * the screenshot test reads.
+ */
+@Composable
+private fun KitchenTapRow(
+    beat: VoiceBeat,
+    state: KitchenBeatState,
+    round: Choice<String>?,
+    hopped: Set<Int>,
+    wrongChoice: Int,
+    wiggleBump: Int,
+    stripHeight: Dp,
+    onTap: (Int) -> Unit,
+    onCenter: (Int, Offset) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tiles = kitchenTiles(beat, state.flow, round)
+    if (tiles.isEmpty()) return
+    val answerShown = state.phase == KitchenPhase.SHOW_ANSWER
+    Box(modifier) {
+        Row(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(KitchenChoiceGap, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tiles.forEachIndexed { i, emoji ->
+                val isAnswer = state.flow == KitchenFlow.TAP_CHOICE && round != null && round.options.getOrNull(i) == round.answer
+                AnswerCard(
+                    modifier = Modifier.size(BalloonChoiceSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
+                    correct = (answerShown && isAnswer) || i in hopped,
+                    glow = state.glow && isAnswer && !answerShown,
+                    wiggle = if (i == wrongChoice) wiggleBump else 0,
+                    onClick = { onTap(i) },
+                ) { Text(emoji, fontSize = 40.sp) }
             }
         }
     }
