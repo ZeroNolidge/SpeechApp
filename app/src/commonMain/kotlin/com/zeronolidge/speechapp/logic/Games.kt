@@ -62,22 +62,41 @@ object Patterns {
 /**
  * The balloon colour-pattern mini game inside a voice-story beat (see [VoiceBeat.game]): finish a
  * row of balloons with a colour pattern (a [PatternRound] of colour words, reusing [Patterns.fromPool]).
- * Every colour starts with one of his target sounds, p or b, so the word he says afterwards (the
- * colour he picked) is also speech practice. Its own quiet ladder (see [Ladder.GAME_PATTERN])
- * steps AB -> AAB -> ABC, the same rule as every other difficulty step.
+ * Blue and purple are his target sounds, p and b, with recorded clips; red is only the pattern's
+ * third colour (for ABC) and is never the word he's asked to say (see [talkWord]). Its own quiet
+ * ladder (see [Ladder.GAME_PATTERN]) steps AB -> AAB -> ABC, the same rule as every other
+ * difficulty step.
  */
 object BalloonGame {
-    val colors = listOf("blue", "purple", "pink", "brown")
+    val colors = listOf("blue", "purple", "red")
 
     private val shapesByStep = listOf("AB", "AAB", "ABC")
 
     fun make(step: Int, rnd: Random): PatternRound = Patterns.fromPool(shapesByStep[step.coerceIn(0, shapesByStep.lastIndex)], colors, rnd)
 
-    /** The word he says for [color]: one word, two words, a short sentence. */
-    fun lines(color: String): List<String> = listOf(color, "$color balloon", "Say $color!")
+    /** The word he actually says once the puzzle is solved: the picked colour when it's already
+     * one of his target sounds (p or b), else "pop" instead, so the speech practice is always a
+     * p/b word no matter which colour the pattern landed on. */
+    fun talkWord(color: String): String = if (color.first() in "pb") color else "pop"
 
-    /** The speech sound it practises: every colour in [colors] starts with p or b. */
-    fun sound(color: String): String = color.first().toString()
+    /** The word he says for [word] (see [talkWord]): one word, two words, a short sentence. */
+    fun lines(word: String): List<String> = listOf(word, "$word balloon", "Say $word!")
+
+    /** The speech sound [word] practises (always p or b; see [talkWord]). */
+    fun sound(word: String): String = word.first().toString()
+
+    /** What Rory says once the fix has played: one line shared by every colour, so solving the
+     * puzzle never needs more than one new recorded line. */
+    fun success(word: String): String = "${word.replaceFirstChar { it.uppercaseChar() }}! There it goes! The balloon fills the gap, and the row is complete!"
+
+    /** The picked colour's own look in the scene: a coloured paper circle, since there's no
+     * coloured balloon emoji to swap in ([VoiceBeat.propEmoji]). */
+    fun balloonEmoji(color: String): String = when (color) {
+        "blue" -> "🔵"
+        "purple" -> "🟣"
+        "red" -> "🔴"
+        else -> "🎈"
+    }
 }
 
 /** Three of one kind and one that doesn't belong. */

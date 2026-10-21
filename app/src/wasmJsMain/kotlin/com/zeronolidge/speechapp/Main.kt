@@ -108,6 +108,8 @@ private fun testStart(hash: String): Screen? {
             v == "say" -> Screen.SayCheck
             v == "cave" -> Screen.EchoCave()
             v == "rest" -> Screen.Rest
+            // The balloon story's own game beat, straight away: for the puzzle's screenshot check.
+            v == "story-balloon-pattern" -> Screen.VoiceStory("balloon", com.zeronolidge.speechapp.logic.VoiceStories.balloon.beats.indexOfFirst { it.game })
             // "story-balloon@3": that story, starting at its 4th beat.
             v.startsWith("story-") -> v.removePrefix("story-").split("@").let { Screen.VoiceStory(it[0], it.getOrNull(1)?.toIntOrNull() ?: 0) }
             v.startsWith("saybeat-") -> Screen.SayBeatCheck(v.removePrefix("saybeat-"))

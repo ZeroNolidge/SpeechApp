@@ -2,14 +2,19 @@ package com.zeronolidge.speechapp.ui.screens
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
@@ -28,10 +33,17 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import com.zeronolidge.speechapp.data.SpeechContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.audio.VoiceTry
+import com.zeronolidge.speechapp.logic.BalloonGame
+import com.zeronolidge.speechapp.logic.GameBeatPhase
+import com.zeronolidge.speechapp.logic.GameBeatState
+import com.zeronolidge.speechapp.logic.PatternRound
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceStories
 import com.zeronolidge.speechapp.logic.VoicePush
@@ -48,12 +60,17 @@ import com.zeronolidge.speechapp.ui.art.VoiceBeatScene
 import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
+import com.zeronolidge.speechapp.ui.art.paperOval
 import com.zeronolidge.speechapp.ui.art.voiceTarget
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.runtime.mutableFloatStateOf
 import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.components.AnswerCard
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueReserve
@@ -61,11 +78,14 @@ import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.peelIn
+import com.zeronolidge.speechapp.ui.components.revealLine
 import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
-private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END }
+private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END, GAME }
 
 /**
  * A voice story (logic/VoiceStories.kt): his word makes each thing happen. Every beat: Rory names
@@ -81,7 +101,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val app = LocalApp.current
     val p = app.progress
     val story = remember(id) { VoiceStories.ready(VoiceStories.byId(id) ?: VoiceStories.boat, p.customWords) }
-    val beats = story.beats
+    var beats by remember(id) { mutableStateOf(story.beats) }
     val mic = rememberMicPermission()
     val scope = rememberCoroutineScope()
     val still = LocalReduceMotion.current
@@ -112,6 +132,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             chipPulse.animateTo(if (chipBig) 1.25f else 1.12f, tween(if (chipBig) 420 else 160))
             chipPulse.animateTo(1f, tween(if (chipBig) 480 else 220))
         }
+    }
+    // The balloon colour-pattern puzzle (see GameBeat.kt), for the one beat with `game = true`.
+    val gameRnd = remember(id) { Random(Random.nextLong()) }
+    var puzzle by remember { mutableStateOf<PatternRound?>(null) }
+    var gamePhase by remember { mutableStateOf(GameBeatState()) }
+    var wrongChoice by remember { mutableIntStateOf(-1) }
+    var wiggleBump by remember { mutableIntStateOf(0) }
+    // The choice balloons' screen centres (CSS px), for the GAMEBEAT log the screenshot test reads.
+    val choiceCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero) }
+    fun logGame(g: GameBeatState) {
+        val round = puzzle ?: return
+        val answerIndex = round.choice.options.indexOf(round.choice.answer)
+        val pts = choiceCenters.joinToString(";") { "${it.x.toInt()},${it.y.toInt()}" }
+        println("GAMEBEAT phase=${g.phase} choices=$pts answerIndex=$answerIndex")
     }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
@@ -168,11 +202,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
         phase = VPhase.ACT
         val b = beats[k]
+        // The puzzle's talk turn just finished: the fix is about to play (success line + sticker).
+        if (b.game) {
+            p.gameBeatResult(gamePhase.rightFirstTry)
+            gamePhase = gamePhase.talked()
+            logGame(gamePhase)
+        }
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
         if (micUsed) p.speechResult(heard)
         p.addGem()?.let { app.showGift(it) }
         app.speaker.say(b.success) {
             if (s != session) return@say
+            if (b.game) { gamePhase = gamePhase.closed(); logGame(gamePhase) }
             when {
                 k + 1 >= beats.size -> finish()
                 // After about 12 minutes of play: straight to the calm goodbye beat.
@@ -298,6 +339,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    /** Rory says the word three times, slower the third time (the word chip pulses once as each
+     * one starts, the slow third one bigger), then listens. Shared by every beat's model turn and,
+     * once the puzzle below has picked a word, the game beat's own. */
+    fun modelWord(k: Int, s: Int) {
+        val say = line(k)
+        fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
+        pulse(false)
+        app.speaker.say(say) { pulse(false) }
+        app.speaker.then(say) { pulse(true) }
+        app.speaker.then(say, slow = true) { if (s == session && phase == VPhase.MODEL) listen(k) }
+    }
+
     startBeat = { k ->
         session++
         val s = session
@@ -310,18 +363,84 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         mouthCue = null
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
-        phase = VPhase.MODEL
         app.listening = false
         val b = beats[k]
-        val say = line(k)
-        app.rememberInstruction("${b.problem} $say. $say. $say.")
-        // Rory names the problem, then says the word three times, slower the third time; the
-        // word chip pulses once as he starts each one (the slow third one bigger and longer).
-        fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
-        app.speaker.say(b.problem) { pulse(false) }
-        app.speaker.then(say) { pulse(false) }
-        app.speaker.then(say) { pulse(true) }
-        app.speaker.then(say, slow = true) { if (s == session && phase == VPhase.MODEL) listen(k) }
+        if (b.game) {
+            // The puzzle comes first: Rory names it, then waits for a tap (see GameBeatState).
+            // Which word he ends up saying isn't known until it's solved, so the usual "say the
+            // word three times" wait till then.
+            puzzle = BalloonGame.make(p.gamePatternStep, gameRnd)
+            gamePhase = GameBeatState()
+            wrongChoice = -1
+            phase = VPhase.GAME
+            app.rememberInstruction(b.problem)
+            logGame(gamePhase)
+            app.speaker.say(b.problem) { if (s == session) { gamePhase = gamePhase.named(); logGame(gamePhase) } }
+        } else {
+            phase = VPhase.MODEL
+            app.rememberInstruction("${b.problem} ${line(k)}. ${line(k)}. ${line(k)}.")
+            app.speaker.say(b.problem) { modelWord(k, s) }
+        }
+    }
+
+    /** The puzzle is solved (right away, or after Rory showed the answer): the word to say is
+     * now known, so the usual talk turn (full listening look, "I said it!") plays out exactly
+     * like any other beat's, and the fix (and sticker) close the beat when it's done. */
+    fun startGameTalk() {
+        val k = index
+        val round = puzzle ?: return
+        val word = BalloonGame.talkWord(round.choice.answer)
+        val fixed = beats[k].copy(
+            lines = BalloonGame.lines(word),
+            sound = BalloonGame.sound(word),
+            success = BalloonGame.success(word),
+            propEmoji = BalloonGame.balloonEmoji(round.choice.answer),
+        )
+        beats = beats.toMutableList().also { it[k] = fixed }
+        val s = session
+        phase = VPhase.MODEL
+        app.listening = false
+        app.rememberInstruction("${fixed.line(p.speechStep)}. ${fixed.line(p.speechStep)}. ${fixed.line(p.speechStep)}.")
+        modelWord(k, s)
+    }
+
+    /** A tap on one of the puzzle's choice balloons (ignored outside the puzzle phase itself). */
+    fun tapChoice(i: Int) {
+        val round = puzzle ?: return
+        if (gamePhase.phase != GameBeatPhase.PUZZLE) return
+        val right = round.choice.options[i] == round.choice.answer
+        val next = gamePhase.tap(right)
+        if (!right && next.phase == GameBeatPhase.WIGGLE) wiggleBump++
+        wrongChoice = if (!right) i else wrongChoice
+        gamePhase = next
+        logGame(next)
+    }
+
+    // The wiggle settles back to the puzzle (the right choice glowing), and a shown answer moves
+    // on to the usual talk turn, entirely on their own: no tap needed.
+    LaunchedEffect(gamePhase.phase) {
+        val s = session
+        when (gamePhase.phase) {
+            GameBeatPhase.WIGGLE -> {
+                app.speaker.say("Try again!")
+                delay(650)
+                if (s == session) {
+                    gamePhase = gamePhase.wiggled()
+                    logGame(gamePhase)
+                }
+            }
+            GameBeatPhase.SHOW_ANSWER -> {
+                val answer = puzzle?.choice?.answer ?: ""
+                app.speaker.say(revealLine(answer)) {
+                    if (s == session) {
+                        gamePhase = gamePhase.shown()
+                        logGame(gamePhase)
+                    }
+                }
+            }
+            GameBeatPhase.TALK -> startGameTalk()
+            else -> {}
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -372,9 +491,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     sticker?.let { st ->
                         Box(Modifier.align(Alignment.Center)) { Sticker(st, minOf(h * 0.35f, 180.dp), Modifier.peelIn(st.text)) }
                     }
-                    // The buddy and Rory, bottom-left, clear of the green button's corner.
+                    // The buddy and Rory, bottom-left, clear of the green button's corner. Hidden
+                    // under the puzzle panel while he's choosing: nothing else competes for taps.
                     val narrow = w < 520.dp
-                    Row(
+                    if (phase != VPhase.GAME) Row(
                         Modifier.align(Alignment.BottomStart).padding(start = 4.dp).height(h * if (narrow) 0.24f else 0.3f).widthIn(max = (w - ContinueReserve).coerceAtLeast(0.dp)),
                         verticalAlignment = Alignment.Bottom,
                     ) {
@@ -383,6 +503,16 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         // Rory beside the buddy, his mouth going as he models each word (on a phone
                         // too while he talks; the big listening Rory takes over on his turn).
                         if (listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
+                    }
+                    // The balloon pattern puzzle, right in the scene: Rory's named the problem, now
+                    // it waits for a tap (see GameBeatState). Nothing times out, nothing else moves.
+                    if (phase == VPhase.GAME) puzzle?.let { round ->
+                        BalloonPatternPuzzle(
+                            round, gamePhase, wrongChoice, wiggleBump,
+                            onTap = ::tapChoice,
+                            onCenter = { i, c -> choiceCenters[i] = c },
+                            modifier = Modifier.align(Alignment.Center),
+                        )
                     }
                 }
             }
@@ -404,7 +534,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     ExpandChip(line(k), more)
                 }
             }
-            if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT) {
+            if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT && phase != VPhase.GAME) {
                 Row(
                     Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
                         .padding(top = 8.dp, start = 8.dp)
@@ -423,7 +553,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory models a sound: his mouth shape for it, big, top-right.
             mouthCue?.let { MouthCue(it, Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).zIndex(4f).popIn("mouth")) }
             // "I said it!" is always there in the same spot: it does the same action as his voice.
-            ContinueAction(
+            // The puzzle has no continue button at all (a quiz step moves on by answering).
+            if (phase != VPhase.GAME) ContinueAction(
                 hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),
                 label = if (phase == VPhase.END || phase == VPhase.INTRO) null else "I said it!",
             ) {
@@ -441,8 +572,97 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         model[0].pressed()
                         finishGently(k, heard = false, micUsed = false)
                     }
-                    VPhase.ACT -> {}
+                    VPhase.ACT, VPhase.GAME -> {}
                     VPhase.END -> if (app.sessionLong()) nav.go(Screen.Rest) else nav.home()
+                }
+            }
+        }
+    }
+}
+
+/** The centre of [c], in window px (CSS px on the web): what the GAMEBEAT log reports. */
+private fun choiceCenter(c: androidx.compose.ui.layout.LayoutCoordinates): Offset {
+    val o = c.positionInWindow()
+    return Offset(o.x + c.size.width / 2f, o.y + c.size.height / 2f)
+}
+
+private fun balloonColor(word: String): Color = when (word) {
+    "blue" -> Color(0xFF42A5F5)
+    "purple" -> Color(0xFF9575CD)
+    "red" -> Color(0xFFEF5350)
+    else -> Color(0xFFBDBDBD)
+}
+
+/** One paper-style balloon: a round body on a thin string. */
+@Composable
+private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension * 0.36f
+        val c = Offset(this.size.width / 2f, this.size.height * 0.42f)
+        paperOval(color, Offset(c.x - r, c.y - r * 1.15f), Size(r * 2f, r * 2.3f))
+        drawLine(Color(0xFF6D4C41), Offset(c.x, c.y + r * 1.1f), Offset(c.x, this.size.height * 0.94f), 1.5.dp.toPx())
+    }
+}
+
+/** The pattern's empty slot: a dashed outline until the answer is shown, then the same balloon. */
+@Composable
+private fun GapBalloon(size: Dp, color: Color?, modifier: Modifier = Modifier) {
+    if (color != null) {
+        Balloon(color, size, modifier.popIn("gap"))
+    } else {
+        Canvas(modifier.size(size)) {
+            drawCircle(
+                Color(0xFF9E9E9E), this.size.minDimension * 0.3f, Offset(this.size.width / 2f, this.size.height * 0.42f),
+                style = Stroke(2.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 7f))),
+            )
+        }
+    }
+}
+
+/**
+ * The balloon colour-pattern puzzle, drawn right in the story scene (see [GameBeatState]): the
+ * pattern so far at the top with its empty gap, and up to 3 big choice balloons at the bottom.
+ * Nothing moves by itself and there's no timer; every tap on a choice goes through [onTap], and
+ * [onCenter] reports each choice's screen centre (for the GAMEBEAT log the screenshot test reads).
+ */
+@Composable
+private fun BalloonPatternPuzzle(
+    round: PatternRound,
+    game: GameBeatState,
+    wrongChoice: Int,
+    wiggleBump: Int,
+    onTap: (Int) -> Unit,
+    onCenter: (Int, Offset) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val answerShown = game.phase == GameBeatPhase.SHOW_ANSWER
+    Box(modifier.fillMaxSize(0.94f).paperCard(Color(0xFFFFFDF2), 28.dp), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BoxWithConstraints(Modifier.weight(1.1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val slot = minOf(maxWidth / (round.shown.size + 1.6f), 68.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    round.shown.forEach { Balloon(balloonColor(it), slot) }
+                    GapBalloon(slot, if (answerShown) balloonColor(round.choice.answer) else null)
+                }
+            }
+            Row(
+                Modifier.weight(1f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                round.choice.options.forEachIndexed { i, opt ->
+                    val right = opt == round.choice.answer
+                    AnswerCard(
+                        modifier = Modifier.size(96.dp).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
+                        correct = answerShown && right,
+                        glow = game.glow && right && !answerShown,
+                        wiggle = if (i == wrongChoice) wiggleBump else 0,
+                        onClick = { onTap(i) },
+                    ) { Balloon(balloonColor(opt), 64.dp) }
                 }
             }
         }

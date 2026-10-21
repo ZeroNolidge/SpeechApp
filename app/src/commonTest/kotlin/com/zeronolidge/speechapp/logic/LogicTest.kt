@@ -119,11 +119,14 @@ class GamesTest {
     }
 }
 
-/** The balloon colour-pattern game beat: AB, then AAB, then ABC; every colour is p or b. */
+/** The balloon colour-pattern game beat: AB, then AAB, then ABC; every talk word is p or b. */
 class BalloonGameTest {
     @Test
-    fun everyColorStartsWithPOrB() {
-        for (c in BalloonGame.colors) assertTrue(c.first() == 'p' || c.first() == 'b', c)
+    fun everyTalkWordStartsWithPOrB() {
+        for (c in BalloonGame.colors) {
+            val w = BalloonGame.talkWord(c)
+            assertTrue(w.first() == 'p' || w.first() == 'b', w)
+        }
     }
 
     @Test
