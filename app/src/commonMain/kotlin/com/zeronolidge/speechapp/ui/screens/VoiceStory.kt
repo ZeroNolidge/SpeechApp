@@ -495,7 +495,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // (never behind it): the strip is reserved space, not an overlay.
                     val gameStrip = if (phase == VPhase.GAME) (h * BalloonStripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
                     Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip)) {
-                        VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize().clipToBounds())
+                        VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize().clipToBounds(), puzzleSafe = phase == VPhase.GAME)
                     }
                     // The sticker he earned, peeling on in the middle at the end.
                     sticker?.let { st ->
@@ -629,8 +629,9 @@ private val BalloonChoiceSize = 88.dp
 private val BalloonChoiceGap = 24.dp
 
 /** The soft sky-blue wash behind the choice strip: a colour, not [PaperStyle.sceneryWash]'s
- * cream, so it reads apart from the meadow above it. */
-private val BalloonStripWash = Color(0x4090CAF5)
+ * cream, so it reads apart from the meadow above it. Solid, not translucent, so it reads as a
+ * light sky-blue band rather than a grey wash over whatever sits behind the strip. */
+private val BalloonStripWash = Color(0xFFDCEFFB)
 
 /**
  * The balloon colour-pattern puzzle, drawn right in the story scene (see [GameBeatState]): the

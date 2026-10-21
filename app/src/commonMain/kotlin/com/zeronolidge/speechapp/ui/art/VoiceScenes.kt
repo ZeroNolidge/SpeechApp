@@ -148,7 +148,7 @@ private fun Emoji(e: String, size: Dp) = Text(e, fontSize = (size.value * 0.72f)
  * prop for company, and the prop his voice moves. [f] and [push] are read only while drawing.
  */
 @Composable
-fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () -> Float, modifier: Modifier = Modifier) {
+fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () -> Float, modifier: Modifier = Modifier, puzzleSafe: Boolean = false) {
     val still = LocalReduceMotion.current
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "beat")
     val wobble by t.loop(0f, 1f, 4000, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "wobble")
@@ -161,9 +161,12 @@ fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () ->
                 Item(unit * propSize(sp) * 0.8f, { at.x }, { at.y }) { PropArt(sp, { 1f }, null, beat) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
+            // While the pattern puzzle is up, the beat's own prop is tucked into a safe corner,
+            // clear of the pattern row above the choice strip (it used to sit left-of-centre and
+            // cover the row's first balloon); it stays small but visible, Bear and all.
             Item(
-                unit * propSize(beat.prop),
-                x = { now().x }, y = { now().y },
+                unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
+                x = { if (puzzleSafe) 0.82f else now().x }, y = { if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { now().rotation }, scale = { now().scale },
             ) { PropArt(beat.prop, f, beat.propEmoji, beat) }
             // The light changes with the move: the sun comes up (dawn) or night falls (dusk).
