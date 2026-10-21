@@ -175,6 +175,18 @@ class BalloonGameTest {
     fun ladderCeilingMatchesTheThreeSteps() {
         assertEquals(2, Ladder.MAX.getValue(Ladder.GAME_PATTERN))
     }
+
+    @Test
+    fun neverBothPinkAndPurpleAndNeverRed() {
+        for (step in 0..2) {
+            repeat(300) { i ->
+                val round = BalloonGame.make(step, Random(step * 10_000 + i))
+                val all = round.unit + round.choice.options
+                assertFalse(all.contains("pink") && all.contains("purple"), "step $step seed $i: $all")
+                assertFalse(all.contains("red"), "step $step seed $i: $all")
+            }
+        }
+    }
 }
 
 class SpeechMatchTest {
@@ -1203,8 +1215,10 @@ class VoiceStoriesTest {
                 assertEquals(1, b.lines[0].trim().split(' ').size, "${s.id}: '${b.lines[0]}' is one word")
                 assertTrue(ClipText.normalize(b.lines[1]).split(' ').size == 2, "${s.id}: '${b.lines[1]}' is two words")
                 assertTrue(ClipText.normalize(b.lines[2]).split(' ').size >= 2, "${s.id}: '${b.lines[2]}' is a sentence")
-                // Rory says the word back first, and nothing has a blank to fill.
-                assertTrue(ClipText.normalize(b.success).startsWith(ClipText.normalize(b.word)), "${s.id}: success '${b.success}'")
+                // Rory says the word back first, and nothing has a blank to fill. The game beat's
+                // close is the exception: whatever colour he said, the balloon always "pops" into
+                // the gap (see BalloonGame.success), so its success line starts with "Pop!" instead.
+                if (!b.game) assertTrue(ClipText.normalize(b.success).startsWith(ClipText.normalize(b.word)), "${s.id}: success '${b.success}'")
                 (listOf(b.problem, b.success) + b.lines).forEach { assertTrue('{' !in it, "${s.id}: blank in '$it'") }
             }
             // It ends calmly, with the goodbye beat last (and only last).

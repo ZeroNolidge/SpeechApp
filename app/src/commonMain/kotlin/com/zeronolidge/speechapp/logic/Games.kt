@@ -62,26 +62,26 @@ object Patterns {
 /**
  * The balloon colour-pattern mini game inside a voice-story beat (see [VoiceBeat.game]): finish a
  * row of balloons with a colour pattern (a [PatternRound] of colour words, reusing [Patterns.fromPool]).
- * Blue and purple are his target sounds, p and b, with recorded clips; red is only the pattern's
- * third colour (for ABC) and is never the word he's asked to say (see [talkWord]). Its own quiet
- * ladder (see [Ladder.GAME_PATTERN]) steps AB -> AAB -> ABC, the same rule as every other
- * difficulty step.
+ * Blue, brown and purple are his target sounds, b and p, with recorded clips, and so is pink (p);
+ * pink and purple look too close to tell apart in a hurry, so each round keeps only one of them
+ * (see [make]). Its own quiet ladder (see [Ladder.GAME_PATTERN]) steps AB -> AAB -> ABC, the same
+ * rule as every other difficulty step.
  */
 object BalloonGame {
-    val colors = listOf("blue", "purple", "red")
+    val colors = listOf("blue", "pink", "brown", "purple")
 
     private val shapesByStep = listOf("AB", "AAB", "ABC")
 
     fun make(step: Int, rnd: Random): PatternRound {
-        val round = Patterns.fromPool(shapesByStep[step.coerceIn(0, shapesByStep.lastIndex)], colors, rnd)
+        val pool = colors - (if (rnd.nextBoolean()) "pink" else "purple")
+        val round = Patterns.fromPool(shapesByStep[step.coerceIn(0, shapesByStep.lastIndex)], pool, rnd)
         // Reshuffle the choice order with the round's own Random so the answer isn't always first.
         return round.copy(choice = round.choice.copy(options = round.choice.options.shuffled(rnd)))
     }
 
-    /** The word he actually says once the puzzle is solved: the picked colour when it's already
-     * one of his target sounds (p or b), else "pop" instead, so the speech practice is always a
-     * p/b word no matter which colour the pattern landed on. */
-    fun talkWord(color: String): String = if (color.first() in "pb") color else "pop"
+    /** The word he actually says once the puzzle is solved: the picked colour (every colour in
+     * [colors] is already a p/b word). */
+    fun talkWord(color: String): String = color
 
     /** The word he says for [word] (see [talkWord]): one word, two words, a short sentence. */
     fun lines(word: String): List<String> = listOf(word, "$word balloon", "Say $word!")
@@ -91,16 +91,7 @@ object BalloonGame {
 
     /** What Rory says once the fix has played: one line shared by every colour, so solving the
      * puzzle never needs more than one new recorded line. */
-    fun success(word: String): String = "${word.replaceFirstChar { it.uppercaseChar() }}! There it goes! The balloon fills the gap, and the row is complete!"
-
-    /** The picked colour's own look in the scene: a coloured paper circle, since there's no
-     * coloured balloon emoji to swap in ([VoiceBeat.propEmoji]). */
-    fun balloonEmoji(color: String): String = when (color) {
-        "blue" -> "🔵"
-        "purple" -> "🟣"
-        "red" -> "🔴"
-        else -> "🎈"
-    }
+    fun success(): String = "Pop! The balloon pops into place, and the row is complete!"
 }
 
 /** Three of one kind and one that doesn't belong. */

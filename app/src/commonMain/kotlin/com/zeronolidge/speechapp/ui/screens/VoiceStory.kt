@@ -44,6 +44,7 @@ import com.zeronolidge.speechapp.logic.BalloonGame
 import com.zeronolidge.speechapp.logic.GameBeatPhase
 import com.zeronolidge.speechapp.logic.GameBeatState
 import com.zeronolidge.speechapp.logic.PatternRound
+import com.zeronolidge.speechapp.logic.Prop
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceStories
 import com.zeronolidge.speechapp.logic.VoicePush
@@ -60,8 +61,11 @@ import com.zeronolidge.speechapp.ui.art.VoiceBeatScene
 import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
-import com.zeronolidge.speechapp.ui.art.paperOval
+import com.zeronolidge.speechapp.ui.art.balloonColor
+import com.zeronolidge.speechapp.ui.art.loop
+import com.zeronolidge.speechapp.ui.art.paperBalloon
 import com.zeronolidge.speechapp.ui.art.voiceTarget
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -393,8 +397,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val fixed = beats[k].copy(
             lines = BalloonGame.lines(word),
             sound = BalloonGame.sound(word),
-            success = BalloonGame.success(word),
-            propEmoji = BalloonGame.balloonEmoji(round.choice.answer),
+            success = BalloonGame.success(),
+            prop = Prop.GAP_BALLOON,
+            gapColor = round.choice.answer,
         )
         beats = beats.toMutableList().also { it[k] = fixed }
         val s = session
@@ -486,7 +491,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
-                    VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize().clipToBounds())
+                    // While he's choosing, the scene shrinks to sit fully above the choice strip
+                    // (never behind it): the strip is reserved space, not an overlay.
+                    val gameStrip = if (phase == VPhase.GAME) (h * BalloonStripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
+                    Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip)) {
+                        VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize().clipToBounds())
+                    }
                     // The sticker he earned, peeling on in the middle at the end.
                     sticker?.let { st ->
                         Box(Modifier.align(Alignment.Center)) { Sticker(st, minOf(h * 0.35f, 180.dp), Modifier.peelIn(st.text)) }
@@ -508,10 +518,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // it waits for a tap (see GameBeatState). Nothing times out, nothing else moves.
                     if (phase == VPhase.GAME) puzzle?.let { round ->
                         BalloonPatternPuzzle(
-                            round, gamePhase, wrongChoice, wiggleBump,
+                            round, gamePhase, wrongChoice, wiggleBump, gameStrip,
                             onTap = ::tapChoice,
                             onCenter = { i, c -> choiceCenters[i] = c },
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
@@ -586,31 +596,23 @@ private fun choiceCenter(c: androidx.compose.ui.layout.LayoutCoordinates): Offse
     return Offset(o.x + c.size.width / 2f, o.y + c.size.height / 2f)
 }
 
-private fun balloonColor(word: String): Color = when (word) {
-    "blue" -> Color(0xFF42A5F5)
-    "purple" -> Color(0xFF9575CD)
-    "red" -> Color(0xFFEF5350)
-    else -> Color(0xFFBDBDBD)
-}
-
 /** One paper-style balloon: a round body on a thin string. */
 @Composable
 private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(size)) {
-        val r = this.size.minDimension * 0.36f
-        val c = Offset(this.size.width / 2f, this.size.height * 0.42f)
-        paperOval(color, Offset(c.x - r, c.y - r * 1.15f), Size(r * 2f, r * 2.3f))
-        drawLine(Color(0xFF6D4C41), Offset(c.x, c.y + r * 1.1f), Offset(c.x, this.size.height * 0.94f), 1.5.dp.toPx())
-    }
+    Canvas(modifier.size(size)) { paperBalloon(color) }
 }
 
-/** The pattern's empty slot: a dashed outline until the answer is shown, then the same balloon. */
+/** The pattern's empty slot: a dashed outline (gently pulsing while he decides) until the answer
+ * is shown, then the same balloon. */
 @Composable
 private fun GapBalloon(size: Dp, color: Color?, modifier: Modifier = Modifier) {
     if (color != null) {
         Balloon(color, size, modifier.popIn("gap"))
     } else {
-        Canvas(modifier.size(size)) {
+        val t = rememberInfiniteTransition(label = "gap")
+        val scale by t.loop(1f, 1.12f, 750, label = "gapScale")
+        val alpha by t.loop(0.55f, 1f, 750, label = "gapAlpha")
+        Canvas(modifier.size(size).graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }) {
             drawCircle(
                 Color(0xFF9E9E9E), this.size.minDimension * 0.3f, Offset(this.size.width / 2f, this.size.height * 0.42f),
                 style = Stroke(2.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 7f))),
@@ -619,13 +621,27 @@ private fun GapBalloon(size: Dp, color: Color?, modifier: Modifier = Modifier) {
     }
 }
 
+/** The strip's share of the stage height, and its floor so it's never cramped on a short
+ * landscape screen (see [BalloonPatternPuzzle]). */
+private const val BalloonStripFraction = 0.22f
+private val BalloonStripMinHeight = 128.dp
+private val BalloonChoiceSize = 88.dp
+private val BalloonChoiceGap = 24.dp
+
+/** The soft sky-blue wash behind the choice strip: a colour, not [PaperStyle.sceneryWash]'s
+ * cream, so it reads apart from the meadow above it. */
+private val BalloonStripWash = Color(0x4090CAF5)
+
 /**
  * The balloon colour-pattern puzzle, drawn right in the story scene (see [GameBeatState]): the
- * meadow stays visible behind it. The pattern so far sits at the top, its balloons tied to a
- * little rope, with only a small soft paper strip behind the row itself for contrast (never a
- * card over the whole scene); up to 3 big choice balloons sit at the bottom third. Nothing moves
- * by itself and there's no timer; every tap on a choice goes through [onTap], and [onCenter]
- * reports each choice's screen centre (for the GAMEBEAT log the screenshot test reads).
+ * meadow stays visible above it, shrunk by the caller to sit clear of [stripHeight] (see the
+ * caller in `VoiceStory`). The pattern so far sits near the top, its balloons tied to a little
+ * rope, with only a small soft paper strip behind the row itself for contrast (never a card over
+ * the whole scene); up to 3 big choice balloons sit centred in the bottom strip, a plain band
+ * reserved just for them so they never land over the scene below. Nothing moves by itself (but
+ * for the empty gap's gentle pulse) and there's no timer; every tap on a choice goes through
+ * [onTap], and [onCenter] reports each choice's screen centre (for the GAMEBEAT log the
+ * screenshot test reads).
  */
 @Composable
 private fun BalloonPatternPuzzle(
@@ -633,20 +649,21 @@ private fun BalloonPatternPuzzle(
     game: GameBeatState,
     wrongChoice: Int,
     wiggleBump: Int,
+    stripHeight: Dp,
     onTap: (Int) -> Unit,
     onCenter: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val answerShown = game.phase == GameBeatPhase.SHOW_ANSWER
-    Column(
-        modifier.fillMaxSize(0.94f).padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        BoxWithConstraints(Modifier.weight(1.1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(modifier) {
+        val stageHeight = maxHeight
+        BoxWithConstraints(
+            Modifier.align(Alignment.TopCenter).padding(top = 16.dp).fillMaxWidth(0.9f).height(stageHeight - stripHeight).padding(bottom = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
             val slot = minOf(maxWidth / (round.shown.size + 1.6f), 68.dp)
             Box(
-                Modifier.fillMaxWidth(0.9f).height(slot * 1.7f).paperCard(PaperStyle.sceneryWash, 24.dp),
+                Modifier.fillMaxWidth().height(slot * 1.7f).paperCard(PaperStyle.sceneryWash, 24.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -660,20 +677,22 @@ private fun BalloonPatternPuzzle(
                 }
             }
         }
+        // The choice strip: its own reserved band at the bottom, the choices centred inside it.
+        // No ContinueReserve here: the puzzle has no continue button to leave room for.
         Row(
-            Modifier.weight(1f).fillMaxWidth().padding(end = ContinueReserve),
-            horizontalArrangement = Arrangement.spacedBy(56.dp, Alignment.CenterHorizontally),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(BalloonChoiceGap, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             round.choice.options.forEachIndexed { i, opt ->
                 val right = opt == round.choice.answer
                 AnswerCard(
-                    modifier = Modifier.size(104.dp).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
+                    modifier = Modifier.size(BalloonChoiceSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
                     correct = answerShown && right,
                     glow = game.glow && right && !answerShown,
                     wiggle = if (i == wrongChoice) wiggleBump else 0,
                     onClick = { onTap(i) },
-                ) { Balloon(balloonColor(opt), 72.dp) }
+                ) { Balloon(balloonColor(opt), 64.dp) }
             }
         }
     }

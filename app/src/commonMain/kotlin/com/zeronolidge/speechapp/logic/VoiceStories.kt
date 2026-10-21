@@ -54,6 +54,9 @@ data class VoiceBeat(
      * colour the puzzle lands on. At most one per story.
      */
     val game: Boolean = false,
+    /** Once the puzzle above is solved, the picked colour (see [BalloonGame]): read only by
+     * [Prop.GAP_BALLOON], kept apart from [propEmoji] so it never short-circuits a prop's art. */
+    val gapColor: String? = null,
 ) {
     val word: String get() = lines[0]
 
@@ -81,7 +84,7 @@ enum class Move {
 }
 
 /** The props, each a piece of paper art any move can carry. */
-enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON }
+enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON }
 
 /** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky). */
 enum class Backdrop(val land: Land) {
@@ -157,7 +160,7 @@ object VoiceStories {
             VoiceBeat(Backdrop.SKY, "Oh! The bird is in the way.", listOf("move", "move bird", "Move, please, bird!"), "m", Prop.BIRD, Move.SLIDE, "Move! Move, bird! The bird moves out of the way!", "🐦", still = Prop.BALLOON),
             VoiceBeat(Backdrop.SKY, "Look! Cupcakes, far down below.", listOf("down", "go down", "Down to the picnic!"), null, Prop.BALLOON, Move.SINK, "Down! Down we go! The balloon floats gently down to the picnic.", "🧁"),
             VoiceBeat(Backdrop.MEADOW, "Bear wants a treat.", listOf("more", "more cake", "More cake, please!"), "m", Prop.CUPCAKE, Move.SINK, "More! More cake! A cupcake drops right into Bear's paw!", "🧁", still = Prop.BALLOON),
-            VoiceBeat(Backdrop.MEADOW, "Bear tied some balloons in a row, but one is missing!", listOf("blue", "blue balloon", "Say blue!"), "b", Prop.BALLOON, Move.SLIDE, "Blue! The blue balloon slides right into the gap, and the row is complete!", "🎈", game = true),
+            VoiceBeat(Backdrop.MEADOW, "Bear tied some balloons in a row, but one is missing!", listOf("blue", "blue balloon", "Say blue!"), "b", Prop.BALLOON, Move.SLIDE, "Pop! The balloon pops into place, and the row is complete!", "🎈", game = true),
             VoiceBeat(Backdrop.MEADOW, "Bubbles are floating past!", listOf("pop", "pop pop", "Pop the bubbles!"), "p", Prop.BUBBLE, Move.POP, "Pop! Pop, pop! Pop, pop, pop! They burst one by one.", "🎉"),
             VoiceBeat(Backdrop.MEADOW, "The sun is going down. Time to rest.", listOf("night", "night Bear", "Good night, Bear!"), null, Prop.MOON, Move.RISE, "Night! Good night, Bear! The moon rises, and Bear gives a big yawn.", "🌙", light = Light.DUSK, goodbye = true, still = Prop.BALLOON),
         ),

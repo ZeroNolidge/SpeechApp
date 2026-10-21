@@ -18,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
@@ -91,6 +92,25 @@ private fun propSize(p: Prop) = when (p) {
     Prop.BALLOON -> 0.44f
     Prop.CUPCAKE -> 0.13f
     Prop.MOON -> 0.2f
+    Prop.GAP_BALLOON -> 0.22f
+}
+
+/** A balloon's colour, shared by the puzzle (see `BalloonPatternPuzzle` in VoiceStory.kt) and the
+ * one that joins the scene once it's solved ([Prop.GAP_BALLOON]). */
+fun balloonColor(word: String): Color = when (word) {
+    "blue" -> Color(0xFF42A5F5)
+    "pink" -> Color(0xFFEC6FA0)
+    "brown" -> Color(0xFF8D6E63)
+    "purple" -> Color(0xFF9575CD)
+    else -> Color(0xFFBDBDBD)
+}
+
+/** One paper balloon: a round body on a thin string, filling the drawing area. */
+fun DrawScope.paperBalloon(color: Color) {
+    val r = size.minDimension * 0.36f
+    val c = Offset(size.width / 2f, size.height * 0.42f)
+    paperOval(color, Offset(c.x - r, c.y - r * 1.15f), Size(r * 2f, r * 2.3f))
+    drawLine(Color(0xFF6D4C41), Offset(c.x, c.y + r * 1.1f), Offset(c.x, size.height * 0.94f), 1.5.dp.toPx())
 }
 
 /** Something placed by its centre at ([x], [y]) (parts of the scene), moved while drawing. */
@@ -341,6 +361,14 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 Canvas(Modifier.fillMaxWidth().fillMaxHeight(0.28f)) {
                     paperRect(Color(0xFF8D6E63), Offset(size.width * 0.12f, 0f), Size(size.width * 0.76f, size.height))
                 }
+            }
+        }
+        // The puzzle's picked colour, popping into place and inflating as his voice carries it
+        // into the gap (see VoiceBeat.gapColor).
+        Prop.GAP_BALLOON -> {
+            val inflate = if (moving) 0.4f + 0.6f * f() else 1f
+            Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX = inflate; scaleY = inflate }) {
+                paperBalloon(balloonColor(beat.gapColor ?: "blue"))
             }
         }
     }
