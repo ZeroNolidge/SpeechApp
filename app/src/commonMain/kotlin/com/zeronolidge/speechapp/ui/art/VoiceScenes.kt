@@ -20,16 +20,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.logic.Backdrop
+import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.KitchenLayout
 import com.zeronolidge.speechapp.logic.Light
 import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.logic.Prop
+import com.zeronolidge.speechapp.logic.Slot
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceBeat
 import kotlin.math.PI
@@ -186,14 +190,32 @@ private fun Emoji(e: String, size: Dp) = Text(e, fontSize = (size.value * 0.72f)
  * prop for company, and the prop his voice moves. [f] and [push] are read only while drawing.
  */
 @Composable
-fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () -> Float, modifier: Modifier = Modifier, puzzleSafe: Boolean = false, landscape: Boolean = false) {
+fun VoiceBeatScene(
+    beat: VoiceBeat,
+    f: () -> Float,
+    strength: Float,
+    push: () -> Float,
+    modifier: Modifier = Modifier,
+    puzzleSafe: Boolean = false,
+    landscape: Boolean = false,
+    /** Rory's Kitchen only: his mouth follows this while he models a word (Ruby, K2b). */
+    kitchenTalking: Boolean = false,
+    /** Rory's Kitchen only: he hides while the big listening Rory takes over (`listenLookGone`),
+     * so the two Rorys are never both shown. */
+    kitchenRoryVisible: Boolean = true,
+    /** Rory's Kitchen only: reports the scene's own on-screen box, for the KITCHEN rects log. */
+    onSceneRect: ((androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
+) {
     val still = LocalReduceMotion.current
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "beat")
     val wobble by t.loop(0f, 1f, 4000, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "wobble")
     Scenery(beat.backdrop.land, modifier.fillMaxSize(), seed = 30 + beat.backdrop.ordinal * 7) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        BoxWithConstraints(
+            Modifier.fillMaxSize().let { m -> if (onSceneRect == null) m else m.onGloballyPositioned(onSceneRect) },
+        ) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
             BackdropExtras(beat.backdrop, landscape)
+            if (beat.backdrop == Backdrop.KITCHEN) KitchenCharacters(landscape, kitchenTalking, kitchenRoryVisible)
             beat.still?.let { sp ->
                 val at = stillSpot(beat.move)
                 Item(unit * propSize(sp) * 0.8f, { at.x }, { at.y }) { PropArt(sp, { 1f }, null, beat) }
@@ -257,6 +279,66 @@ private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop, landscape: Boole
         }
     }
     if (b == Backdrop.ISLAND) Item(unit * 0.16f, { 0.84f }, { 0.5f }) { Emoji("🌴", unit * 0.16f) }
+}
+
+/** Rory's Kitchen's own white paper toque (Ruby, K2b): a fixed prop, not an unlockable piece
+ * (see Critter.kt's "hat_chef" case), so it never goes through the buddy's [Catalog]. */
+private val ChefHat = Cosmetic("hat_chef", Slot.HAT, "Chef hat", 0xFFFFFFFF)
+
+/** A simple paper stool for Bear to sit on: a round seat and three warm-red legs. */
+private fun DrawScope.paperStool() {
+    val w = size.width
+    val h = size.height
+    val legColor = Color(0xFFB23A2E)
+    val seatY = h * 0.2f
+    listOf(w * 0.2f, w * 0.5f, w * 0.8f).forEach { x ->
+        drawLine(legColor, Offset(x, seatY), Offset(x, h), w * 0.1f, cap = StrokeCap.Round)
+    }
+    paperOval(Color(0xFFD1492F), Offset(w * 0.08f, 0f), Size(w * 0.84f, seatY * 1.3f))
+}
+
+/**
+ * Rory's Kitchen's own characters (Ruby, K2b), kept in explicit lanes (see [KitchenLayout]) so
+ * neither ever reaches the counter's props or the choice strip below: Bear, on a simple paper
+ * stool, at the far end of the counter from the pan; Rory, standing behind the counter in his
+ * chef's hat, his lower body hidden by the counter front (redrawn over his legs, the same trick
+ * as Bear riding in the balloon's basket above). [talking] follows Rory's mouth while he models
+ * a word; [roryVisible] hides him while the big listening Rory takes over (`listenLookGone()` at
+ * the call site), so the two Rorys are never both shown.
+ */
+@Composable
+private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talking: Boolean, roryVisible: Boolean) {
+    val w = maxWidth
+    val h = maxHeight
+    val bear = KitchenLayout.bearBox()
+    Box(
+        Modifier.offset(x = w * bear.l, y = h * bear.t).size(w * (bear.r - bear.l), h * (bear.b - bear.t)),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Canvas(Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.55f).align(Alignment.BottomCenter)) { paperStool() }
+        Critter(Species.BEAR, Modifier.fillMaxHeight(0.85f), mood = Mood.HAPPY)
+    }
+    val rory = KitchenLayout.roryBox(landscape)
+    Box(
+        Modifier.offset(x = w * rory.l, y = h * rory.t).size(w * (rory.r - rory.l), h * (rory.b - rory.t)),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        if (roryVisible) {
+            Critter(
+                Species.ROBOT, Modifier.fillMaxWidth(), Color(0xFFFFCC80),
+                outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking,
+            )
+        }
+    }
+    // The counter front, redrawn over Rory's lower body: behind the counter, only his top half
+    // shows (nothing to hide while he's not drawn at all).
+    if (roryVisible) {
+        val ct = KitchenLayout.counterTop(landscape)
+        Canvas(Modifier.fillMaxSize()) {
+            paperRect(Color(0xFFC9773A), Offset(0f, size.height * ct), Size(size.width, size.height * (1f - ct)))
+            paperRect(Color(0xFFE6C38E), Offset(0f, size.height * ct), Size(size.width, size.height * 0.045f))
+        }
+    }
 }
 
 /**

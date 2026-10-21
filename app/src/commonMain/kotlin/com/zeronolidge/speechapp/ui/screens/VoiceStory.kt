@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.audio.VoiceTry
 import com.zeronolidge.speechapp.logic.VoiceBeat
+import com.zeronolidge.speechapp.logic.Backdrop
 import com.zeronolidge.speechapp.logic.BalloonGame
 import com.zeronolidge.speechapp.logic.Choice
 import com.zeronolidge.speechapp.logic.GameBeatPhase
@@ -182,6 +183,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // The counter's on-screen span, in landscape (Ruby, K2a): logged once per step so the
     // screenshot test can check it keeps KitchenLayout.MIN_VISIBLE_FRACTION of the screen.
     var kitchenLayoutLoggedStep by remember { mutableIntStateOf(-1) }
+    // Bear, Rory, the bowl, the pan and the choice strip's own on-screen boxes (CSS px), logged
+    // once per kitchen beat so Ruby's overlap check (K2b) can be run against a real screenshot.
+    var kitchenRectsLoggedStep by remember { mutableIntStateOf(-1) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
@@ -696,6 +700,35 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     val isKitchen = phase == VPhase.KITCHEN
                     val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
                     val gameStrip = if (stripShown) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
+                    // Rory's Kitchen: his mouth talks whenever Rory is the one speaking (naming
+                    // the step, modelling the word, or echoing after it), and he hides while the
+                    // big listening Rory takes over, same as the small bottom-left Rory he replaces.
+                    val kitchenTalking = phase == VPhase.MODEL || phase == VPhase.ACT || phase == VPhase.KITCHEN
+                    val kitchenRoryVisible = listenLookGone()
+                    // Bear, Rory, the bowl, the pan and the choice strip's own on-screen boxes
+                    // (CSS px), once per kitchen beat, so Ruby's overlap check can run against a
+                    // real screenshot (never printed with the "KITCHEN step=" prefix above).
+                    fun logKitchenRects(c: androidx.compose.ui.layout.LayoutCoordinates, sceneLandscape: Boolean) {
+                        if (kitchenRectsLoggedStep == index) return
+                        kitchenRectsLoggedStep = index
+                        val origin = c.positionInWindow()
+                        val sw = c.size.width.toFloat()
+                        val sh = c.size.height.toFloat()
+                        fun fmt(r: KitchenLayout.Rect): String {
+                            val l = (origin.x + r.l * sw).roundToInt()
+                            val t = (origin.y + r.t * sh).roundToInt()
+                            val right = (origin.x + r.r * sw).roundToInt()
+                            val b = (origin.y + r.b * sh).roundToInt()
+                            return "$l,$t,$right,$b"
+                        }
+                        val stripTop = origin.y + sh
+                        val stripBottomPx = stripTop + with(density) { gameStrip.toPx() }
+                        val stripRect = "${origin.x.roundToInt()},${stripTop.roundToInt()},${(origin.x + sw).roundToInt()},${stripBottomPx.roundToInt()}"
+                        println(
+                            "KITCHEN rects bear=${fmt(KitchenLayout.bearBox())} rory=${fmt(KitchenLayout.roryBox(sceneLandscape))} " +
+                                "bowl=${fmt(KitchenLayout.bowlBox(sceneLandscape))} pan=${fmt(KitchenLayout.panBox(sceneLandscape))} strip=$stripRect",
+                        )
+                    }
                     Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip).clipToBounds()) {
                         if (landscape) {
                             // Keep the scene at its usual full-stage size (so Bear/the counter is
@@ -720,10 +753,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     }
                                 },
                             ) {
-                                VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown, landscape = true)
+                                VoiceBeatScene(
+                                    beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
+                                    puzzleSafe = stripShown, landscape = true,
+                                    kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
+                                    onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
+                                )
                             }
                         } else {
-                            VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown)
+                            VoiceBeatScene(
+                                beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
+                                puzzleSafe = stripShown,
+                                kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
+                                onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
+                            )
                         }
                     }
                     // The sticker he earned, peeling on in the middle at the end.
@@ -740,8 +783,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         val species = p.hero ?: Species.KID
                         HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == VPhase.END) Mood.CHEER else Mood.HAPPY)
                         // Rory beside the buddy, his mouth going as he models each word (on a phone
-                        // too while he talks; the big listening Rory takes over on his turn).
-                        if (listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
+                        // too while he talks; the big listening Rory takes over on his turn). Rory's
+                        // Kitchen's own Rory, behind the counter, replaces him there.
+                        if (beat.backdrop != Backdrop.KITCHEN && listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
                     }
                     // The balloon pattern puzzle, right in the scene: Rory's named the problem, now
                     // it waits for a tap (see GameBeatState). Nothing times out, nothing else moves.

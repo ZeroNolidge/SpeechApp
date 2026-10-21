@@ -134,4 +134,68 @@ object KitchenLayout {
     const val MIN_VISIBLE_FRACTION = 0.35f
 
     fun counterTop(landscape: Boolean): Float = if (landscape) COUNTER_TOP_LANDSCAPE else COUNTER_TOP_PORTRAIT
+
+    // --- Ruby's K2b: Bear (on his stool), Rory (behind the counter, chef's hat) and the
+    // counter's own props, in explicit lanes so none of them ever overlap. Lanes below are
+    // fractions of the kitchen scene's own box (0 to 1); [stageBox] rescales one onto the whole
+    // stage once a choice strip is reserved below it (see VoiceStory's `gameStrip`).
+
+    /** Bear's lane (his stool), the far end of the counter from the props: sized so he reads
+     * clearly (22-30% of the scene's height) but stays inside a fifth of its width. */
+    private const val BEAR_RIGHT = 0.20f
+    private const val BEAR_HEIGHT = 0.27f
+    private const val BEAR_BOTTOM = 0.97f
+
+    /** Rory's lane (with his chef's hat): centred behind the props, his head and shoulders a
+     * band just above the counter top line (his lower body hidden by the counter front, so he
+     * never reaches into the props' own band). A fixed height, not the whole wall: landscape's
+     * lift (K2a) scrolls most of the wall off-screen, so a band hugging the counter line stays
+     * visible there too, instead of a tall Rory mostly cropped away. */
+    private const val RORY_LEFT = 0.33f
+    private const val RORY_RIGHT = 0.67f
+    private const val RORY_HEIGHT = 0.20f
+    private const val RORY_MARGIN = 0.02f
+
+    /** Where the counter's props (the bowl choice, the pan and what's on it, the berries) are
+     * kept: the rest of the counter's width, clear of Bear's lane, always at or below the
+     * counter top line. */
+    private const val PROPS_LEFT = 0.40f
+    private const val PROPS_RIGHT = 0.88f
+    private const val PROP_SLOT_WIDTH = 0.2f
+    private const val PROPS_MARGIN = 0.02f
+
+    /** A box on screen, as fractions (0 at the left/top edge, 1 at the right/bottom): [overlaps]
+     * is false for boxes that merely touch at an edge. */
+    data class Rect(val l: Float, val t: Float, val r: Float, val b: Float) {
+        fun overlaps(other: Rect): Boolean = l < other.r && r > other.l && t < other.b && b > other.t
+    }
+
+    /** Bear's box (his stool), as a fraction of the kitchen scene's own box. */
+    fun bearBox(): Rect = Rect(0.01f, BEAR_BOTTOM - BEAR_HEIGHT, BEAR_RIGHT, BEAR_BOTTOM)
+
+    /** Rory's box (with his hat), as a fraction of the kitchen scene's own box. */
+    fun roryBox(landscape: Boolean): Rect {
+        val bottom = counterTop(landscape) - RORY_MARGIN
+        return Rect(RORY_LEFT, bottom - RORY_HEIGHT, RORY_RIGHT, bottom)
+    }
+
+    /** The "tap the bowl" choice's own slot, at the near end of the props band. */
+    fun bowlBox(landscape: Boolean): Rect {
+        val top = counterTop(landscape) + PROPS_MARGIN
+        return Rect(PROPS_LEFT, top, PROPS_LEFT + PROP_SLOT_WIDTH, BEAR_BOTTOM)
+    }
+
+    /** The pan's own slot (and whatever's on it), at the far end of the props band. */
+    fun panBox(landscape: Boolean): Rect {
+        val top = counterTop(landscape) + PROPS_MARGIN
+        return Rect(PROPS_RIGHT - PROP_SLOT_WIDTH, top, PROPS_RIGHT, BEAR_BOTTOM)
+    }
+
+    /** Rescales a box from the kitchen scene's own fractions onto the whole stage's, given how
+     * much of the stage's height the scene itself keeps once a choice strip is reserved below it
+     * ([sceneFraction]; 1f when no strip is reserved this beat). */
+    fun stageBox(box: Rect, sceneFraction: Float): Rect = Rect(box.l, box.t * sceneFraction, box.r, box.b * sceneFraction)
+
+    /** The choice strip's own band, reserved at the bottom of the stage while its tap tiles show. */
+    fun stripBox(stripFraction: Float): Rect = Rect(0f, 1f - stripFraction, 1f, 1f)
 }

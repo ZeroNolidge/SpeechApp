@@ -2067,4 +2067,46 @@ class KitchenLayoutTest {
     fun landscapeWallIsShorterThanPortrait() {
         assertTrue(KitchenLayout.counterTop(landscape = true) < KitchenLayout.counterTop(landscape = false))
     }
+
+    /** Ruby's K2b: Bear (on his stool), Rory (behind the counter, chef's hat) and the counter's
+     * own props (the bowl choice, the pan) never share any area, in either aspect ratio. */
+    @Test
+    fun bearRoryBowlAndPanNeverOverlapEachOther() {
+        for (landscape in listOf(false, true)) {
+            val boxes = listOf(
+                "bear" to KitchenLayout.bearBox(),
+                "rory" to KitchenLayout.roryBox(landscape),
+                "bowl" to KitchenLayout.bowlBox(landscape),
+                "pan" to KitchenLayout.panBox(landscape),
+            )
+            for (i in boxes.indices) for (j in i + 1 until boxes.size) {
+                val (nameA, a) = boxes[i]
+                val (nameB, b) = boxes[j]
+                assertFalse(a.overlaps(b), "$nameA overlaps $nameB in ${if (landscape) "landscape" else "portrait"}")
+            }
+        }
+    }
+
+    /** None of the four ever reach down into the choice strip's own reserved band, at every size
+     * Ruby asked to check: tablet portrait/landscape and phone portrait/landscape. */
+    @Test
+    fun bearRoryBowlAndPanNeverReachTheChoiceStrip() {
+        val sizes = listOf(768f to 1024f, 1024f to 768f, 390f to 844f, 844f to 390f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val stripFraction = if (landscape) 0.18f else 0.22f
+            val sceneFraction = 1f - stripFraction
+            val strip = KitchenLayout.stripBox(stripFraction)
+            val boxes = listOf(
+                "bear" to KitchenLayout.bearBox(),
+                "rory" to KitchenLayout.roryBox(landscape),
+                "bowl" to KitchenLayout.bowlBox(landscape),
+                "pan" to KitchenLayout.panBox(landscape),
+            )
+            for ((name, box) in boxes) {
+                val onStage = KitchenLayout.stageBox(box, sceneFraction)
+                assertFalse(onStage.overlaps(strip), "$name reaches the choice strip at ${w}x$h")
+            }
+        }
+    }
 }
