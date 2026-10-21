@@ -27,6 +27,7 @@ import com.zeronolidge.speechapp.ui.components.PaperIconButton
 import com.zeronolidge.speechapp.ui.components.PointingHand
 import com.zeronolidge.speechapp.ui.components.popIn
 import androidx.compose.runtime.Composable
+import com.zeronolidge.speechapp.ui.components.LocalScreenHeight
 import com.zeronolidge.speechapp.ui.components.LocalScreenWidth
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.changedToUp
@@ -96,6 +97,7 @@ fun TalkAndLearnApp(
         CompositionLocalProvider(LocalApp provides services, LocalReduceMotion provides rememberReduceMotion()) {
             var origin by remember { mutableStateOf(Offset.Zero) }
             var screenW by remember { mutableStateOf(0.dp) }
+            var screenH by remember { mutableStateOf(0.dp) }
             val density = LocalDensity.current
             Box(
                 Modifier
@@ -105,6 +107,7 @@ fun TalkAndLearnApp(
                     .onGloballyPositioned {
                         origin = it.positionInWindow()
                         screenW = with(density) { it.size.width.toDp() }
+                        screenH = with(density) { it.size.height.toDp() }
                     }
                     // A hand holding the tablet: touches that start within EdgeIgnore of the screen's
                     // edge are noted first (Initial pass), so detectKidTaps can stop one from
@@ -176,7 +179,7 @@ fun TalkAndLearnApp(
                         services.touchSession()
                     }
                 }
-                CompositionLocalProvider(LocalScreenWidth provides screenW) { Screens(start) }
+                CompositionLocalProvider(LocalScreenWidth provides screenW, LocalScreenHeight provides screenH) { Screens(start) }
                 CelebrationOverlay()
                 GiftOverlay()
                 WordRateBar()

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.logic.Backdrop
+import com.zeronolidge.speechapp.logic.KitchenLayout
 import com.zeronolidge.speechapp.logic.Light
 import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.logic.Prop
@@ -121,6 +122,35 @@ fun DrawScope.paperBalloon(color: Color) {
     drawLine(Color(0xFF6D4C41), Offset(c.x, c.y + r * 1.1f), Offset(c.x, size.height * 0.94f), 1.5.dp.toPx())
 }
 
+/** One paper blueberry, radius [r] about [center]: a dark round body, a lighter highlight dot,
+ * and a tiny five-point star calyx pressed into its top (no stem, no leaf). Shared by Rory's
+ * Kitchen's berries beat and its "count the berries" tap tiles (see [BlueberryArt]). */
+fun DrawScope.paperBlueberry(center: Offset, r: Float) {
+    paperCircle(Color(0xFF2E3F8F), r, center)
+    paperCircle(Color(0xFF6E82D6), r * 0.22f, Offset(center.x - r * 0.32f, center.y - r * 0.34f))
+    val calyxCenter = Offset(center.x, center.y - r * 0.7f)
+    val calyxR = r * 0.34f
+    val star = Path().apply {
+        for (i in 0 until 5) {
+            val outerA = -PI.toFloat() / 2f + i * (2f * PI.toFloat() / 5f)
+            val ox = calyxCenter.x + cos(outerA) * calyxR
+            val oy = calyxCenter.y + sin(outerA) * calyxR
+            if (i == 0) moveTo(ox, oy) else lineTo(ox, oy)
+            val innerA = outerA + PI.toFloat() / 5f
+            lineTo(calyxCenter.x + cos(innerA) * calyxR * 0.42f, calyxCenter.y + sin(innerA) * calyxR * 0.42f)
+        }
+        close()
+    }
+    paperPath(star, Color(0xFF241B52))
+}
+
+/** A single paper blueberry, sized for Rory's Kitchen's "count the berries" tap tiles (see
+ * `KitchenTapRow` in VoiceStory.kt): blueberries, not strawberries or cherries (Ruby, K2a). */
+@Composable
+fun BlueberryArt(boxSize: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(boxSize)) { paperBlueberry(center, this.size.minDimension * 0.4f) }
+}
+
 /** Something placed by its centre at ([x], [y]) (parts of the scene), moved while drawing. */
 @Composable
 private fun BoxWithConstraintsScope.Item(
@@ -156,14 +186,14 @@ private fun Emoji(e: String, size: Dp) = Text(e, fontSize = (size.value * 0.72f)
  * prop for company, and the prop his voice moves. [f] and [push] are read only while drawing.
  */
 @Composable
-fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () -> Float, modifier: Modifier = Modifier, puzzleSafe: Boolean = false) {
+fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () -> Float, modifier: Modifier = Modifier, puzzleSafe: Boolean = false, landscape: Boolean = false) {
     val still = LocalReduceMotion.current
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "beat")
     val wobble by t.loop(0f, 1f, 4000, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "wobble")
     Scenery(beat.backdrop.land, modifier.fillMaxSize(), seed = 30 + beat.backdrop.ordinal * 7) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
-            BackdropExtras(beat.backdrop)
+            BackdropExtras(beat.backdrop, landscape)
             beat.still?.let { sp ->
                 val at = stillSpot(beat.move)
                 Item(unit * propSize(sp) * 0.8f, { at.x }, { at.y }) { PropArt(sp, { 1f }, null, beat) }
@@ -188,9 +218,10 @@ fun VoiceBeatScene(beat: VoiceBeat, f: () -> Float, strength: Float, push: () ->
     }
 }
 
-/** The little extras that turn a land's scenery into a backdrop: water, an island, a path, sky clouds. */
+/** The little extras that turn a land's scenery into a backdrop: water, an island, a path, sky
+ * clouds. [landscape] only changes [Backdrop.KITCHEN]'s wall/counter split (see [KitchenLayout]). */
 @Composable
-private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop) {
+private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop, landscape: Boolean = false) {
     val unit = minOf(maxWidth, maxHeight * 1.4f)
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
@@ -209,11 +240,16 @@ private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop) {
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.68f, h * 0.12f), Size(w * 0.2f, h * 0.09f))
             }
             Backdrop.KITCHEN -> {
-                // A soft wall above, and a warm low wooden counter filling the bottom half, side view.
-                paperRect(Color(0xFFFFF3E3), Offset(0f, 0f), Size(w, h * 0.56f))
-                paperRect(Color(0xFFC9773A), Offset(0f, h * 0.5f), Size(w, h * 0.5f))
-                paperRect(Color(0xFFE6C38E), Offset(0f, h * 0.5f), Size(w, h * 0.045f))
-                listOf(0.64f, 0.76f, 0.88f).forEach { py ->
+                // A soft wall above, and a warm low wooden counter below it, side view. Landscape
+                // draws a shorter wall (taller counter), so the counter keeps most of the scene
+                // once VoiceStory's landscape lift clips the top clear of the choice strip
+                // (Ruby, K2a: it used to clip into the counter on a landscape phone).
+                val ct = KitchenLayout.counterTop(landscape)
+                paperRect(Color(0xFFFFF3E3), Offset(0f, 0f), Size(w, h * (ct + 0.06f)))
+                paperRect(Color(0xFFC9773A), Offset(0f, h * ct), Size(w, h * (1f - ct)))
+                paperRect(Color(0xFFE6C38E), Offset(0f, h * ct), Size(w, h * 0.045f))
+                listOf(0.28f, 0.52f, 0.76f).forEach { rel ->
+                    val py = ct + rel * (1f - ct)
                     drawLine(Color(0xFF8C5A3A).copy(alpha = 0.55f), Offset(0f, h * py), Offset(w, h * py), 2.dp.toPx())
                 }
             }
@@ -330,7 +366,18 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
         Prop.DUCK -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🦆", fontSize = 40.sp) }
         Prop.BIRD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🐦", fontSize = 40.sp) }
         Prop.CUPCAKE -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🧁", fontSize = 40.sp) }
-        Prop.BERRIES -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🍒🍒", fontSize = 34.sp) }
+        Prop.BERRIES -> if (beat.backdrop == Backdrop.KITCHEN) {
+            // Rory's Kitchen: blueberries tumbling in, not cherries (Ruby, K2a; the owl story's
+            // berries, Backdrop.FOREST, keep their cherry look below).
+            Canvas(Modifier.fillMaxSize()) {
+                val r = size.minDimension * 0.17f
+                listOf(Offset(0.32f, 0.5f), Offset(0.58f, 0.36f), Offset(0.68f, 0.62f)).forEach { spot ->
+                    paperBlueberry(Offset(size.width * spot.x, size.height * spot.y), r)
+                }
+            }
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🍒🍒", fontSize = 34.sp) }
+        }
         Prop.SUN -> Canvas(Modifier.fillMaxSize()) {
             val r = size.minDimension * 0.32f
             for (k in 0 until 8) {

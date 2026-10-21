@@ -419,6 +419,11 @@ val LocalAnswersStacked = staticCompositionLocalOf { false }
 /** The whole screen's width (not just the space a screen part gets), for layout switches like "768 or wider". */
 val LocalScreenWidth = compositionLocalOf { 0.dp }
 
+/** The whole screen's height, same idea as [LocalScreenWidth]: used by Rory's Kitchen's landscape
+ * KITCHEN layout log (VoiceStory.kt) to report the counter's on-screen share against the real
+ * screen, not just the space left after the header. */
+val LocalScreenHeight = compositionLocalOf { 0.dp }
+
 /** What is said when the right answer is shown after the third miss. */
 fun revealLine(answerWords: String?) =
     "It's this one" + (answerWords?.let { ": $it" } ?: "") + ". Good trying! Let's keep going."

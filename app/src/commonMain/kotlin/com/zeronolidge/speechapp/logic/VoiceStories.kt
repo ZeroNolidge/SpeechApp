@@ -204,7 +204,7 @@ object VoiceStories {
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's add some berries! Help me count them in.", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
-                "Three! The berries tumble into the batter!", "🍓", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.BATTER,
+                "Three! The berries tumble into the batter!", "🫐", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.BATTER,
             ),
             VoiceBeat(Backdrop.KITCHEN, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.BATTER, Move.SINK, "Pour! The batter pours into the pan!", "🥞", still = Prop.PAN),
             VoiceBeat(

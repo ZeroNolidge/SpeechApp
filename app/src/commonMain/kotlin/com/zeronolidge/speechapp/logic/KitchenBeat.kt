@@ -114,3 +114,24 @@ object KitchenGame {
 
     fun tapRound(answer: String, count: Int, rnd: Random): Choice<String> = choiceOf(answer, distractors, count, rnd)
 }
+
+/**
+ * Rory's Kitchen's wooden counter (drawn by `BackdropExtras(Backdrop.KITCHEN)` in VoiceScenes.kt):
+ * how far down the wall/window goes before the counter starts, as a fraction of the scene's own
+ * height. Ruby (design fix K2a) found the counter clipped down behind the choice strip on a
+ * landscape phone: VoiceStory's landscape lift (it moves the scene up, clear of the strip, and
+ * clips off whatever scrolls above the top, normally just sky) ate into the counter because the
+ * portrait wall was still half the scene. Landscape draws a shorter wall / taller counter so most
+ * of what's left above the strip is counter, not wall; portrait is unchanged, the counter was
+ * already big there.
+ */
+object KitchenLayout {
+    const val COUNTER_TOP_PORTRAIT = 0.5f
+    const val COUNTER_TOP_LANDSCAPE = 0.3f
+
+    /** The least share of the whole screen's height the counter must keep on screen in landscape
+     * (Ruby's ask, K2a): a hard floor the VoiceStory landscape lift is tuned to clear. */
+    const val MIN_VISIBLE_FRACTION = 0.35f
+
+    fun counterTop(landscape: Boolean): Float = if (landscape) COUNTER_TOP_LANDSCAPE else COUNTER_TOP_PORTRAIT
+}

@@ -2048,3 +2048,23 @@ class KitchenBeatStateTest {
         }
     }
 }
+
+/** Rory's Kitchen's counter (K2a): landscape must draw a shorter wall / taller counter than
+ * portrait, and keep at least [KitchenLayout.MIN_VISIBLE_FRACTION] of the scene as counter. */
+class KitchenLayoutTest {
+    @Test
+    fun portraitCounterIsUnchanged() {
+        assertEquals(0.5f, KitchenLayout.counterTop(landscape = false))
+    }
+
+    @Test
+    fun landscapeCounterMeetsRubysFloor() {
+        val counterFraction = 1f - KitchenLayout.counterTop(landscape = true)
+        assertTrue(counterFraction >= KitchenLayout.MIN_VISIBLE_FRACTION)
+    }
+
+    @Test
+    fun landscapeWallIsShorterThanPortrait() {
+        assertTrue(KitchenLayout.counterTop(landscape = true) < KitchenLayout.counterTop(landscape = false))
+    }
+}

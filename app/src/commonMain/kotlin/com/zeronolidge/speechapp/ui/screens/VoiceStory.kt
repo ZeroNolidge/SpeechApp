@@ -49,6 +49,7 @@ import com.zeronolidge.speechapp.logic.GameBeatState
 import com.zeronolidge.speechapp.logic.KitchenBeatState
 import com.zeronolidge.speechapp.logic.KitchenFlow
 import com.zeronolidge.speechapp.logic.KitchenGame
+import com.zeronolidge.speechapp.logic.KitchenLayout
 import com.zeronolidge.speechapp.logic.KitchenPhase
 import com.zeronolidge.speechapp.logic.Numbers
 import com.zeronolidge.speechapp.logic.PatternRound
@@ -61,6 +62,7 @@ import com.zeronolidge.speechapp.logic.talkGoal
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.placeKey
+import com.zeronolidge.speechapp.ui.art.BlueberryArt
 import com.zeronolidge.speechapp.ui.art.Critter
 import com.zeronolidge.speechapp.ui.art.HeroWithPet
 import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
@@ -88,14 +90,17 @@ import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import com.zeronolidge.speechapp.ui.components.LocalApp
+import com.zeronolidge.speechapp.ui.components.LocalScreenHeight
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.peelIn
 import com.zeronolidge.speechapp.ui.components.revealLine
 import com.zeronolidge.speechapp.ui.components.wiggleOnTap
 import com.zeronolidge.speechapp.ui.platform.rememberMicPermission
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 private enum class VPhase { INTRO, MODEL, LISTEN, WAIT_TAP, ACT, END, GAME, KITCHEN }
@@ -174,6 +179,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val pts = tiles.indices.joinToString(";") { i -> kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" } }
         println("KITCHEN step=$index phase=${k.phase} targets=$pts")
     }
+    // The counter's on-screen span, in landscape (Ruby, K2a): logged once per step so the
+    // screenshot test can check it keeps KitchenLayout.MIN_VISIBLE_FRACTION of the screen.
+    var kitchenLayoutLoggedStep by remember { mutableIntStateOf(-1) }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
@@ -677,22 +685,42 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
+                    val density = LocalDensity.current
+                    val screenHeight = LocalScreenHeight.current
                     // While he's choosing or tapping, the choice strip is reserved space, not an
                     // overlay: the scene sits fully above it, never behind it. Landscape (wider
                     // than tall) uses a slimmer strip (~18% of the stage); portrait keeps the
                     // taller one. The kitchen's tap tiles share the same strip as the balloon puzzle.
                     val stripShown = phase == VPhase.GAME || phase == VPhase.KITCHEN
                     val landscape = stripShown && w > h
+                    val isKitchen = phase == VPhase.KITCHEN
                     val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
                     val gameStrip = if (stripShown) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
                     Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip).clipToBounds()) {
                         if (landscape) {
-                            // Keep the scene at its usual full-stage size (so Bear is never
-                            // shrunk) and move it up clear of the strip instead, with room to
-                            // spare above the strip's top edge; the lifted-off top is clipped.
-                            val lift = gameStrip + BalloonLandscapeGap
-                            Box(Modifier.fillMaxWidth().height(h).offset(y = -lift)) {
-                                VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown)
+                            // Keep the scene at its usual full-stage size (so Bear/the counter is
+                            // never shrunk) and move it up clear of the strip instead, with room
+                            // to spare above the strip's top edge; the lifted-off top is clipped.
+                            // Rory's Kitchen uses no extra gap (its counter, not sky, sits at the
+                            // top once lifted, and KitchenLayout already draws it tall there; see
+                            // KitchenLayoutTest): the balloon puzzle's bigger gap would clip into it.
+                            val lift = gameStrip + (if (isKitchen) KitchenLandscapeGap else BalloonLandscapeGap)
+                            Box(
+                                Modifier.fillMaxWidth().height(h).offset(y = -lift).let { m ->
+                                    if (!isKitchen) return@let m
+                                    m.onGloballyPositioned { c ->
+                                        if (kitchenLayoutLoggedStep == index) return@onGloballyPositioned
+                                        kitchenLayoutLoggedStep = index
+                                        val top = c.positionInWindow().y
+                                        val sceneHeightPx = c.size.height.toFloat()
+                                        val counterTop = top + KitchenLayout.counterTop(true) * sceneHeightPx
+                                        val counterBottom = top + sceneHeightPx
+                                        val screenHPx = with(density) { screenHeight.toPx() }
+                                        println("KITCHEN layout counterTop=${counterTop.roundToInt()} counterBottom=${counterBottom.roundToInt()} screenH=${screenHPx.roundToInt()}")
+                                    }
+                                },
+                            ) {
+                                VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown, landscape = true)
                             }
                         } else {
                             VoiceBeatScene(beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(), puzzleSafe = stripShown)
@@ -839,6 +867,10 @@ private const val BalloonStripFraction = 0.22f
 private const val BalloonLandscapeStripFraction = 0.18f
 /** The least clear space kept between Bear's feet and the strip's top, in landscape. */
 private val BalloonLandscapeGap = 16.dp
+/** Rory's Kitchen's own landscape gap (Ruby, K2a): none, since the counter (not sky) sits at the
+ * top once lifted and every extra dp of gap is a dp less of visible counter (see
+ * KitchenLayout.MIN_VISIBLE_FRACTION, checked by the KITCHEN layout log above). */
+private val KitchenLandscapeGap = 0.dp
 private val BalloonStripMinHeight = 128.dp
 private val BalloonChoiceSize = 88.dp
 private val BalloonChoiceGap = 24.dp
@@ -924,14 +956,17 @@ private fun kitchenWordEmoji(word: String): String = when (word) {
 }
 
 /** The kitchen flow's tap tiles, in order: the bowl choice's shuffled options, three berries to
- * count in, or the pancake to flip (its own emoji); [KitchenFlow.STIR]/[KitchenFlow.BUBBLES] have
- * none (no tap phase at all; see [KitchenFlow.tapGoal]). */
+ * count in (drawn as paper art, not this placeholder; see [KitchenTapRow]), or the pancake to
+ * flip (its own emoji); [KitchenFlow.STIR]/[KitchenFlow.BUBBLES] have none (no tap phase at all;
+ * see [KitchenFlow.tapGoal]). */
 private fun kitchenTiles(beat: VoiceBeat, flow: KitchenFlow, round: Choice<String>?): List<String> = when (flow) {
     KitchenFlow.TAP_CHOICE -> round?.options?.map(::kitchenWordEmoji) ?: emptyList()
-    KitchenFlow.COUNT -> List(3) { "🍓" }
+    KitchenFlow.COUNT -> List(3) { "🫐" }
     KitchenFlow.FLIP -> listOf(beat.emoji)
     KitchenFlow.STIR, KitchenFlow.BUBBLES -> emptyList()
 }
+
+private val KitchenBerryTileSize = 44.dp
 
 private val KitchenChoiceGap = 32.dp
 
@@ -973,7 +1008,7 @@ private fun KitchenTapRow(
                     glow = state.glow && isAnswer && !answerShown,
                     wiggle = if (i == wrongChoice) wiggleBump else 0,
                     onClick = { onTap(i) },
-                ) { Text(emoji, fontSize = 40.sp) }
+                ) { if (state.flow == KitchenFlow.COUNT) BlueberryArt(KitchenBerryTileSize) else Text(emoji, fontSize = 40.sp) }
             }
         }
     }
