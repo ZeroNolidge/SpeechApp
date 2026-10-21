@@ -2110,3 +2110,36 @@ class KitchenLayoutTest {
         }
     }
 }
+
+/** Rory's Kitchen's own ending (Ruby's K2c): the stack-of-pancakes/bite/sticker-fly sequence
+ * lands well inside the designer's "within 3 s of the bite, under ~4 s total, no tap needed"
+ * rules, and the carry-on wait after the bye line is the usual 1.5 to 2.5 s shape. */
+class KitchenEndingTest {
+    @Test
+    fun stickerLandsWithinThreeSecondsOfTheBiteStarting() {
+        assertTrue(KitchenEnding.stickerLandsAfterBiteStartsMs <= 3000)
+    }
+
+    @Test
+    fun stackBiteAndFlyFinishWellUnderFourSeconds() {
+        assertTrue(KitchenEnding.stackToLandedMs < 4000)
+    }
+
+    @Test
+    fun leaveDelayIsAroundOneAndAHalfToTwoAndAHalfSeconds() {
+        assertTrue(KitchenEnding.LEAVE_DELAY_MS in 1500..2500)
+    }
+
+    @Test
+    fun timedStagesRunInOrderWithNoNegativeOrZeroSpan() {
+        val order = listOf(KitchenEndStage.STACK, KitchenEndStage.BITE, KitchenEndStage.STICKER_FLY, KitchenEndStage.IN_BACKPACK)
+        assertEquals(order, KitchenEnding.timedStages.map { it.first })
+        for ((_, ms) in KitchenEnding.timedStages) assertTrue(ms > 0)
+    }
+
+    @Test
+    fun stickerLandsExactlyWhenBiteAndFlyHaveBothElapsed() {
+        assertEquals(KitchenEnding.BITE_MS + KitchenEnding.FLY_MS, KitchenEnding.stickerLandsAfterBiteStartsMs)
+        assertEquals(KitchenEnding.STACK_MS + KitchenEnding.BITE_MS + KitchenEnding.FLY_MS, KitchenEnding.stackToLandedMs)
+    }
+}

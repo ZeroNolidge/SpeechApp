@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.audio.VoiceTry
@@ -48,6 +49,8 @@ import com.zeronolidge.speechapp.logic.Choice
 import com.zeronolidge.speechapp.logic.GameBeatPhase
 import com.zeronolidge.speechapp.logic.GameBeatState
 import com.zeronolidge.speechapp.logic.KitchenBeatState
+import com.zeronolidge.speechapp.logic.KitchenEndStage
+import com.zeronolidge.speechapp.logic.KitchenEnding
 import com.zeronolidge.speechapp.logic.KitchenFlow
 import com.zeronolidge.speechapp.logic.KitchenGame
 import com.zeronolidge.speechapp.logic.KitchenLayout
@@ -70,6 +73,7 @@ import com.zeronolidge.speechapp.ui.art.LocalReduceMotion
 import com.zeronolidge.speechapp.ui.art.Mood
 import com.zeronolidge.speechapp.ui.art.PaperStyle
 import com.zeronolidge.speechapp.ui.art.VoiceBeatScene
+import com.zeronolidge.speechapp.ui.art.KitchenEndingScene
 import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
@@ -190,16 +194,34 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
 
+    // Rory's Kitchen's own ending (Ruby's K2c): the stack of pancakes, Bear's bite, the sticker's
+    // flight into the backpack and the carry-on bye, in place of every other story's "tap the big
+    // green arrow" wait (see KitchenEnding.kt). [kitchenEnd] null until the last beat's fix has
+    // played; [kitchenSticker] is the sticker's 0 to 1 flight, [backpackBounce] its little landing
+    // bounce, [backpackCenter] the backpack icon's own window position once it's drawn (see the
+    // `top` row below), captured so the sticker can arc into exactly where it sits.
+    val isKitchenStory = story.id == "kitchen"
+    var kitchenEnd by remember { mutableStateOf<KitchenEndStage?>(null) }
+    val kitchenSticker = remember { Animatable(0f) }
+    val backpackBounce = remember { Animatable(1f) }
+    var backpackCenter by remember { mutableStateOf<Offset?>(null) }
+    var sceneOrigin by remember { mutableStateOf<Offset?>(null) }
+
     lateinit var startBeat: (Int) -> Unit
     lateinit var startKitchenTalk: () -> Unit
+    lateinit var startKitchenEnding: () -> Unit
 
     fun finish() {
-        phase = VPhase.END
         p.finishVoiceStory(story.id)
         // The sticker for his collection (shiny).
         sticker = p.recordWord(story.sticker.first, story.sticker.second, clear = true, heard = false)
-        app.celebrate(story.ending)
-        app.rememberInstruction("${story.ending} Tap the big green arrow.")
+        phase = VPhase.END
+        if (isKitchenStory) {
+            startKitchenEnding()
+        } else {
+            app.celebrate(story.ending)
+            app.rememberInstruction("${story.ending} Tap the big green arrow.")
+        }
     }
 
     /** It worked: hole-punch confetti at the thing that moved (gone in under 2 s). */
@@ -276,6 +298,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             if (s != session) return@say
             if (b.game) { gamePhase = gamePhase.closed(); logGame(gamePhase) }
             if (b.kitchen != null) { kitchenPhase = kitchenPhase.closed(); logKitchen(kitchenPhase) }
+            if (b.backdrop == Backdrop.KITCHEN && b.kitchen == null) println("KITCHEN step=$k phase=DONE")
             when {
                 k + 1 >= beats.size -> finish()
                 // After about 12 minutes of play: straight to the calm goodbye beat.
@@ -311,6 +334,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     lateinit var listen: (Int) -> Unit
     listen = { k ->
         val s = session
+        // Rory's Kitchen's plain talk-turn beats only (the flow beats log their own TALK through
+        // KitchenBeatState/logKitchen); see the NAME log in startBeat and the DONE log in after().
+        if (beats.getOrNull(k)?.let { it.backdrop == Backdrop.KITCHEN && it.kitchen == null } == true) println("KITCHEN step=$k phase=TALK")
         if (!micOk()) {
             waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
         } else {
@@ -452,6 +478,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         } else {
             phase = VPhase.MODEL
             app.rememberInstruction("${b.problem} ${line(k)}. ${line(k)}. ${line(k)}.")
+            // Rory's Kitchen's plain talk-turn beats (milk, pour, "mmm") carry no KitchenFlow of
+            // their own, but Ruby's K2c test script still drives them from the same KITCHEN log
+            // the flow beats print (see `listen`/`after` below for TALK/DONE).
+            if (b.backdrop == Backdrop.KITCHEN) println("KITCHEN step=$k phase=NAME")
             app.speaker.say(b.problem) { modelWord(k, s) }
         }
     }
@@ -520,6 +550,52 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         phase = VPhase.MODEL
         app.rememberInstruction("${line(k)}! Say it out loud! Then tap the big green I said it button.")
         modelKitchenWord(k, s)
+    }
+
+    // Rory's Kitchen's own ending (Ruby's K2c): no tap needed anywhere in this sequence (see
+    // KitchenEnding.kt for the timed stages); the story carries on by itself once Rory's bye line
+    // finishes, same place every other story's "tap the big green arrow" would have sent him
+    // (nav.go(Screen.Rest) when the sitting's run long, else nav.home()). 🏠 keeps working
+    // throughout, since it's drawn by ScreenFrame, outside this whole sequence.
+    startKitchenEnding = {
+        val s = session
+        kitchenEnd = KitchenEndStage.STACK
+        println("KITCHEN end stage=STACK")
+        scope.launch {
+            delay(KitchenEnding.STACK_MS.toLong())
+            if (s != session) return@launch
+            kitchenEnd = KitchenEndStage.BITE
+            println("KITCHEN end stage=BITE")
+            delay(KitchenEnding.BITE_MS.toLong())
+            if (s != session) return@launch
+            kitchenEnd = KitchenEndStage.STICKER_FLY
+            println("KITCHEN end stage=STICKER_FLY")
+            kitchenSticker.snapTo(0f)
+            launch { kitchenSticker.animateTo(1f, tween(if (still) 0 else KitchenEnding.FLY_MS)) }
+            delay(KitchenEnding.FLY_MS.toLong())
+            if (s != session) return@launch
+            kitchenEnd = KitchenEndStage.IN_BACKPACK
+            println("KITCHEN end stage=IN_BACKPACK")
+            launch {
+                backpackBounce.snapTo(1f)
+                backpackBounce.animateTo(1.35f, tween(if (still) 0 else 140))
+                backpackBounce.animateTo(1f, tween(if (still) 0 else 160))
+            }
+            delay(KitchenEnding.BOUNCE_MS.toLong())
+            if (s != session) return@launch
+            kitchenEnd = KitchenEndStage.BYE
+            println("KITCHEN end stage=BYE")
+            app.rememberInstruction(story.ending)
+            app.speaker.say(story.ending) {
+                if (s != session) return@say
+                scope.launch {
+                    delay(KitchenEnding.LEAVE_DELAY_MS.toLong())
+                    if (s != session) return@launch
+                    println("KITCHEN end stage=LEAVE")
+                    if (app.sessionLong()) nav.go(Screen.Rest) else nav.home()
+                }
+            }
+        }
     }
 
     /** A tap on one of the kitchen flow's tiles (ignored outside its TAP phase; see KitchenBeatState). */
@@ -651,7 +727,14 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val s = session
         // The first talk turn of a sitting: a quick quiet check of the room before Rory talks.
         val first = firstBeat.coerceIn(0, beats.lastIndex)
-        val go = { if (s == session) app.speaker.say(story.setup) { if (s == session && phase == VPhase.INTRO) startBeat(first) } }
+        val go = {
+            if (s == session) {
+                // Ruby's K2c: the kitchen story's very first line, before any beat (story.setup
+                // itself, unchanged from VoiceStories.kitchen).
+                if (isKitchenStory) println("KITCHEN intro say=${story.setup}")
+                app.speaker.say(story.setup) { if (s == session && phase == VPhase.INTRO) startBeat(first) }
+            }
+        }
         if (micOk()) app.voice.checkRoom(go) else go()
     }
     DisposableEffect(Unit) {
@@ -664,7 +747,25 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
-    ScreenFrame(onHome = nav.home, background = {}, top = { PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1) }) {
+    ScreenFrame(
+        onHome = nav.home,
+        background = {},
+        top = {
+            PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
+            // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,
+            // clear of 🏠 and 🔊 (this row sits between them; see ScreenFrame). Only shown once
+            // the ending starts, so it never crowds the title the rest of the story.
+            if (isKitchenStory && kitchenEnd != null) {
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(40.dp)
+                        .graphicsLayer { scaleX = backpackBounce.value; scaleY = backpackBounce.value }
+                        .onGloballyPositioned { c -> backpackCenter = c.positionInWindow() + Offset(c.size.width / 2f, c.size.height / 2f) },
+                    contentAlignment = Alignment.Center,
+                ) { Text("🎒", fontSize = 30.sp) }
+            }
+        },
+    ) {
         ContinueHost {
             // Rory stands in the one listening spot, moved aside only if he'd cover the path of
             // the thing his voice moves.
@@ -686,7 +787,14 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     HolePunchConfetti(confettiAt, { confetti.value })
                 },
             ) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
+                BoxWithConstraints(
+                    Modifier.fillMaxSize().let { m ->
+                        // Rory's Kitchen's ending (Ruby's K2c): this box's own window position,
+                        // so the flying sticker can arc from its centre into the backpack icon up
+                        // in the top bar (captured separately; see the `top` row above).
+                        if (isKitchenStory) m.onGloballyPositioned { c -> sceneOrigin = c.positionInWindow() } else m
+                    },
+                ) {
                     val w = maxWidth
                     val h = maxHeight
                     val density = LocalDensity.current
@@ -753,25 +861,59 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     }
                                 },
                             ) {
+                                val end = kitchenEnd
+                                if (end != null) {
+                                    KitchenEndingScene(end, landscape = true, modifier = Modifier.fillMaxSize())
+                                } else {
+                                    VoiceBeatScene(
+                                        beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
+                                        puzzleSafe = stripShown, landscape = true,
+                                        kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
+                                        onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
+                                    )
+                                }
+                            }
+                        } else {
+                            val end = kitchenEnd
+                            if (end != null) {
+                                KitchenEndingScene(end, landscape = false, modifier = Modifier.fillMaxSize())
+                            } else {
                                 VoiceBeatScene(
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
-                                    puzzleSafe = stripShown, landscape = true,
+                                    puzzleSafe = stripShown,
                                     kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
                                 )
                             }
-                        } else {
-                            VoiceBeatScene(
-                                beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
-                                puzzleSafe = stripShown,
-                                kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
-                                onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
-                            )
                         }
                     }
-                    // The sticker he earned, peeling on in the middle at the end.
-                    sticker?.let { st ->
+                    // The sticker he earned, peeling on in the middle at the end. Rory's Kitchen's
+                    // own ending flies its sticker into the backpack instead (see below): no
+                    // screen-takeover card for that story.
+                    if (!isKitchenStory) sticker?.let { st ->
                         Box(Modifier.align(Alignment.Center)) { Sticker(st, minOf(h * 0.35f, 180.dp), Modifier.peelIn(st.text)) }
+                    }
+                    // Rory's Kitchen's own ending (Ruby's K2c): the sticker arcs from the middle
+                    // of this scene up into the backpack icon in the top bar, shrinking as it
+                    // nears it; it stays there (scaled right down) through IN_BACKPACK too, so it
+                    // never pops back to its starting size.
+                    if (isKitchenStory && (kitchenEnd == KitchenEndStage.STICKER_FLY || kitchenEnd == KitchenEndStage.IN_BACKPACK)) sticker?.let { st ->
+                        val wPx = with(density) { w.toPx() }
+                        val hPx = with(density) { h.toPx() }
+                        val start = Offset(wPx / 2f, hPx * 0.42f)
+                        val target = backpackCenter?.let { bp -> sceneOrigin?.let { origin -> bp - origin } }
+                        val end = target ?: start
+                        val t = kitchenSticker.value
+                        val bow = hPx * 0.16f
+                        val x = start.x + (end.x - start.x) * t
+                        val y = start.y + (end.y - start.y) * t - bow * kotlin.math.sin(kotlin.math.PI.toFloat() * t)
+                        val scale = 1f - 0.6f * t
+                        val stickerSize = minOf(h * 0.3f, 150.dp)
+                        val sizePx = with(density) { stickerSize.toPx() }
+                        Box(
+                            Modifier.offset { IntOffset((x - sizePx * scale / 2f).roundToInt(), (y - sizePx * scale / 2f).roundToInt()) }
+                                .zIndex(6f),
+                        ) { Sticker(st, stickerSize, Modifier.graphicsLayer { scaleX = scale; scaleY = scale }) }
                     }
                     // The buddy and Rory, bottom-left, clear of the green button's corner. Hidden
                     // under the puzzle/tap panel while he's choosing: nothing else competes for taps.
@@ -846,7 +988,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // "I said it!" is always there in the same spot: it does the same action as his voice.
             // The puzzle and the kitchen's tap tiles have no continue button at all (a quiz step
             // moves on by answering).
-            if (phase != VPhase.GAME && phase != VPhase.KITCHEN) ContinueAction(
+            // Rory's Kitchen's own ending (Ruby's K2c) has no continue button at all: it carries
+            // on by itself, no tap needed (🏠, drawn by ScreenFrame outside this whole sequence,
+            // still works throughout).
+            if (phase != VPhase.GAME && phase != VPhase.KITCHEN && !(isKitchenStory && phase == VPhase.END)) ContinueAction(
                 hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),
                 label = if (phase == VPhase.END || phase == VPhase.INTRO) null else "I said it!",
             ) {

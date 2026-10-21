@@ -15,9 +15,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
@@ -29,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.logic.Backdrop
 import com.zeronolidge.speechapp.logic.Cosmetic
+import com.zeronolidge.speechapp.logic.KitchenEndStage
 import com.zeronolidge.speechapp.logic.KitchenLayout
+import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Light
 import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.logic.Prop
@@ -240,6 +244,27 @@ fun VoiceBeatScene(
     }
 }
 
+/**
+ * Rory's Kitchen's own ending (Ruby's K2c): once Bear's had his bite, this replaces the usual
+ * beat scene (no more moving prop to drive, no score or summary) with the stack of pancakes he's
+ * eating ([PancakeStackArt]) in place on the counter, Bear leaning in for his bite from
+ * [KitchenEndStage.BITE] on, same backdrop and Rory as every other kitchen beat.
+ */
+@Composable
+fun KitchenEndingScene(stage: KitchenEndStage, landscape: Boolean = false, modifier: Modifier = Modifier) {
+    val bitten = stage != KitchenEndStage.STACK
+    val leaning = stage == KitchenEndStage.BITE || bitten
+    Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val unit = minOf(maxWidth, maxHeight * 1.4f)
+            BackdropExtras(Backdrop.KITCHEN, landscape)
+            KitchenCharacters(landscape, talking = false, roryVisible = true, bearLeaning = leaning)
+            val ct = KitchenLayout.counterTop(landscape)
+            Item(unit * 0.4f, { 0.56f }, { ct + (1f - ct) * 0.42f }) { PancakeStackArt(bitten) }
+        }
+    }
+}
+
 /** The little extras that turn a land's scenery into a backdrop: water, an island, a path, sky
  * clouds. [landscape] only changes [Backdrop.KITCHEN]'s wall/counter split (see [KitchenLayout]). */
 @Composable
@@ -304,19 +329,29 @@ private fun DrawScope.paperStool() {
  * chef's hat, his lower body hidden by the counter front (redrawn over his legs, the same trick
  * as Bear riding in the balloon's basket above). [talking] follows Rory's mouth while he models
  * a word; [roryVisible] hides him while the big listening Rory takes over (`listenLookGone()` at
- * the call site), so the two Rorys are never both shown.
+ * the call site), so the two Rorys are never both shown. [bearLeaning] is the ending's own
+ * (Ruby, K2c): Bear tips in toward the counter's props for his bite, cheering instead of just
+ * standing happy.
  */
 @Composable
-private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talking: Boolean, roryVisible: Boolean) {
+private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talking: Boolean, roryVisible: Boolean, bearLeaning: Boolean = false) {
     val w = maxWidth
     val h = maxHeight
     val bear = KitchenLayout.bearBox()
     Box(
-        Modifier.offset(x = w * bear.l, y = h * bear.t).size(w * (bear.r - bear.l), h * (bear.b - bear.t)),
+        Modifier.offset(x = w * bear.l, y = h * bear.t).size(w * (bear.r - bear.l), h * (bear.b - bear.t))
+            .graphicsLayer {
+                if (bearLeaning) {
+                    rotationZ = -8f
+                    translationX = size.width * 0.18f
+                    scaleX = 1.06f
+                    scaleY = 1.06f
+                }
+            },
         contentAlignment = Alignment.BottomCenter,
     ) {
         Canvas(Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.55f).align(Alignment.BottomCenter)) { paperStool() }
-        Critter(Species.BEAR, Modifier.fillMaxHeight(0.85f), mood = Mood.HAPPY)
+        Critter(Species.BEAR, Modifier.fillMaxHeight(0.85f), mood = if (bearLeaning) Mood.CHEER else Mood.HAPPY)
     }
     val rory = KitchenLayout.roryBox(landscape)
     Box(
@@ -593,6 +628,62 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 }
                 drawPath(wisp, Color.White.copy(alpha = 0.55f - i * 0.1f), style = Stroke(4.dp.toPx()))
             }
+        }
+    }
+}
+
+/** Soft paper steam, rising and fading in a gentle loop (Rory's Kitchen's ending, Ruby's K2c):
+ * 3 wavy wisps, each a little behind the last, fading as it nears the top. */
+@Composable
+private fun PancakeSteam(modifier: Modifier = Modifier) {
+    val still = LocalReduceMotion.current
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "pancakeSteam")
+    val phase by t.loop(0f, 1f, 2200, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "steamPhase")
+    Canvas(modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val p = if (still) 0f else phase
+        listOf(0.28f, 0.5f, 0.72f).forEachIndexed { i, x ->
+            val rise = (p + i / 3f) % 1f
+            val wisp = Path().apply {
+                moveTo(w * x, h * (0.96f - rise * 0.1f))
+                quadraticTo(w * (x - 0.09f), h * (0.56f - rise * 0.12f), w * x, h * (0.3f - rise * 0.1f))
+                quadraticTo(w * (x + 0.09f), h * (0.12f - rise * 0.1f), w * x, h * (-0.04f - rise * 0.08f))
+            }
+            drawPath(wisp, Color.White.copy(alpha = 0.6f * (1f - rise)), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+        }
+    }
+}
+
+/**
+ * The stack of pancakes Bear's about to eat (Rory's Kitchen's ending, Ruby's K2c): three golden
+ * paper pancakes, each a touch smaller than the one below, a pat of butter on top, and
+ * [PancakeSteam] rising behind them. Once [bitten], the top pancake carries a bite-shaped notch
+ * (a plain circle cut from its edge, `PathOperation.Difference`) where Bear's had his bite.
+ */
+@Composable
+fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize()) {
+        PancakeSteam(Modifier.fillMaxSize())
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val layers = listOf(0.86f to 0.62f, 0.76f to 0.46f, 0.66f to 0.3f)
+            layers.forEachIndexed { i, (pw, py) ->
+                val top = Path().apply { addOval(Rect(Offset(w * (0.5f - pw / 2f), h * py), Size(w * pw, h * 0.22f))) }
+                val shape = if (bitten && i == layers.lastIndex) {
+                    val bite = Path().apply {
+                        addOval(Rect(Offset(w * (0.5f + pw * 0.14f), h * (py - 0.01f)), Size(w * pw * 0.26f, h * 0.2f)))
+                    }
+                    Path().apply { op(top, bite, PathOperation.Difference) }
+                } else {
+                    top
+                }
+                paperPath(shape, Color(0xFFD08A3E))
+                paperOval(Color(0xFFF2C06B), Offset(w * (0.5f - pw * 0.39f), h * (py + 0.02f)), Size(w * pw * 0.78f, h * 0.15f))
+            }
+            // A pat of butter, melting on top.
+            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.44f, h * 0.24f), Size(w * 0.12f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
         }
     }
 }
