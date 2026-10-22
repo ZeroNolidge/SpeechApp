@@ -238,6 +238,23 @@ object VoiceStories {
         ending = "What a treat! You got a pancake sticker. See you next time!",
     )
 
+    /** Rory's Kitchen's own "your turn" cue (K3d), said once after he's modelled the word: a
+     * per-word line, naming the word twice ("Milk! Now you say it... milk!"), in place of the old
+     * generic "Say it out loud!" every other kitchen talk turn used -- it reads the same for every
+     * word, so a child who can't read the caption had only the picture to tell him which word was
+     * his turn to say. Covers the kitchen's five plain talk beats (milk, mix, pour, pop, mmm;
+     * bowl/three/flip are tap-only and never reach a talk turn at all). Falls back to the old
+     * line for any word that isn't one of these (there are none today, kept only so a future
+     * kitchen word never goes silent waiting on a new clip). */
+    fun kitchenYourTurnLine(word: String): String = when (word) {
+        "milk" -> "Milk! Now you say it... milk!"
+        "mix" -> "Mix! Now you say it... mix!"
+        "pour" -> "Pour! Now you say it... pour!"
+        "pop" -> "Pop! Now you say it... pop!"
+        "mmm" -> "Mmm! Now you say it... mmm!"
+        else -> "Say it out loud!"
+    }
+
     val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen)
 
     fun byId(id: String): VoiceStory? = all.firstOrNull { it.id == id }

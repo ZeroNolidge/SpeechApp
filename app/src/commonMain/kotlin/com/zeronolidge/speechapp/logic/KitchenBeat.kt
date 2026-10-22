@@ -322,8 +322,36 @@ object KitchenLayout {
 
     /** Rescales a box from the kitchen scene's own fractions onto the whole stage's, given how
      * much of the stage's height the scene itself keeps once a choice strip is reserved below it
-     * ([sceneFraction]; 1f when no strip is reserved this beat). */
+     * ([sceneFraction]; 1f when no strip is reserved this beat). Models a scene that *shrinks* to
+     * fit above the strip -- right for portrait (and for every non-Kitchen beat with a strip, the
+     * balloon puzzle included), but NOT for Rory's Kitchen in landscape, which keeps the scene at
+     * full size and lifts it clear of the strip instead ([onStage] below models that one). */
     fun stageBox(box: Rect, sceneFraction: Float): Rect = Rect(box.l, box.t * sceneFraction, box.r, box.b * sceneFraction)
+
+    /**
+     * Where a scene-local fraction ([local], the same 0-to-1 space every box in this file is
+     * measured in) actually lands on the WHOLE STAGE's own height, once the choice strip is
+     * reserved below it (K3d): mirrors VoiceStory.kt's own landscape lift exactly (one shared
+     * source, not two separately-guessed formulas), so a test -- or the "KITCHEN layout
+     * counterTop=" / "KITCHEN props ..." logs themselves -- can check the real drawn position
+     * without re-deriving it. Landscape never shrinks the scene: it stays the stage's own full
+     * height and is shifted up clear of the strip (by the strip's own height; Rory's Kitchen adds
+     * no extra lift gap, see [COUNTER_TOP_LANDSCAPE]'s own comment), so a scene-local fraction's
+     * on-stage position is simply itself minus the strip's own share of the stage. Portrait (and
+     * landscape with no strip at all) never lifts: the scene just shrinks into [1 - stripFraction]
+     * of the stage, same as [stageBox]. Because this is one linear conversion applied the same way
+     * to any local fraction, the counter's own top and every kitchen prop's own bottom
+     * ([propBox]) stay exactly [PROPS_MARGIN] apart on stage, in either orientation -- never
+     * independently guessed positions that could drift apart (the bug this fixes: props drawn as
+     * if the scene had shrunk like the balloon puzzle's, while the counter they're meant to sit on
+     * had actually lifted, left them floating above it).
+     */
+    fun onStage(local: Float, landscape: Boolean, stageHeight: Float, stripFraction: Float, stripMinHeight: Float): Float {
+        if (!landscape) return local * (1f - stripFraction)
+        if (stageHeight <= 0f) return local
+        val strip = (stageHeight * stripFraction).coerceAtLeast(stripMinHeight)
+        return local - strip / stageHeight
+    }
 
     /** The choice strip's own band, reserved at the bottom of the stage while its tap tiles show. */
     fun stripBox(stripFraction: Float): Rect = Rect(0f, 1f - stripFraction, 1f, 1f)

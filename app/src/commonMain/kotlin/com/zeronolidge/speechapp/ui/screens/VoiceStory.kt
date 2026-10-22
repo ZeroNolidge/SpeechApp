@@ -63,6 +63,7 @@ import com.zeronolidge.speechapp.logic.VoiceStories
 import com.zeronolidge.speechapp.logic.VoicePush
 import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.logic.talkGoal
+import com.zeronolidge.speechapp.logic.tapGoal
 import com.zeronolidge.speechapp.ui.Nav
 import com.zeronolidge.speechapp.ui.Screen
 import com.zeronolidge.speechapp.ui.placeKey
@@ -190,6 +191,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // within about 6 s; reset every time a fresh tap phase begins (see KitchenPhase.TAP's own
     // LaunchedEffect below).
     var kitchenTapReplayed by remember { mutableStateOf(false) }
+    // K3d: a kitchen talk turn (mix/pop's own tries, or milk/pour/mmm's) replays its "your turn"
+    // line once if nothing's said within about 6 s of listening starting, the same safety net
+    // as [kitchenTapReplayed]'s own; reset once per beat (see `startBeat` below), not per try, so
+    // it only ever fires once across the whole beat's talk turn(s).
+    var kitchenTalkReplayed by remember { mutableStateOf(false) }
     // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below.
     val kitchenCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero) }
     fun logKitchen(k: KitchenBeatState) {
@@ -198,12 +204,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val pts = tiles.indices.joinToString(";") { i -> kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" } }
         println("KITCHEN step=$index phase=${k.phase} targets=$pts")
     }
-    // The counter's on-screen span, in landscape (Ruby, K2a): logged once per step so the
-    // screenshot test can check it keeps KitchenLayout.MIN_VISIBLE_FRACTION of the screen.
-    var kitchenLayoutLoggedStep by remember { mutableIntStateOf(-1) }
+    // The counter's on-screen span, in landscape (Ruby, K2a): logged once per step AND again
+    // whenever the phase changes (K3d), not just on the step's first frame -- a tap flow's own
+    // fix (ACT) keeps the same strip-shown layout its tapping just used (see `stripShown` above),
+    // but a screenshot check still needs the real drawn position re-measured there, not a stale
+    // number from the TAP phase that happened to still read true at the time.
+    var kitchenLayoutLoggedStep by remember { mutableStateOf<Pair<Int, VPhase>?>(null) }
     // Bear, Rory, the bowl, the pan and the choice strip's own on-screen boxes (CSS px), logged
-    // once per kitchen beat so Ruby's overlap check (K2b) can be run against a real screenshot.
-    var kitchenRectsLoggedStep by remember { mutableIntStateOf(-1) }
+    // once per kitchen beat AND again on every phase change (K3d), same reason as above.
+    var kitchenRectsLoggedStep by remember { mutableStateOf<Pair<Int, VPhase>?>(null) }
     // Bear's bite lean (K2j): his real on-screen head/seat boxes, the stool and the counter's
     // left edge, logged once at full lean so a screenshot check can confirm his head never
     // actually passes the counter (not just that the math behind the lean says so).
@@ -466,15 +475,17 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     }
 
     /** Rory's Kitchen's own talk turns (K3a): once he's said the word, a clear spoken "your turn"
-     * cue (reusing the same line the no-mic fallback already speaks) before he goes quiet and
-     * listens, with his small corner Rory pointing to his own mouth and a paper speech bubble
-     * beside him the whole time he's talking (both cleared once listening starts: the big
-     * listening Rory, with his cupped ear, takes over). Shared by [modelWord]'s first model and
-     * [modelKitchenWord]'s later tries (mix again, pop again). */
+     * cue, said once, before he goes quiet and listens, with his small corner Rory pointing to his
+     * own mouth and a paper speech bubble beside him the whole time he's talking (both cleared
+     * once listening starts: the big listening Rory, with his cupped ear, takes over). K3d: the
+     * cue names the word itself ("Milk! Now you say it... milk!", [VoiceStories.kitchenYourTurnLine])
+     * instead of the old one-size "Say it out loud!" every word shared, so a child who can't read
+     * the caption still hears which word is his turn to say, not just that it's his turn. Shared
+     * by [modelWord]'s first model and [modelKitchenWord]'s later tries (mix again, pop again). */
     fun kitchenSayItOutLoud(k: Int, s: Int) {
         if (s != session) return
         kitchenPointing = true
-        app.speaker.then("Say it out loud!") {
+        app.speaker.then(VoiceStories.kitchenYourTurnLine(beats[k].word)) {
             kitchenPointing = false
             if (s == session && phase == VPhase.MODEL) listen(k)
         }
@@ -512,6 +523,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         scope.launch { act.snapTo(0f) }
         app.listening = false
         kitchenPointing = false
+        kitchenTalkReplayed = false
         val b = beats[k]
         if (b.kitchen != null) {
             // Rory names the problem, then its tap or talk flow plays out (see KitchenBeatState);
@@ -598,7 +610,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     }
 
     /** A kitchen talk turn's single model line (not three; see KitchenFlow), then the usual
-     * "Say it out loud!" cue and listen. */
+     * per-word "your turn" cue and listen. */
     fun modelKitchenWord(k: Int, s: Int) {
         val say = line(k)
         if (s == session) { chipBig = false; chipBeat++ }
@@ -766,6 +778,33 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    // K3d: a kitchen talk turn (mix/pop's own tries, or milk/pour/mmm's) has the usual mic-based
+    // miss flow (AGAIN_TOGETHER/WAIT above), but that's driven by what the mic actually heard, not
+    // a plain timer -- this is the same kind of safety net [kitchenTapReplayed] already gives a
+    // tap step, for whenever the mic never resolves at all (a hung `listenTry`, same worry as
+    // "Speech never blocks" elsewhere): if nothing's happened within about 6 s of listening
+    // starting, Rory replays the "your turn" line once (closing the mic first, same as
+    // [replayInstruction], then reopening it once he's done), then the mic-driven miss flow
+    // carries on as normal.
+    LaunchedEffect(index, phase) {
+        val s = session
+        val b = beats.getOrNull(index) ?: return@LaunchedEffect
+        if (phase == VPhase.LISTEN && b.backdrop == Backdrop.KITCHEN && !kitchenTalkReplayed) {
+            delay(6000)
+            if (s == session && phase == VPhase.LISTEN && !kitchenTalkReplayed) {
+                kitchenTalkReplayed = true
+                println("KITCHEN replay step=$index kind=talk")
+                app.voice.cancel()
+                app.listening = false
+                app.listenLevel = 0f
+                pushNow = 0f
+                app.speaker.say(VoiceStories.kitchenYourTurnLine(b.word)) {
+                    if (s == session && phase == VPhase.LISTEN) listen(index)
+                }
+            }
+        }
+    }
+
     /** A tap on one of the puzzle's choice balloons (ignored outside the puzzle phase itself). */
     fun tapChoice(i: Int) {
         val round = puzzle ?: return
@@ -922,9 +961,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // overlay: the scene sits fully above it, never behind it. Landscape (wider
                     // than tall) uses a slimmer strip (~18% of the stage); portrait keeps the
                     // taller one. The kitchen's tap tiles share the same strip as the balloon puzzle.
-                    val stripShown = phase == VPhase.GAME || phase == VPhase.KITCHEN
+                    // K3d: whether THIS beat's own flow ever has a tap phase at all (bowl, berries,
+                    // flip) -- stir/bubbles never do (KitchenFlow.tapGoal is 0 for both), so their
+                    // brief NAME announcement never needs the strip reserved either.
+                    val kitchenTapFlow = beat.kitchen?.tapGoal(beat.kitchenGoal)?.let { it > 0 } == true
+                    // K3d: a tap flow's own fix (ACT, right after its last tap/CLOSE) keeps the
+                    // same strip-reserved, lifted layout its tapping just used, instead of
+                    // collapsing it the instant the tiles go away. Before this, the scene's lift
+                    // and size changed in the same frame the tiles vanished and the success line
+                    // started -- Timothy's screenshots showed the counter (and the berries/bowl/pan
+                    // on it) jump to the portrait-style, un-lifted position mid-celebration, which
+                    // read as the props floating up over the wall.
+                    val stripShown = phase == VPhase.GAME || (kitchenTapFlow && (phase == VPhase.KITCHEN || phase == VPhase.ACT))
                     val landscape = stripShown && w > h
-                    val isKitchen = phase == VPhase.KITCHEN
+                    val isKitchen = kitchenTapFlow && (phase == VPhase.KITCHEN || phase == VPhase.ACT)
                     val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
                     val gameStrip = if (stripShown) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
                     // Rory's Kitchen: his mouth talks whenever Rory is the one speaking (naming
@@ -942,8 +992,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // (CSS px), once per kitchen beat, so Ruby's overlap check can run against a
                     // real screenshot (never printed with the "KITCHEN step=" prefix above).
                     fun logKitchenRects(c: androidx.compose.ui.layout.LayoutCoordinates, sceneLandscape: Boolean) {
-                        if (kitchenRectsLoggedStep == index) return
-                        kitchenRectsLoggedStep = index
+                        if (kitchenRectsLoggedStep == index to phase) return
+                        kitchenRectsLoggedStep = index to phase
                         val origin = c.positionInWindow()
                         val sw = c.size.width.toFloat()
                         val sh = c.size.height.toFloat()
@@ -986,8 +1036,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                 Modifier.fillMaxWidth().height(h).offset(y = -lift).let { m ->
                                     if (!isKitchen) return@let m
                                     m.onGloballyPositioned { c ->
-                                        if (kitchenLayoutLoggedStep == index) return@onGloballyPositioned
-                                        kitchenLayoutLoggedStep = index
+                                        if (kitchenLayoutLoggedStep == index to phase) return@onGloballyPositioned
+                                        kitchenLayoutLoggedStep = index to phase
                                         val top = c.positionInWindow().y
                                         val sceneHeightPx = c.size.height.toFloat()
                                         val counterTop = top + KitchenLayout.counterTop(true) * sceneHeightPx

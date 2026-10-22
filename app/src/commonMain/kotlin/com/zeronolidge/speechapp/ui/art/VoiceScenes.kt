@@ -49,7 +49,6 @@ import com.zeronolidge.speechapp.logic.Prop
 import com.zeronolidge.speechapp.logic.Slot
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceBeat
-import com.zeronolidge.speechapp.ui.components.PointingHand
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -622,7 +621,8 @@ private fun androidx.compose.ui.layout.LayoutCoordinates.windowRect(): Rect {
  * only ever true alongside [roryVisible] (a talk-type beat's own MODEL/LISTEN phases): a small
  * hand near his mouth for the "Say it out loud!" cue, and a paper speech-bubble beside him for the
  * whole talk turn, so a child who can't read the caption still sees, not just hears, that this is
- * his turn to talk.
+ * his turn to talk. K3d: [pointing] now poses his own arm (`Critter(pointMouth = true)`, a paper
+ * hand raised to his mouth) instead of a separate floating hand icon beside him.
  */
 @Composable
 private fun BoxWithConstraintsScope.KitchenRory(
@@ -642,15 +642,11 @@ private fun BoxWithConstraintsScope.KitchenRory(
         if (roryVisible) {
             Critter(
                 Species.ROBOT, Modifier.fillMaxHeight(), Color(0xFFFFCC80),
-                outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking,
+                outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking, pointMouth = pointing,
             )
             if (speechBubble) KitchenSpeechBubble(
                 Modifier.align(Alignment.TopEnd).offset(x = (w * (rory.r - rory.l)) * 0.1f, y = -(h * (rory.b - rory.t)) * 0.15f)
                     .fillMaxWidth(0.55f).aspectRatio(1.1f),
-            )
-            if (pointing) PointingHand(
-                modifier = Modifier.align(Alignment.TopStart).offset(x = -(w * (rory.r - rory.l)) * 0.12f),
-                size = 22.dp, pointRight = true,
             )
         }
     }

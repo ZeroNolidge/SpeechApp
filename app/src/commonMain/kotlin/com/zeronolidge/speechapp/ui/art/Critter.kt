@@ -92,6 +92,11 @@ fun Critter(
     talking: Boolean = false,
     /** A real wave: the right hand comes up and goes side to side twice, then down. */
     waving: Boolean = false,
+    /** Rory's Kitchen's own "your turn" cue (K3d): his right arm raises so the paper hand on its
+     * end lands beside his own mouth, in place of whatever [mood] would otherwise have that arm
+     * doing (the cupped-ear [Mood.LISTEN] pose takes over, unchanged, once listening starts --
+     * the two are never shown together). */
+    pointMouth: Boolean = false,
     /** Extra pupil shift (face units, roughly -10 to 10) on top of whatever [mood] already gives
      * the eyes: for a character who needs to visibly look toward something specific (Rory's
      * Kitchen's Bear, toward the pan) rather than just whatever [mood] happens to imply. */
@@ -170,7 +175,7 @@ fun Critter(
         modifier
             .aspectRatio(W / H)
             .graphicsLayer { scaleX = if (mirrored) -1f else 1f }
-            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX), motion, lean, leanForward, onHeadBounds)),
+            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX), motion, lean, leanForward, pointMouth, onHeadBounds)),
     )
 }
 
@@ -227,26 +232,29 @@ private class PuppetElement(
     val motion: PuppetMotion,
     val lean: Float,
     val leanForward: Float,
+    val pointMouth: Boolean,
     val onHeadBounds: ((Rect) -> Unit)?,
 ) : ModifierNodeElement<PuppetNode>() {
-    override fun create() = PuppetNode(spec, motion, lean, leanForward, onHeadBounds)
+    override fun create() = PuppetNode(spec, motion, lean, leanForward, pointMouth, onHeadBounds)
 
     override fun update(node: PuppetNode) {
         node.motion = motion
         node.lean = lean
         node.leanForward = leanForward
+        node.pointMouth = pointMouth
         node.onHeadBounds = onHeadBounds
         if (node.spec != spec) {
             node.spec = spec
             node.parts.clear()
         }
-        // lean/leanForward are plain fields (not read via snapshot state in draw(), unlike
-        // motion's own State values), so a change needs an explicit redraw, not just a rebake.
+        // lean/leanForward/pointMouth are plain fields (not read via snapshot state in draw(),
+        // unlike motion's own State values), so a change needs an explicit redraw, not just a rebake.
         node.invalidateDraw()
     }
 
     override fun equals(other: Any?) =
-        other is PuppetElement && other.spec == spec && other.motion === motion && other.lean == lean && other.leanForward == leanForward
+        other is PuppetElement && other.spec == spec && other.motion === motion && other.lean == lean &&
+            other.leanForward == leanForward && other.pointMouth == pointMouth
     override fun hashCode() = spec.hashCode()
 }
 
@@ -255,6 +263,7 @@ private class PuppetNode(
     var motion: PuppetMotion,
     var lean: Float,
     var leanForward: Float,
+    var pointMouth: Boolean,
     var onHeadBounds: ((Rect) -> Unit)?,
 ) : Modifier.Node(), DrawModifierNode {
     val parts = HashMap<Part, Baked>()
@@ -325,7 +334,10 @@ private class PuppetNode(
                     val w = if (still) 0f else m.wave.value
                     val up = if (w <= 0f || w >= 1f) 0f else minOf(w / 0.15f, (1f - w) / 0.12f, 1f)
                     val swing = if (w in 0.15f..0.85f) sin((w - 0.15f) / 0.7f * 2f * PI.toFloat() * 2f) * 26f else 0f
-                    val rWave = (r - wave + wig * 14f) * (1f - up) + (-150f + swing) * up
+                    // The "your turn" cue (K3d): the right arm raises so its paper hand lands
+                    // beside his own mouth, in place of whatever mood/wave the arm would
+                    // otherwise be doing.
+                    val rWave = if (pointMouth) PointMouthAngle else (r - wave + wig * 14f) * (1f - up) + (-150f + swing) * up
                     rotate(l + wave - wig * 4f, shoulder(u, boxy, false)) { drawBaked(part(Part.ARM_L)) }
                     rotate(rWave, shoulder(u, boxy, true)) { drawBaked(part(Part.ARM_R)) }
                 }
@@ -350,6 +362,12 @@ private class PuppetNode(
         parts.clear()
     }
 }
+
+/** The right arm's own rotation (degrees, about its shoulder pin) for `pointMouth` (K3d): swings
+ * the paper hand on its end up from hanging straight down to just beside the mouth (`o(50f, 65f)`,
+ * the same spot [robotMouth] draws at, measured from the right shoulder pin at (72, 80) -- as
+ * close as a fixed-length arm reaches). */
+private const val PointMouthAngle = 120f
 
 /** How each mood holds the arms on their pins (degrees; arms hang straight down at 0). */
 private fun armAngles(mood: Mood): Pair<Float, Float> = when (mood) {

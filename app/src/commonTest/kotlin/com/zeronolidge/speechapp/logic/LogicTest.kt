@@ -2251,6 +2251,46 @@ class KitchenLayoutTest {
         }
     }
 
+    /** K3d: Rory's Kitchen's landscape strip doesn't shrink the scene the way
+     * [bearRoryBowlAndPanNeverReachTheChoiceStrip]'s own [KitchenLayout.stageBox] models every
+     * other strip (the balloon puzzle included) -- VoiceStory.kt keeps the scene at full size and
+     * lifts it clear of the strip instead ([KitchenLayout.onStage]). A screenshot showed what that
+     * mismatch looks like on screen: the counter drawn (correctly) at its lifted position while a
+     * prop was placed as if the scene had shrunk, leaving it floating above the counter, near the
+     * wall. Checked at the sizes Timothy reported it on (a landscape tablet and phone) plus a
+     * bigger tablet, so a future change to either the lift or the shrink math can't quietly drift
+     * the two apart again: every kitchen prop's own drawn bottom ([KitchenLayout.propBox]) must
+     * land within [KitchenLayout.PROPS_MARGIN] of the counter's own drawn top, on the SAME stage,
+     * never above it (floating) and never far below it (sunk off the counter). */
+    @Test
+    fun kitchenPropsSitOnTheRealDrawnCounterTopInLandscape() {
+        val stripFraction = 0.18f
+        val stripMinHeight = 128f
+        val sizes = listOf(1024f to 768f, 1366f to 1024f, 844f to 390f)
+        val props = listOf(Prop.BOWL, Prop.MILK, Prop.BERRIES, Prop.PAN, Prop.PANCAKE)
+        for ((w, h) in sizes) {
+            assertTrue(w > h, "these are the landscape, strip-shown sizes: ${w}x$h")
+            val drawnCounterTop = KitchenLayout.onStage(KitchenLayout.counterTop(true), true, h, stripFraction, stripMinHeight)
+            for (prop in props) {
+                // The size fraction itself doesn't matter here (propBox's own bottom, [propNaturalBox],
+                // is independent of it): a representative size stands in for every prop's real one
+                // (`kitchenPropSizeFraction` in VoiceScenes.kt), which this test can't reach -- `logic`
+                // stays platform-free.
+                val box = KitchenLayout.propBox(prop, true, 0.2f, w, h)
+                val drawnBottom = KitchenLayout.onStage(box.b, true, h, stripFraction, stripMinHeight)
+                assertTrue(
+                    drawnBottom >= drawnCounterTop - 0.0001f,
+                    "$prop floats above the drawn counter at ${w}x$h: bottom=$drawnBottom counterTop=$drawnCounterTop",
+                )
+                val margin = KitchenLayout.onStage(KitchenLayout.counterTop(true) + KitchenLayout.PROPS_MARGIN, true, h, stripFraction, stripMinHeight)
+                assertTrue(
+                    drawnBottom <= margin + 0.0001f,
+                    "$prop sits too far below the drawn counter at ${w}x$h: bottom=$drawnBottom expected<=$margin",
+                )
+            }
+        }
+    }
+
     /** Mirrors `KitchenBear`'s own geometry in VoiceScenes.kt: Bear's actual on-screen box (not
      * his lane), fitted to a slice of the lane's width the same way (his drawn puppet never
      * floats above the stool, K2g) and pinned to the lane's own left edge, not centred (K2k: his
