@@ -91,6 +91,10 @@ fun Critter(
     talking: Boolean = false,
     /** A real wave: the right hand comes up and goes side to side twice, then down. */
     waving: Boolean = false,
+    /** Extra pupil shift (face units, roughly -10 to 10) on top of whatever [mood] already gives
+     * the eyes: for a character who needs to visibly look toward something specific (Rory's
+     * Kitchen's Bear, toward the pan) rather than just whatever [mood] happens to imply. */
+    lookX: Float = 0f,
 ) {
     val still = LocalReduceMotion.current || !animate
     val t = rememberInfiniteTransition(label = "critter")
@@ -151,7 +155,7 @@ fun Critter(
         modifier
             .aspectRatio(W / H)
             .graphicsLayer { scaleX = if (mirrored) -1f else 1f }
-            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still), motion)),
+            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX), motion)),
     )
 }
 
@@ -188,6 +192,7 @@ private data class PuppetSpec(
     val mood: Mood,
     val scarf: Boolean,
     val still: Boolean,
+    val lookX: Float = 0f,
 )
 
 private class PuppetMotion(
@@ -233,7 +238,7 @@ private class PuppetNode(var spec: PuppetSpec, var motion: PuppetMotion) : Modif
             bakePaper(
                 size.width, size.height, 6.dp.toPx(), 3.dp.toPx(), 1.2.dp.toPx(), 9.dp.toPx(),
                 grain = true, maxPx = 520f, shapeShadows = true,
-            ) { drawPuppetPart(p, u, s.species, s.color, s.outfit, s.mood, s.scarf) }
+            ) { drawPuppetPart(p, u, s.species, s.color, s.outfit, s.mood, s.scarf, s.lookX) }
         }
     }
 
@@ -324,6 +329,7 @@ private fun DrawScope.drawPuppetPart(
     outfit: Outfit,
     mood: Mood,
     scarf: Boolean,
+    lookX: Float = 0f,
 ) {
     val lift = 0f
     fun o(x: Float, y: Float) = Offset(x * u, (y + OY + lift) * u)
@@ -556,7 +562,7 @@ private fun DrawScope.drawPuppetPart(
                     oval(39f, eyeY, 13f, eyeH, Color.White); oval(61f, eyeY, 13f, eyeH, Color.White)
                 }
                 if (blink < 0.5f && mood != Mood.SLEEP) {
-                    val look = if (mood == Mood.THINK) -2f else 1f
+                    val look = (if (mood == Mood.THINK) -2f else 1f) + lookX
                     val ly = if (mood == Mood.THINK) -2f else 1f
                     circle(39f + look, eyeY + ly, 4.6f, Ink); circle(61f + look, eyeY + ly, 4.6f, Ink)
                     circle(40.5f + look, eyeY + ly - 2f, 1.7f, Color.White); circle(62.5f + look, eyeY + ly - 2f, 1.7f, Color.White)

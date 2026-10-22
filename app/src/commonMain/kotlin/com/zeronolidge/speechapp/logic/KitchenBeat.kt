@@ -163,24 +163,26 @@ object KitchenLayout {
      * counter top by a little rather than stopping at [BEAR_BOTTOM] minus some fixed height. */
     private const val BEAR_HEAD_OVERLAP = 0.04f
 
-    /** Rory's lane (with his chef's hat): centred behind the props, his head and shoulders a
-     * band just above the counter top line, entirely clear of it (his own [Critter] is sized to
-     * this band exactly, `fillMaxHeight()`, so nothing of him needs hiding behind the counter).
-     * A fixed height, not the whole wall: landscape's lift (K2a) scrolls most of the wall
-     * off-screen, so a band hugging the counter line stays visible there too, instead of a tall
-     * Rory mostly cropped away. Landscape gets a shorter band than portrait (K2d, shrunk again at
-     * K2e): even with [COUNTER_TOP_LANDSCAPE] moved down, the lift still clips off roughly its
-     * own share of the scene's top (more of it on a short landscape phone, where the choice
-     * strip's own floor height is a bigger share of the screen), so a shorter Rory sits entirely
-     * below that clip line instead of a taller one straddling it (only its bottom sliver
-     * surviving, or none of it at all). */
+    /** Rory's lane (with his chef's hat): centred behind the props. K2d/K2e kept shrinking his
+     * height (down to a 9%-tall sliver in landscape) to fit him entirely above the counter top
+     * line before the landscape lift clips the scene's own top, which read as a tiny Rory
+     * standing ON the counter rather than a normal-sized one behind it. K2f draws him behind the
+     * counter instead ([KitchenRory] drawn before [KitchenCounterFront] in VoiceScenes.kt, so the
+     * counter's own paint covers his lower body, the way a real counter hides someone's legs):
+     * his box can now be one full, un-shrunk size in both orientations ([RORY_HEIGHT]), reaching
+     * down past the counter top line by design ([RORY_HIDDEN_FRACTION]) instead of stopping just
+     * short of it. */
     private const val RORY_LEFT = 0.33f
     private const val RORY_RIGHT = 0.67f
-    private const val RORY_HEIGHT_PORTRAIT = 0.20f
-    private const val RORY_HEIGHT_LANDSCAPE = 0.09f
-    private const val RORY_MARGIN = 0.015f
 
-    private fun roryHeight(landscape: Boolean): Float = if (landscape) RORY_HEIGHT_LANDSCAPE else RORY_HEIGHT_PORTRAIT
+    /** Rory's own height, as a fraction of the kitchen scene's own height: about a quarter, the
+     * same in portrait and landscape now (K2f; no more separate landscape shrink). */
+    private const val RORY_HEIGHT = 0.25f
+
+    /** How much of [RORY_HEIGHT] sits below the counter top line, hidden behind the counter
+     * (K2f): under half, so his hat, head, shoulders and upper body stay clearly visible above
+     * it, the way a waist-high counter hides only someone's legs. */
+    private const val RORY_HIDDEN_FRACTION = 0.45f
 
     /** Where the counter's props (the bowl choice, the pan and what's on it, the berries) are
      * kept: the rest of the counter's width, clear of Bear's lane, always at or below the
@@ -201,10 +203,21 @@ object KitchenLayout {
      * stopping well short of it. */
     fun bearBox(landscape: Boolean): Rect = Rect(0.01f, counterTop(landscape) - BEAR_HEAD_OVERLAP, BEAR_RIGHT, BEAR_BOTTOM)
 
-    /** Rory's box (with his hat), as a fraction of the kitchen scene's own box. */
+    /** Rory's box (with his hat), as a fraction of the kitchen scene's own box: reaches from
+     * above the counter top line down past it ([RORY_HIDDEN_FRACTION]), since the counter is
+     * drawn over his lower body (K2f), not clipped away by this box itself. */
     fun roryBox(landscape: Boolean): Rect {
-        val bottom = counterTop(landscape) - RORY_MARGIN
-        return Rect(RORY_LEFT, bottom - roryHeight(landscape), RORY_RIGHT, bottom)
+        val ct = counterTop(landscape)
+        return Rect(RORY_LEFT, ct - RORY_HEIGHT * (1f - RORY_HIDDEN_FRACTION), RORY_RIGHT, ct + RORY_HEIGHT * RORY_HIDDEN_FRACTION)
+    }
+
+    /** The part of [roryBox] that actually shows: above the counter top line, where the counter
+     * can't hide him. The rest is deliberately behind the counter (K2f), so overlap checks
+     * against the other kitchen elements (bear, bowl, pan) use this, not the full box: see
+     * `bearRoryBowlAndPanNeverOverlapEachOther`. */
+    fun roryVisibleBox(landscape: Boolean): Rect {
+        val box = roryBox(landscape)
+        return Rect(box.l, box.t, box.r, counterTop(landscape))
     }
 
     /** The "tap the bowl" choice's own slot, at the near end of the props band. */

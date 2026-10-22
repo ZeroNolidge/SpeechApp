@@ -2069,13 +2069,17 @@ class KitchenLayoutTest {
     }
 
     /** Ruby's K2b: Bear (on his stool), Rory (behind the counter, chef's hat) and the counter's
-     * own props (the bowl choice, the pan) never share any area, in either aspect ratio. */
+     * own props (the bowl choice, the pan) never share any area, in either aspect ratio. K2f:
+     * Rory's box now reaches down past the counter top line on purpose (the counter hides his
+     * lower body, see [KitchenLayout.roryVisibleBox]), so only his visible part above the line is
+     * checked here; it may still sit horizontally over the bowl/pan, since those are below the
+     * line where he can't be seen at all. */
     @Test
     fun bearRoryBowlAndPanNeverOverlapEachOther() {
         for (landscape in listOf(false, true)) {
             val boxes = listOf(
                 "bear" to KitchenLayout.bearBox(landscape),
-                "rory" to KitchenLayout.roryBox(landscape),
+                "rory" to KitchenLayout.roryVisibleBox(landscape),
                 "bowl" to KitchenLayout.bowlBox(landscape),
                 "pan" to KitchenLayout.panBox(landscape),
             )
@@ -2085,6 +2089,25 @@ class KitchenLayoutTest {
                 assertFalse(a.overlaps(b), "$nameA overlaps $nameB in ${if (landscape) "landscape" else "portrait"}")
             }
         }
+    }
+
+    /** K2f: Rory is the same full height in both orientations now (no more landscape shrink),
+     * and his visible part (above the counter top) is a strict top slice of his full box, never
+     * reaching past the line itself. */
+    @Test
+    fun roryIsOneSizeInBothOrientationsWithAVisibleSliceAboveTheCounter() {
+        for (landscape in listOf(false, true)) {
+            val box = KitchenLayout.roryBox(landscape)
+            val visible = KitchenLayout.roryVisibleBox(landscape)
+            assertEquals(box.l, visible.l)
+            assertEquals(box.r, visible.r)
+            assertEquals(box.t, visible.t)
+            assertEquals(KitchenLayout.counterTop(landscape), visible.b)
+            assertTrue(visible.b < box.b, "rory's visible box should stop at the counter top, short of his full box's bottom")
+        }
+        val portraitHeight = KitchenLayout.roryBox(false).b - KitchenLayout.roryBox(false).t
+        val landscapeHeight = KitchenLayout.roryBox(true).b - KitchenLayout.roryBox(true).t
+        assertEquals(portraitHeight, landscapeHeight)
     }
 
     /** None of the four ever reach down into the choice strip's own reserved band, at every size

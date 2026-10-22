@@ -218,8 +218,16 @@ fun VoiceBeatScene(
             Modifier.fillMaxSize().let { m -> if (onSceneRect == null) m else m.onGloballyPositioned(onSceneRect) },
         ) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
-            BackdropExtras(beat.backdrop, landscape)
-            if (beat.backdrop == Backdrop.KITCHEN) KitchenCharacters(landscape, kitchenTalking, kitchenRoryVisible)
+            // Rory's Kitchen draws its own backdrop in three layers, Rory sandwiched behind the
+            // counter (K2f; see KitchenRory/KitchenCounterFront): every other backdrop is one
+            // flat layer (BackdropExtras).
+            if (beat.backdrop == Backdrop.KITCHEN) {
+                KitchenWall()
+                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible)
+                KitchenCounterFront(landscape)
+            } else {
+                BackdropExtras(beat.backdrop)
+            }
             beat.still?.let { sp ->
                 val at = stillSpot(beat.move)
                 Item(unit * propSize(sp) * 0.8f, { at.x }, { at.y }) { PropArt(sp, { 1f }, null, beat) }
@@ -240,6 +248,9 @@ fun VoiceBeatScene(
                     drawRect(Color(0xFF1A2350).copy(alpha = a))
                 }
             }
+            // Bear sits in front of the counter and its props (K2f), drawn last so his lean
+            // never disappears behind anything on it.
+            if (beat.backdrop == Backdrop.KITCHEN) KitchenBear(landscape)
         }
     }
 }
@@ -258,18 +269,22 @@ fun KitchenEndingScene(stage: KitchenEndStage, leanAmount: Float = 0f, landscape
     Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
-            BackdropExtras(Backdrop.KITCHEN, landscape)
-            KitchenCharacters(landscape, talking = false, roryVisible = true, leanAmount = leanAmount)
+            KitchenWall()
+            KitchenRory(landscape, talking = false, roryVisible = true)
+            KitchenCounterFront(landscape)
             val ct = KitchenLayout.counterTop(landscape)
             Item(unit * 0.4f, { 0.56f }, { ct + (1f - ct) * 0.42f }) { PancakeStackArt(bitten) }
+            KitchenBear(landscape, leanAmount)
         }
     }
 }
 
 /** The little extras that turn a land's scenery into a backdrop: water, an island, a path, sky
- * clouds. [landscape] only changes [Backdrop.KITCHEN]'s wall/counter split (see [KitchenLayout]). */
+ * clouds. [Backdrop.KITCHEN] draws its own wall/counter split elsewhere (K2f: [KitchenWall],
+ * [KitchenRory], [KitchenCounterFront], see [KitchenLayout]), with Rory sandwiched behind the
+ * counter, so there's nothing for this function to do for it. */
 @Composable
-private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop, landscape: Boolean = false) {
+private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop) {
     val unit = minOf(maxWidth, maxHeight * 1.4f)
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
@@ -287,31 +302,48 @@ private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop, landscape: Boole
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.08f, h * 0.2f), Size(w * 0.18f, h * 0.08f))
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.68f, h * 0.12f), Size(w * 0.2f, h * 0.09f))
             }
-            Backdrop.KITCHEN -> {
-                // A soft wall above, and a warm low wooden counter below it, side view. Landscape
-                // draws a shorter wall (taller counter), so the counter keeps most of the scene
-                // once VoiceStory's landscape lift clips the top clear of the choice strip
-                // (Ruby, K2a: it used to clip into the counter on a landscape phone). The counter
-                // only runs from just right of Bear's stool (K2e): left of that it's floor (the
-                // same wall colour, carried down), so the counter reads as a real piece of
-                // furniture with its own left end beside him, not a slab spanning the whole wall
-                // with Bear floating in front of it.
-                val ct = KitchenLayout.counterTop(landscape)
-                val counterLeft = w * KitchenLayout.bearBox(landscape).r
-                paperRect(Color(0xFFFFF3E3), Offset(0f, 0f), Size(w, h * (ct + 0.06f)))
-                paperRect(Color(0xFFFFF3E3), Offset(0f, h * ct), Size(counterLeft, h * (1f - ct)))
-                paperRect(Color(0xFFC9773A), Offset(counterLeft, h * ct), Size(w - counterLeft, h * (1f - ct)))
-                paperRect(Color(0xFFE6C38E), Offset(counterLeft, h * ct), Size(w - counterLeft, h * 0.045f))
-                drawLine(Color(0xFF8C5A3A), Offset(counterLeft, h * ct), Offset(counterLeft, h), 3.dp.toPx())
-                listOf(0.28f, 0.52f, 0.76f).forEach { rel ->
-                    val py = ct + rel * (1f - ct)
-                    drawLine(Color(0xFF8C5A3A).copy(alpha = 0.55f), Offset(counterLeft, h * py), Offset(w, h * py), 2.dp.toPx())
-                }
-            }
+            // Rory's Kitchen draws its own wall/counter split as two separate layers with Rory
+            // sandwiched between them (K2f; see KitchenWall/KitchenCounterFront below), so Rory
+            // never needs this function at all.
+            Backdrop.KITCHEN -> {}
             Backdrop.FOREST, Backdrop.MEADOW -> {}
         }
     }
     if (b == Backdrop.ISLAND) Item(unit * 0.16f, { 0.84f }, { 0.5f }) { Emoji("🌴", unit * 0.16f) }
+}
+
+/** Rory's Kitchen's back-most layer (K2f): one flat cream wall/floor, covering the whole scene.
+ * [KitchenCounterFront] paints over the counter's own share of it afterwards; because this is one
+ * uninterrupted rect rather than two separately-positioned pieces meeting at the counter top line
+ * (K2a to K2e's approach), there's no seam to line up at all. Drawn before [KitchenRory] so he
+ * stands in front of the wall but behind the counter that follows him. */
+@Composable
+private fun KitchenWall() {
+    Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xFFFFF3E3)) }
+}
+
+/** Rory's Kitchen's counter, its front face only (K2f): drawn after [KitchenRory] so it paints
+ * over his lower body, the way a real counter hides someone's legs, instead of the counter-shaped
+ * redraw-over-Rory this needed before Rory moved behind it. Only runs from just right of Bear's
+ * stool (K2e): left of that stays the plain wall colour from [KitchenWall], so the counter reads
+ * as a real piece of furniture with its own left end beside him. Landscape draws a taller share of
+ * the scene as counter (shorter wall), so it keeps most of the scene once VoiceStory's landscape
+ * lift clips the top clear of the choice strip (Ruby, K2a). */
+@Composable
+private fun KitchenCounterFront(landscape: Boolean) {
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val ct = KitchenLayout.counterTop(landscape)
+        val counterLeft = w * KitchenLayout.bearBox(landscape).r
+        paperRect(Color(0xFFC9773A), Offset(counterLeft, h * ct), Size(w - counterLeft, h * (1f - ct)))
+        paperRect(Color(0xFFE6C38E), Offset(counterLeft, h * ct), Size(w - counterLeft, h * 0.045f))
+        drawLine(Color(0xFF8C5A3A), Offset(counterLeft, h * ct), Offset(counterLeft, h), 3.dp.toPx())
+        listOf(0.28f, 0.52f, 0.76f).forEach { rel ->
+            val py = ct + rel * (1f - ct)
+            drawLine(Color(0xFF8C5A3A).copy(alpha = 0.55f), Offset(counterLeft, h * py), Offset(w, h * py), 2.dp.toPx())
+        }
+    }
 }
 
 /** Rory's Kitchen's own white paper toque (Ruby, K2b): a fixed prop, not an unlockable piece
@@ -330,9 +362,18 @@ private fun DrawScope.paperStool() {
     paperOval(Color(0xFFD1492F), Offset(w * 0.08f, 0f), Size(w * 0.84f, seatY * 1.3f))
 }
 
-/** Bear's constant "turned toward the pan" stance (K2e): a small clockwise tilt, tipping his top
- * toward the counter's props (to his right) rather than sitting square to the screen. */
+/** Bear's constant "turned toward the pan" stance (K2e, widened at K2f): a clockwise lean and a
+ * pseudo-3D turn (`rotationY`, [BearFacingTurnDeg]) toward the counter's props to his right,
+ * rather than sitting square to the screen; his pupils shift the same way ([BearPanLookX]), in
+ * every beat and the ending, since the paper puppet's own face is otherwise symmetric front-on. */
 private const val BearFacingTiltDeg = 8f
+private const val BearFacingTurnDeg = 20f
+private const val BearPanLookX = 6f
+
+/** How far [BearFacingTurnDeg]'s perspective turn reads before it starts to look flattened or
+ * stretched instead of rotated: a bigger camera distance keeps the puppet's own paper cut-outs
+ * looking flat-but-turned rather than warped. */
+private const val BearTurnCameraDistance = 12f
 
 /** Bear's extra tilt and push toward the stack while he leans in for his bite (K2e;
  * [leanAmount] 0 to 1, animated in VoiceStory.kt so he eases in then back within one stage). */
@@ -340,20 +381,18 @@ private const val BearLeanTiltDeg = 13f
 private const val BearLeanTranslateFraction = 0.18f
 
 /**
- * Rory's Kitchen's own characters (Ruby, K2b), kept in explicit lanes (see [KitchenLayout]) so
- * neither ever reaches the counter's props or the choice strip below: Bear, on a simple paper
- * stool beside the counter's own left end (its left end starts just past him; see
- * [BackdropExtras]'s `Backdrop.KITCHEN` case), turned toward the pan; Rory, standing behind the
- * counter in his chef's hat. His box (see [KitchenLayout.roryBox]) already sits entirely above
- * the counter top line, so nothing of him needs hiding behind it (K2e: the counter-front redraw
- * this used to need left visible seams where its edges didn't quite match the backdrop's own
- * counter). [talking] follows Rory's mouth while he models a word; [roryVisible] hides him while
- * the big listening Rory takes over (`listenLookGone()` at the call site), so the two Rorys are
- * never both shown. [leanAmount] is the ending's own (Ruby, K2c/K2e): 0 to 1, how far into his
- * bite-lean Bear currently is, cheering instead of just standing happy while it's above zero.
+ * Bear, on a simple paper stool beside the counter's own left end (its left end starts just past
+ * him; see [KitchenCounterFront]), turned toward the pan (K2e/K2f). Stool and Bear share one
+ * `graphicsLayer` (and so one pivot) for the lean, rather than each moving on its own: K2e once
+ * showed a portrait frame with Bear floating above the stool mid-lean, traced to
+ * [Critter]'s own idle bob (biggest in [Mood.CHEER], meant to read as excitement) lifting the
+ * puppet's artwork inside its own canvas independent of the stool beneath it; `animate = false`
+ * here turns that bob (and blink/wiggle) off, so his seat on the stool can never drift.
+ * [leanAmount] is the ending's own (Ruby, K2c/K2e): 0 to 1, how far into his bite-lean Bear
+ * currently is, cheering instead of just standing happy while it's above zero.
  */
 @Composable
-private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talking: Boolean, roryVisible: Boolean, leanAmount: Float = 0f) {
+private fun BoxWithConstraintsScope.KitchenBear(landscape: Boolean, leanAmount: Float = 0f) {
     val w = maxWidth
     val h = maxHeight
     val bear = KitchenLayout.bearBox(landscape)
@@ -361,6 +400,8 @@ private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talkin
         Modifier.offset(x = w * bear.l, y = h * bear.t).size(w * (bear.r - bear.l), h * (bear.b - bear.t))
             .graphicsLayer {
                 rotationZ = BearFacingTiltDeg + BearLeanTiltDeg * leanAmount
+                rotationY = BearFacingTurnDeg
+                cameraDistance = BearTurnCameraDistance * density
                 translationX = size.width * BearLeanTranslateFraction * leanAmount
                 scaleX = 1f + 0.06f * leanAmount
                 scaleY = 1f + 0.06f * leanAmount
@@ -368,8 +409,26 @@ private fun BoxWithConstraintsScope.KitchenCharacters(landscape: Boolean, talkin
         contentAlignment = Alignment.BottomCenter,
     ) {
         Canvas(Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomCenter)) { paperStool() }
-        Critter(Species.BEAR, Modifier.fillMaxHeight(0.85f), mood = if (leanAmount > 0.1f) Mood.CHEER else Mood.HAPPY)
+        Critter(
+            Species.BEAR, Modifier.fillMaxHeight(0.85f),
+            mood = if (leanAmount > 0.1f) Mood.CHEER else Mood.HAPPY,
+            animate = false, lookX = BearPanLookX,
+        )
     }
+}
+
+/**
+ * Rory, standing behind the counter in his chef's hat (Ruby, K2b; K2f draws him behind it, not
+ * merely above it): his box (see [KitchenLayout.roryBox]) now reaches down past the counter top
+ * line on purpose, since [KitchenCounterFront] is drawn after him and paints over his lower body,
+ * the way a real counter hides someone's legs. [talking] follows his mouth while he models a
+ * word; [roryVisible] hides him while the big listening Rory takes over (`listenLookGone()` at
+ * the call site), so the two Rorys are never both shown.
+ */
+@Composable
+private fun BoxWithConstraintsScope.KitchenRory(landscape: Boolean, talking: Boolean, roryVisible: Boolean) {
+    val w = maxWidth
+    val h = maxHeight
     val rory = KitchenLayout.roryBox(landscape)
     Box(
         Modifier.offset(x = w * rory.l, y = h * rory.t).size(w * (rory.r - rory.l), h * (rory.b - rory.t)),
@@ -666,12 +725,15 @@ private fun PancakeSteam(modifier: Modifier = Modifier) {
 /**
  * The stack of pancakes Bear's about to eat (Rory's Kitchen's ending, Ruby's K2c): three golden
  * paper pancakes, each a touch smaller than the one below, a pat of butter on top, and
- * [PancakeSteam] rising behind them. Once [bitten], the top pancake carries a bite-shaped notch,
- * a quarter to a third of its width, cut from its left edge (nearest Bear, who sits at the far
- * left of the counter): the notch is cut out of BOTH the pancake's base and its lighter top
+ * [PancakeSteam] rising behind them. Once [bitten], the top pancake carries a bite-shaped notch
+ * cut from its left edge (nearest Bear, who sits at the far left of the counter): a scalloped mark
+ * (K2f), 3 overlapping circular "scallops" instead of one smooth oval, so it reads as a real bite
+ * rather than a clean scoop, spanning about 35% of the pancake's own width and reaching about half
+ * of its own height deep. The notch is cut out of BOTH the pancake's base and its lighter top
  * highlight (K2e fix: cutting only the base left an un-notched highlight oval painted straight
- * over it, so the bite never showed), centred right on the edge so half of it falls outside the
- * pancake's own outline and the other half carves a clear half-moon into it.
+ * over it, so the bite never showed); each scallop is centred right on the edge so half falls
+ * outside the pancake's own outline and the other half carves into it, same as the single-circle
+ * bite K2e started from.
  */
 @Composable
 fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
@@ -687,12 +749,19 @@ fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
                     addOval(Rect(Offset(w * (0.5f - pw * 0.39f), h * (py + 0.02f)), Size(w * pw * 0.78f, h * 0.15f)))
                 }
                 if (bitten && i == layers.lastIndex) {
-                    val biteW = w * pw * 0.28f
-                    val biteH = h * 0.3f
+                    val biteTotalW = w * pw * 0.35f
+                    val scallopD = h * 0.22f * 0.5f
+                    val scallopR = scallopD / 2f
                     val edgeX = w * (0.5f - pw / 2f)
                     val centerY = h * (py + 0.11f)
+                    val step = (biteTotalW - scallopD) / 2f
+                    val scallops = listOf(
+                        Offset(edgeX, centerY - scallopR * 0.3f),
+                        Offset(edgeX + step, centerY + scallopR * 0.35f),
+                        Offset(edgeX + step * 2f, centerY - scallopR * 0.15f),
+                    )
                     val bite = Path().apply {
-                        addOval(Rect(Offset(edgeX - biteW / 2f, centerY - biteH / 2f), Size(biteW, biteH)))
+                        scallops.forEach { c -> addOval(Rect(Offset(c.x - scallopR, c.y - scallopR), Size(scallopD, scallopD))) }
                     }
                     paperPath(Path().apply { op(top, bite, PathOperation.Difference) }, Color(0xFFD08A3E))
                     paperPath(Path().apply { op(highlight, bite, PathOperation.Difference) }, Color(0xFFF2C06B))
