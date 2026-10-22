@@ -225,7 +225,12 @@ private class PuppetMotion(
 )
 
 // HEAD_TALK(_BLINK): the head without its mouth, which is drawn live while Rory talks.
-private enum class Part { BODY, HEAD, HEAD_BLINK, HEAD_TALK, HEAD_TALK_BLINK, FRONT, ARM_L, ARM_R }
+// ARM_R_POINT (K4): the right arm's own "your turn" variant, a bigger paper hand with a
+// contrasting outline so the point-to-mouth cue reads clearly at Rory's Kitchen's small size
+// (see drawPuppetPart's own doc there) -- a separate baked part, not ARM_R redrawn bigger on the
+// fly, since [PuppetNode.part]'s own cache is keyed on [Part] alone and pointMouth isn't part of
+// the (cached-per-spec) [PuppetSpec].
+private enum class Part { BODY, HEAD, HEAD_BLINK, HEAD_TALK, HEAD_TALK_BLINK, FRONT, ARM_L, ARM_R, ARM_R_POINT }
 
 private class PuppetElement(
     val spec: PuppetSpec,
@@ -339,7 +344,7 @@ private class PuppetNode(
                     // otherwise be doing.
                     val rWave = if (pointMouth) PointMouthAngle else (r - wave + wig * 14f) * (1f - up) + (-150f + swing) * up
                     rotate(l + wave - wig * 4f, shoulder(u, boxy, false)) { drawBaked(part(Part.ARM_L)) }
-                    rotate(rWave, shoulder(u, boxy, true)) { drawBaked(part(Part.ARM_R)) }
+                    rotate(rWave, shoulder(u, boxy, true)) { drawBaked(part(if (pointMouth) Part.ARM_R_POINT else Part.ARM_R)) }
                 }
             }
             // Reports the head's own drawn bounds (K2j's KITCHEN bite log), in this node's own
@@ -799,6 +804,25 @@ private fun DrawScope.drawPuppetPart(
                 oval(pin.x, pin.y + 9f, 11f, 24f, armColor)
                 circle(pin.x, pin.y + 20f, 5.5f, hand)
             }
+            splitPin(o(pin.x, pin.y), 2.6f * u)
+        }
+        Part.ARM_R_POINT -> {
+            val pin = shoulderUnits(sp.boxy, true)
+            val armColor = body
+            val hand = if (kid) skin else darker(body, 0.1f)
+            if (sp.boxy) {
+                paperRoundRect(armColor, o(pin.x - 4.5f, pin.y - 3f), Size(9f * u, 24f * u), CornerRadius(3f * u))
+            } else {
+                oval(pin.x, pin.y + 9f, 11f, 24f, armColor)
+            }
+            // K4: a bigger paper hand/finger for the "your turn" point-to-mouth cue -- about a
+            // third of the head's own width (HEAD_HALF_WIDTH*2 = 56 to 66 units) instead of the
+            // plain arm's small hand, with a dark outline so it stands out from his own body
+            // colour, clear enough to read at Rory's Kitchen's small on-screen size.
+            val r = 9f
+            val handY = pin.y + (if (sp.boxy) 22f else 20f)
+            circle(pin.x, handY, r, hand)
+            drawCircle(darker(hand, 0.5f), r * u, o(pin.x, handY), style = Stroke(1.8f * u))
             splitPin(o(pin.x, pin.y), 2.6f * u)
         }
     }

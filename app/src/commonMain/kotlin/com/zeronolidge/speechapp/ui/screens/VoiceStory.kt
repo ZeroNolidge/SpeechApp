@@ -958,8 +958,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             target = { voiceTarget(beat, act.value, strength(index)) },
                             fromX = rory.x, fromY = rory.y,
                             // The glow shows what will move while Rory names it, and hides on his
-                            // turn so it never overlaps Rory's ear.
-                            glowing = phase == VPhase.MODEL && !app.listening,
+                            // turn so it never overlaps Rory's ear. K4: Rory's Kitchen never shows
+                            // it at all -- the generic open-air target position (`pose()`, the
+                            // scene's own centre) has no idea where the kitchen's counter actually
+                            // is, and landed right on top of Rory and the counter on a real
+                            // screenshot; the counter's own props are already the thing to watch
+                            // there, with no separate "what moves" cue needed.
+                            glowing = phase == VPhase.MODEL && !app.listening && beat.backdrop != Backdrop.KITCHEN,
                             push = { pushNow },
                         )
                     }

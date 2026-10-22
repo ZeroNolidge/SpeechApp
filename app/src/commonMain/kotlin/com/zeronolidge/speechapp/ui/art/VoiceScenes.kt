@@ -516,15 +516,19 @@ private fun BoxWithConstraintsScope.KitchenBear(
     // the same left edge below, not centred any more) leave a real gap before the counter instead
     // of filling the lane right up to it -- see KitchenLayout.BEAR_SHIFT_FRACTION.
     val fitWidth = (laneWidth - w * KitchenLayout.BEAR_SHIFT_FRACTION).coerceAtLeast(laneWidth * 0.5f)
-    val bearHeight = minOf(laneHeight * 0.85f, fitWidth / CritterArtRatio)
+    // K4: the lane IS his own body box now (head to seat, see KitchenLayout.bearBox's own doc),
+    // not a shared space with the stool's legs any more, so no extra margin is held back from it
+    // (K2g's old `* 0.85f` was for a lane that still had to leave room for the stool beneath him).
+    val bearHeight = minOf(laneHeight, fitWidth / CritterArtRatio)
     val bearWidth = bearHeight * CritterArtRatio
     val laneLeft = w * bear.l
-    val laneBottom = h * bear.b
+    val seatY = h * bear.b
+    val floorY = h * KitchenLayout.BEAR_FLOOR
     val bearBox = KitchenLayout.Rect(
         l = laneLeft,
-        t = laneBottom - bearHeight,
+        t = seatY - bearHeight,
         r = laneLeft + bearWidth,
-        b = laneBottom,
+        b = seatY,
     )
     val counterLeftX = w * bear.r
     val lean = KitchenLayout.bearLean(bearBox, counterLeftX)
@@ -550,16 +554,15 @@ private fun BoxWithConstraintsScope.KitchenBear(
         // wrong whenever density != 1).
         Box(Modifier.offset(x = counterLeftX.dp, y = (h * bear.t).dp).onGloballyPositioned { c -> counterLeftPx = c.positionInWindow().x })
     }
+    // K4: a tall stool, its own box from Bear's seat down to the real floor (KitchenLayout.BEAR_FLOOR),
+    // separate from his body box below -- so his seat reads at counter height while his stool's
+    // legs still reach the ground, instead of the two being the same point (K2e to K3's own
+    // low-stool look, where his seat sat far below the counter).
     Box(
-        Modifier.offset(x = laneLeft.dp, y = (h * bear.t).dp).size(laneWidth.dp, laneHeight.dp),
-        contentAlignment = Alignment.BottomStart,
+        Modifier.offset(x = laneLeft.dp, y = seatY.dp).size(bearWidth.dp, (floorY - seatY).dp),
     ) {
-        // The stool keeps only Bear's constant resting turn (K2i/K2j): the bite lean never moves
-        // it, so his seat stays exactly where it's always drawn. Pinned to the lane's own left
-        // edge, same as Bear himself (K2k), not centred: they move left together, the gap before
-        // the counter opens up on the right where neither of them ever sits.
         Canvas(
-            Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomStart)
+            Modifier.fillMaxWidth(0.6f).fillMaxHeight()
                 .graphicsLayer {
                     rotationZ = BearFacingTiltDeg
                     rotationY = BearFacingTurnDeg
@@ -567,9 +570,11 @@ private fun BoxWithConstraintsScope.KitchenBear(
                 }
                 .let { m -> if (!wantRects) m else m.onGloballyPositioned { c -> stoolRect = c.windowRect() } },
         ) { paperStool() }
+    }
+    Box(Modifier.offset(x = laneLeft.dp, y = (seatY - bearHeight).dp).size(bearWidth.dp, bearHeight.dp)) {
         Critter(
             Species.BEAR,
-            Modifier.height(bearHeight.dp).aspectRatio(CritterArtRatio)
+            Modifier.fillMaxSize()
                 .graphicsLayer {
                     // Bear's constant "turned toward the pan" stance (K2e/K2f) only: the bite
                     // lean itself is Critter's own `lean`/`leanForward` below, which moves only
@@ -766,7 +771,16 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 )
             }
         }
-        Prop.BUBBLE -> Canvas(Modifier.fillMaxSize()) {
+        // Rory's Kitchen's "pop the bubbles" beat (K4): the generic open-air bubble below (pale
+        // blue paper rings bursting apart) was built for the River story's own floating bubble,
+        // not a pancake on a pan -- on Rory's Kitchen's counter it read as a pale plate, not
+        // bubbles cooking. [KitchenPancakeBubbles] draws the real picture instead: the same dark
+        // pan and golden pancake as [Prop.PAN]/[Prop.PANCAKE] (so this beat's "still" pan, already
+        // drawn underneath, is never seen as a mismatched second pan), with a few bubbles that pop
+        // on his voice.
+        Prop.BUBBLE -> if (beat.backdrop == Backdrop.KITCHEN) {
+            KitchenPancakeBubbles(moving, beat, f)
+        } else Canvas(Modifier.fillMaxSize()) {
             // Three paper layers: whole, then bursting apart, each flying its own way.
             val burst = if (moving && beat.move == Move.POP) ((f() - 0.55f) / 0.45f).coerceIn(0f, 1f) else 0f
             val swell = if (moving && beat.move == Move.POP) 1f + 0.18f * (f() / 0.55f).coerceIn(0f, 1f) else 1f
@@ -954,6 +968,39 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                     quadraticTo(w * (x + 0.1f), h * 0.2f, w * x, h * 0.04f)
                 }
                 drawPath(wisp, Color.White.copy(alpha = 0.55f - i * 0.1f), style = Stroke(4.dp.toPx()))
+            }
+        }
+    }
+}
+
+/**
+ * Rory's Kitchen's own "pop the bubbles" beat (K4): a real frying pan (dark, seen from a slight
+ * side angle, with its handle) holding a golden pancake, with a few bubbles that pop into view on
+ * his voice -- reuses [Prop.PAN]'s and [Prop.PANCAKE]'s own shapes so the pan this beat draws
+ * always matches the one its "still" prop drew underneath, then adds the bubbles themselves
+ * (small raised paper circles, not the generic open-air bubble's pale rings).
+ */
+@Composable
+private fun KitchenPancakeBubbles(moving: Boolean, beat: VoiceBeat, f: () -> Float) {
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        paperOval(Color(0xFF424242), Offset(w * 0.06f, h * 0.56f), Size(w * 0.7f, h * 0.22f))
+        paperRect(Color(0xFF5D4037), Offset(w * 0.72f, h * 0.6f), Size(w * 0.26f, h * 0.06f))
+        paperOval(Color(0xFFD08A3E), Offset(w * 0.14f, h * 0.3f), Size(w * 0.72f, h * 0.4f))
+        paperOval(Color(0xFFF2C06B), Offset(w * 0.22f, h * 0.34f), Size(w * 0.56f, h * 0.26f))
+        val popping = moving && beat.move == Move.POP
+        // Each bubble pops into view in turn as his voice pushes the move along, then fades away
+        // near the very end (burst) rather than lingering once the pancake's ready to flip.
+        val along = if (popping) (f() / 0.55f).coerceIn(0f, 1f) else 0f
+        val burst = if (popping) ((f() - 0.8f) / 0.2f).coerceIn(0f, 1f) else 0f
+        listOf(Offset(0.36f, 0.42f), Offset(0.5f, 0.5f), Offset(0.62f, 0.4f)).forEachIndexed { i, spot ->
+            val grow = (along * 3f - i).coerceIn(0f, 1f)
+            if (grow > 0f && burst < 1f) {
+                val r = w * 0.05f * grow * (1f - burst)
+                val at = Offset(w * spot.x, h * spot.y)
+                drawCircle(Color(0xFFFFE9A8).copy(alpha = 0.95f * (1f - burst)), r, at)
+                drawCircle(Color(0xFFB9752E).copy(alpha = 0.6f * (1f - burst)), r, at, style = Stroke(1.dp.toPx()))
             }
         }
     }

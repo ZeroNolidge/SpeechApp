@@ -2167,12 +2167,19 @@ class KitchenBeatStateTest {
     }
 }
 
-/** Rory's Kitchen's counter (K2a): landscape must draw a shorter wall / taller counter than
- * portrait, and keep at least [KitchenLayout.MIN_VISIBLE_FRACTION] of the scene as counter. */
+/** Rory's Kitchen's counter (K2a; K4 moved the counter top down a long way, see
+ * [KitchenLayout.COUNTER_TOP_LANDSCAPE]'s own doc): keeps at least
+ * [KitchenLayout.MIN_VISIBLE_FRACTION] of the scene as counter, and lands its REAL drawn position
+ * (after VoiceStory's landscape lift, [KitchenLayout.onStage]) at roughly 60-65% down the visible
+ * scene in both orientations -- not the same local fraction (landscape's clips away a share of
+ * the scene's own top before anything is visible at all, so matching portrait's real position
+ * needs a bigger local number there, the opposite of K2a's old "shorter wall" rule). */
 class KitchenLayoutTest {
     @Test
-    fun portraitCounterIsUnchanged() {
-        assertEquals(0.5f, KitchenLayout.counterTop(landscape = false))
+    fun portraitCounterTopLandsInTheTargetVisibleBand() {
+        // Portrait never lifts/clips (see onStage), so its local fraction IS its visible one.
+        val ct = KitchenLayout.counterTop(landscape = false)
+        assertTrue(ct in 0.60f..0.65f, "portrait counter top not in the target band: $ct")
     }
 
     @Test
@@ -2181,9 +2188,57 @@ class KitchenLayoutTest {
         assertTrue(counterFraction >= KitchenLayout.MIN_VISIBLE_FRACTION)
     }
 
+    /** Timothy's own report (K4): an iPad landscape at 1024x768. [KitchenLayout.onStage] mirrors
+     * VoiceStory's real lift/clip math, so dividing by its own value at the visible scene's very
+     * bottom (`local = 1f`) turns its stage-fraction result into a visible-scene fraction: 0 at
+     * the top of what's actually on screen, 1 at the bottom. */
     @Test
-    fun landscapeWallIsShorterThanPortrait() {
-        assertTrue(KitchenLayout.counterTop(landscape = true) < KitchenLayout.counterTop(landscape = false))
+    fun landscapeCounterTopLandsInTheSameVisibleBandAsPortrait() {
+        val stripFraction = 0.18f
+        val stripMinHeight = 128f
+        for (h in listOf(600f, 768f, 1024f)) {
+            val ct = KitchenLayout.counterTop(landscape = true)
+            val onStage = KitchenLayout.onStage(ct, true, h, stripFraction, stripMinHeight)
+            val visibleBottom = KitchenLayout.onStage(1f, true, h, stripFraction, stripMinHeight)
+            val visibleFraction = onStage / visibleBottom
+            assertTrue(visibleFraction in 0.55f..0.70f, "landscape counter top not in the target visible band at height $h: $visibleFraction")
+        }
+    }
+
+    /** K4: Timothy's screenshots showed Rory standing behind the counter with only his head and
+     * hat visible once the tap choice strip is shown -- the real on-screen slice of him, after the
+     * landscape lift/clip ([KitchenLayout.onStage]), must be at least 45% of his own full height
+     * at a real device size (an iPad landscape, 1024x768). */
+    @Test
+    fun roryTapPhaseVisiblePartIsAtLeast45PercentOfHisHeightLandscape1024x768() {
+        val stripFraction = 0.18f
+        val stripMinHeight = 128f
+        val h = 768f
+        fun stage(local: Float) = KitchenLayout.onStage(local, true, h, stripFraction, stripMinHeight)
+        val box = KitchenLayout.roryBox(true)
+        val ct = KitchenLayout.counterTop(true)
+        val fullTop = stage(box.t)
+        val fullBottom = stage(box.b)
+        val visibleTop = maxOf(fullTop, 0f) // the lift clips away anything above the visible scene's own top
+        val visibleBottom = stage(ct)
+        val fullHeight = fullBottom - fullTop
+        val visibleFraction = (visibleBottom - visibleTop).coerceAtLeast(0f) / fullHeight
+        assertTrue(visibleFraction >= 0.45f, "Rory's visible part is less than 45% of his height: $visibleFraction")
+    }
+
+    /** K4: Timothy's screenshots showed Bear sitting on a low stool far below the counter -- his
+     * seat ([KitchenLayout.bearBox]'s own bottom) must now land close to the counter top, within
+     * a tenth of the scene's own height, in both orientations. */
+    @Test
+    fun bearsSeatIsWithinTenPercentOfTheCounterTop() {
+        for (landscape in listOf(false, true)) {
+            val ct = KitchenLayout.counterTop(landscape)
+            val seat = KitchenLayout.bearBox(landscape).b
+            assertTrue(
+                kotlin.math.abs(seat - ct) <= 0.10f,
+                "Bear's seat too far from the counter top in ${if (landscape) "landscape" else "portrait"}: seat=$seat ct=$ct",
+            )
+        }
     }
 
     /** Ruby's K2b: Bear (on his stool), Rory (behind the counter, chef's hat) and the counter's
@@ -2303,7 +2358,10 @@ class KitchenLayoutTest {
         val laneWidth = w * (bear.r - bear.l)
         val laneHeight = h * (bear.b - bear.t)
         val fitWidth = (laneWidth - w * KitchenLayout.BEAR_SHIFT_FRACTION).coerceAtLeast(laneWidth * 0.5f)
-        val bearHeight = minOf(laneHeight * 0.85f, fitWidth / critterArtRatio)
+        // K4: the lane IS his own body box now (head to seat), not a shared space with the
+        // stool's legs any more (see KitchenLayout.bearBox's own doc), so no `* 0.85f` margin is
+        // held back from it any more.
+        val bearHeight = minOf(laneHeight, fitWidth / critterArtRatio)
         val bearWidth = bearHeight * critterArtRatio
         val laneLeft = w * bear.l
         val laneBottom = h * bear.b
