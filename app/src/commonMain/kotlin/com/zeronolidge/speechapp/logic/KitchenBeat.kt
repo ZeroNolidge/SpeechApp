@@ -263,12 +263,53 @@ object KitchenLayout {
         return Rect(0.01f, seat - BEAR_HEIGHT, BEAR_RIGHT, seat)
     }
 
+    /** K4b: real screenshots (1024x768 landscape, 768x1024 portrait) showed Bear's own bottom
+     * ([bearBox]'s own `b`) sitting a couple of px above the stool's drawn seat -- a hairline gap
+     * that reads as him floating, even though both numbers already shared the same `seatY` anchor
+     * in `KitchenBear` (VoiceScenes.kt). [stoolTop] is defined a few px *above* [bearBox]'s own
+     * bottom on purpose, never as an independent number, so his seat always rests ON the stool
+     * with a small overlap instead of merely touching it (see
+     * `KitchenLayoutTest.bearsSeatOverlapsTheStoolSeat`). */
+    const val BEAR_SEAT_OVERLAP = 0.01f
+
+    /** Where the stool's own seat (drawn in `KitchenBear`, VoiceScenes.kt) starts: see
+     * [BEAR_SEAT_OVERLAP]. */
+    fun stoolTop(landscape: Boolean): Float = bearBox(landscape).b - BEAR_SEAT_OVERLAP
+
     /** Rory's box (with his hat), as a fraction of the kitchen scene's own box: reaches from
      * above the counter top line down past it ([RORY_HIDDEN_FRACTION]), since the counter is
-     * drawn over his lower body (K2f), not clipped away by this box itself. */
+     * drawn over his lower body (K2f), not clipped away by this box itself. This is his *nominal*
+     * box, at his full own height ([RORY_HEIGHT]); see [roryFittedBox] for the box actually drawn,
+     * which can come out shorter than this in a narrow lane. */
     fun roryBox(landscape: Boolean): Rect {
         val ct = counterTop(landscape)
         return Rect(RORY_LEFT, ct - RORY_HEIGHT * (1f - RORY_HIDDEN_FRACTION), RORY_RIGHT, ct + RORY_HEIGHT * RORY_HIDDEN_FRACTION)
+    }
+
+    /** K4b: Rory's real on-screen box, for a stage of [w] by [h]: a real portrait screenshot
+     * (768x1024) showed him standing in front of the counter with his whole body, feet included,
+     * visible above it. [roryBox] alone can't be trusted to draw him there: his lane
+     * ([RORY_LEFT]/[RORY_RIGHT]) is much narrower than [CRITTER_ART_RATIO] needs for his nominal
+     * height ([RORY_HEIGHT]) once the scene itself is tall and narrow (portrait), so
+     * `Modifier.fillMaxHeight()` plus Critter's own `aspectRatio` fought over the lane's width and
+     * measured him shorter, top-anchored at [roryBox]'s own top -- his real feet landed well short
+     * of the counter top line instead of reaching down past it. Anchoring from the BOTTOM instead,
+     * his hidden fraction ([RORY_HIDDEN_FRACTION]) of his own *fitted* height below the counter
+     * top line (never the lane's nominal one), keeps him emerging from behind the counter by the
+     * same proportion however much the lane narrows him. `KitchenRory` (VoiceScenes.kt) draws
+     * exactly this box, not [roryBox], so the two can never drift apart. */
+    private const val CRITTER_ART_RATIO = 100f / 140f
+
+    fun roryFittedBox(w: Float, h: Float, landscape: Boolean): Rect {
+        val rory = roryBox(landscape)
+        val ct = counterTop(landscape)
+        val laneWidth = w * (rory.r - rory.l)
+        val laneHeight = h * (rory.b - rory.t)
+        val fittedHeight = minOf(laneHeight, laneWidth / CRITTER_ART_RATIO)
+        val fittedWidth = fittedHeight * CRITTER_ART_RATIO
+        val centerX = w * (rory.l + rory.r) / 2f
+        val bottom = h * ct + fittedHeight * RORY_HIDDEN_FRACTION
+        return Rect(centerX - fittedWidth / 2f, bottom - fittedHeight, centerX + fittedWidth / 2f, bottom)
     }
 
     /** The part of [roryBox] that actually shows: above the counter top line, where the counter

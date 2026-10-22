@@ -2226,6 +2226,29 @@ class KitchenLayoutTest {
         assertTrue(visibleFraction >= 0.45f, "Rory's visible part is less than 45% of his height: $visibleFraction")
     }
 
+    /** K4b: a real portrait screenshot (768x1024) showed Rory standing in front of the counter
+     * with his whole body, feet included, visible above it, instead of behind it -- his lane is
+     * much narrower than [KitchenLayout.roryBox]'s own nominal height needs at that aspect ratio,
+     * so trusting the nominal box alone (as `Modifier.fillMaxHeight()` plus Critter's own
+     * aspectRatio used to) measures him shorter and top-anchored, leaving his real feet short of
+     * the counter top line. [KitchenLayout.roryFittedBox] (what `KitchenRory` in VoiceScenes.kt
+     * actually draws) must always put his feet at or below the counter top line instead, so his
+     * lower body is always at least started behind it, at the sizes this bug was seen (portrait
+     * tablet) and its landscape counterpart. */
+    @Test
+    fun roryFittedFeetNeverFloatAboveTheCounterTop() {
+        val sizes = listOf(768f to 1024f, 1024f to 768f, 390f to 844f, 844f to 390f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val fitted = KitchenLayout.roryFittedBox(w, h, landscape)
+            val ct = h * KitchenLayout.counterTop(landscape)
+            assertTrue(
+                fitted.b >= ct - 0.0001f,
+                "Rory's feet float above the counter top at ${w}x$h: feet=${fitted.b} counterTop=$ct",
+            )
+        }
+    }
+
     /** K4: Timothy's screenshots showed Bear sitting on a low stool far below the counter -- his
      * seat ([KitchenLayout.bearBox]'s own bottom) must now land close to the counter top, within
      * a tenth of the scene's own height, in both orientations. */
@@ -2237,6 +2260,28 @@ class KitchenLayoutTest {
             assertTrue(
                 kotlin.math.abs(seat - ct) <= 0.10f,
                 "Bear's seat too far from the counter top in ${if (landscape) "landscape" else "portrait"}: seat=$seat ct=$ct",
+            )
+        }
+    }
+
+    /** K4b: real screenshots (1024x768 landscape, 768x1024 portrait, both the tap and the talk
+     * steps) showed a hairline gap between Bear's own bottom ([KitchenLayout.bearBox]'s own `b`)
+     * and the stool's drawn seat, reading as him floating just above it. [KitchenLayout.stoolTop]
+     * is defined a few px above that bottom on purpose, never as a separately-guessed number, so
+     * the two can never drift apart again: his seat always overlaps the stool's own top by a
+     * small amount (never a gap), and that overlap stays well under the 2% of the scene's own
+     * height Ruby allowed, in both orientations (the step -- tap or talk -- never changes either
+     * number: both are pure functions of `landscape` alone). */
+    @Test
+    fun bearsSeatOverlapsTheStoolSeat() {
+        for (landscape in listOf(false, true)) {
+            val bearBottom = KitchenLayout.bearBox(landscape).b
+            val stoolTop = KitchenLayout.stoolTop(landscape)
+            val diff = bearBottom - stoolTop
+            assertTrue(diff > 0f, "Bear's seat doesn't overlap the stool at all in ${if (landscape) "landscape" else "portrait"}: diff=$diff")
+            assertTrue(
+                kotlin.math.abs(diff) <= 0.02f,
+                "Bear's seat and the stool's are more than 2% of the scene height apart in ${if (landscape) "landscape" else "portrait"}: diff=$diff",
             )
         }
     }

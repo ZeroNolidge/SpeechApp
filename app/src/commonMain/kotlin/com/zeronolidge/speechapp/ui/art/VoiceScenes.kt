@@ -558,8 +558,13 @@ private fun BoxWithConstraintsScope.KitchenBear(
     // separate from his body box below -- so his seat reads at counter height while his stool's
     // legs still reach the ground, instead of the two being the same point (K2e to K3's own
     // low-stool look, where his seat sat far below the counter).
+    // K4b: its top starts a few px ABOVE seatY (KitchenLayout.stoolTop), not at seatY itself, so
+    // Bear's own bottom (drawn below, at seatY, and on top of this Canvas in draw order) always
+    // overlaps the stool's own drawn seat by that much instead of merely touching it (a real
+    // screenshot showed a hairline gap between the two that read as him floating).
+    val stoolTopY = h * KitchenLayout.stoolTop(landscape)
     Box(
-        Modifier.offset(x = laneLeft.dp, y = seatY.dp).size(bearWidth.dp, (floorY - seatY).dp),
+        Modifier.offset(x = laneLeft.dp, y = stoolTopY.dp).size(bearWidth.dp, (floorY - stoolTopY).dp),
     ) {
         Canvas(
             Modifier.fillMaxWidth(0.6f).fillMaxHeight()
@@ -663,20 +668,36 @@ private fun BoxWithConstraintsScope.KitchenRory(
     pointing: Boolean = false,
     speechBubble: Boolean = false,
 ) {
-    val w = maxWidth
-    val h = maxHeight
+    val w = maxWidth.value
+    val h = maxHeight.value
     val rory = KitchenLayout.roryBox(landscape)
+    val laneLeft = w * rory.l
+    val laneTop = h * rory.t
+    val laneWidth = w * (rory.r - rory.l)
+    val laneHeight = h * (rory.b - rory.t)
     Box(
-        Modifier.offset(x = w * rory.l, y = h * rory.t).size(w * (rory.r - rory.l), h * (rory.b - rory.t)),
-        contentAlignment = Alignment.TopCenter,
+        Modifier.offset(x = laneLeft.dp, y = laneTop.dp).size(laneWidth.dp, laneHeight.dp),
     ) {
         if (roryVisible) {
+            // K4b: fitted to his lane's own width (KitchenLayout.roryFittedBox), not drawn with
+            // Modifier.fillMaxHeight(): in a lane narrower than his art needs for the lane's
+            // nominal height (portrait's tall, narrow lane especially), fillMaxHeight() plus
+            // Critter's own aspectRatio modifier measured him shorter than the lane and left him
+            // top-anchored there, his real feet well short of the counter top line -- a real
+            // portrait screenshot (768x1024) showed his whole body standing above the counter
+            // instead of behind it. [KitchenLayout.roryFittedBox] anchors his feet to the counter
+            // top line directly, by his own fitted height, so he always emerges from behind it by
+            // the same proportion however much the lane narrows him.
+            val fitted = KitchenLayout.roryFittedBox(w, h, landscape)
             Critter(
-                Species.ROBOT, Modifier.fillMaxHeight(), Color(0xFFFFCC80),
+                Species.ROBOT,
+                Modifier.offset(x = (fitted.l - laneLeft).dp, y = (fitted.t - laneTop).dp)
+                    .size((fitted.r - fitted.l).dp, (fitted.b - fitted.t).dp),
+                Color(0xFFFFCC80),
                 outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking, pointMouth = pointing,
             )
             if (speechBubble) KitchenSpeechBubble(
-                Modifier.align(Alignment.TopEnd).offset(x = (w * (rory.r - rory.l)) * 0.1f, y = -(h * (rory.b - rory.t)) * 0.15f)
+                Modifier.align(Alignment.TopEnd).offset(x = (laneWidth * 0.1f).dp, y = -(laneHeight * 0.15f).dp)
                     .fillMaxWidth(0.55f).aspectRatio(1.1f),
             )
         }
