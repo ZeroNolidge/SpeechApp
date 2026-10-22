@@ -240,10 +240,12 @@ fun BackButton(onBack: () -> Unit) {
 /**
  * "Hear it again": always the top-right corner. Says the screen's instruction again. If speech
  * didn't start or finish in time, it pulses in its own spot (so it never covers anything) until
- * it's tapped.
+ * it's tapped. [onHear], when given, replaces the plain replay (K3a: Rory's Kitchen uses it to
+ * close the microphone first, replay, then reopen it, so a real iPad never has the mic open while
+ * the replay plays).
  */
 @Composable
-fun HearAgainButton() {
+fun HearAgainButton(onHear: (() -> Unit)? = null) {
     val app = LocalApp.current
     val trouble = app.audioTrouble
     val t = rememberInfiniteTransition(label = "hear")
@@ -254,7 +256,7 @@ fun HearAgainButton() {
         modifier = Modifier.scale(if (trouble) pulse else 1f),
     ) {
         app.audioTrouble = false
-        app.repeatInstruction()
+        if (onHear != null) onHear() else app.repeatInstruction()
     }
 }
 
@@ -290,6 +292,8 @@ fun ScreenFrame(
     top: @Composable RowScope.() -> Unit = {},
     /** The grown-up check has nothing to hear: its numbers are for reading, never spoken. */
     showHear: Boolean = true,
+    /** See [HearAgainButton]'s own [onHear]. */
+    onHear: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -314,7 +318,7 @@ fun ScreenFrame(
                 Spacer(Modifier.width(14.dp))
                 Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically, content = top)
                 Spacer(Modifier.width(14.dp))
-                if (showHear) HearAgainButton() else Spacer(Modifier.width(CornerButtonSize))
+                if (showHear) HearAgainButton(onHear) else Spacer(Modifier.width(CornerButtonSize))
             }
             Spacer(Modifier.height(10.dp))
             Column(Modifier.weight(1f).fillMaxWidth(), content = content)

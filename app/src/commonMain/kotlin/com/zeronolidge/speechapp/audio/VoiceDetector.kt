@@ -20,6 +20,12 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
 
     val available: Boolean get() = mic.available
 
+    /** For the MIC open/closed log only (K3a): true while a real microphone stream is open. On
+     * iOS/iPadOS Safari an open microphone switches the audio session to play-and-record, which
+     * ducks or silences any clip/browser-voice playback started while it's open -- so this is
+     * also what proves, from the log, that nothing ever plays while the mic is open. */
+    private var micOpenNow = false
+
     /** True while Rory is talking: a turn's microphone waits until he's done (it would hear him). */
     var isSpeaking: () -> Boolean = { false }
 
@@ -89,6 +95,8 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
             }
             delay(200)
             if (s != session) return@launch
+            micOpenNow = true
+            println("MIC open")
             mic.start(
                 onLevel = { rms ->
                     if (s == session) {
@@ -177,6 +185,8 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
                 this@VoiceDetector.words.begin(words!!)
                 wordsOn = true
             }
+            micOpenNow = true
+            println("MIC open")
             mic.start(
                 onLevel = { rms ->
                     if (s == session) {
@@ -200,44 +210,19 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
     }
 
     /**
-     * Watches the mic while Rory is still talking a model or prompt line (never while he's
-     * waiting for a turn to finish; see [listenTry]'s own wait): a voice clearly over the room,
-     * held [BARGE_MS], calls [onBargeIn] once and stops. The caller then stops Rory mid-line and
-     * treats the turn as his (barge-in): "if he's clearly already talking, don't make him wait
-     * for Rory to finish before it counts."
+     * Fully closes the microphone (K3a: no barge-in watch keeps it open during Rory's speech any
+     * more, and a turn's stream is never kept open for the next one -- see [release]'s own note
+     * on why the web used to keep a stream open between turns, and [MIC open]/[MIC closed] in the
+     * log, which should never show a clip playing between them).
      */
-    fun watchBargeIn(onBargeIn: () -> Unit) {
-        if (!mic.available) return
-        cancel()
-        val s = ++session
-        var overMs = 0
-        val bar = maxOf(VoiceMeter.MIN_VOICE, (room ?: 0f) * BARGE_FACTOR)
-        mic.start(
-            onLevel = { rms ->
-                if (s == session) {
-                    if (rms > bar) {
-                        overMs += MicLevels.STEP_MS
-                        if (overMs >= BARGE_MS) {
-                            overMs = 0
-                            stopMic()
-                            onBargeIn()
-                        }
-                    } else {
-                        overMs = 0
-                    }
-                }
-            },
-            onFail = {},
-        )
-    }
-
-    /** Stops a [watchBargeIn] in progress; harmless if there isn't one. */
-    fun stopBargeIn() = cancel()
-
     private fun stopMic() {
         session++
         guard?.cancel()
-        mic.stop()
+        if (micOpenNow) {
+            micOpenNow = false
+            println("MIC closed")
+        }
+        mic.release()
     }
 
     fun cancel() {
@@ -248,24 +233,13 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         }
     }
 
-    /** Fully releases the microphone (leaving a voice story, or the app going to the background).
-     * Between turns [cancel]/[stop] alone is enough: the web keeps the stream open so the next
-     * turn starts at once (see [com.zeronolidge.speechapp.audio.MicLevels.release]). */
-    fun release() {
-        cancel()
-        mic.release()
-    }
-
-    companion object {
-        /** A voice clearly his own (not an echo of Rory's own, echo-cancelled, playback) while
-         * Rory is still talking: louder than a plain try's bar, so his own faint playback leak
-         * never triggers it. */
-        private const val BARGE_FACTOR = 3f
-
-        /** How long a loud-enough sound must hold while Rory's talking to count as barge-in
-         * (one or two readings is as likely a click or cough as a word). */
-        private const val BARGE_MS = 150
-    }
+    /** Fully closes the microphone (leaving a voice story, or the app going to the background).
+     * [cancel] alone already does this now (K3a): every turn opens the mic fresh, only once
+     * Rory's own line has finished playing, and fully closes it the moment the turn ends, so a
+     * clip or the browser voice is never playing while a real microphone stream is open (the open
+     * stream switches iOS/iPadOS Safari's audio session to play-and-record, which ducks or
+     * silences any playback started while it's open). */
+    fun release() = cancel()
 }
 
 /** How a listening turn went: a clear voice, a soft try, silence, or no microphone. */

@@ -188,20 +188,25 @@ object VoiceStories {
 
     /**
      * Rory's Kitchen: pancakes for Bear's picnic. Five beats reuse a tap/talk flow (see
-     * [KitchenFlow], [KitchenBeatState]) instead of the usual single talk turn: tap the bowl
-     * (among distractors), stir three times, count three berries in (no talk, a counting turn),
-     * pop three bubbles, tap the pancake then say "flip!". The other three beats (milk, pour,
-     * his taste of it) are the usual one talk-turn beat. Placed by Market Town (food, not the
-     * already-busy Meadow) though the scene itself is Rory's kitchen counter ([Backdrop.KITCHEN]).
-     * Every beat carries its own [VoiceBeat.caption] (K2l): he can't read yet, so it's a steady
-     * on-screen cue ("Tap the bowl", "Say mix!") beside Rory's spoken line, not instead of it.
+     * [KitchenFlow], [KitchenBeatState]) instead of the usual single talk turn, and every one is
+     * now either tap-only or talk-only, never both (K3a: Timothy's iPad notes -- a tap step that
+     * then also asked him to talk read as the tiles vanishing into an unexplained listening
+     * screen): tap the bowl (among distractors), count three berries in, tap the pancake to flip
+     * it (all three: one tap, then straight to the fix, no talk turn) -- stir three times and pop
+     * three bubbles (no tap at all, several talk tries in a row). The other three beats (milk,
+     * pour, his taste of it) are the usual one talk-turn beat. Placed by Market Town (food, not
+     * the already-busy Meadow) though the scene itself is Rory's kitchen counter
+     * ([Backdrop.KITCHEN]). Every beat carries its own [VoiceBeat.caption] (K2l): he can't read
+     * yet, so it's a steady on-screen cue ("Tap the bowl", "Say mix!") beside Rory's spoken line,
+     * not instead of it -- every step's instruction, and on a talk step the cue to speak, is
+     * always said out loud too (K3a), never left to the caption alone.
      */
     val kitchen = VoiceStory(
         id = "kitchen", title = "Rory's Kitchen", emoji = "🥞", land = Land.MARKET, sounds = listOf("p", "b", "m"),
         setup = "Bear's hungry! Let's make pancakes!",
         beats = listOf(
             VoiceBeat(
-                Backdrop.KITCHEN, "We need a bowl!", listOf("bowl", "big bowl", "Get the bowl!"), "b", Prop.BOWL, Move.SLIDE,
+                Backdrop.KITCHEN, "We need a bowl! Tap the bowl!", listOf("bowl", "big bowl", "Get the bowl!"), "b", Prop.BOWL, Move.SLIDE,
                 "Bowl! The bowl slides onto the counter!", "🥣", kitchen = KitchenFlow.TAP_CHOICE, kitchenChoices = KitchenGame.distractors,
                 caption = "Tap the bowl",
             ),
@@ -212,7 +217,7 @@ object VoiceStories {
                 caption = "Say mix!",
             ),
             VoiceBeat(
-                Backdrop.KITCHEN, "Let's add some berries! Help me count them in.", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
+                Backdrop.KITCHEN, "Let's add some berries! Tap one, two, three!", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
                 "Three! The berries tumble into the batter!", "🫐", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.BATTER,
                 caption = "Count the berries",
             ),

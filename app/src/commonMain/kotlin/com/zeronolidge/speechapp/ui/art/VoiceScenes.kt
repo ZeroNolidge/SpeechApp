@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -48,6 +49,7 @@ import com.zeronolidge.speechapp.logic.Prop
 import com.zeronolidge.speechapp.logic.Slot
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceBeat
+import com.zeronolidge.speechapp.ui.components.PointingHand
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -215,6 +217,12 @@ fun VoiceBeatScene(
     /** Rory's Kitchen only: he hides while the big listening Rory takes over (`listenLookGone`),
      * so the two Rorys are never both shown. */
     kitchenRoryVisible: Boolean = true,
+    /** Rory's Kitchen only (K3a): a small hand near his mouth while he says "Say it out loud!",
+     * so the cue to talk is seen as well as heard. */
+    kitchenPointing: Boolean = false,
+    /** Rory's Kitchen only (K3a): a paper speech-bubble beside him for the whole of a talk-type
+     * beat (never a tap step), the same visual anchor the hint hand already is for a tap step. */
+    kitchenSpeechBubble: Boolean = false,
     /** Rory's Kitchen only: reports the scene's own on-screen box, for the KITCHEN rects log. */
     onSceneRect: ((androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
 ) {
@@ -231,7 +239,7 @@ fun VoiceBeatScene(
             // flat layer (BackdropExtras).
             if (beat.backdrop == Backdrop.KITCHEN) {
                 KitchenWall()
-                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible)
+                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble)
                 KitchenCounterFront(landscape)
             } else {
                 BackdropExtras(beat.backdrop)
@@ -544,6 +552,31 @@ private fun BoxWithConstraintsScope.KitchenBear(
     }
 }
 
+/**
+ * A small paper speech-bubble (K3a): a rounded cream shape with a little tail and three dots, the
+ * same "someone is talking" shorthand a comic uses, drawn with the shared paper helpers (never a
+ * raw `drawRoundRect`/`drawPath`) so it keeps the torn-edge paper look everything else here has.
+ * Shown beside Rory for the whole of a kitchen talk turn (see [KitchenRory]'s own `speechBubble`),
+ * so a child who can't read the caption still sees that this step is him talking, not a tap.
+ */
+@Composable
+private fun KitchenSpeechBubble(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = size.width
+        val bodyH = size.height * 0.74f
+        paperRoundRect(Color.White, Offset.Zero, Size(w, bodyH), CornerRadius(w * 0.32f, w * 0.32f))
+        val tail = Path().apply {
+            moveTo(w * 0.16f, bodyH * 0.9f)
+            lineTo(w * 0.06f, size.height)
+            lineTo(w * 0.42f, bodyH * 0.9f)
+            close()
+        }
+        paperPath(tail, Color.White)
+        val dot = w * 0.09f
+        listOf(0.3f, 0.5f, 0.7f).forEach { fx -> paperCircle(PaperStyle.ink, dot, Offset(w * fx, bodyH * 0.46f)) }
+    }
+}
+
 private fun androidx.compose.ui.layout.LayoutCoordinates.windowRect(): Rect {
     val p = positionInWindow()
     return Rect(p.x, p.y, p.x + size.width, p.y + size.height)
@@ -555,10 +588,20 @@ private fun androidx.compose.ui.layout.LayoutCoordinates.windowRect(): Rect {
  * line on purpose, since [KitchenCounterFront] is drawn after him and paints over his lower body,
  * the way a real counter hides someone's legs. [talking] follows his mouth while he models a
  * word; [roryVisible] hides him while the big listening Rory takes over (`listenLookGone()` at
- * the call site), so the two Rorys are never both shown.
+ * the call site), so the two Rorys are never both shown. [pointing] and [speechBubble] (K3a) are
+ * only ever true alongside [roryVisible] (a talk-type beat's own MODEL/LISTEN phases): a small
+ * hand near his mouth for the "Say it out loud!" cue, and a paper speech-bubble beside him for the
+ * whole talk turn, so a child who can't read the caption still sees, not just hears, that this is
+ * his turn to talk.
  */
 @Composable
-private fun BoxWithConstraintsScope.KitchenRory(landscape: Boolean, talking: Boolean, roryVisible: Boolean) {
+private fun BoxWithConstraintsScope.KitchenRory(
+    landscape: Boolean,
+    talking: Boolean,
+    roryVisible: Boolean,
+    pointing: Boolean = false,
+    speechBubble: Boolean = false,
+) {
     val w = maxWidth
     val h = maxHeight
     val rory = KitchenLayout.roryBox(landscape)
@@ -570,6 +613,14 @@ private fun BoxWithConstraintsScope.KitchenRory(landscape: Boolean, talking: Boo
             Critter(
                 Species.ROBOT, Modifier.fillMaxHeight(), Color(0xFFFFCC80),
                 outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking,
+            )
+            if (speechBubble) KitchenSpeechBubble(
+                Modifier.align(Alignment.TopEnd).offset(x = (w * (rory.r - rory.l)) * 0.1f, y = -(h * (rory.b - rory.t)) * 0.15f)
+                    .fillMaxWidth(0.55f).aspectRatio(1.1f),
+            )
+            if (pointing) PointingHand(
+                modifier = Modifier.align(Alignment.TopStart).offset(x = -(w * (rory.r - rory.l)) * 0.12f),
+                size = 22.dp, pointRight = true,
             )
         }
     }

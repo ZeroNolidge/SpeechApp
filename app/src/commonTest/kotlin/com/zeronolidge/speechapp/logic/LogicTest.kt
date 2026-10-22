@@ -2006,9 +2006,9 @@ class KitchenStoryTest {
  * path reaches [KitchenPhase.DONE]. */
 class KitchenBeatStateTest {
     @Test
-    fun tapChoiceRightFirstTimeSkipsStraightToTalk() {
+    fun tapChoiceRightFirstTimeSkipsStraightToClose() {
         val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true)
-        assertEquals(KitchenPhase.TALK, s.phase)
+        assertEquals(KitchenPhase.CLOSE, s.phase)
         assertTrue(s.rightFirstTry)
     }
 
@@ -2022,34 +2022,33 @@ class KitchenBeatStateTest {
         s = s.wiggled()
         assertEquals(KitchenPhase.TAP, s.phase)
         s = s.tap(true)
-        assertEquals(KitchenPhase.TALK, s.phase)
+        assertEquals(KitchenPhase.CLOSE, s.phase)
         assertFalse(s.rightFirstTry)
     }
 
     @Test
-    fun tapChoiceTwoWrongTapsShowTheAnswerThenTalk() {
+    fun tapChoiceTwoWrongTapsShowTheAnswerThenClose() {
         val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(false)
         assertEquals(KitchenPhase.SHOW_ANSWER, s.phase)
-        assertEquals(KitchenPhase.TALK, s.shown().phase)
+        assertEquals(KitchenPhase.CLOSE, s.shown().phase)
     }
 
     @Test
-    fun tapChoiceOneTalkTryThenClose() {
-        val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true).talked()
+    fun tapChoiceGoesStraightToCloseWithNoTalkTurnAtAll() {
+        val s = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true)
         assertEquals(KitchenPhase.CLOSE, s.phase)
         assertEquals(KitchenPhase.DONE, s.closed().phase)
     }
 
     @Test
-    fun flipIsOneTapWithNoWrongAnswerThenOneTalkTurn() {
+    fun flipIsOneTapWithNoWrongAnswerAndNoTalkTurn() {
         var s = KitchenBeatState(KitchenFlow.FLIP).named()
         assertEquals(KitchenPhase.TAP, s.phase)
         // A stray "wrong" tap is impossible for this flow: it's simply ignored, never fails.
         assertEquals(s, s.tap(false))
         s = s.tap(true)
-        assertEquals(KitchenPhase.TALK, s.phase)
-        s = s.talked()
         assertEquals(KitchenPhase.CLOSE, s.phase)
+        assertEquals(KitchenPhase.DONE, s.closed().phase)
     }
 
     @Test
@@ -2090,13 +2089,48 @@ class KitchenBeatStateTest {
 
     @Test
     fun outOfOrderCallsAreIgnored() {
-        val talking = KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true)
+        val talking = KitchenBeatState(KitchenFlow.STIR, goal = 3).named()
+        assertEquals(KitchenPhase.TALK, talking.phase)
         assertEquals(talking, talking.wiggled())
         assertEquals(talking, talking.shown())
         assertEquals(talking, talking.closed())
         val start = KitchenBeatState(KitchenFlow.STIR, goal = 3)
         assertEquals(start, start.talked())
         assertEquals(start, start.tap(true))
+    }
+
+    /** K3a (Timothy's iPad notes): a tap step that also slid into a talk/listening turn afterward
+     * read, with no audio to explain it, as "the tiles vanished and a strange listening screen
+     * appeared". Every tap flow must now go straight from its last tap to CLOSE, never through
+     * TALK -- the only phase that ever shows the listening look (see VoiceStoryScreen's `listen`). */
+    @Test
+    fun tapFlowsNeverEnterTalkPhase() {
+        fun drive(flow: KitchenFlow, taps: List<Boolean>): KitchenBeatState {
+            var s = KitchenBeatState(flow, goal = taps.count { it }.coerceAtLeast(1)).named()
+            for (right in taps) {
+                s = s.tap(right)
+                if (s.phase == KitchenPhase.WIGGLE) s = s.wiggled()
+                if (s.phase == KitchenPhase.SHOW_ANSWER) s = s.shown()
+                assertTrue(s.phase != KitchenPhase.TALK, "$flow $taps: reached TALK")
+            }
+            return s
+        }
+        assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.TAP_CHOICE, listOf(true)).phase)
+        assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.TAP_CHOICE, listOf(false, true)).phase)
+        assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.TAP_CHOICE, listOf(false, false)).phase)
+        assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.FLIP, listOf(true)).phase)
+        assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.COUNT, listOf(true, true, true)).phase)
+    }
+
+    /** The flip side of [tapFlowsNeverEnterTalkPhase]: every flow is tap-only (goes NAME -> TAP,
+     * never TALK) or talk-only (goes NAME -> TALK, never TAP), never both. */
+    @Test
+    fun everyFlowIsEitherTapOnlyOrTalkOnlyNeverBoth() {
+        for (flow in KitchenFlow.entries) {
+            val hasTap = flow.tapGoal(3) > 0
+            val hasTalk = flow.talkGoal(3) > 0
+            assertTrue(hasTap != hasTalk, "$flow must be either tap-only or talk-only, not both or neither")
+        }
     }
 
     /** Aida (speech therapist): "mix!" and "pop!" must model once per try, then wait quietly for
@@ -2118,10 +2152,10 @@ class KitchenBeatStateTest {
     @Test
     fun everyFlowAndEveryPathReachesDone() {
         val paths = listOf(
-            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true).talked(),
-            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(true).talked(),
-            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(false).shown().talked(),
-            KitchenBeatState(KitchenFlow.FLIP).named().tap(true).talked(),
+            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(true),
+            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(true),
+            KitchenBeatState(KitchenFlow.TAP_CHOICE).named().tap(false).wiggled().tap(false).shown(),
+            KitchenBeatState(KitchenFlow.FLIP).named().tap(true),
             KitchenBeatState(KitchenFlow.STIR, goal = 3).named().talked().talked().talked(),
             KitchenBeatState(KitchenFlow.BUBBLES, goal = 3).named().talked().talked().talked(),
             KitchenBeatState(KitchenFlow.COUNT, goal = 3).named().tap(true).tap(true).tap(true),

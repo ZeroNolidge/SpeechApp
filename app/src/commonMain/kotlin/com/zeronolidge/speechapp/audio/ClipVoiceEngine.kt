@@ -39,6 +39,11 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
 
     private fun speakNow(text: String, rate: Float, onEnd: (spoken: Boolean) -> Unit) {
         val parts = if (clips.ready) ClipText.plan(text) { clips.has(it) } else emptyList()
+        // K3a: every spoken line, logged as it starts, with whether it's fully covered by
+        // pre-made clips (ok=false: no clip at all, or part of it falls back to the browser
+        // voice) -- proves, alongside VoiceDetector's MIC open/closed log, that no clip or
+        // browser-voice line ever starts while the microphone is open.
+        println("CLIP play text=$text ok=${parts.isNotEmpty() && parts.none { it is ClipText.Part.Speak }}")
         // Words with no clip are said by the device voice (a different voice): log them, so the
         // smoke test can list any line that still mixes voices.
         if (clips.ready) parts.filterIsInstance<ClipText.Part.Speak>().forEach { println("VOICEGAP [${it.text}] in: $text") }

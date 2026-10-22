@@ -180,6 +180,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     var kitchenHopped by remember { mutableStateOf(setOf<Int>()) }
     var kitchenWrong by remember { mutableIntStateOf(-1) }
     var kitchenWiggleBump by remember { mutableIntStateOf(0) }
+    // K3a: true for the moment Rory says "Say it out loud!" on a kitchen talk turn, before he
+    // goes quiet and listens: his small corner Rory points to his own mouth and a paper speech
+    // bubble shows beside him, so a child who can't read the caption still sees, not just hears,
+    // that this is his turn to talk.
+    var kitchenPointing by remember { mutableStateOf(false) }
+    // K3a: a tap step (bowl, berries, flip) replays its instruction once if nothing's tapped
+    // within about 6 s; reset every time a fresh tap phase begins (see KitchenPhase.TAP's own
+    // LaunchedEffect below).
+    var kitchenTapReplayed by remember { mutableStateOf(false) }
     // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below.
     val kitchenCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero) }
     fun logKitchen(k: KitchenBeatState) {
@@ -455,6 +464,21 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    /** Rory's Kitchen's own talk turns (K3a): once he's said the word, a clear spoken "your turn"
+     * cue (reusing the same line the no-mic fallback already speaks) before he goes quiet and
+     * listens, with his small corner Rory pointing to his own mouth and a paper speech bubble
+     * beside him the whole time he's talking (both cleared once listening starts: the big
+     * listening Rory, with his cupped ear, takes over). Shared by [modelWord]'s first model and
+     * [modelKitchenWord]'s later tries (mix again, pop again). */
+    fun kitchenSayItOutLoud(k: Int, s: Int) {
+        if (s != session) return
+        kitchenPointing = true
+        app.speaker.then("Say it out loud!") {
+            kitchenPointing = false
+            if (s == session && phase == VPhase.MODEL) listen(k)
+        }
+    }
+
     /** Rory says the word three times, slower the third time (the word chip pulses once as each
      * one starts, the slow third one bigger), then listens. Shared by every beat's model turn and,
      * once the puzzle below has picked a word, the game beat's own. */
@@ -463,8 +487,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
         pulse(false)
         if (beats[k].backdrop == Backdrop.KITCHEN) {
-            // Kitchen (Aida): Rory models the word once, then goes quiet and waits.
-            app.speaker.say(say) { if (s == session && phase == VPhase.MODEL) { pulse(true); listen(k) } }
+            // Kitchen (Aida): Rory models the word once, then a clear "your turn" cue.
+            app.speaker.say(say) { pulse(true); kitchenSayItOutLoud(k, s) }
             return
         }
         app.speaker.say(say) { pulse(false) }
@@ -486,6 +510,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
         app.listening = false
+        kitchenPointing = false
         val b = beats[k]
         if (b.kitchen != null) {
             // Rory names the problem, then its tap or talk flow plays out (see KitchenBeatState);
@@ -494,6 +519,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             kitchenRound = if (b.kitchen == KitchenFlow.TAP_CHOICE) KitchenGame.tapRound(b.word, b.kitchenChoices.size + 1, gameRnd) else null
             kitchenHopped = emptySet()
             kitchenWrong = -1
+            kitchenTapReplayed = false
             phase = VPhase.KITCHEN
             app.rememberInstruction(b.problem)
             b.caption?.let { println("KITCHEN cue step=$k text=$it") }
@@ -512,7 +538,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             app.speaker.say(b.problem) { if (s == session) { gamePhase = gamePhase.named(); logGame(gamePhase) } }
         } else {
             phase = VPhase.MODEL
-            app.rememberInstruction("${b.problem} ${line(k)}. ${line(k)}. ${line(k)}.")
+            app.rememberInstruction(
+                if (b.backdrop == Backdrop.KITCHEN) "${b.problem} ${line(k)}! Say it out loud!"
+                else "${b.problem} ${line(k)}. ${line(k)}. ${line(k)}.",
+            )
             // Rory's Kitchen's plain talk-turn beats (milk, pour, "mmm") carry no KitchenFlow of
             // their own, but Ruby's K2c test script still drives them from the same KITCHEN log
             // the flow beats print (see `listen`/`after` below for TALK/DONE).
@@ -567,11 +596,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         listen(k)
     }
 
-    /** A kitchen talk turn's single model line (not three; see KitchenFlow), then the usual listen. */
+    /** A kitchen talk turn's single model line (not three; see KitchenFlow), then the usual
+     * "Say it out loud!" cue and listen. */
     fun modelKitchenWord(k: Int, s: Int) {
         val say = line(k)
         if (s == session) { chipBig = false; chipBeat++ }
-        app.speaker.say(say) { if (s == session && phase == VPhase.MODEL) listen(k) }
+        app.speaker.say(say) { kitchenSayItOutLoud(k, s) }
     }
 
     startKitchenTalk = {
@@ -719,6 +749,22 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    // K3a: a tap step (bowl, berries, flip) has no talk turn and no timer of its own, so if
+    // nothing's tapped within about 6 s of the instruction, Rory says it once more (never a
+    // second time: [kitchenTapReplayed]), the same way a talk turn's own miss flow already
+    // re-prompts him.
+    LaunchedEffect(index, kitchenPhase.phase) {
+        val s = session
+        val b = beats.getOrNull(index) ?: return@LaunchedEffect
+        if (kitchenPhase.phase == KitchenPhase.TAP && !kitchenTapReplayed) {
+            delay(6000)
+            if (s == session && kitchenPhase.phase == KitchenPhase.TAP && !kitchenTapReplayed) {
+                kitchenTapReplayed = true
+                app.speaker.say(b.problem)
+            }
+        }
+    }
+
     /** A tap on one of the puzzle's choice balloons (ignored outside the puzzle phase itself). */
     fun tapChoice(i: Int) {
         val round = puzzle ?: return
@@ -783,35 +829,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
         if (micOk()) app.voice.checkRoom(go) else go()
     }
-    // Barge-in: if he's clearly already talking while Rory is still saying a model or prompt
-    // line, don't make him wait for Rory to finish before it counts (Timothy's iPad notes: a
-    // 3-year-old who starts answering early would otherwise have to repeat himself). Only while
-    // Rory is actually modelling the word (never during the puzzle/kitchen tap phases, which have
-    // no talk turn at all).
-    DisposableEffect(phase, index) {
-        if (phase == VPhase.MODEL && micOk()) {
-            val s = session
-            val k = index
-            app.voice.watchBargeIn {
-                if (s == session && phase == VPhase.MODEL) {
-                    app.speaker.stop()
-                    leaning = false
-                    model[0].pressed()
-                    println(
-                        "VOICETURN story=${story.id} beat=$k try=${model[0].tries} peak=${model[0].strength} " +
-                            "voicedMs=0 room=${app.voice.room ?: 0f} threshold=${app.voice.threshold} counted=true why=bargein",
-                    )
-                    finishGently(k, heard = true, micUsed = true)
-                }
-            }
-        }
-        onDispose { app.voice.stopBargeIn() }
-    }
+    // K3a: no more barge-in watch here. It opened the microphone the moment Rory started
+    // modelling a word, so a real iPad's audio session switched to play-and-record while his own
+    // line was still playing -- which is why "Say milk!" and the other model lines sometimes
+    // played silently. The mic now only ever opens once his line has fully finished (see `listen`,
+    // called from each model's own onDone), and fully closes the moment each listening turn ends.
     DisposableEffect(Unit) {
         onDispose {
             session++
             app.voice.cancel()
-            app.voice.stopBargeIn()
             app.voice.release()
             app.speaker.stop()
             app.listening = false
@@ -819,8 +845,27 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    // K3a: "hear it again" on a talk turn whose mic is open (VPhase.LISTEN) closes it first,
+    // replays, then reopens it as a fresh listen on the same beat -- replaying while the mic is
+    // still open is exactly what used to duck or silence the clip on a real iPad. Every other
+    // phase (tap steps included) just replays the instruction, same as any other screen.
+    fun replayInstruction() {
+        val k = index
+        val s = session
+        if (phase == VPhase.LISTEN) {
+            app.voice.cancel()
+            app.listening = false
+            app.listenLevel = 0f
+            pushNow = 0f
+            app.speaker.say(app.instruction) { if (s == session && phase == VPhase.LISTEN) listen(k) }
+        } else {
+            app.speaker.say(app.instruction)
+        }
+    }
+
     ScreenFrame(
         onHome = nav.home,
+        onHear = ::replayInstruction,
         background = {},
         top = {
             PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
@@ -886,6 +931,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // big listening Rory takes over, same as the small bottom-left Rory he replaces.
                     val kitchenTalking = phase == VPhase.MODEL || phase == VPhase.ACT || phase == VPhase.KITCHEN
                     val kitchenRoryVisible = listenLookGone()
+                    // K3a: a talk-type kitchen beat (never a tap step: those never reach MODEL or
+                    // LISTEN, see KitchenFlow.talkGoal) shows a paper speech-bubble beside Rory the
+                    // whole time he's talking or listening, so a child who can't read still sees
+                    // it's his turn to talk; the hand near his mouth shows only for the "Say it
+                    // out loud!" cue itself.
+                    val kitchenTalkStep = beat.backdrop == Backdrop.KITCHEN && (phase == VPhase.MODEL || phase == VPhase.LISTEN)
                     // Bear, Rory, the bowl, the pan and the choice strip's own on-screen boxes
                     // (CSS px), once per kitchen beat, so Ruby's overlap check can run against a
                     // real screenshot (never printed with the "KITCHEN step=" prefix above).
@@ -942,6 +993,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
                                         puzzleSafe = stripShown, landscape = true,
                                         kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
+                                        kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
                                     )
                                 }
@@ -955,6 +1007,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
                                     puzzleSafe = stripShown,
                                     kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
+                                    kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
                                 )
                             }
@@ -1059,15 +1112,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 }
             }
             // Rory's Kitchen (K2l): a short plain caption instead of the word chip above, since he
-            // can't read it anyway but a grown-up watching can see every step is clear. Shown for
-            // the whole beat (tap and talk turns alike), top-centre, clear of the top bar, Bear,
-            // Rory, the counter and the tap tiles below.
+            // can't read it anyway but a grown-up watching can see every step is clear. K3a: every
+            // step's instruction (and a talk step's "say it out loud" cue) is now always spoken
+            // too, so this is a small helper label for the grown-up, not the thing he's meant to
+            // rely on -- shrunk to about 60% of its old size, never the main cue. Shown for the
+            // whole beat (tap and talk turns alike), top-centre, clear of the top bar, Bear, Rory,
+            // the counter and the tap tiles below.
             if (k >= 0 && beats[k].backdrop == Backdrop.KITCHEN && phase != VPhase.END && phase != VPhase.ACT) {
                 beats[k].caption?.let { cap ->
                     Text(
-                        cap, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
+                        cap, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).zIndex(4f)
-                            .paperCard(PaperStyle.chip, 22.dp).padding(horizontal = 18.dp, vertical = 6.dp),
+                            .paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 14.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -1092,7 +1148,6 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         val k = index
                         session++
                         app.voice.cancel()
-                        app.voice.stopBargeIn()
                         app.speaker.stop()
                         leaning = false
                         // The same action as his voice, at a gentle speed.

@@ -3,18 +3,22 @@ package com.zeronolidge.speechapp.logic
 import kotlin.random.Random
 
 /**
- * The flows a "kitchen" beat ([VoiceBeat.kitchen]) can play before (or instead of) its usual
- * single talk turn, in Rory's Kitchen (pancakes for Bear's picnic). Mirrors [GameBeatState]'s
- * "nothing ever fails" shape, generalised so one state machine ([KitchenBeatState]) covers all
- * five:
+ * The flows a "kitchen" beat ([VoiceBeat.kitchen]) can play in place of its usual single talk
+ * turn, in Rory's Kitchen (pancakes for Bear's picnic). Mirrors [GameBeatState]'s "nothing ever
+ * fails" shape, generalised so one state machine ([KitchenBeatState]) covers all five. Timothy's
+ * iPad notes (K3a): a step that both makes him tap AND then talk reads as "the tiles vanished and
+ * a strange listening screen appeared" to a child who can't read the caption explaining why, so
+ * every kitchen flow is now either tap-only or talk-only, never both:
  *  - [TAP_CHOICE] ("Tap the bowl!"): a tap among 2 or 3 items, one right (the beat's own word;
  *    [VoiceBeat.kitchenChoices] names the distractors). Wrong taps wiggle, then show the answer,
- *    exactly like [GameBeatState]'s puzzle. One talk turn follows.
+ *    exactly like [GameBeatState]'s puzzle. No talk turn follows: the fix plays straight from the
+ *    tap, same as [COUNT].
  *  - [COUNT] ("Count 3 berries in"): taps with no wrong answer, Rory counting each one aloud
  *    ("one, two, three!"); no talk turn at all, since it's a counting turn, not a speech target.
  *  - [STIR] ("mix!") and [BUBBLES] ("pop!"): no tap phase, but several one-word talk turns in a
  *    row (his stirs, his pops) before the fix plays.
- *  - [FLIP] ("Tap the pancake, then flip!"): one plain tap (no wrong answer), then one talk turn.
+ *  - [FLIP] ("Tap the pancake, then flip!"): one plain tap (no wrong answer). No talk turn, same
+ *    as [TAP_CHOICE]/[COUNT].
  * How many taps or talk turns a beat's flow needs is [VoiceBeat.kitchenGoal].
  */
 enum class KitchenFlow { TAP_CHOICE, COUNT, STIR, BUBBLES, FLIP }
@@ -30,10 +34,10 @@ fun KitchenFlow.tapGoal(goal: Int): Int = when (this) {
     KitchenFlow.STIR, KitchenFlow.BUBBLES -> 0
 }
 
-/** How many talk turns this flow needs before the fix plays (0: no talk turn at all, only [COUNT]). */
+/** How many talk turns this flow needs before the fix plays (0: no talk turn at all; K3a: every
+ * tap flow is now 0, so a tap step never slides into a talk/listening turn afterward). */
 fun KitchenFlow.talkGoal(goal: Int): Int = when (this) {
-    KitchenFlow.COUNT -> 0
-    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP -> 1
+    KitchenFlow.COUNT, KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP -> 0
     KitchenFlow.STIR, KitchenFlow.BUBBLES -> goal
 }
 

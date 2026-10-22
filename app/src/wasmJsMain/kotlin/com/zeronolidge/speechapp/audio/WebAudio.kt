@@ -59,11 +59,12 @@ class WebVoiceEngine : VoiceEngine {
 
 private fun jsMicAvailable(): Boolean = js("!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))")
 
-// Keeps the microphone stream open between listening turns (see jsMicStop): on a real iPad,
-// re-asking getUserMedia for every turn cost the first 0.3 to 0.8 s of each turn, right when a
-// soft word starts. [jsMicStart] reuses `window.__tlMicStream` if it's still live instead of
-// opening a new one; `jsMicStop`'s `release` flag is the only thing that really closes it (a
-// voice story leaving, or the tab going to the background).
+// K3a: opens a fresh microphone stream every turn (never kept open between turns, and never
+// opened while Rory is still talking) and [jsMicStop] always fully closes it again at the end of
+// the turn. An open getUserMedia stream switches iOS/iPadOS Safari's audio session to
+// play-and-record, which ducks or silences any clip/browser-voice playback started while it's
+// open -- a stream kept open between turns, or opened early to watch for barge-in while Rory
+// modelled a word, was why his lines sometimes played silently or not at all on a real iPad.
 private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> Unit): JsAny = js(
     """(() => {
         const st = { stopped: false, stream: null, timer: null, src: null };
@@ -77,7 +78,7 @@ private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> 
             });
         }
         const begin = (stream) => {
-            if (st.stopped) { return; }
+            if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; }
             st.stream = stream;
             window.__tlMicStream = stream;
             const C = window.AudioContext || window.webkitAudioContext;
@@ -129,19 +130,13 @@ private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> 
                 onLevel(rms, band, best);
             }, 50);
         };
-        const live = window.__tlMicStream && window.__tlMicStream.active &&
-            window.__tlMicStream.getAudioTracks().some(t => t.readyState === 'live');
-        if (live) {
-            begin(window.__tlMicStream);
-        } else {
-            try {
-                // noiseSuppression off: on an iPad it was flattening the soft fricatives (s, f,
-                // p puffs) a 3-year-old makes right out, well below the loudness floor.
-                navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } })
-                    .then(stream => { if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; } begin(stream); })
-                    .catch(() => { if (!st.stopped) onFail(); });
-            } catch (e) { onFail(); }
-        }
+        try {
+            // noiseSuppression off: on an iPad it was flattening the soft fricatives (s, f,
+            // p puffs) a 3-year-old makes right out, well below the loudness floor.
+            navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } })
+                .then(stream => { if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; } begin(stream); })
+                .catch(() => { if (!st.stopped) onFail(); });
+        } catch (e) { onFail(); }
         return st;
     })()"""
 )
