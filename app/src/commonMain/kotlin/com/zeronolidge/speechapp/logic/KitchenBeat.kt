@@ -180,9 +180,12 @@ object KitchenLayout {
     private const val RORY_HEIGHT = 0.25f
 
     /** How much of [RORY_HEIGHT] sits below the counter top line, hidden behind the counter
-     * (K2f): under half, so his hat, head, shoulders and upper body stay clearly visible above
-     * it, the way a waist-high counter hides only someone's legs. */
-    private const val RORY_HIDDEN_FRACTION = 0.45f
+     * (K2g, was 0.45): his puppet's own art leaves empty space above his antenna and his head
+     * reaches a good way down past his chin before his shoulders start, so 0.45 hidden only left
+     * his hat and eyes above the line (screenshots showed his mouth, chin and shoulders gone).
+     * 0.25 clears his whole head (mouth and chin included) and his shoulders/upper chest, so the
+     * counter front hides only his belly and legs, the way a waist-high counter should. */
+    private const val RORY_HIDDEN_FRACTION = 0.25f
 
     /** Where the counter's props (the bowl choice, the pan and what's on it, the berries) are
      * kept: the rest of the counter's width, clear of Bear's lane, always at or below the

@@ -4,9 +4,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -20,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
@@ -375,29 +378,46 @@ private const val BearPanLookX = 6f
  * looking flat-but-turned rather than warped. */
 private const val BearTurnCameraDistance = 12f
 
-/** Bear's extra tilt and push toward the stack while he leans in for his bite (K2e;
- * [leanAmount] 0 to 1, animated in VoiceStory.kt so he eases in then back within one stage). */
-private const val BearLeanTiltDeg = 13f
-private const val BearLeanTranslateFraction = 0.18f
+/** Bear's extra tilt and push toward the stack while he leans in for his bite (K2g, widened from
+ * 13deg/0.18: Ruby asked for a BIG lean, rotating about 20deg further and shifting his upper body
+ * about 30% of his own width toward the stack; [leanAmount] 0 to 1, animated in VoiceStory.kt so
+ * he eases in, holds the full lean, then settles back within one stage). */
+private const val BearLeanTiltDeg = 20f
+private const val BearLeanTranslateFraction = 0.30f
+
+/** [Critter]'s own drawing area is 100 wide by 140 tall (see Critter.kt); Bear must keep this
+ * exact ratio when fitted into his lane, or his puppet's art (which scales x and y together off
+ * its measured width) draws shorter than its box and seems to float above his stool. */
+private const val CritterArtRatio = 100f / 140f
 
 /**
  * Bear, on a simple paper stool beside the counter's own left end (its left end starts just past
  * him; see [KitchenCounterFront]), turned toward the pan (K2e/K2f). Stool and Bear share one
- * `graphicsLayer` (and so one pivot) for the lean, rather than each moving on its own: K2e once
- * showed a portrait frame with Bear floating above the stool mid-lean, traced to
- * [Critter]'s own idle bob (biggest in [Mood.CHEER], meant to read as excitement) lifting the
- * puppet's artwork inside its own canvas independent of the stool beneath it; `animate = false`
- * here turns that bob (and blink/wiggle) off, so his seat on the stool can never drift.
- * [leanAmount] is the ending's own (Ruby, K2c/K2e): 0 to 1, how far into his bite-lean Bear
- * currently is, cheering instead of just standing happy while it's above zero.
+ * `graphicsLayer` (and so one pivot, pinned to his seat via `transformOrigin`) for the lean,
+ * rather than each moving on its own. [leanAmount] is the ending's own (Ruby, K2c/K2e/K2g): 0 to
+ * 1, how far into his bite-lean Bear currently is, cheering (mouth open for the bite) instead of
+ * just standing happy while it's above zero.
+ *
+ * Bear's own height here ([fillMaxHeight] against his lane) used to be handed to [Critter]
+ * unconditionally at 85%: in a lane narrower than [CritterArtRatio] needs for that height (K2e's
+ * portrait ending), [Modifier.fillMaxHeight] and the aspect ratio inside [Critter] fight over the
+ * lane's width, and [Critter] is measured taller than its own art can fill at that width — its
+ * puppet only draws the top slice of that extra-tall canvas, leaving empty space below his feet
+ * and reading as Bear floating above the stool (K2g). Working out his fitted height here first
+ * (capped by the lane's width, not just its height) and sizing him to that exact height plus
+ * [CritterArtRatio] keeps his measured box and his drawn art the same size, so his feet always
+ * land on the box's own bottom edge, right where the stool's seat is.
  */
 @Composable
 private fun BoxWithConstraintsScope.KitchenBear(landscape: Boolean, leanAmount: Float = 0f) {
     val w = maxWidth
     val h = maxHeight
     val bear = KitchenLayout.bearBox(landscape)
+    val laneWidth = w * (bear.r - bear.l)
+    val laneHeight = h * (bear.b - bear.t)
+    val bearHeight = minOf(laneHeight * 0.85f, laneWidth / CritterArtRatio)
     Box(
-        Modifier.offset(x = w * bear.l, y = h * bear.t).size(w * (bear.r - bear.l), h * (bear.b - bear.t))
+        Modifier.offset(x = w * bear.l, y = h * bear.t).size(laneWidth, laneHeight)
             .graphicsLayer {
                 rotationZ = BearFacingTiltDeg + BearLeanTiltDeg * leanAmount
                 rotationY = BearFacingTurnDeg
@@ -405,12 +425,13 @@ private fun BoxWithConstraintsScope.KitchenBear(landscape: Boolean, leanAmount: 
                 translationX = size.width * BearLeanTranslateFraction * leanAmount
                 scaleX = 1f + 0.06f * leanAmount
                 scaleY = 1f + 0.06f * leanAmount
+                transformOrigin = TransformOrigin(0.5f, 1f)
             },
         contentAlignment = Alignment.BottomCenter,
     ) {
         Canvas(Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomCenter)) { paperStool() }
         Critter(
-            Species.BEAR, Modifier.fillMaxHeight(0.85f),
+            Species.BEAR, Modifier.height(bearHeight).aspectRatio(CritterArtRatio),
             mood = if (leanAmount > 0.1f) Mood.CHEER else Mood.HAPPY,
             animate = false, lookX = BearPanLookX,
         )

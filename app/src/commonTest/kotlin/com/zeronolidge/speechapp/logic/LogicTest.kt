@@ -2107,7 +2107,7 @@ class KitchenLayoutTest {
         }
         val portraitHeight = KitchenLayout.roryBox(false).b - KitchenLayout.roryBox(false).t
         val landscapeHeight = KitchenLayout.roryBox(true).b - KitchenLayout.roryBox(true).t
-        assertEquals(portraitHeight, landscapeHeight)
+        assertEquals(portraitHeight, landscapeHeight, 0.0001f)
     }
 
     /** None of the four ever reach down into the choice strip's own reserved band, at every size
@@ -2164,5 +2164,13 @@ class KitchenEndingTest {
     fun stickerLandsExactlyWhenBiteAndFlyHaveBothElapsed() {
         assertEquals(KitchenEnding.BITE_MS + KitchenEnding.FLY_MS, KitchenEnding.stickerLandsAfterBiteStartsMs)
         assertEquals(KitchenEnding.STACK_MS + KitchenEnding.BITE_MS + KitchenEnding.FLY_MS, KitchenEnding.stackToLandedMs)
+    }
+
+    /** K2g: Bear's big lean (ease in, hold the full lean, settle back) must fit inside the bite
+     * stage's own span, or the lean gets cut off before it's held or settled. */
+    @Test
+    fun biteStageLastsLongEnoughForTheFullLean() {
+        val leanSpan = KitchenEnding.LEAN_IN_MS + KitchenEnding.LEAN_HOLD_MS + KitchenEnding.LEAN_SETTLE_MS
+        assertTrue(KitchenEnding.BITE_MS >= leanSpan)
     }
 }

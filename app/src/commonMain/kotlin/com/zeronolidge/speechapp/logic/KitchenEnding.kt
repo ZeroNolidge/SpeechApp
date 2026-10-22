@@ -15,8 +15,19 @@ object KitchenEnding {
     /** The pancake stack and its steam settle onto the counter. */
     const val STACK_MS = 600
 
-    /** Bear leans in; the bite-shaped notch appears in the top pancake. */
-    const val BITE_MS = 1000
+    /** How long Bear takes to ease into his big lean toward the stack (K2g). */
+    const val LEAN_IN_MS = 250
+
+    /** How long Bear holds the full lean, mouth open for his bite, before settling back (K2g). */
+    const val LEAN_HOLD_MS = 800
+
+    /** How long Bear takes to settle back out of the lean once he's taken his bite (K2g). */
+    const val LEAN_SETTLE_MS = 250
+
+    /** Bear leans in; the bite-shaped notch appears in the top pancake. Long enough for his full
+     * ease-in/hold/settle lean ([LEAN_IN_MS] + [LEAN_HOLD_MS] + [LEAN_SETTLE_MS], K2g; was 1000,
+     * too short to hold the lean at all). */
+    const val BITE_MS = 1300
 
     /** The sticker peels up and arcs into the backpack. */
     const val FLY_MS = 900

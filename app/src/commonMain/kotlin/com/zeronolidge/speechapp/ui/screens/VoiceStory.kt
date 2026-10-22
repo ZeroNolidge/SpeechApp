@@ -572,8 +572,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             println("KITCHEN end stage=BITE")
             bearLean.snapTo(0f)
             launch {
-                bearLean.animateTo(1f, tween(if (still) 0 else 350))
-                bearLean.animateTo(0f, tween(if (still) 0 else 450))
+                bearLean.animateTo(1f, tween(if (still) 0 else KitchenEnding.LEAN_IN_MS))
+                delay(if (still) 0L else KitchenEnding.LEAN_HOLD_MS.toLong())
+                bearLean.animateTo(0f, tween(if (still) 0 else KitchenEnding.LEAN_SETTLE_MS))
             }
             delay(KitchenEnding.BITE_MS.toLong())
             if (s != session) return@launch
