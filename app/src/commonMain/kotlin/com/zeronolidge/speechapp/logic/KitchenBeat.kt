@@ -176,17 +176,26 @@ object KitchenLayout {
      * counter top by a little rather than stopping at [BEAR_BOTTOM] minus some fixed height. */
     private const val BEAR_HEAD_OVERLAP = 0.04f
 
-    /** Rory's lane (with his chef's hat): centred behind the props. K2d/K2e kept shrinking his
-     * height (down to a 9%-tall sliver in landscape) to fit him entirely above the counter top
-     * line before the landscape lift clips the scene's own top, which read as a tiny Rory
-     * standing ON the counter rather than a normal-sized one behind it. K2f draws him behind the
-     * counter instead ([KitchenRory] drawn before [KitchenCounterFront] in VoiceScenes.kt, so the
-     * counter's own paint covers his lower body, the way a real counter hides someone's legs):
-     * his box can now be one full, un-shrunk size in both orientations ([RORY_HEIGHT]), reaching
-     * down past the counter top line by design ([RORY_HIDDEN_FRACTION]) instead of stopping just
-     * short of it. */
-    private const val RORY_LEFT = 0.33f
-    private const val RORY_RIGHT = 0.67f
+    /** Rory's lane (with his chef's hat): his own strip of the counter, left of the props.
+     * K2d/K2e kept shrinking his height (down to a 9%-tall sliver in landscape) to fit him
+     * entirely above the counter top line before the landscape lift clips the scene's own top,
+     * which read as a tiny Rory standing ON the counter rather than a normal-sized one behind it.
+     * K2f draws him behind the counter instead ([KitchenRory] drawn before [KitchenCounterFront]
+     * in VoiceScenes.kt, so the counter's own paint covers his lower body, the way a real counter
+     * hides someone's legs): his box can now be one full, un-shrunk size in both orientations
+     * ([RORY_HEIGHT]), reaching down past the counter top line by design
+     * ([RORY_HIDDEN_FRACTION]) instead of stopping just short of it.
+     *
+     * K3c: Timothy's screenshots (1024x768 and 768x1024) showed the bowl, milk and berries
+     * covering Rory's face -- this lane used to be centred ([0.33, 0.67]) right on top of the
+     * bowl station ([0.40, 0.60] at the time), since nothing had ever checked Rory's own visible
+     * box against the props themselves (only bear/bowl/pan were in
+     * `bearRoryBowlAndPanNeverOverlapEachOther`'s own box list). Moving him into his own strip,
+     * left of both stations entirely, is the fix a centred-behind-the-props lane could never give
+     * without shrinking him down to fit between the two (K3b's own station widths leave no gap
+     * big enough in the middle). */
+    private const val RORY_LEFT = 0.30f
+    private const val RORY_RIGHT = 0.45f
 
     /** Rory's own height, as a fraction of the kitchen scene's own height: about a quarter, the
      * same in portrait and landscape now (K2f; no more separate landscape shrink). */
@@ -200,12 +209,17 @@ object KitchenLayout {
      * counter front hides only his belly and legs, the way a waist-high counter should. */
     private const val RORY_HIDDEN_FRACTION = 0.25f
 
-    /** Where the counter's props (the bowl choice, the pan and what's on it, the berries) are
-     * kept: the rest of the counter's width, clear of Bear's lane, always at or below the
-     * counter top line. */
-    private const val PROPS_LEFT = 0.40f
-    private const val PROPS_RIGHT = 0.88f
-    private const val PROP_SLOT_WIDTH = 0.2f
+    /** The bowl station (the bowl choice, milk, batter while it's being mixed, the berries
+     * falling in): its own strip of the counter, clear of Rory's lane ([RORY_RIGHT]) on one side
+     * and the pan station ([PAN_LEFT]) on the other (K3c: K3b's props band used to sit right
+     * under Rory's old centred lane). */
+    private const val BOWL_LEFT = 0.52f
+    private const val BOWL_RIGHT = 0.70f
+
+    /** The pan station (the pan itself and everything cooking in it): clear of the bowl station
+     * on one side and the counter's own right edge on the other (K3c). */
+    private const val PAN_LEFT = 0.74f
+    private const val PAN_RIGHT = 0.94f
 
     /** How far below the counter-top line the props' own tap-target slots start (K2b) -- and,
      * since K3b, also where every prop's own *bottom edge* actually rests ([propBox]): a thin
@@ -243,16 +257,16 @@ object KitchenLayout {
         return Rect(box.l, box.t, box.r, counterTop(landscape))
     }
 
-    /** The "tap the bowl" choice's own slot, at the near end of the props band. */
+    /** The "tap the bowl" choice's own slot. */
     fun bowlBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
-        return Rect(PROPS_LEFT, top, PROPS_LEFT + PROP_SLOT_WIDTH, BEAR_BOTTOM)
+        return Rect(BOWL_LEFT, top, BOWL_RIGHT, BEAR_BOTTOM)
     }
 
-    /** The pan's own slot (and whatever's on it), at the far end of the props band. */
+    /** The pan's own slot (and whatever's on it). */
     fun panBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
-        return Rect(PROPS_RIGHT - PROP_SLOT_WIDTH, top, PROPS_RIGHT, BEAR_BOTTOM)
+        return Rect(PAN_LEFT, top, PAN_RIGHT, BEAR_BOTTOM)
     }
 
     /** Which of the two counter stations a kitchen prop uses (K3b): [bowlBox] for everything that
@@ -265,6 +279,26 @@ object KitchenLayout {
     }
 
     /**
+     * Where [prop] actually renders, centred in its own station ([propSlot]) and bottom-anchored
+     * on the counter's own surface ([PROPS_MARGIN] below the counter-top line), with no clamp:
+     * the exact box `Item` draws in VoiceScenes.kt (its size there is `unit * sizeFraction`, a
+     * part of `unit = min(sceneWidth, sceneHeight * 1.4)`, centred at this box's own centre).
+     * [propBox] is this, clamped into the station; [KitchenLayoutTest]'s own overlap check
+     * (`kitchenPropsNeverOverlapRoryOrTheOtherStation`) uses this one instead, since the real
+     * render ignores the clamp entirely -- a size picked without checking against this would
+     * still look fine in [propBox]'s own (clamped) numbers while actually overlapping on screen.
+     */
+    fun propNaturalBox(prop: Prop, landscape: Boolean, sizeFraction: Float, sceneWidth: Float, sceneHeight: Float): Rect {
+        val slot = propSlot(prop, landscape)
+        val unit = minOf(sceneWidth, sceneHeight * 1.4f)
+        val halfWidth = (unit * sizeFraction / 2f) / sceneWidth
+        val height = (unit * sizeFraction) / sceneHeight
+        val centerX = (slot.l + slot.r) / 2f
+        val bottom = slot.t
+        return Rect(centerX - halfWidth, bottom - height, centerX + halfWidth, bottom)
+    }
+
+    /**
      * Where [prop] actually sits on the counter (K3b), pure maths so it's directly testable
      * ([KitchenLayoutTest.kitchenPropsAlwaysSitOnTheCounter]) and loggable once per beat ("KITCHEN
      * props", VoiceStory.kt): centred in its own station ([propSlot]), its bottom on the counter's
@@ -274,25 +308,16 @@ object KitchenLayout {
      * boat/owl/balloon scenes, whose fractions were never built with a counter in mind) put the
      * bowl up over the wall, near Bear, instead of on the counter.
      *
-     * [sizeFraction] is the prop's own size (`propSize` in VoiceScenes.kt -- the exact number
-     * `Item` draws it at, a part of `unit = min(sceneWidth, sceneHeight * 1.4)`), so a bigger prop
-     * (the pan) still gets a bottom-anchored box rather than drifting by its own centre.
-     * [sceneWidth]/[sceneHeight] only need to share the real scene's own aspect ratio: any
-     * matching unit works (CSS px for the real log, or plain ratios for a quick check). The
-     * result's horizontal span is clamped inside the props band ([PROPS_LEFT]/[PROPS_RIGHT]),
-     * which already sits clear of Bear's lane and the counter's own right edge (the counter itself
-     * reaches the scene's full width, see `KitchenCounterFront`) at every size tested.
+     * [sizeFraction] is the prop's own size (`propSize` in VoiceScenes.kt). The result's
+     * horizontal span is [propNaturalBox], clamped inside [prop]'s own station ([propSlot]), not
+     * the props band as a whole (K3c: the bowl and pan stations are each other's neighbour now,
+     * not two ends of one shared band, so a prop can never drift out of its own station into the
+     * other's -- or, before K3c moved Rory out of the middle, into Rory's lane).
      */
     fun propBox(prop: Prop, landscape: Boolean, sizeFraction: Float, sceneWidth: Float, sceneHeight: Float): Rect {
         val slot = propSlot(prop, landscape)
-        val unit = minOf(sceneWidth, sceneHeight * 1.4f)
-        val halfWidth = (unit * sizeFraction / 2f) / sceneWidth
-        val height = (unit * sizeFraction) / sceneHeight
-        val centerX = (slot.l + slot.r) / 2f
-        val bottom = slot.t
-        val left = (centerX - halfWidth).coerceAtLeast(PROPS_LEFT)
-        val right = (centerX + halfWidth).coerceAtMost(PROPS_RIGHT)
-        return Rect(left, bottom - height, right, bottom)
+        val natural = propNaturalBox(prop, landscape, sizeFraction, sceneWidth, sceneHeight)
+        return Rect(natural.l.coerceAtLeast(slot.l), natural.t, natural.r.coerceAtMost(slot.r), natural.b)
     }
 
     /** Rescales a box from the kitchen scene's own fractions onto the whole stage's, given how

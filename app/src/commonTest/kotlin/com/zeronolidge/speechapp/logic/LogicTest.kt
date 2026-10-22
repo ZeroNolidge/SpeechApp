@@ -2391,7 +2391,7 @@ class KitchenLayoutTest {
         // that must agree on, or a changed size could quietly drift out of sync with where this
         // thinks it ends).
         val sizeFractions = mapOf(
-            Prop.BOWL to 0.26f, Prop.MILK to 0.2f, Prop.BERRIES to 0.2f, Prop.PAN to 0.34f, Prop.PANCAKE to 0.24f,
+            Prop.BOWL to 0.18f, Prop.MILK to 0.2f, Prop.BERRIES to 0.2f, Prop.PAN to 0.16f, Prop.PANCAKE to 0.15f,
         )
         val sizes = listOf(
             1024f to 768f, 768f to 1024f, 1180f to 820f, 820f to 1180f, 1366f to 1024f, 390f to 844f, 844f to 390f,
@@ -2406,6 +2406,40 @@ class KitchenLayoutTest {
                 assertTrue(box.r <= 1f, "$prop reaches past the counter's right edge at ${w}x$h: ${box.r}")
                 assertEquals(expectedBottom, box.b, 0.0001f, "$prop's bottom isn't on the counter's own surface at ${w}x$h")
                 assertTrue(box.t < box.b, "$prop has no height at ${w}x$h")
+            }
+        }
+    }
+
+    /** K3c: a screenshot (1024x768 and 768x1024) showed the bowl, milk and berries sitting right
+     * over Rory's face -- [kitchenPropsAlwaysSitOnTheCounter] above only ever checked
+     * [KitchenLayout.propBox], which clamps a prop's span into its own station, so it could never
+     * have caught this (clamping just hides an oversized prop behind a smaller box than the one
+     * actually drawn). This checks [KitchenLayout.propNaturalBox] -- the unclamped box
+     * `VoiceScenes.kt`'s `Item` really draws -- against [KitchenLayout.roryVisibleBox] (Rory's own
+     * visible slice, same reasoning as [bearRoryBowlAndPanNeverOverlapEachOther]) and against every
+     * prop in the other station, at every size Timothy's note asked for: the two sizes the bug
+     * screenshots were taken at, a wider tablet, a taller one, and both orientations of a phone.
+     * Sizes mirror `kitchenPropSize` in VoiceScenes.kt (BOWL/MILK/BATTER/BERRIES/PAN/PANCAKE/STEAM
+     * match [propSize] there exactly; BUBBLE is Rory's Kitchen's own smaller override of that
+     * function, since [propSize]'s own 0.3 is sized for the River story's open-air bubble, not a
+     * pancake's). */
+    @Test
+    fun kitchenPropsNeverOverlapRoryOrTheOtherStation() {
+        val bowlStationSizes = mapOf(Prop.BOWL to 0.18f, Prop.MILK to 0.2f, Prop.BATTER to 0.18f, Prop.BERRIES to 0.2f)
+        val panStationSizes = mapOf(Prop.PAN to 0.16f, Prop.PANCAKE to 0.15f, Prop.BUBBLE to 0.18f, Prop.STEAM to 0.14f)
+        val sizes = listOf(
+            1024f to 768f, 768f to 1024f, 1180f to 820f, 820f to 1180f, 1366f to 1024f, 390f to 844f, 844f to 390f,
+        )
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val rory = KitchenLayout.roryVisibleBox(landscape)
+            val bowlBoxes = bowlStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
+            val panBoxes = panStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
+            for ((prop, box) in bowlBoxes + panBoxes) {
+                assertFalse(rory.overlaps(box), "rory overlaps $prop at ${w}x$h")
+            }
+            for ((bowlProp, bowlBox) in bowlBoxes) for ((panProp, panBox) in panBoxes) {
+                assertFalse(bowlBox.overlaps(panBox), "$bowlProp overlaps $panProp at ${w}x$h")
             }
         }
     }

@@ -114,18 +114,28 @@ private fun propSize(p: Prop) = when (p) {
     Prop.CUPCAKE -> 0.13f
     Prop.MOON -> 0.2f
     Prop.GAP_BALLOON -> 0.22f
-    Prop.BOWL -> 0.26f
+    // K3c: the bowl and pan each got their own narrower station on the counter (clear of Rory's
+    // lane, see KitchenLayout), so these five had to shrink to fit inside them without the two
+    // stations' props reaching into each other or into Rory -- the old sizes (up to 0.34 for the
+    // pan) were sized for the wider, Rory-straddling band K3b used, not K3c's two slimmer ones.
+    Prop.BOWL -> 0.18f
     Prop.MILK -> 0.2f
-    Prop.BATTER -> 0.26f
-    Prop.PAN -> 0.34f
-    Prop.PANCAKE -> 0.24f
-    Prop.STEAM -> 0.2f
+    Prop.BATTER -> 0.18f
+    Prop.PAN -> 0.16f
+    Prop.PANCAKE -> 0.15f
+    Prop.STEAM -> 0.14f
 }
 
-/** [propSize], exposed for Rory's Kitchen's own "KITCHEN props" log (`VoiceStory.kt`, K3b): the
- * exact size fraction a kitchen prop renders at, so the logged/tested box
+/** [Prop.BUBBLE]'s own [propSize] (0.3) is shared with the River story's bubble-pop beat, where
+ * it floats free in open air -- too big for Rory's Kitchen's pan station ([KitchenLayout], K3c:
+ * 0.2 of the scene's width), where it's the pancake's own bubbles popping on the counter. Kitchen
+ * beats use this instead of [propSize] directly; every other backdrop is unaffected. */
+private fun kitchenPropSize(p: Prop) = if (p == Prop.BUBBLE) 0.18f else propSize(p)
+
+/** [kitchenPropSize], exposed for Rory's Kitchen's own "KITCHEN props" log (`VoiceStory.kt`,
+ * K3b): the exact size fraction a kitchen prop renders at, so the logged/tested box
  * ([com.zeronolidge.speechapp.logic.KitchenLayout.propBox]) matches what's actually drawn. */
-fun kitchenPropSizeFraction(prop: Prop): Float = propSize(prop)
+fun kitchenPropSizeFraction(prop: Prop): Float = kitchenPropSize(prop)
 
 /** A balloon's colour, shared by the puzzle (see `BalloonPatternPuzzle` in VoiceStory.kt) and the
  * one that joins the scene once it's solved ([Prop.GAP_BALLOON]). */
@@ -257,12 +267,12 @@ fun VoiceBeatScene(
             // geometry, so kitchen props use that instead, for both the still prop and the moving
             // one; every other backdrop is unchanged.
             fun kitchenCenter(prop: Prop): Pair<Float, Float> {
-                val box = KitchenLayout.propBox(prop, landscape, propSize(prop), maxWidth.value, maxHeight.value)
+                val box = KitchenLayout.propBox(prop, landscape, kitchenPropSize(prop), maxWidth.value, maxHeight.value)
                 return (box.l + box.r) / 2f to (box.t + box.b) / 2f
             }
             beat.still?.let { sp ->
                 val (sx, sy) = if (isKitchen) kitchenCenter(sp) else stillSpot(beat.move).let { it.x to it.y }
-                Item(unit * propSize(sp) * (if (isKitchen) 1f else 0.8f), { sx }, { sy }) { PropArt(sp, { 1f }, null, beat) }
+                Item(unit * (if (isKitchen) kitchenPropSize(sp) else propSize(sp) * 0.8f), { sx }, { sy }) { PropArt(sp, { 1f }, null, beat) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
             val kitchenPropCenter = if (isKitchen) kitchenCenter(beat.prop) else null
@@ -272,7 +282,7 @@ fun VoiceBeatScene(
             // Kitchen's own choice strip never needs this: its counter position is already clear
             // of it (K3b).
             Item(
-                unit * propSize(beat.prop) * (if (isKitchen) 1f else if (puzzleSafe) 0.7f else 1f),
+                unit * (if (isKitchen) kitchenPropSize(beat.prop) else propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f)),
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { now().rotation }, scale = { now().scale },
