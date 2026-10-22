@@ -2598,6 +2598,66 @@ class KitchenLayoutTest {
             for (prop in panProps) assertEquals(KitchenLayout.panBox(landscape), KitchenLayout.propSlot(prop, landscape))
         }
     }
+
+    /** K5: Timothy's own measured screenshot (1024x768 landscape, the TAP step with the choice
+     * strip shown) had the counter top at y~345 and Bear's drawn stool seat at y~372-385, with
+     * Bear himself (y~265-370) sitting lower than the counter too -- a net gap of about 4% of the
+     * scene's own height between [KitchenLayout.stoolTop] (the stool's own drawn seat, see
+     * `paperStool` in VoiceScenes.kt) and [KitchenLayout.counterTop], once [BEAR_SEAT_OVERLAP] is
+     * taken out of [BEAR_SEAT_GAP]. These two numbers never change between the tap and talk steps
+     * (both are pure functions of `landscape` alone, see [bearsSeatOverlapsTheStoolSeat]'s own
+     * doc), so one check per orientation covers every step. */
+    @Test
+    fun stoolSeatTopIsWithinTwoPercentOfTheCounterTop() {
+        for (landscape in listOf(false, true)) {
+            val ct = KitchenLayout.counterTop(landscape)
+            val stoolTop = KitchenLayout.stoolTop(landscape)
+            val diff = kotlin.math.abs(stoolTop - ct)
+            assertTrue(
+                diff <= 0.02f,
+                "stool seat too far from the counter top in ${if (landscape) "landscape" else "portrait"}: stoolTop=$stoolTop ct=$ct diff=$diff",
+            )
+        }
+    }
+
+    /** K5: a real screenshot (the POP step, landscape) showed the frying pan's own drawn bottom
+     * floating about 15px above the counter top it's meant to sit on, and the portrait "count the
+     * berries" TAP step showed the berry pile floating the same way -- the props' own tap-target
+     * BOXES ([kitchenPropsAlwaysSitOnTheCounter]) already sat right on the counter, but the
+     * hand-drawn paper art inside each box's Canvas (VoiceScenes.kt) stopped short of the box's
+     * own bottom edge. [KitchenLayout.symmetricQuadApexY] and the five props' own shared geometry
+     * constants are the exact numbers that Canvas drawing uses now, so this confirms each one's
+     * own lowest painted pixel lands on its box's bottom edge (fraction 1f, no padding) without
+     * needing to render anything. */
+    @Test
+    fun kitchenPropArtTouchesItsOwnBoxBottomWithNoPadding() {
+        val tolerance = 0.0001f
+        assertEquals(
+            1f,
+            KitchenLayout.symmetricQuadApexY(KitchenLayout.BOWL_RIM_Y, KitchenLayout.BOWL_OUTER_CONTROL_Y),
+            tolerance,
+            "bowl's own lowest drawn point doesn't touch its box's bottom edge",
+        )
+        assertEquals(1f, KitchenLayout.MILK_ART_BOTTOM, tolerance, "milk carton's own drawn bottom doesn't touch its box's bottom edge")
+        assertEquals(
+            1f,
+            KitchenLayout.BERRIES_LOWEST_CENTER_Y + KitchenLayout.BERRIES_RADIUS_FRACTION,
+            tolerance,
+            "the lowest berry's own drawn bottom doesn't touch its box's bottom edge",
+        )
+        assertEquals(
+            1f,
+            KitchenLayout.PAN_ART_TOP + KitchenLayout.PAN_ART_HEIGHT,
+            tolerance,
+            "the pan's own drawn bottom doesn't touch its box's bottom edge",
+        )
+        assertEquals(
+            1f,
+            KitchenLayout.PANCAKE_ART_TOP + KitchenLayout.PANCAKE_ART_HEIGHT,
+            tolerance,
+            "the pancake's own drawn bottom doesn't touch its box's bottom edge",
+        )
+    }
 }
 
 /** Rory's Kitchen's own ending (Ruby's K2c): the stack-of-pancakes/bite/sticker-fly sequence

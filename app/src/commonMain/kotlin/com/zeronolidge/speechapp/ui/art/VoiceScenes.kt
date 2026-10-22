@@ -822,10 +822,14 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
         Prop.CUPCAKE -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🧁", fontSize = 40.sp) }
         Prop.BERRIES -> if (beat.backdrop == Backdrop.KITCHEN) {
             // Rory's Kitchen: blueberries tumbling in, not cherries (Ruby, K2a; the owl story's
-            // berries, Backdrop.FOREST, keep their cherry look below).
+            // berries, Backdrop.FOREST, keep their cherry look below). K5: the lowest berry's own
+            // centre+radius are KitchenLayout's shared constants (summing to 1f, its own bottom
+            // on the box's bottom edge) -- a real screenshot showed the whole pile floating well
+            // short of the counter; the other two keep their original offset from this one.
             Canvas(Modifier.fillMaxSize()) {
-                val r = size.minDimension * 0.17f
-                listOf(Offset(0.32f, 0.5f), Offset(0.58f, 0.36f), Offset(0.68f, 0.62f)).forEach { spot ->
+                val r = size.minDimension * KitchenLayout.BERRIES_RADIUS_FRACTION
+                val lowest = KitchenLayout.BERRIES_LOWEST_CENTER_Y
+                listOf(Offset(0.32f, lowest - 0.12f), Offset(0.58f, lowest - 0.26f), Offset(0.68f, lowest)).forEach { spot ->
                     paperBlueberry(Offset(size.width * spot.x, size.height * spot.y), r)
                 }
             }
@@ -897,18 +901,26 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 paperBalloon(balloonColor(beat.gapColor ?: "blue"))
             }
         }
-        // Rory's Kitchen: a mixing bowl, side view (a wide rim over a rounded body).
+        // Rory's Kitchen: a mixing bowl, side view (a wide rim over a rounded body). K5: the rim
+        // and control points are KitchenLayout's own shared constants, not bare literals, so the
+        // bowl's own lowest drawn point ([KitchenLayout.symmetricQuadApexY]) stays exactly on the
+        // box's bottom edge (1f) -- a real screenshot showed it floating well short of the
+        // counter, 38% of the box's own height empty below it.
         Prop.BOWL -> Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
             val body = Path().apply {
-                moveTo(w * 0.1f, h * 0.34f)
-                quadraticTo(w * 0.5f, h * 0.9f, w * 0.9f, h * 0.34f)
-                quadraticTo(w * 0.5f, h * 0.48f, w * 0.1f, h * 0.34f)
+                moveTo(w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
+                quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_OUTER_CONTROL_Y, w * 0.9f, h * KitchenLayout.BOWL_RIM_Y)
+                quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_INNER_CONTROL_Y, w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
                 close()
             }
             paperPath(body, Color(0xFFFFF3E0))
-            paperOval(Color(0xFFFFFDF7), Offset(w * 0.06f, h * 0.22f), Size(w * 0.88f, h * 0.2f))
+            paperOval(
+                Color(0xFFFFFDF7),
+                Offset(w * 0.06f, h * KitchenLayout.BOWL_INNER_RIM_TOP),
+                Size(w * 0.88f, h * KitchenLayout.BOWL_INNER_RIM_HEIGHT),
+            )
         }
         // K3b: a classic gable-top milk carton, not a plain jug (which read as a grey blob on a
         // real iPad) -- a white body, a blue label band with a milk-drop mark, a blue-ridged
@@ -918,9 +930,11 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
             val h = size.height
             val bodyLeft = w * 0.26f
             val bodyRight = w * 0.74f
-            val gableTop = h * 0.06f
-            val shoulder = h * 0.28f
-            val bottom = h * 0.92f
+            // K5: shifted down 8% so the carton's own drawn bottom ([KitchenLayout.MILK_ART_BOTTOM])
+            // lands exactly on the box's bottom edge, not floating short of the counter.
+            val gableTop = h * 0.14f
+            val shoulder = h * 0.36f
+            val bottom = h * KitchenLayout.MILK_ART_BOTTOM
             val ridgeX = w * 0.5f
             val carton = Path().apply {
                 moveTo(bodyLeft, bottom)
@@ -938,8 +952,8 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
             drawLine(Color(0xFFBDBDBD), Offset(ridgeX, gableTop), Offset(ridgeX, shoulder), 1.dp.toPx())
             // A blue label band around the middle, with a small white milk drop (a cow-spot would
             // read the same at this size) so it's unmistakably milk, not juice or water.
-            val labelTop = h * 0.42f
-            val labelBottom = h * 0.68f
+            val labelTop = h * 0.50f
+            val labelBottom = h * 0.76f
             paperRect(Color(0xFF2E7BD6), Offset(bodyLeft, labelTop), Size(bodyRight - bodyLeft, labelBottom - labelTop))
             val dropR = (labelBottom - labelTop) * 0.22f
             val dropTop = labelTop + (labelBottom - labelTop) * 0.22f
@@ -964,19 +978,22 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
             paperPath(body, Color(0xFFFFF3E0))
             paperOval(Color(0xFFFFE9A8), Offset(w * 0.08f, h * 0.2f), Size(w * 0.84f, h * 0.22f))
         }
-        // A flat frying pan (side view, no dials or flame): a dark oval with one handle.
+        // A flat frying pan (side view, no dials or flame): a dark oval with one handle. K5: top
+        // offset/height are KitchenLayout's shared constants (summing to 1f) so the pan's own
+        // drawn bottom sits exactly on the box's bottom edge -- a real screenshot showed it
+        // floating about 15px above the counter during the bubbles beat.
         Prop.PAN -> Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            paperOval(Color(0xFF424242), Offset(w * 0.06f, h * 0.56f), Size(w * 0.7f, h * 0.22f))
-            paperRect(Color(0xFF5D4037), Offset(w * 0.72f, h * 0.6f), Size(w * 0.26f, h * 0.06f))
+            paperOval(Color(0xFF424242), Offset(w * 0.06f, h * KitchenLayout.PAN_ART_TOP), Size(w * 0.7f, h * KitchenLayout.PAN_ART_HEIGHT))
+            paperRect(Color(0xFF5D4037), Offset(w * 0.72f, h * (KitchenLayout.PAN_ART_TOP + 0.04f)), Size(w * 0.26f, h * 0.06f))
         }
-        // A golden pancake, two shades for a browned edge.
+        // A golden pancake, two shades for a browned edge. K5: same shared-constant fix as the pan.
         Prop.PANCAKE -> Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            paperOval(Color(0xFFD08A3E), Offset(w * 0.14f, h * 0.3f), Size(w * 0.72f, h * 0.4f))
-            paperOval(Color(0xFFF2C06B), Offset(w * 0.22f, h * 0.34f), Size(w * 0.56f, h * 0.26f))
+            paperOval(Color(0xFFD08A3E), Offset(w * 0.14f, h * KitchenLayout.PANCAKE_ART_TOP), Size(w * 0.72f, h * KitchenLayout.PANCAKE_ART_HEIGHT))
+            paperOval(Color(0xFFF2C06B), Offset(w * 0.22f, h * (KitchenLayout.PANCAKE_ART_TOP + 0.04f)), Size(w * 0.56f, h * 0.26f))
         }
         // Soft paper steam wisps, rising.
         Prop.STEAM -> Canvas(Modifier.fillMaxSize()) {
@@ -1006,18 +1023,25 @@ private fun KitchenPancakeBubbles(moving: Boolean, beat: VoiceBeat, f: () -> Flo
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        paperOval(Color(0xFF424242), Offset(w * 0.06f, h * 0.56f), Size(w * 0.7f, h * 0.22f))
-        paperRect(Color(0xFF5D4037), Offset(w * 0.72f, h * 0.6f), Size(w * 0.26f, h * 0.06f))
-        paperOval(Color(0xFFD08A3E), Offset(w * 0.14f, h * 0.3f), Size(w * 0.72f, h * 0.4f))
-        paperOval(Color(0xFFF2C06B), Offset(w * 0.22f, h * 0.34f), Size(w * 0.56f, h * 0.26f))
+        // K5: same shared KitchenLayout constants as Prop.PAN/Prop.PANCAKE below, not a second
+        // copy of the old (floating) literals, so this beat's own pan/pancake always matches the
+        // "still" one drawn underneath it, bottom flush with the box either way.
+        paperOval(Color(0xFF424242), Offset(w * 0.06f, h * KitchenLayout.PAN_ART_TOP), Size(w * 0.7f, h * KitchenLayout.PAN_ART_HEIGHT))
+        paperRect(Color(0xFF5D4037), Offset(w * 0.72f, h * (KitchenLayout.PAN_ART_TOP + 0.04f)), Size(w * 0.26f, h * 0.06f))
+        paperOval(Color(0xFFD08A3E), Offset(w * 0.14f, h * KitchenLayout.PANCAKE_ART_TOP), Size(w * 0.72f, h * KitchenLayout.PANCAKE_ART_HEIGHT))
+        paperOval(Color(0xFFF2C06B), Offset(w * 0.22f, h * (KitchenLayout.PANCAKE_ART_TOP + 0.04f)), Size(w * 0.56f, h * 0.26f))
         val popping = moving && beat.move == Move.POP
-        // Each bubble pops into view in turn as his voice pushes the move along, then fades away
-        // near the very end (burst) rather than lingering once the pancake's ready to flip.
+        // Each bubble pops bigger in turn as his voice pushes the move along, then fades away
+        // near the very end (burst) rather than lingering once the pancake's ready to flip. K5:
+        // a real screenshot taken before any voice push showed a bare pancake -- [grow] now has a
+        // visible floor (0.4) from the moment this beat starts, so the 4 bubbles always read as
+        // "cooking" rather than only appearing once he's spoken.
         val along = if (popping) (f() / 0.55f).coerceIn(0f, 1f) else 0f
         val burst = if (popping) ((f() - 0.8f) / 0.2f).coerceIn(0f, 1f) else 0f
-        listOf(Offset(0.36f, 0.42f), Offset(0.5f, 0.5f), Offset(0.62f, 0.4f)).forEachIndexed { i, spot ->
-            val grow = (along * 3f - i).coerceIn(0f, 1f)
-            if (grow > 0f && burst < 1f) {
+        val spots = listOf(Offset(0.32f, 0.74f), Offset(0.46f, 0.82f), Offset(0.58f, 0.72f), Offset(0.7f, 0.8f))
+        spots.forEachIndexed { i, spot ->
+            val grow = 0.4f + 0.6f * (along * spots.size - i).coerceIn(0f, 1f)
+            if (burst < 1f) {
                 val r = w * 0.05f * grow * (1f - burst)
                 val at = Offset(w * spot.x, h * spot.y)
                 drawCircle(Color(0xFFFFE9A8).copy(alpha = 0.95f * (1f - burst)), r, at)

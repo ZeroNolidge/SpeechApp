@@ -179,8 +179,17 @@ object KitchenLayout {
      * seat about 45% of the scene's own height below the counter top) -- he read as sitting on
      * the floor beside the counter, not at it. [BEAR_SEAT_GAP] puts his *seat* (not his head, see
      * K2e's old [bearBox]) just below the counter top line instead, as if his stool were a tall
-     * one that brings him up to counter height, beside its left end. */
-    private const val BEAR_SEAT_GAP = 0.05f
+     * one that brings him up to counter height, beside its left end.
+     *
+     * K5: Timothy's own measured screenshot (1024x768 landscape) still showed the stool's drawn
+     * seat (and Bear himself) sitting a further 27px below the counter top -- K4's own 0.05 was
+     * still too generous once [BEAR_SEAT_OVERLAP] is taken out, landing the net gap around 4% of
+     * the scene's own height, not the "within 2%, read as sitting right at counter height" Ruby
+     * actually asked for ([KitchenLayoutTest.stoolSeatTopIsWithinTwoPercentOfTheCounterTop]).
+     * Lowered so the net gap ([stoolTop]'s own distance from [counterTop]) comes out under 2%: a
+     * taller stool (see [stoolTop]) that reads as bringing him right up to the counter, not merely
+     * closer to it. */
+    private const val BEAR_SEAT_GAP = 0.02f
 
     /** Bear's own body height (head to seat), as a fraction of the scene's own height: tall enough
      * that his head (and ears) clearly rise above the counter top once his seat sits at
@@ -246,6 +255,59 @@ object KitchenLayout {
      * height read as floating, not standing on the counter). Public so [KitchenLayoutTest] can
      * check against it directly rather than guessing the number. */
     const val PROPS_MARGIN = 0.02f
+
+    /**
+     * K5: the "KITCHEN props" log (`propRect` in VoiceStory.kt) measures each prop's layout BOX
+     * ([propBox]), which [kitchenPropsAlwaysSitOnTheCounter][KitchenLayoutTest] already checks
+     * sits right on the counter -- but real screenshots (the pan during the bubbles beat, the
+     * berry pile while counting) showed the hand-drawn paper art INSIDE that box (VoiceScenes.kt's
+     * `Item`/`PropArt` canvases) stopping well short of the box's own bottom edge: empty padding
+     * baked into each shape's own hardcoded y-fractions, invisible to a box-only check. These are
+     * that same drawing math's own numbers, pulled out as named, shared constants (not duplicated
+     * literals in VoiceScenes.kt) so the two can never drift apart again, and so a plain unit test
+     * can confirm each shape's own lowest painted pixel lands exactly on its box's bottom edge
+     * (local fraction 1f), with no gap.
+     */
+    fun symmetricQuadApexY(edgeY: Float, controlY: Float): Float = (edgeY + controlY) / 2f
+
+    /** [Prop.BOWL]'s outer rim curve (a quadratic Bezier from `(0.1, BOWL_RIM_Y)` to
+     * `(0.9, BOWL_RIM_Y)` via `(0.5, BOWL_OUTER_CONTROL_Y)`): its apex ([symmetricQuadApexY]) is
+     * the bowl's own lowest drawn point, which must land at 1f. */
+    const val BOWL_RIM_Y = 0.72f
+    const val BOWL_OUTER_CONTROL_Y = 1.28f
+
+    /** The bowl's inner rim curve (back up from the same two rim points): purely decorative, no
+     * bottom-touching requirement of its own. */
+    const val BOWL_INNER_CONTROL_Y = 0.86f
+
+    /** The bowl's inner rim highlight oval. */
+    const val BOWL_INNER_RIM_TOP = 0.60f
+    const val BOWL_INNER_RIM_HEIGHT = 0.2f
+
+    /** [Prop.MILK]'s carton: its own drawn bottom edge, as a fraction of its box -- 1f, flush with
+     * the box's own bottom, with every other carton measurement (shoulder, gable, label) shifted
+     * to match (see the Canvas drawing in VoiceScenes.kt). */
+    const val MILK_ART_BOTTOM = 1f
+
+    /** [Prop.BERRIES] (Rory's Kitchen's own blueberries): the lowest berry's own centre Y and
+     * radius (as a fraction of the box's smaller side) -- their sum must land at 1f, the lowest
+     * berry's own bottom flush with the box's bottom edge. The other two berries keep their
+     * original offset from this one (see the Canvas drawing). */
+    const val BERRIES_LOWEST_CENTER_Y = 0.83f
+    const val BERRIES_RADIUS_FRACTION = 0.17f
+
+    /** [Prop.PAN]'s own oval body (also redrawn, identically, by the pancake-bubbles beat's own
+     * `KitchenPancakeBubbles` in VoiceScenes.kt, so the pan it draws always matches this one): top
+     * offset and height, as fractions of the box -- their sum must land at 1f. */
+    const val PAN_ART_TOP = 0.78f
+    const val PAN_ART_HEIGHT = 0.22f
+
+    /** [Prop.PANCAKE]'s own base oval (also shared with `KitchenPancakeBubbles`): top offset and
+     * height, as fractions of the box -- their sum must land at 1f. The lighter top-highlight oval
+     * keeps its original offset from this one (see the Canvas drawing), no bottom-touching
+     * requirement of its own. */
+    const val PANCAKE_ART_TOP = 0.6f
+    const val PANCAKE_ART_HEIGHT = 0.4f
 
     /** A box on screen, as fractions (0 at the left/top edge, 1 at the right/bottom): [overlaps]
      * is false for boxes that merely touch at an edge. */
