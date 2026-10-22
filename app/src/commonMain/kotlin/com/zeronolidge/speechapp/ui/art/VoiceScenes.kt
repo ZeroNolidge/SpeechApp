@@ -183,7 +183,12 @@ fun BlueberryArt(boxSize: Dp, modifier: Modifier = Modifier) {
     Canvas(modifier.size(boxSize)) { paperBlueberry(center, this.size.minDimension * 0.4f) }
 }
 
-/** Something placed by its centre at ([x], [y]) (parts of the scene), moved while drawing. */
+/** Something placed by its centre at ([x], [y]) (parts of the scene), moved while drawing.
+ * [onRect] (K3e), when given, reports this Box's own real drawn bounds (window coordinates) every
+ * time it's placed -- for Rory's Kitchen's "KITCHEN props" log (VoiceStory.kt), which used to print
+ * a hand-recomputed box ([com.zeronolidge.speechapp.logic.KitchenLayout.propBox]) that could drift
+ * from what this function actually draws; reading it straight from the real node closes that gap
+ * for good, whatever either formula does later. */
 @Composable
 private fun BoxWithConstraintsScope.Item(
     size: Dp,
@@ -192,6 +197,7 @@ private fun BoxWithConstraintsScope.Item(
     alpha: () -> Float = { 1f },
     rotation: () -> Float = { 0f },
     scale: () -> Float = { 1f },
+    onRect: ((androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val wPx = constraints.maxWidth
@@ -200,6 +206,7 @@ private fun BoxWithConstraintsScope.Item(
         Modifier
             .offset { IntOffset((x() * wPx - size.toPx() / 2).roundToInt(), (y() * hPx - size.toPx() / 2).roundToInt()) }
             .size(size)
+            .let { m -> if (onRect == null) m else m.onGloballyPositioned(onRect) }
             .graphicsLayer {
                 this.alpha = alpha().coerceIn(0f, 1f)
                 rotationZ = rotation()
@@ -239,6 +246,9 @@ fun VoiceBeatScene(
     kitchenSpeechBubble: Boolean = false,
     /** Rory's Kitchen only: reports the scene's own on-screen box, for the KITCHEN rects log. */
     onSceneRect: ((androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
+    /** Rory's Kitchen only (K3e): reports each kitchen prop's own real drawn box (window
+     * coordinates), straight from the node `Item` actually places -- see [Item]'s own `onRect`. */
+    onKitchenPropRect: ((Prop, androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
 ) {
     val still = LocalReduceMotion.current
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "beat")
@@ -249,6 +259,18 @@ fun VoiceBeatScene(
         ) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
             val isKitchen = beat.backdrop == Backdrop.KITCHEN
+            // K3e: a kitchen prop stands up from the counter, which (in landscape) leaves only a
+            // short "wall" band actually visible above the counter line -- [unit] above is tuned
+            // for open-air floating props and, in a wide landscape stage, is dominated by the
+            // scene's own WIDTH (its *1.4 boost makes height lose that min() almost every time a
+            // screen is wider than it is tall), so sizing a counter prop off it cross-multiplies by
+            // the stage's own aspect ratio and inflates its height well past the counter (a real
+            // iPad screenshot showed the berries reaching almost to the screen's own top, over the
+            // wall and the caption). Sizing kitchen props off the plain smaller side instead keeps
+            // a prop's on-screen height a direct, un-amplified fraction of the scene's own height
+            // in both orientations (portrait is unaffected: [maxWidth] was already the smaller side
+            // there either way).
+            val kitchenUnit = minOf(maxWidth, maxHeight)
             // Rory's Kitchen draws its own backdrop in three layers, Rory sandwiched behind the
             // counter (K2f; see KitchenRory/KitchenCounterFront): every other backdrop is one
             // flat layer (BackdropExtras).
@@ -271,7 +293,10 @@ fun VoiceBeatScene(
             }
             beat.still?.let { sp ->
                 val (sx, sy) = if (isKitchen) kitchenCenter(sp) else stillSpot(beat.move).let { it.x to it.y }
-                Item(unit * (if (isKitchen) kitchenPropSize(sp) else propSize(sp) * 0.8f), { sx }, { sy }) { PropArt(sp, { 1f }, null, beat) }
+                Item(
+                    if (isKitchen) kitchenUnit * kitchenPropSize(sp) else unit * propSize(sp) * 0.8f, { sx }, { sy },
+                    onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(sp, c) },
+                ) { PropArt(sp, { 1f }, null, beat) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
             val kitchenPropCenter = if (isKitchen) kitchenCenter(beat.prop) else null
@@ -281,10 +306,11 @@ fun VoiceBeatScene(
             // Kitchen's own choice strip never needs this: its counter position is already clear
             // of it (K3b).
             Item(
-                unit * (if (isKitchen) kitchenPropSize(beat.prop) else propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f)),
+                if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { now().rotation }, scale = { now().scale },
+                onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(beat.prop, c) },
             ) { PropArt(beat.prop, f, beat.propEmoji, beat) }
             // The light changes with the move: the sun comes up (dawn) or night falls (dusk).
             if (beat.light != Light.SAME) {

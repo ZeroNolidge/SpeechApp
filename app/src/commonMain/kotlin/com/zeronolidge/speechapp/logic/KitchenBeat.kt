@@ -281,16 +281,26 @@ object KitchenLayout {
     /**
      * Where [prop] actually renders, centred in its own station ([propSlot]) and bottom-anchored
      * on the counter's own surface ([PROPS_MARGIN] below the counter-top line), with no clamp:
-     * the exact box `Item` draws in VoiceScenes.kt (its size there is `unit * sizeFraction`, a
-     * part of `unit = min(sceneWidth, sceneHeight * 1.4)`, centred at this box's own centre).
-     * [propBox] is this, clamped into the station; [KitchenLayoutTest]'s own overlap check
+     * the exact box `Item` draws in VoiceScenes.kt (its size there is `kitchenUnit * sizeFraction`,
+     * `kitchenUnit = min(sceneWidth, sceneHeight)`, centred at this box's own centre). [propBox] is
+     * this, clamped into the station; [KitchenLayoutTest]'s own overlap check
      * (`kitchenPropsNeverOverlapRoryOrTheOtherStation`) uses this one instead, since the real
      * render ignores the clamp entirely -- a size picked without checking against this would
      * still look fine in [propBox]'s own (clamped) numbers while actually overlapping on screen.
+     *
+     * K3e: `kitchenUnit` dropped the generic open-air sizing's `* 1.4` height boost (see
+     * `VoiceScenes.kt`'s own `unit`, used for props that float free in a scene with no counter to
+     * sit on): in a wide landscape stage that boost lets the *width* win the `min`, so a prop's
+     * on-screen height ends up `width/height` times bigger than its own size fraction -- on an
+     * iPad-size screen enough to push the berries almost to the very top of the scene, over the
+     * wall and the caption, well clear of the counter they're meant to be standing on. Plain
+     * `min(sceneWidth, sceneHeight)` keeps a kitchen prop's own height a direct, un-amplified
+     * fraction of the scene's height in every orientation (portrait already had `sceneWidth` win
+     * this `min` either way, so it draws exactly as before there).
      */
     fun propNaturalBox(prop: Prop, landscape: Boolean, sizeFraction: Float, sceneWidth: Float, sceneHeight: Float): Rect {
         val slot = propSlot(prop, landscape)
-        val unit = minOf(sceneWidth, sceneHeight * 1.4f)
+        val unit = minOf(sceneWidth, sceneHeight)
         val halfWidth = (unit * sizeFraction / 2f) / sceneWidth
         val height = (unit * sizeFraction) / sceneHeight
         val centerX = (slot.l + slot.r) / 2f

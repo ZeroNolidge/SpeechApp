@@ -87,6 +87,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.runtime.mutableFloatStateOf
@@ -217,6 +218,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // left edge, logged once at full lean so a screenshot check can confirm his head never
     // actually passes the counter (not just that the math behind the lean says so).
     var kitchenBiteRectsLogged by remember { mutableStateOf(false) }
+    // K3e: each kitchen prop's own real drawn box (window px), reported straight from the `Item`
+    // node VoiceScenes.kt actually places (`onKitchenPropRect`), not recomputed from the same
+    // formula the drawing itself uses -- a formula bug (or a future one) would otherwise agree
+    // with itself and never show up in the "KITCHEN props" log. Plain mutable state (not Compose
+    // state): written imperatively from a layout callback and only ever read from another one,
+    // never used to drive recomposition.
+    val kitchenPropRects = remember { mutableMapOf<Prop, androidx.compose.ui.geometry.Rect>() }
     fun logBiteRects(line: String) {
         if (kitchenBiteRectsLogged) return
         kitchenBiteRectsLogged = true
@@ -373,6 +381,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         // Rory's Kitchen's plain talk-turn beats only (the flow beats log their own TALK through
         // KitchenBeatState/logKitchen); see the NAME log in startBeat and the DONE log in after().
         if (beats.getOrNull(k)?.let { it.backdrop == Backdrop.KITCHEN && it.kitchen == null } == true) println("KITCHEN step=$k phase=TALK")
+        // K3e: the small kitchen Rory hides and the big listening Rory (cupped ear, `Mood.LISTEN`)
+        // takes over as soon as a kitchen talk turn starts listening, mic or no mic (both branches
+        // below set `app.listening = true`).
+        if (beats.getOrNull(k)?.backdrop == Backdrop.KITCHEN) println("KITCHEN pose=CUP_EAR step=$k")
         if (!micOk()) {
             waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
         } else {
@@ -485,6 +497,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     fun kitchenSayItOutLoud(k: Int, s: Int) {
         if (s != session) return
         kitchenPointing = true
+        println("KITCHEN pose=POINT_MOUTH step=$k")
         app.speaker.then(VoiceStories.kitchenYourTurnLine(beats[k].word)) {
             kitchenPointing = false
             if (s == session && phase == VPhase.MODEL) listen(k)
@@ -499,8 +512,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
         pulse(false)
         if (beats[k].backdrop == Backdrop.KITCHEN) {
-            // Kitchen (Aida): Rory models the word once, then a clear "your turn" cue.
-            app.speaker.say(say) { pulse(true); kitchenSayItOutLoud(k, s) }
+            // Kitchen (Aida, K3e): the "your turn" cue already opens by naming the word
+            // ("Milk! Now you say it... milk!"), so it IS the model -- no separate plain-word
+            // model first (that doubled up the word, same bug as the bubbles beat's "pop pop pop").
+            pulse(true)
+            kitchenSayItOutLoud(k, s)
             return
         }
         app.speaker.say(say) { pulse(false) }
@@ -609,19 +625,23 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         listen(k)
     }
 
-    /** A kitchen talk turn's single model line (not three; see KitchenFlow), then the usual
-     * per-word "your turn" cue and listen. */
+    /** A kitchen talk turn's single model (K3e: the per-word "your turn" cue IS the model --
+     * [VoiceStories.kitchenYourTurnLine] already opens by naming the word, "Pop!" -- so this no
+     * longer says the plain word again first; that left the bubbles beat's own try sounding like
+     * nothing but "pop" repeated with no audible "now you say it" at all). */
     fun modelKitchenWord(k: Int, s: Int) {
-        val say = line(k)
         if (s == session) { chipBig = false; chipBeat++ }
-        app.speaker.say(say) { kitchenSayItOutLoud(k, s) }
+        kitchenSayItOutLoud(k, s)
     }
 
     startKitchenTalk = {
         val k = index
         val s = session
         // A flow with several tries (stir, bubbles) calls this again for each one: a fresh push
-        // and a fresh action, same as any new talk turn, so each stir or pop plays out in full.
+        // and a fresh action, so each stir or pop plays out in full -- including its own 6 s
+        // replay watchdog (K3e: without resetting this, only the FIRST stir/pop try could ever
+        // get a replay if the mic hung; a later try stalling the same way would wait forever).
+        kitchenTalkReplayed = false
         model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
         modelSound[0] = null
         modelledBeat[0] = false
@@ -773,6 +793,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             delay(6000)
             if (s == session && kitchenPhase.phase == KitchenPhase.TAP && !kitchenTapReplayed) {
                 kitchenTapReplayed = true
+                println("KITCHEN replay step=$index kind=tap")
                 app.speaker.say(b.problem)
             }
         }
@@ -1013,8 +1034,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         )
                         // K3b: where each of Rory's Kitchen's own props actually renders (not just
                         // their tap-target slots above), so a screenshot's "floating off the
-                        // counter" bug shows up here as a number, not just a look.
-                        fun propRect(p: Prop) = fmt(KitchenLayout.propBox(p, sceneLandscape, kitchenPropSizeFraction(p), sw, sh))
+                        // counter" bug shows up here as a number, not just a look. K3e: prefers the
+                        // real measured box (`kitchenPropRects`, from `Item`'s own `onRect` in
+                        // VoiceScenes.kt) over the formula-recomputed one -- a prop not currently on
+                        // screen this beat has nothing measured yet, so this falls back to the
+                        // formula for it, same as before.
+                        fun fmtReal(r: androidx.compose.ui.geometry.Rect) =
+                            "${r.left.roundToInt()},${r.top.roundToInt()},${r.right.roundToInt()},${r.bottom.roundToInt()}"
+                        fun propRect(p: Prop) = kitchenPropRects[p]?.let(::fmtReal)
+                            ?: fmt(KitchenLayout.propBox(p, sceneLandscape, kitchenPropSizeFraction(p), sw, sh))
                         val counterTopPx = (origin.y + KitchenLayout.counterTop(sceneLandscape) * sh).roundToInt()
                         val counterLeftPx = (origin.x + KitchenLayout.bearBox(sceneLandscape).r * sw).roundToInt()
                         println(
@@ -1057,6 +1085,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
+                                        onKitchenPropRect = if (beat.backdrop == Backdrop.KITCHEN) { p, c -> kitchenPropRects[p] = c.boundsInWindow() } else null,
                                     )
                                 }
                             }
@@ -1071,6 +1100,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
+                                    onKitchenPropRect = if (beat.backdrop == Backdrop.KITCHEN) { p, c -> kitchenPropRects[p] = c.boundsInWindow() } else null,
                                 )
                             }
                         }
