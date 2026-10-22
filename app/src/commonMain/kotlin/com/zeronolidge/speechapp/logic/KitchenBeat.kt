@@ -156,7 +156,13 @@ object KitchenLayout {
      * [BackdropExtras] in VoiceScenes.kt, so he reads as sitting *beside* it, not floating over
      * its front). */
     private const val BEAR_RIGHT = 0.20f
-    private const val BEAR_BOTTOM = 0.97f
+
+    /** K2i moved this up from 0.97: screenshots of the BITE lean ([bearLean]) showed Bear's
+     * resting (non-lean) stool already sitting right at the scene's bottom edge, leaving no room
+     * below him for the lean's own rotation to swing a corner down without crossing it. 0.90
+     * keeps him fully inside the scene at rest and gives the lean enough clearance in every size
+     * [bearLean] is tested against. */
+    private const val BEAR_BOTTOM = 0.90f
 
     /** How far Bear's head pokes up past the counter top line (K2e): his head/shoulders should
      * read as level with the counter, not sitting well below it, so his box's top overlaps the
@@ -242,4 +248,63 @@ object KitchenLayout {
 
     /** The choice strip's own band, reserved at the bottom of the stage while its tap tiles show. */
     fun stripBox(stripFraction: Float): Rect = Rect(0f, 1f - stripFraction, 1f, 1f)
+
+    /** The lean's own floor (Ruby: it must stay clearly visible even on a tight layout) and
+     * ceiling (K2g's original ask: rotate about 20deg further). [bearLean] picks whatever's
+     * smaller than this ceiling but never less than the floor. */
+    const val MIN_LEAN_DEG = 10f
+    const val MAX_LEAN_DEG = 20f
+
+    /** K2g's own ask: shift his upper body about 30% of his own width toward the stack. */
+    const val LEAN_TRANSLATE_FRACTION = 0.30f
+
+    /** The least share of the scene's own height that must stay clear below Bear at full lean. */
+    const val BOTTOM_MARGIN_FRACTION = 0.02f
+
+    private fun sinDeg(deg: Float): Float = kotlin.math.sin(deg * kotlin.math.PI.toFloat() / 180f)
+    private fun asinDeg(x: Float): Float = kotlin.math.asin(x.coerceIn(-1f, 1f)) * 180f / kotlin.math.PI.toFloat()
+
+    /** Bear's bite lean (K2i), bound by [bearLean]: [angleDeg] the extra clockwise rotation on
+     * top of his constant facing tilt, and [dx] the sideways shift toward the counter, both at
+     * full lean (`leanAmount` 1f in `KitchenBear`, VoiceScenes.kt; it scales both down for the
+     * ease-in/settle, see [KitchenEnding]). */
+    data class BearLean(val angleDeg: Float, val dx: Float)
+
+    /**
+     * How far Bear can lean toward the stack without any part of him passing the counter's left
+     * edge or dropping below the scene's own bottom edge. Screenshots of K2g's lean (~20deg
+     * rotation plus a ~30%-of-width shift) showed his body tipping past the counter's left end
+     * and, in portrait, dropping near the scene's bottom edge as if he were falling off the
+     * stool.
+     *
+     * The lean rotates [bearBox] (Bear's own on-screen box; not his stool, which [KitchenBear] in
+     * VoiceScenes.kt keeps out of this transform entirely, pinned to a seat that never moves)
+     * about its own bottom-centre. That pivot point itself never moves, but the rotation swings
+     * his top ("nose") sideways by `height * sin(angle)` and his far bottom corner down by
+     * `halfWidth * sin(angle)`: the first must stop at or before [counterLeftX], the second must
+     * stay [BOTTOM_MARGIN_FRACTION] of [sceneH] clear of the bottom. Whichever limit is tighter
+     * caps the angle (never below [MIN_LEAN_DEG], Ruby's ask that it stay clearly visible); any
+     * room the rotation hasn't used goes to a sideways shift, up to [LEAN_TRANSLATE_FRACTION].
+     */
+    fun bearLean(bearBox: Rect, counterLeftX: Float, sceneH: Float): BearLean {
+        val halfWidth = (bearBox.r - bearBox.l) / 2f
+        val height = bearBox.b - bearBox.t
+        if (halfWidth <= 0f || height <= 0f) return BearLean(MIN_LEAN_DEG, 0f)
+        val centerX = (bearBox.l + bearBox.r) / 2f
+
+        val bottomRoom = (sceneH * (1f - BOTTOM_MARGIN_FRACTION) - bearBox.b).coerceAtLeast(0f)
+        val angleFromBottom = asinDeg((bottomRoom / halfWidth).coerceIn(0f, 1f))
+
+        val room = (counterLeftX - centerX).coerceAtLeast(0f)
+        val angleFromNose = asinDeg((room / height).coerceIn(0f, 1f))
+
+        val angle = minOf(MAX_LEAN_DEG, angleFromBottom, angleFromNose).coerceAtLeast(MIN_LEAN_DEG)
+
+        val usedByAngle = height * sinDeg(angle)
+        val dxRoom = (room - usedByAngle).coerceAtLeast(0f)
+        val desiredDx = halfWidth * 2f * LEAN_TRANSLATE_FRACTION
+        val dx = minOf(desiredDx, dxRoom)
+
+        return BearLean(angle, dx)
+    }
 }

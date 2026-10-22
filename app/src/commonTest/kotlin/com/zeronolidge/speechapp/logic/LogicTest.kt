@@ -2176,6 +2176,69 @@ class KitchenLayoutTest {
             }
         }
     }
+
+    /** Mirrors `KitchenBear`'s own geometry in VoiceScenes.kt: Bear's actual on-screen box (not
+     * his lane), fitted to the lane's width the same way (his drawn puppet never floats above
+     * the stool, K2g), for a scene of [w] by [h]. */
+    private fun bearOnScreenBox(w: Float, h: Float, landscape: Boolean): KitchenLayout.Rect {
+        val critterArtRatio = 100f / 140f
+        val bear = KitchenLayout.bearBox(landscape)
+        val laneWidth = w * (bear.r - bear.l)
+        val laneHeight = h * (bear.b - bear.t)
+        val bearHeight = minOf(laneHeight * 0.85f, laneWidth / critterArtRatio)
+        val bearWidth = bearHeight * critterArtRatio
+        val laneLeft = w * bear.l
+        val laneBottom = h * bear.b
+        return KitchenLayout.Rect(
+            l = laneLeft + (laneWidth - bearWidth) / 2f,
+            t = laneBottom - bearHeight,
+            r = laneLeft + (laneWidth + bearWidth) / 2f,
+            b = laneBottom,
+        )
+    }
+
+    /** K2i: screenshots showed K2g's fixed ~20deg/~30%-of-width bite lean tipping Bear's body
+     * past the counter's left end and, in portrait, dropping him near the scene's bottom edge as
+     * if he were falling off the stool. [KitchenLayout.bearLean] must keep the lean clearly
+     * visible (at least [KitchenLayout.MIN_LEAN_DEG]) while never letting his "nose" (the
+     * rotated top of his box) pass the counter's left edge, nor his far bottom corner drop below
+     * the scene's own bottom margin, at every size Ruby asked to check: tablet portrait/landscape
+     * and phone portrait/landscape. */
+    @Test
+    fun bearLeanNeverCrossesTheCounterOrDropsOffTheBottom() {
+        val sizes = listOf(768f to 1024f, 1024f to 768f, 390f to 844f, 844f to 390f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val box = bearOnScreenBox(w, h, landscape)
+            val counterLeftX = w * KitchenLayout.bearBox(landscape).r
+            val lean = KitchenLayout.bearLean(box, counterLeftX, h)
+
+            assertTrue(lean.angleDeg >= KitchenLayout.MIN_LEAN_DEG, "lean too small at ${w}x$h: ${lean.angleDeg}")
+
+            val angleRad = lean.angleDeg * kotlin.math.PI.toFloat() / 180f
+            val centerX = (box.l + box.r) / 2f
+            val height = box.b - box.t
+            val halfWidth = (box.r - box.l) / 2f
+            val noseX = centerX + height * kotlin.math.sin(angleRad) + lean.dx
+            val bottomY = box.b + halfWidth * kotlin.math.sin(angleRad)
+            val bottomMargin = h * KitchenLayout.BOTTOM_MARGIN_FRACTION
+
+            assertTrue(noseX <= counterLeftX + 0.5f, "nose past the counter at ${w}x$h: $noseX > $counterLeftX")
+            assertTrue(bottomY <= h - bottomMargin + 0.5f, "dropped below the margin at ${w}x$h: $bottomY > ${h - bottomMargin}")
+        }
+    }
+
+    /** K2i: Bear's resting (non-lean) stool must sit fully inside the scene, not near the bottom
+     * edge, or there's no room left for the lean itself. */
+    @Test
+    fun bearsRestingPositionStaysClearOfTheBottomEdge() {
+        val sizes = listOf(768f to 1024f, 1024f to 768f, 390f to 844f, 844f to 390f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val box = bearOnScreenBox(w, h, landscape)
+            assertTrue(box.b <= h * (1f - KitchenLayout.BOTTOM_MARGIN_FRACTION), "Bear's resting box reaches the bottom edge at ${w}x$h")
+        }
+    }
 }
 
 /** Rory's Kitchen's own ending (Ruby's K2c): the stack-of-pancakes/bite/sticker-fly sequence

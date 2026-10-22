@@ -378,13 +378,6 @@ private const val BearPanLookX = 6f
  * looking flat-but-turned rather than warped. */
 private const val BearTurnCameraDistance = 12f
 
-/** Bear's extra tilt and push toward the stack while he leans in for his bite (K2g, widened from
- * 13deg/0.18: Ruby asked for a BIG lean, rotating about 20deg further and shifting his upper body
- * about 30% of his own width toward the stack; [leanAmount] 0 to 1, animated in VoiceStory.kt so
- * he eases in, holds the full lean, then settles back within one stage). */
-private const val BearLeanTiltDeg = 20f
-private const val BearLeanTranslateFraction = 0.30f
-
 /** [Critter]'s own drawing area is 100 wide by 140 tall (see Critter.kt); Bear must keep this
  * exact ratio when fitted into his lane, or his puppet's art (which scales x and y together off
  * its measured width) draws shorter than its box and seems to float above his stool. */
@@ -392,11 +385,16 @@ private const val CritterArtRatio = 100f / 140f
 
 /**
  * Bear, on a simple paper stool beside the counter's own left end (its left end starts just past
- * him; see [KitchenCounterFront]), turned toward the pan (K2e/K2f). Stool and Bear share one
- * `graphicsLayer` (and so one pivot, pinned to his seat via `transformOrigin`) for the lean,
- * rather than each moving on its own. [leanAmount] is the ending's own (Ruby, K2c/K2e/K2g): 0 to
- * 1, how far into his bite-lean Bear currently is, cheering (mouth open for the bite) instead of
- * just standing happy while it's above zero.
+ * him; see [KitchenCounterFront]), turned toward the pan (K2e/K2f). [leanAmount] is the ending's
+ * own (Ruby, K2c/K2e/K2g): 0 to 1, how far into his bite-lean Bear currently is, cheering (mouth
+ * open for the bite) instead of just standing happy while it's above zero.
+ *
+ * K2i: the stool keeps only his constant resting tilt/turn and never takes the bite lean itself,
+ * so his seat stays put on it; only his own body (the `graphicsLayer` below) rotates, pinned by
+ * `transformOrigin` to its own bottom-centre — his seat point — which [KitchenLayout.bearLean]
+ * treats as the fixed pivot when it works out how far he can safely lean (screenshots of K2g's
+ * fixed ~20deg/~30%-of-width lean showed him tipping past the counter's left end and, in
+ * portrait, dropping near the scene's bottom edge).
  *
  * Bear's own height here ([fillMaxHeight] against his lane) used to be handed to [Critter]
  * unconditionally at 85%: in a lane narrower than [CritterArtRatio] needs for that height (K2e's
@@ -406,32 +404,56 @@ private const val CritterArtRatio = 100f / 140f
  * and reading as Bear floating above the stool (K2g). Working out his fitted height here first
  * (capped by the lane's width, not just its height) and sizing him to that exact height plus
  * [CritterArtRatio] keeps his measured box and his drawn art the same size, so his feet always
- * land on the box's own bottom edge, right where the stool's seat is.
+ * land on the box's own bottom edge, right where the stool's seat is; that same box (in the
+ * scene's own px) is what's handed to [KitchenLayout.bearLean].
  */
 @Composable
 private fun BoxWithConstraintsScope.KitchenBear(landscape: Boolean, leanAmount: Float = 0f) {
-    val w = maxWidth
-    val h = maxHeight
+    val w = maxWidth.value
+    val h = maxHeight.value
     val bear = KitchenLayout.bearBox(landscape)
     val laneWidth = w * (bear.r - bear.l)
     val laneHeight = h * (bear.b - bear.t)
     val bearHeight = minOf(laneHeight * 0.85f, laneWidth / CritterArtRatio)
+    val bearWidth = bearHeight * CritterArtRatio
+    val laneLeft = w * bear.l
+    val laneBottom = h * bear.b
+    val bearBox = KitchenLayout.Rect(
+        l = laneLeft + (laneWidth - bearWidth) / 2f,
+        t = laneBottom - bearHeight,
+        r = laneLeft + (laneWidth + bearWidth) / 2f,
+        b = laneBottom,
+    )
+    val counterLeftX = w * bear.r
+    val lean = KitchenLayout.bearLean(bearBox, counterLeftX, h)
     Box(
-        Modifier.offset(x = w * bear.l, y = h * bear.t).size(laneWidth, laneHeight)
-            .graphicsLayer {
-                rotationZ = BearFacingTiltDeg + BearLeanTiltDeg * leanAmount
-                rotationY = BearFacingTurnDeg
-                cameraDistance = BearTurnCameraDistance * density
-                translationX = size.width * BearLeanTranslateFraction * leanAmount
-                scaleX = 1f + 0.06f * leanAmount
-                scaleY = 1f + 0.06f * leanAmount
-                transformOrigin = TransformOrigin(0.5f, 1f)
-            },
+        Modifier.offset(x = laneLeft.dp, y = (h * bear.t).dp).size(laneWidth.dp, laneHeight.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Canvas(Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomCenter)) { paperStool() }
+        // The stool keeps only Bear's constant resting turn (K2i): the bite lean never moves it,
+        // so his seat stays exactly where his own graphicsLayer pivots below.
+        Canvas(
+            Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomCenter)
+                .graphicsLayer {
+                    rotationZ = BearFacingTiltDeg
+                    rotationY = BearFacingTurnDeg
+                    cameraDistance = BearTurnCameraDistance * density
+                },
+        ) { paperStool() }
         Critter(
-            Species.BEAR, Modifier.height(bearHeight).aspectRatio(CritterArtRatio),
+            Species.BEAR,
+            Modifier.height(bearHeight.dp).aspectRatio(CritterArtRatio)
+                .graphicsLayer {
+                    rotationZ = BearFacingTiltDeg + lean.angleDeg * leanAmount
+                    rotationY = BearFacingTurnDeg
+                    cameraDistance = BearTurnCameraDistance * density
+                    // lean.dx is in the same Dp-value units as the box KitchenBear fed to
+                    // bearLean; graphicsLayer's translationX wants device px, hence * density.
+                    translationX = lean.dx * leanAmount * density
+                    scaleX = 1f + 0.06f * leanAmount
+                    scaleY = 1f + 0.06f * leanAmount
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                },
             mood = if (leanAmount > 0.1f) Mood.CHEER else Mood.HAPPY,
             animate = false, lookX = BearPanLookX,
         )
