@@ -2375,6 +2375,52 @@ class KitchenLayoutTest {
             assertTrue(counterLeftX - box.r >= 10f, "resting gap before the counter too small at ${w}x$h: ${counterLeftX - box.r}")
         }
     }
+
+    /** K3b: on a real iPad the bowl rendered up over the wall, near Bear, because the generic
+     * move-based position (`pose` in VoiceScenes.kt, shared with the open-air boat/owl/balloon
+     * scenes) never knew where the counter actually was. Every kitchen prop's own resting box
+     * ([KitchenLayout.propBox]) must sit on the counter instead: its bottom on the counter's own
+     * surface ([KitchenLayout.PROPS_MARGIN] below the counter-top line), horizontally clear of
+     * Bear's lane and the counter's own right edge, at every size Timothy's note asked for
+     * (tablet portrait/landscape, a wider tablet, phone portrait/landscape) and whether or not the
+     * choice strip is reserved below (the scene's own box already excludes it, same as every
+     * other KitchenLayout fraction, so a size here stands for both). */
+    @Test
+    fun kitchenPropsAlwaysSitOnTheCounter() {
+        // Mirrors VoiceScenes.kt's own `propSize` for these five (the one thing this test and
+        // that must agree on, or a changed size could quietly drift out of sync with where this
+        // thinks it ends).
+        val sizeFractions = mapOf(
+            Prop.BOWL to 0.26f, Prop.MILK to 0.2f, Prop.BERRIES to 0.2f, Prop.PAN to 0.34f, Prop.PANCAKE to 0.24f,
+        )
+        val sizes = listOf(
+            1024f to 768f, 768f to 1024f, 1180f to 820f, 820f to 1180f, 1366f to 1024f, 390f to 844f, 844f to 390f,
+        )
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val bearRight = KitchenLayout.bearBox(landscape).r
+            val expectedBottom = KitchenLayout.counterTop(landscape) + KitchenLayout.PROPS_MARGIN
+            for ((prop, sizeFraction) in sizeFractions) {
+                val box = KitchenLayout.propBox(prop, landscape, sizeFraction, w, h)
+                assertTrue(box.l >= bearRight, "$prop reaches Bear's lane at ${w}x$h: ${box.l} < $bearRight")
+                assertTrue(box.r <= 1f, "$prop reaches past the counter's right edge at ${w}x$h: ${box.r}")
+                assertEquals(expectedBottom, box.b, 0.0001f, "$prop's bottom isn't on the counter's own surface at ${w}x$h")
+                assertTrue(box.t < box.b, "$prop has no height at ${w}x$h")
+            }
+        }
+    }
+
+    /** The bowl/milk/batter/berries beats and the pan/pancake/bubble/steam beats never share a
+     * station (K3b): each kitchen prop goes to exactly one of the two counter slots. */
+    @Test
+    fun everyKitchenPropHasExactlyOneStation() {
+        val bowlProps = setOf(Prop.BOWL, Prop.MILK, Prop.BATTER, Prop.BERRIES)
+        val panProps = setOf(Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM)
+        for (landscape in listOf(false, true)) {
+            for (prop in bowlProps) assertEquals(KitchenLayout.bowlBox(landscape), KitchenLayout.propSlot(prop, landscape))
+            for (prop in panProps) assertEquals(KitchenLayout.panBox(landscape), KitchenLayout.propSlot(prop, landscape))
+        }
+    }
 }
 
 /** Rory's Kitchen's own ending (Ruby's K2c): the stack-of-pancakes/bite/sticker-fly sequence

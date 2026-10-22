@@ -206,7 +206,14 @@ object KitchenLayout {
     private const val PROPS_LEFT = 0.40f
     private const val PROPS_RIGHT = 0.88f
     private const val PROP_SLOT_WIDTH = 0.2f
-    private const val PROPS_MARGIN = 0.02f
+
+    /** How far below the counter-top line the props' own tap-target slots start (K2b) -- and,
+     * since K3b, also where every prop's own *bottom edge* actually rests ([propBox]): a thin
+     * "counter surface" band right under the line, not spread down toward [BEAR_BOTTOM] (K2b's
+     * slots are tall enough for a comfortable tap target, but a prop drawn anywhere in that much
+     * height read as floating, not standing on the counter). Public so [KitchenLayoutTest] can
+     * check against it directly rather than guessing the number. */
+    const val PROPS_MARGIN = 0.02f
 
     /** A box on screen, as fractions (0 at the left/top edge, 1 at the right/bottom): [overlaps]
      * is false for boxes that merely touch at an edge. */
@@ -246,6 +253,46 @@ object KitchenLayout {
     fun panBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
         return Rect(PROPS_RIGHT - PROP_SLOT_WIDTH, top, PROPS_RIGHT, BEAR_BOTTOM)
+    }
+
+    /** Which of the two counter stations a kitchen prop uses (K3b): [bowlBox] for everything that
+     * happens at the bowl (the bowl itself, milk, batter while it's being mixed, the berries
+     * falling in) or [panBox] for the pan itself and everything cooking in it (poured batter, the
+     * pancake, its bubbles/steam). */
+    fun propSlot(prop: Prop, landscape: Boolean): Rect = when (prop) {
+        Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM -> panBox(landscape)
+        else -> bowlBox(landscape)
+    }
+
+    /**
+     * Where [prop] actually sits on the counter (K3b), pure maths so it's directly testable
+     * ([KitchenLayoutTest.kitchenPropsAlwaysSitOnTheCounter]) and loggable once per beat ("KITCHEN
+     * props", VoiceStory.kt): centred in its own station ([propSlot]), its bottom on the counter's
+     * own surface ([PROPS_MARGIN] below the counter-top line) instead of drifting down toward
+     * Bear's level the way the full tap-target slot would allow. A real iPad showed the bug this
+     * fixes: the generic move-based position (`pose` in VoiceScenes.kt, shared with the open-air
+     * boat/owl/balloon scenes, whose fractions were never built with a counter in mind) put the
+     * bowl up over the wall, near Bear, instead of on the counter.
+     *
+     * [sizeFraction] is the prop's own size (`propSize` in VoiceScenes.kt -- the exact number
+     * `Item` draws it at, a part of `unit = min(sceneWidth, sceneHeight * 1.4)`), so a bigger prop
+     * (the pan) still gets a bottom-anchored box rather than drifting by its own centre.
+     * [sceneWidth]/[sceneHeight] only need to share the real scene's own aspect ratio: any
+     * matching unit works (CSS px for the real log, or plain ratios for a quick check). The
+     * result's horizontal span is clamped inside the props band ([PROPS_LEFT]/[PROPS_RIGHT]),
+     * which already sits clear of Bear's lane and the counter's own right edge (the counter itself
+     * reaches the scene's full width, see `KitchenCounterFront`) at every size tested.
+     */
+    fun propBox(prop: Prop, landscape: Boolean, sizeFraction: Float, sceneWidth: Float, sceneHeight: Float): Rect {
+        val slot = propSlot(prop, landscape)
+        val unit = minOf(sceneWidth, sceneHeight * 1.4f)
+        val halfWidth = (unit * sizeFraction / 2f) / sceneWidth
+        val height = (unit * sizeFraction) / sceneHeight
+        val centerX = (slot.l + slot.r) / 2f
+        val bottom = slot.t
+        val left = (centerX - halfWidth).coerceAtLeast(PROPS_LEFT)
+        val right = (centerX + halfWidth).coerceAtMost(PROPS_RIGHT)
+        return Rect(left, bottom - height, right, bottom)
     }
 
     /** Rescales a box from the kitchen scene's own fractions onto the whole stage's, given how

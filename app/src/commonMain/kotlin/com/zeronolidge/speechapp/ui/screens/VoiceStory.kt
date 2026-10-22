@@ -78,6 +78,7 @@ import com.zeronolidge.speechapp.logic.Move
 import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
 import com.zeronolidge.speechapp.ui.art.balloonColor
+import com.zeronolidge.speechapp.ui.art.kitchenPropSizeFraction
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.paperBalloon
 import com.zeronolidge.speechapp.ui.art.voiceTarget
@@ -959,6 +960,17 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         println(
                             "KITCHEN rects bear=${fmt(KitchenLayout.bearBox(sceneLandscape))} rory=${fmt(KitchenLayout.roryBox(sceneLandscape))} " +
                                 "bowl=${fmt(KitchenLayout.bowlBox(sceneLandscape))} pan=${fmt(KitchenLayout.panBox(sceneLandscape))} strip=$stripRect",
+                        )
+                        // K3b: where each of Rory's Kitchen's own props actually renders (not just
+                        // their tap-target slots above), so a screenshot's "floating off the
+                        // counter" bug shows up here as a number, not just a look.
+                        fun propRect(p: Prop) = fmt(KitchenLayout.propBox(p, sceneLandscape, kitchenPropSizeFraction(p), sw, sh))
+                        val counterTopPx = (origin.y + KitchenLayout.counterTop(sceneLandscape) * sh).roundToInt()
+                        val counterLeftPx = (origin.x + KitchenLayout.bearBox(sceneLandscape).r * sw).roundToInt()
+                        println(
+                            "KITCHEN props bowl=${propRect(Prop.BOWL)} milk=${propRect(Prop.MILK)} " +
+                                "berries=${propRect(Prop.BERRIES)} pan=${propRect(Prop.PAN)} pancake=${propRect(Prop.PANCAKE)} " +
+                                "counterTop=$counterTopPx counterLeft=$counterLeftPx",
                         )
                     }
                     Box(Modifier.align(Alignment.TopStart).fillMaxWidth().height(h - gameStrip).clipToBounds()) {

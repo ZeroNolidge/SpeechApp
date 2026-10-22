@@ -122,6 +122,11 @@ private fun propSize(p: Prop) = when (p) {
     Prop.STEAM -> 0.2f
 }
 
+/** [propSize], exposed for Rory's Kitchen's own "KITCHEN props" log (`VoiceStory.kt`, K3b): the
+ * exact size fraction a kitchen prop renders at, so the logged/tested box
+ * ([com.zeronolidge.speechapp.logic.KitchenLayout.propBox]) matches what's actually drawn. */
+fun kitchenPropSizeFraction(prop: Prop): Float = propSize(prop)
+
 /** A balloon's colour, shared by the puzzle (see `BalloonPatternPuzzle` in VoiceStory.kt) and the
  * one that joins the scene once it's solved ([Prop.GAP_BALLOON]). */
 fun balloonColor(word: String): Color = when (word) {
@@ -234,27 +239,42 @@ fun VoiceBeatScene(
             Modifier.fillMaxSize().let { m -> if (onSceneRect == null) m else m.onGloballyPositioned(onSceneRect) },
         ) {
             val unit = minOf(maxWidth, maxHeight * 1.4f)
+            val isKitchen = beat.backdrop == Backdrop.KITCHEN
             // Rory's Kitchen draws its own backdrop in three layers, Rory sandwiched behind the
             // counter (K2f; see KitchenRory/KitchenCounterFront): every other backdrop is one
             // flat layer (BackdropExtras).
-            if (beat.backdrop == Backdrop.KITCHEN) {
+            if (isKitchen) {
                 KitchenWall()
                 KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble)
                 KitchenCounterFront(landscape)
             } else {
                 BackdropExtras(beat.backdrop)
             }
+            // Rory's Kitchen's own props always sit on the counter (K3b): the generic open-air
+            // `stillSpot`/`pose` positions below (built for the boat/owl/balloon scenes) put the
+            // bowl up over the wall, near Bear, on a real iPad, because they know nothing about
+            // where the counter actually is. KitchenLayout.propBox does, from the counter's own
+            // geometry, so kitchen props use that instead, for both the still prop and the moving
+            // one; every other backdrop is unchanged.
+            fun kitchenCenter(prop: Prop): Pair<Float, Float> {
+                val box = KitchenLayout.propBox(prop, landscape, propSize(prop), maxWidth.value, maxHeight.value)
+                return (box.l + box.r) / 2f to (box.t + box.b) / 2f
+            }
             beat.still?.let { sp ->
-                val at = stillSpot(beat.move)
-                Item(unit * propSize(sp) * 0.8f, { at.x }, { at.y }) { PropArt(sp, { 1f }, null, beat) }
+                val (sx, sy) = if (isKitchen) kitchenCenter(sp) else stillSpot(beat.move).let { it.x to it.y }
+                Item(unit * propSize(sp) * (if (isKitchen) 1f else 0.8f), { sx }, { sy }) { PropArt(sp, { 1f }, null, beat) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
+            val kitchenPropCenter = if (isKitchen) kitchenCenter(beat.prop) else null
             // While the pattern puzzle is up, the beat's own prop is tucked into a safe corner,
             // clear of the pattern row above the choice strip (it used to sit left-of-centre and
-            // cover the row's first balloon); it stays small but visible, Bear and all.
+            // cover the row's first balloon); it stays small but visible, Bear and all. Rory's
+            // Kitchen's own choice strip never needs this: its counter position is already clear
+            // of it (K3b).
             Item(
-                unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
-                x = { if (puzzleSafe) 0.82f else now().x }, y = { if (puzzleSafe) 0.8f else now().y },
+                unit * propSize(beat.prop) * (if (isKitchen) 1f else if (puzzleSafe) 0.7f else 1f),
+                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
+                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { now().rotation }, scale = { now().scale },
             ) { PropArt(beat.prop, f, beat.propEmoji, beat) }
             // The light changes with the move: the sun comes up (dawn) or night falls (dusk).
@@ -823,21 +843,46 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
             paperPath(body, Color(0xFFFFF3E0))
             paperOval(Color(0xFFFFFDF7), Offset(w * 0.06f, h * 0.22f), Size(w * 0.88f, h * 0.2f))
         }
-        // A little milk jug: a straight-sided body with a pouring lip.
+        // K3b: a classic gable-top milk carton, not a plain jug (which read as a grey blob on a
+        // real iPad) -- a white body, a blue label band with a milk-drop mark, a blue-ridged
+        // gable top and a thin grey outline, so it reads as milk at a glance.
         Prop.MILK -> Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            val body = Path().apply {
-                moveTo(w * 0.28f, h * 0.16f)
-                lineTo(w * 0.7f, h * 0.16f)
-                lineTo(w * 0.82f, h * 0.3f)
-                lineTo(w * 0.7f, h * 0.9f)
-                lineTo(w * 0.3f, h * 0.9f)
-                lineTo(w * 0.18f, h * 0.3f)
+            val bodyLeft = w * 0.26f
+            val bodyRight = w * 0.74f
+            val gableTop = h * 0.06f
+            val shoulder = h * 0.28f
+            val bottom = h * 0.92f
+            val ridgeX = w * 0.5f
+            val carton = Path().apply {
+                moveTo(bodyLeft, bottom)
+                lineTo(bodyLeft, shoulder)
+                lineTo(ridgeX, gableTop)
+                lineTo(bodyRight, shoulder)
+                lineTo(bodyRight, bottom)
                 close()
             }
-            paperPath(body, Color(0xFFFFFFFF))
-            drawLine(Color(0xFFE0E0E0), Offset(w * 0.8f, h * 0.38f), Offset(w * 0.92f, h * 0.58f), 4.dp.toPx())
+            paperPath(carton, Color(0xFFFFFFFF))
+            // The gable's own fold lines and a thin grey outline, so the white body still reads
+            // against a pale wall instead of melting into it.
+            drawPath(carton, Color(0xFF9E9E9E), style = Stroke(1.5.dp.toPx()))
+            drawLine(Color(0xFFBDBDBD), Offset(bodyLeft, shoulder), Offset(bodyRight, shoulder), 1.5.dp.toPx())
+            drawLine(Color(0xFFBDBDBD), Offset(ridgeX, gableTop), Offset(ridgeX, shoulder), 1.dp.toPx())
+            // A blue label band around the middle, with a small white milk drop (a cow-spot would
+            // read the same at this size) so it's unmistakably milk, not juice or water.
+            val labelTop = h * 0.42f
+            val labelBottom = h * 0.68f
+            paperRect(Color(0xFF2E7BD6), Offset(bodyLeft, labelTop), Size(bodyRight - bodyLeft, labelBottom - labelTop))
+            val dropR = (labelBottom - labelTop) * 0.22f
+            val dropTop = labelTop + (labelBottom - labelTop) * 0.22f
+            val drop = Path().apply {
+                moveTo(ridgeX, dropTop)
+                quadraticTo(ridgeX + dropR, dropTop + dropR * 1.3f, ridgeX, dropTop + dropR * 2.1f)
+                quadraticTo(ridgeX - dropR, dropTop + dropR * 1.3f, ridgeX, dropTop)
+                close()
+            }
+            paperPath(drop, Color(0xFFFFFFFF))
         }
         // The bowl, now with pale batter inside (reuses the bowl shape).
         Prop.BATTER -> Canvas(Modifier.fillMaxSize()) {
