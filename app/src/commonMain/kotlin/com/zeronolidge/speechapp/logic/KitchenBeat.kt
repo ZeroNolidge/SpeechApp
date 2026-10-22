@@ -313,6 +313,23 @@ object KitchenLayout {
      * largest shared fraction of [MAX_LEAN_DEG]/[LEAN_FORWARD_UNITS] (scaled together) whose
      * predicted head edge still stays a small margin inside that line.
      */
+    /** K2k: screenshots taken at full lean (BITE) measured Bear's head ending up about 25px past
+     * the counter's own left edge on an iPad-size stage (`1024x768` landscape, `768x1024`
+     * portrait) -- a drift between the modelled head circle ([headRightEdgeUnits]) and Critter's
+     * real baked/rotated art that [bearLean]'s own tiny (1-unit, a couple of px) safety margin
+     * doesn't cover. Bear's own lane right up against the counter at rest (K2i/K2j) leaves no
+     * room to add a bigger margin there without the lean itself eating it straight back up (more
+     * room just lets [bearLean] lean him further, see K2k's own log); shrinking the width his
+     * puppet is fitted to by this much (as a fraction of the stage's own width, so it scales to
+     * any size) and pinning him to his lane's own *left* edge (`KitchenBear` in VoiceScenes.kt,
+     * `Alignment.BottomStart` in place of `BottomCenter`) instead opens a real gap before the
+     * counter that stays a gap however far he leans, without moving his lane's left edge (already
+     * tight, K2i) or the counter's own (tied to [BEAR_RIGHT], never shifts). The runtime clamp on
+     * his real measured head bounds (`onHeadBounds`, VoiceScenes.kt) is still the actual
+     * guarantee against his head crossing the counter; this is slack so that clamp is never
+     * needed at ordinary sizes. */
+    const val BEAR_SHIFT_FRACTION = 0.035f
+
     fun bearLean(bearBox: Rect, counterLeftX: Float): BearLean {
         val u = (bearBox.b - bearBox.t) / ART_H
         if (u <= 0f) return BearLean(0f, 0f)

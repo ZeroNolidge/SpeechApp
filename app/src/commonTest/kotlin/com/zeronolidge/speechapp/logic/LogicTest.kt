@@ -2178,21 +2178,25 @@ class KitchenLayoutTest {
     }
 
     /** Mirrors `KitchenBear`'s own geometry in VoiceScenes.kt: Bear's actual on-screen box (not
-     * his lane), fitted to the lane's width the same way (his drawn puppet never floats above
-     * the stool, K2g), for a scene of [w] by [h]. */
+     * his lane), fitted to a slice of the lane's width the same way (his drawn puppet never
+     * floats above the stool, K2g) and pinned to the lane's own left edge, not centred (K2k: his
+     * lane is fitted narrower than itself by [KitchenLayout.BEAR_SHIFT_FRACTION] and left-aligned,
+     * so his bite lean gets a real gap before the counter that stays open however far he leans),
+     * for a scene of [w] by [h]. */
     private fun bearOnScreenBox(w: Float, h: Float, landscape: Boolean): KitchenLayout.Rect {
         val critterArtRatio = 100f / 140f
         val bear = KitchenLayout.bearBox(landscape)
         val laneWidth = w * (bear.r - bear.l)
         val laneHeight = h * (bear.b - bear.t)
-        val bearHeight = minOf(laneHeight * 0.85f, laneWidth / critterArtRatio)
+        val fitWidth = (laneWidth - w * KitchenLayout.BEAR_SHIFT_FRACTION).coerceAtLeast(laneWidth * 0.5f)
+        val bearHeight = minOf(laneHeight * 0.85f, fitWidth / critterArtRatio)
         val bearWidth = bearHeight * critterArtRatio
         val laneLeft = w * bear.l
         val laneBottom = h * bear.b
         return KitchenLayout.Rect(
-            l = laneLeft + (laneWidth - bearWidth) / 2f,
+            l = laneLeft,
             t = laneBottom - bearHeight,
-            r = laneLeft + (laneWidth + bearWidth) / 2f,
+            r = laneLeft + bearWidth,
             b = laneBottom,
         )
     }
@@ -2263,6 +2267,38 @@ class KitchenLayoutTest {
             val landscape = w > h
             val box = bearOnScreenBox(w, h, landscape)
             assertTrue(box.b <= h * (1f - KitchenLayout.BOTTOM_MARGIN_FRACTION), "Bear's resting box reaches the bottom edge at ${w}x$h")
+        }
+    }
+
+    /** K2k: shifting Bear (and his stool) left must never push him off the screen's own left
+     * edge, on an iPad-size stage (same two sizes the shift itself was measured against, see
+     * [bearsRestingBoxLeavesAGapBeforeTheCounter]): his drawn box must keep at least a few px
+     * clear of it. A narrow phone's lane already sits this close to the edge before this shift
+     * (its own pre-existing tightness, not something this shift changes, since the shift only
+     * ever narrows Bear's *fitted width*, never his lane's own left edge), so it's out of scope
+     * here. */
+    @Test
+    fun bearStaysOnScreenAfterTheLeftShift() {
+        val sizes = listOf(768f to 1024f, 1024f to 768f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val box = bearOnScreenBox(w, h, landscape)
+            assertTrue(box.l >= 4f, "Bear's box sits too close to (or off) the left edge at ${w}x$h: ${box.l}")
+        }
+    }
+
+    /** K2k's own point: the left shift must open a real gap between Bear's *resting* box and the
+     * counter (never the lean itself, see [bearLeanNeverCrossesTheCounter]), on an iPad-size
+     * stage, or the shift bought nothing -- a tighter phone size may have less slack to spare, so
+     * this only checks the two sizes the shift was measured against. */
+    @Test
+    fun bearsRestingBoxLeavesAGapBeforeTheCounter() {
+        val sizes = listOf(768f to 1024f, 1024f to 768f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val box = bearOnScreenBox(w, h, landscape)
+            val counterLeftX = w * KitchenLayout.bearBox(landscape).r
+            assertTrue(counterLeftX - box.r >= 10f, "resting gap before the counter too small at ${w}x$h: ${counterLeftX - box.r}")
         }
     }
 }

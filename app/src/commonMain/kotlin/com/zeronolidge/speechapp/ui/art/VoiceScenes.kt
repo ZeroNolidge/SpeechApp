@@ -426,6 +426,16 @@ private const val CritterArtRatio = 100f / 140f
  * [CritterArtRatio] keeps his measured box and his drawn art the same size, so his feet always
  * land on the box's own bottom edge, right where the stool's seat is; that same box (in the
  * scene's own px) is what's handed to [KitchenLayout.bearLean].
+ *
+ * K2k: fitted to a slice of the lane narrower than the lane itself
+ * ([KitchenLayout.BEAR_SHIFT_FRACTION]) and pinned to the lane's own left edge (not centred), so
+ * he and his stool sit further left, with a real gap before the counter his lean can't eat back
+ * up (see [KitchenLayout.BEAR_SHIFT_FRACTION]'s own doc for why: screenshots at full lean still
+ * showed his head about 25px past the counter on an iPad-size stage). [onHeadBounds]'s real
+ * measured position still gets a runtime check of its own below (`runtimeLeanScale`): his lean
+ * backs off and remeasures if his head crosses the counter's real measured left edge regardless,
+ * since that drift is between the modelled head circle and Critter's real drawn art, not
+ * something either box's own numbers alone can promise away.
  */
 @Composable
 private fun BoxWithConstraintsScope.KitchenBear(
@@ -438,27 +448,38 @@ private fun BoxWithConstraintsScope.KitchenBear(
     val bear = KitchenLayout.bearBox(landscape)
     val laneWidth = w * (bear.r - bear.l)
     val laneHeight = h * (bear.b - bear.t)
-    val bearHeight = minOf(laneHeight * 0.85f, laneWidth / CritterArtRatio)
+    // K2k: fitted to a slice of the lane this much narrower than the lane itself (never less than
+    // half, a sanity floor against a future, much narrower lane), so he (and his stool, pinned to
+    // the same left edge below, not centred any more) leave a real gap before the counter instead
+    // of filling the lane right up to it -- see KitchenLayout.BEAR_SHIFT_FRACTION.
+    val fitWidth = (laneWidth - w * KitchenLayout.BEAR_SHIFT_FRACTION).coerceAtLeast(laneWidth * 0.5f)
+    val bearHeight = minOf(laneHeight * 0.85f, fitWidth / CritterArtRatio)
     val bearWidth = bearHeight * CritterArtRatio
     val laneLeft = w * bear.l
     val laneBottom = h * bear.b
     val bearBox = KitchenLayout.Rect(
-        l = laneLeft + (laneWidth - bearWidth) / 2f,
+        l = laneLeft,
         t = laneBottom - bearHeight,
-        r = laneLeft + (laneWidth + bearWidth) / 2f,
+        r = laneLeft + bearWidth,
         b = laneBottom,
     )
     val counterLeftX = w * bear.r
     val lean = KitchenLayout.bearLean(bearBox, counterLeftX)
     // K2j's own measurement log: real on-screen boxes (device px), not a second model of them,
-    // collected once leanAmount reaches (about) full and reported together once every piece is
-    // in (see the LaunchedEffect below).
-    val wantRects = onBiteRects != null && leanAmount >= 0.999f
+    // collected once leanAmount reaches its held maximum (see KitchenEnding's own animateTo(1f)
+    // then hold, VoiceStory.kt) and reported together once every piece is in (see the
+    // LaunchedEffect below).
+    val wantRects = onBiteRects != null && leanAmount >= 1f
     var seatRect by remember { mutableStateOf<Rect?>(null) }
     var stoolRect by remember { mutableStateOf<Rect?>(null) }
     var localHeadRect by remember { mutableStateOf<Rect?>(null) }
     var critterOrigin by remember { mutableStateOf<Offset?>(null) }
     var counterLeftPx by remember { mutableStateOf<Float?>(null) }
+    // K2k's own runtime safety net, on top of the static shift above: if his real measured head
+    // still ends up past the counter's real measured left edge at full lean, back the lean off a
+    // little and remeasure (the LaunchedEffect below re-fires on its own since this is one of its
+    // keys), rather than trusting the model alone. Normal sizes never need this.
+    var runtimeLeanScale by remember { mutableStateOf(1f) }
     if (wantRects) {
         // A zero-size marker at the counter's own left edge (same dp-value coordinate space as
         // [counterLeftX]), measured the same way as everything else here (`positionInWindow`),
@@ -468,12 +489,14 @@ private fun BoxWithConstraintsScope.KitchenBear(
     }
     Box(
         Modifier.offset(x = laneLeft.dp, y = (h * bear.t).dp).size(laneWidth.dp, laneHeight.dp),
-        contentAlignment = Alignment.BottomCenter,
+        contentAlignment = Alignment.BottomStart,
     ) {
         // The stool keeps only Bear's constant resting turn (K2i/K2j): the bite lean never moves
-        // it, so his seat stays exactly where it's always drawn.
+        // it, so his seat stays exactly where it's always drawn. Pinned to the lane's own left
+        // edge, same as Bear himself (K2k), not centred: they move left together, the gap before
+        // the counter opens up on the right where neither of them ever sits.
         Canvas(
-            Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomCenter)
+            Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomStart)
                 .graphicsLayer {
                     rotationZ = BearFacingTiltDeg
                     rotationY = BearFacingTurnDeg
@@ -496,13 +519,13 @@ private fun BoxWithConstraintsScope.KitchenBear(
                 .let { m -> if (!wantRects) m else m.onGloballyPositioned { c -> critterOrigin = c.positionInWindow(); seatRect = c.windowRect() } },
             mood = if (leanAmount > 0.1f) Mood.CHEER else Mood.HAPPY,
             animate = false, lookX = BearPanLookX,
-            lean = lean.angleDeg * leanAmount,
-            leanForward = lean.forwardUnits * leanAmount,
+            lean = lean.angleDeg * leanAmount * runtimeLeanScale,
+            leanForward = lean.forwardUnits * leanAmount * runtimeLeanScale,
             onHeadBounds = if (!wantRects) null else { r -> localHeadRect = r },
         )
     }
     if (wantRects) {
-        LaunchedEffect(seatRect, stoolRect, localHeadRect, critterOrigin, counterLeftPx) {
+        LaunchedEffect(seatRect, stoolRect, localHeadRect, critterOrigin, counterLeftPx, runtimeLeanScale) {
             val seat = seatRect
             val stool = stoolRect
             val headLocal = localHeadRect
@@ -510,8 +533,12 @@ private fun BoxWithConstraintsScope.KitchenBear(
             val counterLeft = counterLeftPx
             if (seat != null && stool != null && headLocal != null && origin != null && counterLeft != null) {
                 val head = Rect(origin.x + headLocal.left, origin.y + headLocal.top, origin.x + headLocal.right, origin.y + headLocal.bottom)
-                fun fmt(r: Rect) = "${r.left.roundToInt()},${r.top.roundToInt()},${r.right.roundToInt()},${r.bottom.roundToInt()}"
-                onBiteRects?.invoke("KITCHEN bite bear-head=${fmt(head)} bear-seat=${fmt(seat)} stool=${fmt(stool)} counterLeft=${counterLeft.roundToInt()}")
+                if (head.right > counterLeft + 0.5f && runtimeLeanScale > 0.05f) {
+                    runtimeLeanScale *= 0.85f
+                } else {
+                    fun fmt(r: Rect) = "${r.left.roundToInt()},${r.top.roundToInt()},${r.right.roundToInt()},${r.bottom.roundToInt()}"
+                    onBiteRects?.invoke("KITCHEN bite bear-head=${fmt(head)} bear-seat=${fmt(seat)} stool=${fmt(stool)} counterLeft=${counterLeft.roundToInt()}")
+                }
             }
         }
     }
