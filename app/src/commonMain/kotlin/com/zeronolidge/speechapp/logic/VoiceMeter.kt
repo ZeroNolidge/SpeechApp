@@ -13,7 +13,7 @@ class VoiceMeter(
     private val windowMs: Int = 4000,
     settleMs: Int = 300,
     private val needMs: Int = 150,
-    private val tailMs: Int = 700,
+    private val tailMs: Int = 900,
     /**
      * The room's loudness saved from an earlier turn (see [roomAfter]). With it there's no
      * settling: his voice counts from the first reading, and the room is never measured right
@@ -86,7 +86,7 @@ class VoiceMeter(
     val room: Float get() = if (roomCount == 0) 0f else roomSum / roomCount
 
     /** Anything louder than this counts as voice. */
-    val threshold: Float get() = maxOf(MIN_VOICE, room * 2.2f)
+    val threshold: Float get() = maxOf(MIN_VOICE, room * ROOM_FACTOR)
 
     /**
      * How hard this reading pushes, 0 to 1: nothing below the voice threshold (or while the room
@@ -267,8 +267,15 @@ class VoiceMeter(
         /** Louder than this at the very start of a turn is his voice, not the room. */
         const val LOUD_ROOM = 0.035f
 
-        /** A whisper close to a tablet is above this; a quiet room is below it. */
-        const val MIN_VOICE = 0.012f
+        /** A whisper close to a tablet is above this; a quiet room is below it. Lowered from
+         * 0.012 (real iPads): a young child's soft or breathy sounds (p, f, s) were sitting right
+         * under the old floor and reading as silence. */
+        const val MIN_VOICE = 0.006f
+
+        /** How much louder than the room counts as voice. Lowered from 2.2 along with
+         * [MIN_VOICE], so a noisy room still needs a clearly louder voice but a quiet room (most
+         * turns) stays generous. */
+        const val ROOM_FACTOR = 1.6f
 
         /** Loudness on a 0 to 1 scale for the listening animation. */
         fun display(rms: Float): Float = (rms / 0.15f).coerceIn(0f, 1f)

@@ -68,7 +68,13 @@ interface MicLevels {
      */
     fun start(onLevel: (Float) -> Unit, onFail: () -> Unit)
 
+    /** Pauses metering between turns. On platforms that keep a stream open for reuse (the web)
+     * this does NOT close the microphone; see [release] for that. */
     fun stop()
+
+    /** Fully releases the microphone (leaving a voice story, or the app going to the background).
+     * Platforms with nothing to keep open between turns can just treat this as [stop]. */
+    fun release() = stop()
 
     /**
      * What the last reading (just before [start]'s onLevel call) sounded like: the share of its

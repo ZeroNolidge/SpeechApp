@@ -488,8 +488,29 @@ class VoiceMeterTest {
     fun aNoisyRoomNeedsALouderVoice() {
         val m = VoiceMeter()
         repeat(6) { m.feed(0.03f, 50) }
-        assertTrue(m.threshold > 0.06f)
+        assertTrue(m.threshold > 0.04f)
         assertFalse(run(List(80) { 0.03f }).heard)
+    }
+
+    @Test
+    fun aSoftVoicedShortSoundCounts() {
+        // Matches VoiceDetector's real settings for a plain talk turn (needMs 90, see
+        // VoiceDetector.listenTry): a true, if very quiet, try just above a quiet room now
+        // crosses the bar and counts quickly. With the old floor (MIN_VOICE 0.012, factor 2.2)
+        // this same sound never would have.
+        val m = VoiceMeter(needMs = 90)
+        val levels = List(6) { 0.004f } + List(2) { 0.008f } + List(60) { 0.004f }
+        for (l in levels) if (m.feed(l, 50)) break
+        assertTrue(m.heard)
+    }
+
+    @Test
+    fun trueSilenceNeverCounts() {
+        val m = VoiceMeter(needMs = 90)
+        val levels = List(80) { 0.004f }
+        for (l in levels) if (m.feed(l, 50)) break
+        assertFalse(m.heard)
+        assertFalse(m.soft)
     }
 
     @Test
@@ -1320,7 +1341,7 @@ class VoiceStoriesTest {
     fun aSoftTryIsNotSilence() {
         fun meter(levels: List<Float>) = VoiceMeter().also { m -> levels.forEach { m.feed(it, 50) } }
         val room = List(6) { 0.004f }
-        val soft = meter(room + List(10) { 0.009f } + List(70) { 0.004f })
+        val soft = meter(room + List(10) { 0.006f } + List(70) { 0.004f })
         assertTrue(!soft.heard && soft.soft)
         val quiet = meter(room + List(80) { 0.004f })
         assertTrue(!quiet.heard && !quiet.soft)
@@ -1460,7 +1481,7 @@ class RoomLevelTest {
         // Without it, the first readings only measure the room (here: his voice, setting the bar too high).
         val fresh = VoiceMeter()
         repeat(6) { fresh.feed(0.05f, 50) }
-        assertTrue(fresh.threshold > 0.1f)
+        assertTrue(fresh.threshold > 0.07f)
     }
 
     @Test
@@ -1680,9 +1701,9 @@ class HoldAndPopTest {
         // counts once its louder second half is weighed in.
         assertTrue(pops(Triple(0.03f, 0.2f, 0.1f), Triple(0.05f, 0.55f, 0.1f)).heard)
         // A puff split so neither half alone is loud enough, but together they are, still counts.
-        assertTrue(pops(Triple(0.009f, 0.5f, 0.1f), Triple(0.009f, 0.5f, 0.1f)).heard)
+        assertTrue(pops(Triple(0.0046f, 0.5f, 0.1f), Triple(0.0046f, 0.5f, 0.1f)).heard)
         // Steady room-level readings, each well under the near-threshold band, never count.
-        assertTrue(!pops(Triple(0.006f, 0.5f, 0.1f), Triple(0.006f, 0.5f, 0.1f), Triple(0.006f, 0.5f, 0.1f)).heard)
+        assertTrue(!pops(Triple(0.004f, 0.5f, 0.1f), Triple(0.004f, 0.5f, 0.1f), Triple(0.004f, 0.5f, 0.1f)).heard)
     }
 
     @Test

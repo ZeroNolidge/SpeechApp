@@ -147,6 +147,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val modelledBeat = remember { arrayOf(false) }
     /** The sound whose mouth shape Rory shows while he models it. */
     var mouthCue by remember { mutableStateOf<String?>(null) }
+    /** True after a first quiet try (Ruby + Aida's miss flow): Rory leans a little closer while
+     * he listens again, instead of a full re-model. Cleared whenever a fresh talk turn starts. */
+    var leaning by remember { mutableStateOf(false) }
     /** One pulse of the word chip per word Rory models (the slow third one bigger). */
     var chipBeat by remember { mutableIntStateOf(0) }
     var chipBig by remember { mutableStateOf(false) }
@@ -266,7 +269,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 phase = VPhase.LISTEN
                 app.listening = true
                 val again = app.wordCheck(line(k), beats[k].sound, modeled = true)
-                app.voice.listenTry(4000, onLevel = { app.listenLevel = it }, onVoice = null, words = again?.grammar,
+                app.voice.listenTry(5000, onLevel = { app.listenLevel = it }, onVoice = null, words = again?.grammar,
                     onWords = { h -> again?.let { app.wordHeard(it, h) } }) { _ ->
                     if (s != session) return@listenTry
                     app.listening = false
@@ -364,7 +367,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             var loud: VoiceTry? = null
             lateinit var handle: (VoiceTry, Pair<com.zeronolidge.speechapp.logic.Heard, Float>?) -> Unit
             app.voice.listenTry(
-                4000,
+                5000,
                 onLevel = { app.listenLevel = it },
                 onVoice = null,
                 // Every 50 ms: louder pushes further, holding the sound keeps it moving.
@@ -395,9 +398,22 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
                     return@handle
                 }
-                when (model[0].afterTry(heard = t == VoiceTry.HEARD, soft = t == VoiceTry.SOFT)) {
+                // A try misses only on real silence: any voiced or over-threshold sound (a
+                // whisper, a puff of "p", a soft "s") counts as heard outright, never a lesser
+                // "soft" partial that still has to fail twice to finish.
+                val countedAsHeard = t == VoiceTry.HEARD || t == VoiceTry.SOFT
+                val next = model[0].afterTry(heard = countedAsHeard, soft = false)
+                val why = if (countedAsHeard) "voiced" else if (next == VoicePush.Next.WAIT) "second-miss" else "silence"
+                val counted = countedAsHeard || next == VoicePush.Next.WAIT
+                println(
+                    "VOICETURN story=${story.id} beat=$k try=${model[0].tries} peak=${app.voice.lastPeak} " +
+                        "voicedMs=${app.voice.lastVoicedMs} room=${app.voice.room ?: 0f} threshold=${app.voice.threshold} " +
+                        "counted=$counted why=$why",
+                )
+                when (next) {
                     // He spoke: the rest of the action goes on by itself (gently), then confetti.
                     VoicePush.Next.FINISH_GENTLY -> {
+                        leaning = false
                         if (waitWords && check != null && judged != null) {
                             val reply = com.zeronolidge.speechapp.logic.Corrections.reply(check, judged.first, judged.second, app.corrections())
                             val canModel = reply == com.zeronolidge.speechapp.logic.Reply.MODEL_SOUND && SpeechContent.sounds.any { it.id == check.sound }
@@ -410,31 +426,29 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         if (reached) {
                             phase = VPhase.ACT
                             app.listening = false
-                            after(k, heard = t == VoiceTry.HEARD, micUsed = true)
+                            after(k, heard = countedAsHeard, micUsed = true)
                         } else {
-                            finishGently(k, heard = t == VoiceTry.HEARD, micUsed = true)
+                            finishGently(k, heard = countedAsHeard, micUsed = true)
                         }
                     }
-                    // Quiet: it still moves a little, then "Again, together!" and one more listen.
+                    // First miss (real silence): no red, no X, no buzz. Rory just leans a little
+                    // closer and listens again (never a full three-times re-model).
                     VoicePush.Next.AGAIN_TOGETHER -> {
                         phase = VPhase.MODEL
                         app.listening = false
-                        strengths = strengths + (k to model[0].strength)
-                        val to = model[0].progress
-                        scope.launch { act.animateTo(to, tween(if (still) 0 else 500)) }
-                        app.speaker.say("Again, together!")
-                        app.speaker.then(line(k), slow = true) { if (s == session) listen(k) }
+                        leaning = true
+                        app.speaker.say("Again? I'm listening!") { if (s == session) listen(k) }
+                        app.rememberInstruction("${line(k)}! Again? I'm listening!")
                     }
-                    // Still quiet after two tries: it waits for his voice or "I said it!" and
-                    // never moves on by itself. Rory asks once (not listening while he talks),
-                    // then just listens.
-                    VoicePush.Next.WAIT -> if (model[0].tries > VoicePush.MAX_TRIES) {
-                        listen(k)
-                    } else {
+                    // Second miss (real silence): he never has to say it a third time. Rory says
+                    // he heard him and the beat finishes gently on its own (no voice really
+                    // caught, so it's never scored as a speech miss: heard/micUsed both false).
+                    VoicePush.Next.WAIT -> {
+                        leaning = false
                         phase = VPhase.MODEL
                         app.listening = false
-                        app.speaker.say("Say it out loud! Then tap the big green I said it button.") { if (s == session) listen(k) }
-                        app.rememberInstruction("${line(k)}! Say it out loud! Then tap the big green I said it button.")
+                        app.speaker.say("I heard you!") { if (s == session) finishGently(k, heard = false, micUsed = false) }
+                        app.rememberInstruction(line(k))
                     }
                 }
             }
@@ -467,6 +481,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
         modelSound[0] = null
         modelledBeat[0] = false
+        leaning = false
         mouthCue = null
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
@@ -542,6 +557,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         model[0] = VoicePush(VoicePush.modeFor("p"))
         modelSound[0] = null
         modelledBeat[0] = false
+        leaning = false
         mouthCue = null
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
@@ -566,6 +582,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         model[0] = VoicePush(VoicePush.modeFor(beats[k].sound))
         modelSound[0] = null
         modelledBeat[0] = false
+        leaning = false
         mouthCue = null
         pushNow = 0f
         scope.launch { act.snapTo(0f) }
@@ -766,10 +783,36 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
         if (micOk()) app.voice.checkRoom(go) else go()
     }
+    // Barge-in: if he's clearly already talking while Rory is still saying a model or prompt
+    // line, don't make him wait for Rory to finish before it counts (Timothy's iPad notes: a
+    // 3-year-old who starts answering early would otherwise have to repeat himself). Only while
+    // Rory is actually modelling the word (never during the puzzle/kitchen tap phases, which have
+    // no talk turn at all).
+    DisposableEffect(phase, index) {
+        if (phase == VPhase.MODEL && micOk()) {
+            val s = session
+            val k = index
+            app.voice.watchBargeIn {
+                if (s == session && phase == VPhase.MODEL) {
+                    app.speaker.stop()
+                    leaning = false
+                    model[0].pressed()
+                    println(
+                        "VOICETURN story=${story.id} beat=$k try=${model[0].tries} peak=${model[0].strength} " +
+                            "voicedMs=0 room=${app.voice.room ?: 0f} threshold=${app.voice.threshold} counted=true why=bargein",
+                    )
+                    finishGently(k, heard = true, micUsed = true)
+                }
+            }
+        }
+        onDispose { app.voice.stopBargeIn() }
+    }
     DisposableEffect(Unit) {
         onDispose {
             session++
             app.voice.cancel()
+            app.voice.stopBargeIn()
+            app.voice.release()
             app.speaker.stop()
             app.listening = false
             app.listenLevel = 0f
@@ -801,6 +844,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             val beat = beats[index.coerceAtLeast(0)]
             ListeningStage(
                 Modifier.fillMaxSize(),
+                lean = leaning,
                 aboveDim = { rory ->
                     // The thing to move glows; his voice streams to it as paper wind strips.
                     if (index >= 0 && phase != VPhase.END) {
@@ -1048,9 +1092,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         val k = index
                         session++
                         app.voice.cancel()
+                        app.voice.stopBargeIn()
                         app.speaker.stop()
+                        leaning = false
                         // The same action as his voice, at a gentle speed.
                         model[0].pressed()
+                        println(
+                            "VOICETURN story=${story.id} beat=$k try=${model[0].tries} peak=${model[0].strength} " +
+                                "voicedMs=0 room=${app.voice.room ?: 0f} threshold=${app.voice.threshold} counted=true why=pressed",
+                        )
                         finishGently(k, heard = false, micUsed = false)
                     }
                     VPhase.ACT, VPhase.GAME, VPhase.KITCHEN -> {}

@@ -50,6 +50,9 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         if (room == null && saved != null && saved > 0f) room = minOf(saved, VoiceMeter.SAVED_ROOM_MAX)
     }
 
+    /** What counts as voice right now (see [VoiceMeter.threshold]), for the test-only VOICETURN log. */
+    val threshold: Float get() = maxOf(VoiceMeter.MIN_VOICE, (room ?: 0f) * VoiceMeter.ROOM_FACTOR)
+
     private fun saveRoom(v: Float) {
         room = v
         onRoom(v)
@@ -133,7 +136,7 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         cancel()
         val s = ++session
         val pops = mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS
-        val meter = VoiceMeter(windowMs, needMs = if (pops) 50 else 150, knownRoom = room, pops = pops)
+        val meter = VoiceMeter(windowMs, needMs = if (pops) 50 else 90, knownRoom = room, pops = pops)
         var voiced = false
         val listenWords = words != null && this.words.ready
         fun done(result: VoiceTry) {
@@ -196,6 +199,41 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         }
     }
 
+    /**
+     * Watches the mic while Rory is still talking a model or prompt line (never while he's
+     * waiting for a turn to finish; see [listenTry]'s own wait): a voice clearly over the room,
+     * held [BARGE_MS], calls [onBargeIn] once and stops. The caller then stops Rory mid-line and
+     * treats the turn as his (barge-in): "if he's clearly already talking, don't make him wait
+     * for Rory to finish before it counts."
+     */
+    fun watchBargeIn(onBargeIn: () -> Unit) {
+        if (!mic.available) return
+        cancel()
+        val s = ++session
+        var overMs = 0
+        val bar = maxOf(VoiceMeter.MIN_VOICE, (room ?: 0f) * BARGE_FACTOR)
+        mic.start(
+            onLevel = { rms ->
+                if (s == session) {
+                    if (rms > bar) {
+                        overMs += MicLevels.STEP_MS
+                        if (overMs >= BARGE_MS) {
+                            overMs = 0
+                            stopMic()
+                            onBargeIn()
+                        }
+                    } else {
+                        overMs = 0
+                    }
+                }
+            },
+            onFail = {},
+        )
+    }
+
+    /** Stops a [watchBargeIn] in progress; harmless if there isn't one. */
+    fun stopBargeIn() = cancel()
+
     private fun stopMic() {
         session++
         guard?.cancel()
@@ -208,6 +246,25 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
             wordsOn = false
             words.cancel()
         }
+    }
+
+    /** Fully releases the microphone (leaving a voice story, or the app going to the background).
+     * Between turns [cancel]/[stop] alone is enough: the web keeps the stream open so the next
+     * turn starts at once (see [com.zeronolidge.speechapp.audio.MicLevels.release]). */
+    fun release() {
+        cancel()
+        mic.release()
+    }
+
+    companion object {
+        /** A voice clearly his own (not an echo of Rory's own, echo-cancelled, playback) while
+         * Rory is still talking: louder than a plain try's bar, so his own faint playback leak
+         * never triggers it. */
+        private const val BARGE_FACTOR = 3f
+
+        /** How long a loud-enough sound must hold while Rory's talking to count as barge-in
+         * (one or two readings is as likely a click or cough as a word). */
+        private const val BARGE_MS = 150
     }
 }
 

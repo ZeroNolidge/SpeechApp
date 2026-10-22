@@ -59,74 +59,103 @@ class WebVoiceEngine : VoiceEngine {
 
 private fun jsMicAvailable(): Boolean = js("!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext))")
 
+// Keeps the microphone stream open between listening turns (see jsMicStop): on a real iPad,
+// re-asking getUserMedia for every turn cost the first 0.3 to 0.8 s of each turn, right when a
+// soft word starts. [jsMicStart] reuses `window.__tlMicStream` if it's still live instead of
+// opening a new one; `jsMicStop`'s `release` flag is the only thing that really closes it (a
+// voice story leaving, or the tab going to the background).
 private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> Unit): JsAny = js(
     """(() => {
         const st = { stopped: false, stream: null, timer: null, src: null };
-        try {
-            navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(stream => {
-                if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; }
-                st.stream = stream;
-                const C = window.AudioContext || window.webkitAudioContext;
-                window.__tlAudio = window.__tlAudio || new C();
-                const ctx = window.__tlAudio;
-                try { ctx.resume(); } catch (e) {}
-                const src = ctx.createMediaStreamSource(stream);
-                const an = ctx.createAnalyser();
-                // About 43 ms of sound per reading (most of each 50 ms step).
-                an.fftSize = 2048;
-                an.smoothingTimeConstant = 0;
-                src.connect(an);
-                st.src = src;
-                // Word listening (WebWords.kt) hears the same stream, when a turn asked for it.
-                try { if (window.__tlWords && window.__tlWords.attach) window.__tlWords.attach(ctx, src); } catch (e) {}
-                const buf = new Float32Array(an.fftSize);
-                const spec = new Float32Array(an.frequencyBinCount);
-                const hz = ctx.sampleRate / an.fftSize;
-                const k = Math.max(1, Math.round(ctx.sampleRate / 16000));
-                const n = Math.floor(buf.length / k);
-                const d = new Float32Array(n);
-                st.timer = setInterval(() => {
-                    an.getFloatTimeDomainData(buf);
-                    let sum = 0;
-                    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-                    const rms = Math.sqrt(sum / buf.length);
-                    // Share of the energy in the voice range (150 to 2000 Hz) of 50 to 8000 Hz.
-                    an.getFloatFrequencyData(spec);
-                    let inV = 0, all = 0;
-                    for (let b = 1; b < spec.length; b++) {
-                        const f = b * hz;
-                        if (f < 50 || f > 8000) continue;
-                        const pw = Math.pow(10, spec[b] / 10);
-                        all += pw;
-                        if (f >= 150 && f <= 2000) inV += pw;
-                    }
-                    const band = all > 0 ? inV / all : 0;
-                    // How voiced: the best normalised self-match at a child's or grown-up's pitch
-                    // (80 to 600 Hz), on the sound brought down to about 16 kHz.
-                    for (let i = 0; i < n; i++) { let a = 0; for (let j = 0; j < k; j++) a += buf[i * k + j]; d[i] = a / k; }
-                    const sr = ctx.sampleRate / k;
-                    const lo = Math.floor(sr / 600), hi = Math.min(Math.floor(sr / 80), n - 64);
-                    let best = 0;
-                    for (let lag = lo; lag <= hi; lag++) {
-                        let xy = 0, xx = 0, yy = 0;
-                        for (let i = 0; i + lag < n; i++) { const x = d[i], y = d[i + lag]; xy += x * y; xx += x * x; yy += y * y; }
-                        if (xx > 0 && yy > 0) { const r = xy / Math.sqrt(xx * yy); if (r > best) best = r; }
-                    }
-                    onLevel(rms, band, best);
-                }, 50);
-            }).catch(() => { if (!st.stopped) onFail(); });
-        } catch (e) { onFail(); }
+        if (!window.__tlMicVisHandler) {
+            window.__tlMicVisHandler = true;
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && window.__tlMicStream) {
+                    try { window.__tlMicStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+                    window.__tlMicStream = null;
+                }
+            });
+        }
+        const begin = (stream) => {
+            if (st.stopped) { return; }
+            st.stream = stream;
+            window.__tlMicStream = stream;
+            const C = window.AudioContext || window.webkitAudioContext;
+            window.__tlAudio = window.__tlAudio || new C();
+            const ctx = window.__tlAudio;
+            try { ctx.resume(); } catch (e) {}
+            const src = ctx.createMediaStreamSource(stream);
+            const an = ctx.createAnalyser();
+            // About 43 ms of sound per reading (most of each 50 ms step).
+            an.fftSize = 2048;
+            an.smoothingTimeConstant = 0;
+            src.connect(an);
+            st.src = src;
+            // Word listening (WebWords.kt) hears the same stream, when a turn asked for it.
+            try { if (window.__tlWords && window.__tlWords.attach) window.__tlWords.attach(ctx, src); } catch (e) {}
+            const buf = new Float32Array(an.fftSize);
+            const spec = new Float32Array(an.frequencyBinCount);
+            const hz = ctx.sampleRate / an.fftSize;
+            const k = Math.max(1, Math.round(ctx.sampleRate / 16000));
+            const n = Math.floor(buf.length / k);
+            const d = new Float32Array(n);
+            st.timer = setInterval(() => {
+                an.getFloatTimeDomainData(buf);
+                let sum = 0;
+                for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+                const rms = Math.sqrt(sum / buf.length);
+                // Share of the energy in the voice range (150 to 2000 Hz) of 50 to 8000 Hz.
+                an.getFloatFrequencyData(spec);
+                let inV = 0, all = 0;
+                for (let b = 1; b < spec.length; b++) {
+                    const f = b * hz;
+                    if (f < 50 || f > 8000) continue;
+                    const pw = Math.pow(10, spec[b] / 10);
+                    all += pw;
+                    if (f >= 150 && f <= 2000) inV += pw;
+                }
+                const band = all > 0 ? inV / all : 0;
+                // How voiced: the best normalised self-match at a child's or grown-up's pitch
+                // (80 to 600 Hz), on the sound brought down to about 16 kHz.
+                for (let i = 0; i < n; i++) { let a = 0; for (let j = 0; j < k; j++) a += buf[i * k + j]; d[i] = a / k; }
+                const sr = ctx.sampleRate / k;
+                const lo = Math.floor(sr / 600), hi = Math.min(Math.floor(sr / 80), n - 64);
+                let best = 0;
+                for (let lag = lo; lag <= hi; lag++) {
+                    let xy = 0, xx = 0, yy = 0;
+                    for (let i = 0; i + lag < n; i++) { const x = d[i], y = d[i + lag]; xy += x * y; xx += x * x; yy += y * y; }
+                    if (xx > 0 && yy > 0) { const r = xy / Math.sqrt(xx * yy); if (r > best) best = r; }
+                }
+                onLevel(rms, band, best);
+            }, 50);
+        };
+        const live = window.__tlMicStream && window.__tlMicStream.active &&
+            window.__tlMicStream.getAudioTracks().some(t => t.readyState === 'live');
+        if (live) {
+            begin(window.__tlMicStream);
+        } else {
+            try {
+                // noiseSuppression off: on an iPad it was flattening the soft fricatives (s, f,
+                // p puffs) a 3-year-old makes right out, well below the loudness floor.
+                navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } })
+                    .then(stream => { if (st.stopped) { stream.getTracks().forEach(t => t.stop()); return; } begin(stream); })
+                    .catch(() => { if (!st.stopped) onFail(); });
+            } catch (e) { onFail(); }
+        }
         return st;
     })()"""
 )
 
-private fun jsMicStop(st: JsAny): Unit = js(
+private fun jsMicStop(st: JsAny, release: Boolean): Unit = js(
     """(() => {
         st.stopped = true;
         try { if (window.__tlWords && window.__tlWords.detach) window.__tlWords.detach(); } catch (e) {}
         try { if (st.timer) clearInterval(st.timer); } catch (e) {}
         try { if (st.src) st.src.disconnect(); } catch (e) {}
-        try { if (st.stream) st.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+        if (release) {
+            try { if (st.stream) st.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+            if (window.__tlMicStream === st.stream) window.__tlMicStream = null;
+        }
     })()"""
 )
 
@@ -148,8 +177,15 @@ class WebMicLevels : MicLevels {
         }, onFail)
     }
 
+    /** Pauses metering only; the stream itself (see jsMicStart) stays open for the next turn. */
     override fun stop() {
-        current?.let { jsMicStop(it) }
+        current?.let { jsMicStop(it, release = false) }
+        current = null
+    }
+
+    /** Really closes the microphone (leaving a voice story, or the tab hiding). */
+    override fun release() {
+        current?.let { jsMicStop(it, release = true) }
         current = null
     }
 }

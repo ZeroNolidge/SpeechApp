@@ -715,12 +715,15 @@ private fun WordPicture(word: Word, picture: (@Composable (Modifier) -> Unit)?, 
 internal fun RoryListens(level: Float, size: Dp) {
     val t = rememberInfiniteTransition(label = "listen")
     val glow by t.loop(0.55f, 1f, 600, label = "earGlow")
+    // Smoothed, but quick: his ear and the ring grow with how loud he is right now, live, and
+    // never dim for a miss (a quiet try just doesn't grow them much; nothing here shrinks below
+    // the resting size).
     val voice by animateFloatAsState(level, tween(90), label = "voice")
     Box(Modifier.size(size * 1.35f), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val base = size.toPx() * 0.5f
             // The paper ring that grows with his voice.
-            val r = base * (0.95f + 0.5f * voice)
+            val r = base * (0.92f + 0.75f * voice)
             paperCircle(Color(0xFFFFF3C4), r, center)
             drawCircle(Color.White, r, style = Stroke(4.dp.toPx()))
             drawCircle(Color(0xFFFFC94A).copy(alpha = 0.6f), r * 0.86f, style = Stroke(3.dp.toPx()))
@@ -736,7 +739,7 @@ internal fun RoryListens(level: Float, size: Dp) {
             // Big enough to read as an ear at a glance: about half Rory's width, sticking out
             // from the side of his head.
             val ear = Offset(left + w * 0.98f, (s - h) / 2 + h * 0.3f)
-            drawCircle(Color(0xFFFFE082).copy(alpha = 0.6f * glow), w * 0.42f * (1f + 0.3f * voice + 0.15f * glow), ear)
+            drawCircle(Color(0xFFFFE082).copy(alpha = (0.55f + 0.35f * voice) * glow), w * 0.42f * (1f + 0.55f * voice + 0.15f * glow), ear)
             // The ear itself: a tall rounded shape with a lobe at the bottom and the curl inside,
             // a C that opens towards Rory's face, the way a child draws an ear.
             paperOval(Color(0xFFFFD54F), Offset(ear.x - w * 0.15f, ear.y - w * 0.24f), Size(w * 0.3f, w * 0.48f))
@@ -765,6 +768,9 @@ internal fun ListeningStage(
     enabled: Boolean = true,
     /** Talk practice: Rory stays in the stage's lower half (the picture and word are above). */
     lowerHalf: Boolean = false,
+    /** True after a first quiet try (Ruby + Aida's miss flow): Rory leans a little closer while
+     * he listens again, a small scale and lift, never a jump. */
+    lean: Boolean = false,
     /** Drawn over the dimmed scene, under Rory (a voice story's wind strips and confetti); gets Rory's centre. */
     aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.(roryAt: Offset) -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
@@ -772,6 +778,7 @@ internal fun ListeningStage(
     val app = LocalApp.current
     val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
     val k by animateFloatAsState(if (enabled && app.listening) 1f else 0f, tween(if (still) 0 else 450), label = "stage")
+    val leanK by animateFloatAsState(if (lean) 1f else 0f, tween(if (still) 0 else 350), label = "lean")
     BoxWithConstraints(modifier) {
         val w = maxWidth
         val h = maxHeight
@@ -792,13 +799,23 @@ internal fun ListeningStage(
                     .align(Alignment.TopStart)
                     .graphicsLayer {
                         translationX = (startX + (endLeft - startX) * k).toPx()
-                        translationY = (startY + (endTop - startY) * k).toPx()
+                        // The lean: a small lift (closer) rather than any sideways drift, so it
+                        // never nudges him towards a glowing prop beside him.
+                        translationY = (startY + (endTop - startY) * k).toPx() - LeanLiftPx * leanK
+                        scaleX = 1f + LeanScaleBoost * leanK
+                        scaleY = 1f + LeanScaleBoost * leanK
                         alpha = k
                     },
             ) { RoryListens(app.listenLevel, rory) }
         }
     }
 }
+
+/** How far the lean lifts Rory, in px (see [ListeningStage]). */
+private const val LeanLiftPx = 14f
+
+/** How much bigger the lean makes him look, a small nudge (see [ListeningStage]). */
+private const val LeanScaleBoost = 0.1f
 
 /** Where the listening Rory stands (centre, parts of the stage) and how big he is (dp). */
 internal class ListenSpot(val cx: Float, val cy: Float, val size: Float)
