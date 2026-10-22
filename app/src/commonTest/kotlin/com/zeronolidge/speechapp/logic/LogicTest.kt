@@ -2197,35 +2197,61 @@ class KitchenLayoutTest {
         )
     }
 
-    /** K2i: screenshots showed K2g's fixed ~20deg/~30%-of-width bite lean tipping Bear's body
-     * past the counter's left end and, in portrait, dropping him near the scene's bottom edge as
-     * if he were falling off the stool. [KitchenLayout.bearLean] must keep the lean clearly
-     * visible (at least [KitchenLayout.MIN_LEAN_DEG]) while never letting his "nose" (the
-     * rotated top of his box) pass the counter's left edge, nor his far bottom corner drop below
-     * the scene's own bottom margin, at every size Ruby asked to check: tablet portrait/landscape
-     * and phone portrait/landscape. */
+    /** K2j: K2i's whole-body bite lean (rotating and shifting the entire Critter about a
+     * bottom-centre pivot) still tipped Bear's body past the counter's left end in real
+     * screenshots, even though a unit test of that same rotation passed -- the test modelled a
+     * different transform than the one actually drawn. K2j's lean only rotates/shifts his head
+     * (his stool-seated lower body never moves at all), so the only thing left to check is that
+     * [KitchenLayout.headRightEdgeUnits] -- the exact geometry `KitchenBear` (VoiceScenes.kt)
+     * hands to `Critter`'s own `lean`/`leanForward` parameters -- never passes the counter's own
+     * left edge for the lean [KitchenLayout.bearLean] actually returns, at every size Ruby asked
+     * to check: tablet portrait/landscape and phone portrait/landscape. It should also stay
+     * clearly visible (at least [KitchenLayout.MIN_LEAN_DEG]) at all four, since there's enough
+     * room in this layout for that; the clamp itself (tested separately below) is allowed to go
+     * smaller if a future size were ever tighter than that. */
     @Test
-    fun bearLeanNeverCrossesTheCounterOrDropsOffTheBottom() {
+    fun bearLeanNeverCrossesTheCounter() {
         val sizes = listOf(768f to 1024f, 1024f to 768f, 390f to 844f, 844f to 390f)
         for ((w, h) in sizes) {
             val landscape = w > h
             val box = bearOnScreenBox(w, h, landscape)
             val counterLeftX = w * KitchenLayout.bearBox(landscape).r
-            val lean = KitchenLayout.bearLean(box, counterLeftX, h)
+            val lean = KitchenLayout.bearLean(box, counterLeftX)
 
             assertTrue(lean.angleDeg >= KitchenLayout.MIN_LEAN_DEG, "lean too small at ${w}x$h: ${lean.angleDeg}")
 
-            val angleRad = lean.angleDeg * kotlin.math.PI.toFloat() / 180f
-            val centerX = (box.l + box.r) / 2f
-            val height = box.b - box.t
-            val halfWidth = (box.r - box.l) / 2f
-            val noseX = centerX + height * kotlin.math.sin(angleRad) + lean.dx
-            val bottomY = box.b + halfWidth * kotlin.math.sin(angleRad)
-            val bottomMargin = h * KitchenLayout.BOTTOM_MARGIN_FRACTION
+            val u = (box.b - box.t) / 140f
+            val headRightEdge = box.l + KitchenLayout.headRightEdgeUnits(lean.angleDeg, lean.forwardUnits) * u
 
-            assertTrue(noseX <= counterLeftX + 0.5f, "nose past the counter at ${w}x$h: $noseX > $counterLeftX")
-            assertTrue(bottomY <= h - bottomMargin + 0.5f, "dropped below the margin at ${w}x$h: $bottomY > ${h - bottomMargin}")
+            assertTrue(headRightEdge <= counterLeftX + 0.5f, "head past the counter at ${w}x$h: $headRightEdge > $counterLeftX")
         }
+    }
+
+    /** [KitchenLayout.bearLean]'s own safety net: a counter gap tighter than the full lean needs
+     * (but roomier than his resting, no-lean head) comes back with a *smaller* lean that still
+     * keeps the head's own right edge at or before the counter -- the clamp (a binary search in
+     * [KitchenLayout.bearLean]) actually engaging, not just never being tight enough to matter in
+     * the four real sizes [bearLeanNeverCrossesTheCounter] checks. */
+    @Test
+    fun bearLeanClampsWhenTheGapIsTighterThanFullLean() {
+        val box = KitchenLayout.Rect(l = 0f, t = 0f, r = 100f, b = 140f) // u = 1f
+        val counterLeftX = 90f // less than a full lean's own reach, more than resting's
+        val lean = KitchenLayout.bearLean(box, counterLeftX)
+        val headRightEdge = box.l + KitchenLayout.headRightEdgeUnits(lean.angleDeg, lean.forwardUnits)
+        assertTrue(headRightEdge <= counterLeftX + 0.5f, "head past the counter: $headRightEdge > $counterLeftX")
+        assertTrue(lean.angleDeg < KitchenLayout.MAX_LEAN_DEG, "clamp should have engaged: ${lean.angleDeg}")
+    }
+
+    /** Even a gap too tight for his head at rest (an unrealistic input: Bear's own box is never
+     * wider than the gap by design, see [bearBox]) must come back with a sensible floor -- no
+     * lean at all, not a crash or a negative angle -- rather than making things worse. */
+    @Test
+    fun bearLeanFloorsAtZeroWhenEvenRestingWouldCrossTheCounter() {
+        val box = KitchenLayout.Rect(l = 0f, t = 0f, r = 20f, b = 140f) // u = 1f, 20 units wide
+        val counterLeftX = 60f // well inside his resting head's own reach
+        val lean = KitchenLayout.bearLean(box, counterLeftX)
+        assertEquals(0f, lean.angleDeg)
+        assertEquals(0f, lean.forwardUnits)
     }
 
     /** K2i: Bear's resting (non-lean) stool must sit fully inside the scene, not near the bottom

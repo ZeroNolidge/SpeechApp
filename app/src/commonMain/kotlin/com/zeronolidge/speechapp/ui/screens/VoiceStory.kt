@@ -190,6 +190,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // Bear, Rory, the bowl, the pan and the choice strip's own on-screen boxes (CSS px), logged
     // once per kitchen beat so Ruby's overlap check (K2b) can be run against a real screenshot.
     var kitchenRectsLoggedStep by remember { mutableIntStateOf(-1) }
+    // Bear's bite lean (K2j): his real on-screen head/seat boxes, the stool and the counter's
+    // left edge, logged once at full lean so a screenshot check can confirm his head never
+    // actually passes the counter (not just that the math behind the lean says so).
+    var kitchenBiteRectsLogged by remember { mutableStateOf(false) }
+    fun logBiteRects(line: String) {
+        if (kitchenBiteRectsLogged) return
+        kitchenBiteRectsLogged = true
+        println(line)
+    }
     fun micOk() = p.useMic && app.voice.available && mic.granted()
     fun line(k: Int) = beats[k].line(p.speechStep)
     fun strength(k: Int) = strengths[k] ?: 0.7f
@@ -878,7 +887,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             ) {
                                 val end = kitchenEnd
                                 if (end != null) {
-                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize())
+                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects)
                                 } else {
                                     VoiceBeatScene(
                                         beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
@@ -891,7 +900,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         } else {
                             val end = kitchenEnd
                             if (end != null) {
-                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize())
+                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects)
                             } else {
                                 VoiceBeatScene(
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),

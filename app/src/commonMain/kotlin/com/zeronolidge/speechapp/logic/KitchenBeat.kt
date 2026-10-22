@@ -250,61 +250,81 @@ object KitchenLayout {
     fun stripBox(stripFraction: Float): Rect = Rect(0f, 1f - stripFraction, 1f, 1f)
 
     /** The lean's own floor (Ruby: it must stay clearly visible even on a tight layout) and
-     * ceiling (K2g's original ask: rotate about 20deg further). [bearLean] picks whatever's
-     * smaller than this ceiling but never less than the floor. */
+     * ceiling: K2g's original whole-body ask was 20deg, but K2j's lean only tilts his head (see
+     * below), so the same visible tilt reads fine a little smaller. [bearLean] picks whatever's
+     * smaller than this ceiling, never less than the floor unless even the floor would push his
+     * head past the counter (see [headRightEdgeUnits]) -- staying off the counter always wins, a
+     * screenshot of K2i's whole-body version showed the opposite priority let him tip past it. */
     const val MIN_LEAN_DEG = 10f
-    const val MAX_LEAN_DEG = 20f
+    const val MAX_LEAN_DEG = 18f
 
-    /** K2g's own ask: shift his upper body about 30% of his own width toward the stack. */
-    const val LEAN_TRANSLATE_FRACTION = 0.30f
+    /** K2j's own ask: shift his head a little further forward than the rotation alone, toward
+     * the stack, at full lean (local art units, same scale as [headRightEdgeUnits]). */
+    const val LEAN_FORWARD_UNITS = 6f
 
-    /** The least share of the scene's own height that must stay clear below Bear at full lean. */
+    /** The least share of the scene's own height that must stay clear below Bear at rest. */
     const val BOTTOM_MARGIN_FRACTION = 0.02f
 
-    private fun sinDeg(deg: Float): Float = kotlin.math.sin(deg * kotlin.math.PI.toFloat() / 180f)
-    private fun asinDeg(x: Float): Float = kotlin.math.asin(x.coerceIn(-1f, 1f)) * 180f / kotlin.math.PI.toFloat()
-
-    /** Bear's bite lean (K2i), bound by [bearLean]: [angleDeg] the extra clockwise rotation on
-     * top of his constant facing tilt, and [dx] the sideways shift toward the counter, both at
-     * full lean (`leanAmount` 1f in `KitchenBear`, VoiceScenes.kt; it scales both down for the
-     * ease-in/settle, see [KitchenEnding]). */
-    data class BearLean(val angleDeg: Float, val dx: Float)
+    /** Critter's own head circle (`circle(50f, 63f, 30f, ...)` in Critter.kt) and the neck pivot
+     * its bite lean rotates about (`o(50f, 90f)`, non-boxy species): local 100-wide/140-tall art
+     * units. Must match Critter.kt's own numbers exactly, or [headRightEdgeUnits] models a
+     * different puppet than the one actually drawn -- K2i's bug, in a new place. [HEAD_HALF_WIDTH]
+     * sits a little past the head circle's own radius (30): BEAR's round ears (`Ears.ROUND`,
+     * centred at x=71, radius 10) poke out to x=81, plus a small safety margin for the baked
+     * art's own soft edge. */
+    private const val ART_H = 140f
+    private const val HEAD_CENTER_X = 50f
+    private const val HEAD_CENTER_Y = 63f
+    private const val NECK_PIVOT_Y = 90f
+    private const val HEAD_HALF_WIDTH = 33f
 
     /**
-     * How far Bear can lean toward the stack without any part of him passing the counter's left
-     * edge or dropping below the scene's own bottom edge. Screenshots of K2g's lean (~20deg
-     * rotation plus a ~30%-of-width shift) showed his body tipping past the counter's left end
-     * and, in portrait, dropping near the scene's bottom edge as if he were falling off the
-     * stool.
-     *
-     * The lean rotates [bearBox] (Bear's own on-screen box; not his stool, which [KitchenBear] in
-     * VoiceScenes.kt keeps out of this transform entirely, pinned to a seat that never moves)
-     * about its own bottom-centre. That pivot point itself never moves, but the rotation swings
-     * his top ("nose") sideways by `height * sin(angle)` and his far bottom corner down by
-     * `halfWidth * sin(angle)`: the first must stop at or before [counterLeftX], the second must
-     * stay [BOTTOM_MARGIN_FRACTION] of [sceneH] clear of the bottom. Whichever limit is tighter
-     * caps the angle (never below [MIN_LEAN_DEG], Ruby's ask that it stay clearly visible); any
-     * room the rotation hasn't used goes to a sideways shift, up to [LEAN_TRANSLATE_FRACTION].
+     * How far the head circle's own right-most x sits, in Critter's local art units, after
+     * rotating the head+arms group by [angleDeg] about the neck pivot and shifting it forward by
+     * [forwardUnits] -- the exact transform `KitchenBear` (VoiceScenes.kt) hands to `Critter`'s
+     * own `lean`/`leanForward` parameters, via Compose's `rotate`/`translate`, not a separate
+     * model of it (K2i rotated and shifted the *whole* Critter about a different pivot than this
+     * assumed, which is how a passing unit test still shipped Bear tipping past the counter on
+     * screen). [bearLean] below caps against this same function, and the KITCHEN bite log
+     * (VoiceStory.kt) prints the real measured head box beside it, so a drift between this
+     * prediction and the real drawing would show up as a disagreement, not just a math check
+     * passing in isolation.
      */
-    fun bearLean(bearBox: Rect, counterLeftX: Float, sceneH: Float): BearLean {
-        val halfWidth = (bearBox.r - bearBox.l) / 2f
-        val height = bearBox.b - bearBox.t
-        if (halfWidth <= 0f || height <= 0f) return BearLean(MIN_LEAN_DEG, 0f)
-        val centerX = (bearBox.l + bearBox.r) / 2f
+    fun headRightEdgeUnits(angleDeg: Float, forwardUnits: Float): Float {
+        val rad = angleDeg * kotlin.math.PI.toFloat() / 180f
+        val pivotToHead = NECK_PIVOT_Y - HEAD_CENTER_Y
+        return HEAD_CENTER_X + pivotToHead * kotlin.math.sin(rad) + forwardUnits + HEAD_HALF_WIDTH
+    }
 
-        val bottomRoom = (sceneH * (1f - BOTTOM_MARGIN_FRACTION) - bearBox.b).coerceAtLeast(0f)
-        val angleFromBottom = asinDeg((bottomRoom / halfWidth).coerceIn(0f, 1f))
+    /** Bear's bite lean (K2j), bound by [bearLean]: [angleDeg] the extra clockwise rotation his
+     * head+arms (only; his stool-seated lower body never moves, see `KitchenBear` in
+     * VoiceScenes.kt) turn by on top of his constant facing tilt, and [forwardUnits] how far that
+     * same group shifts forward, both at full lean (`leanAmount` 1f; `KitchenEnding` scales both
+     * down for the ease-in/settle). */
+    data class BearLean(val angleDeg: Float, val forwardUnits: Float)
 
-        val room = (counterLeftX - centerX).coerceAtLeast(0f)
-        val angleFromNose = asinDeg((room / height).coerceIn(0f, 1f))
-
-        val angle = minOf(MAX_LEAN_DEG, angleFromBottom, angleFromNose).coerceAtLeast(MIN_LEAN_DEG)
-
-        val usedByAngle = height * sinDeg(angle)
-        val dxRoom = (room - usedByAngle).coerceAtLeast(0f)
-        val desiredDx = halfWidth * 2f * LEAN_TRANSLATE_FRACTION
-        val dx = minOf(desiredDx, dxRoom)
-
-        return BearLean(angle, dx)
+    /**
+     * How far Bear can lean his head (and arms) toward the stack without [headRightEdgeUnits]
+     * passing [counterLeftX], for a Bear box of [bearBox] (his own on-screen box, in scene px;
+     * K2j: his lower body/stool never moves during the lean, so unlike K2i's whole-body version
+     * there is no bottom-edge case left to check here). Converts [counterLeftX] into the same
+     * local art units [headRightEdgeUnits] works in (via the box's own height, since Critter
+     * keeps its 100-wide/140-tall aspect ratio whatever size it's drawn at), then finds the
+     * largest shared fraction of [MAX_LEAN_DEG]/[LEAN_FORWARD_UNITS] (scaled together) whose
+     * predicted head edge still stays a small margin inside that line.
+     */
+    fun bearLean(bearBox: Rect, counterLeftX: Float): BearLean {
+        val u = (bearBox.b - bearBox.t) / ART_H
+        if (u <= 0f) return BearLean(0f, 0f)
+        val roomUnits = (counterLeftX - bearBox.l) / u - 1f // a 1-unit safety margin
+        if (headRightEdgeUnits(MAX_LEAN_DEG, LEAN_FORWARD_UNITS) <= roomUnits) return BearLean(MAX_LEAN_DEG, LEAN_FORWARD_UNITS)
+        if (headRightEdgeUnits(0f, 0f) >= roomUnits) return BearLean(0f, 0f)
+        var lo = 0f
+        var hi = 1f
+        repeat(24) {
+            val mid = (lo + hi) / 2f
+            if (headRightEdgeUnits(MAX_LEAN_DEG * mid, LEAN_FORWARD_UNITS * mid) <= roomUnits) lo = mid else hi = mid
+        }
+        return BearLean(MAX_LEAN_DEG * lo, LEAN_FORWARD_UNITS * lo)
     }
 }

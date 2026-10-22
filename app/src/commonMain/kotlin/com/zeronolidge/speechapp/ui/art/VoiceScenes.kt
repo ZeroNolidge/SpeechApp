@@ -13,7 +13,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -28,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -267,7 +272,17 @@ fun VoiceBeatScene(
  * separate from [bitten] (the pancake's own notch, which stays once it appears).
  */
 @Composable
-fun KitchenEndingScene(stage: KitchenEndStage, leanAmount: Float = 0f, landscape: Boolean = false, modifier: Modifier = Modifier) {
+fun KitchenEndingScene(
+    stage: KitchenEndStage,
+    leanAmount: Float = 0f,
+    landscape: Boolean = false,
+    modifier: Modifier = Modifier,
+    /** K2j's own KITCHEN bite measurement log: a formatted line, reported once bear-head,
+     * bear-seat, stool and the counter's left edge are all known at full lean (see
+     * [KitchenBear]'s own `onBiteRects`); the caller (VoiceStory.kt) decides whether/when to
+     * actually print it. */
+    onBiteRects: ((String) -> Unit)? = null,
+) {
     val bitten = stage != KitchenEndStage.STACK
     Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -277,7 +292,7 @@ fun KitchenEndingScene(stage: KitchenEndStage, leanAmount: Float = 0f, landscape
             KitchenCounterFront(landscape)
             val ct = KitchenLayout.counterTop(landscape)
             Item(unit * 0.4f, { 0.56f }, { ct + (1f - ct) * 0.42f }) { PancakeStackArt(bitten) }
-            KitchenBear(landscape, leanAmount)
+            KitchenBear(landscape, leanAmount, onBiteRects)
         }
     }
 }
@@ -389,12 +404,17 @@ private const val CritterArtRatio = 100f / 140f
  * own (Ruby, K2c/K2e/K2g): 0 to 1, how far into his bite-lean Bear currently is, cheering (mouth
  * open for the bite) instead of just standing happy while it's above zero.
  *
- * K2i: the stool keeps only his constant resting tilt/turn and never takes the bite lean itself,
- * so his seat stays put on it; only his own body (the `graphicsLayer` below) rotates, pinned by
- * `transformOrigin` to its own bottom-centre — his seat point — which [KitchenLayout.bearLean]
- * treats as the fixed pivot when it works out how far he can safely lean (screenshots of K2g's
- * fixed ~20deg/~30%-of-width lean showed him tipping past the counter's left end and, in
- * portrait, dropping near the scene's bottom edge).
+ * K2j: Bear's resting graphicsLayer below keeps only his constant facing tilt/turn (never the
+ * bite lean itself: his stool-seated lower body — legs, bottom, belly, the stool under him —
+ * never moves at all, resting or leaning). The bite lean itself is [Critter]'s own `lean`/
+ * `leanForward` (K2j), which rotates and shifts only his head+arms, about his neck: K2i rotated
+ * and shifted the *whole* Critter about a bottom-centre pivot instead, which is how his whole
+ * body (not just his head) ended up swinging past the counter and off the stool in real
+ * screenshots, even though a unit test of that same rotation's math passed. [KitchenLayout.bearLean]
+ * works out how far his head can lean before it would pass the counter's own left edge, the one
+ * thing left to cap now that his body itself never moves. [onBiteRects], if given, reports a
+ * formatted KITCHEN bite log line once his head, his own on-screen box ("seat"), the stool and
+ * the counter's left edge are all known at full lean (VoiceStory.kt decides whether to print it).
  *
  * Bear's own height here ([fillMaxHeight] against his lane) used to be handed to [Critter]
  * unconditionally at 85%: in a lane narrower than [CritterArtRatio] needs for that height (K2e's
@@ -408,7 +428,11 @@ private const val CritterArtRatio = 100f / 140f
  * scene's own px) is what's handed to [KitchenLayout.bearLean].
  */
 @Composable
-private fun BoxWithConstraintsScope.KitchenBear(landscape: Boolean, leanAmount: Float = 0f) {
+private fun BoxWithConstraintsScope.KitchenBear(
+    landscape: Boolean,
+    leanAmount: Float = 0f,
+    onBiteRects: ((String) -> Unit)? = null,
+) {
     val w = maxWidth.value
     val h = maxHeight.value
     val bear = KitchenLayout.bearBox(landscape)
@@ -425,39 +449,77 @@ private fun BoxWithConstraintsScope.KitchenBear(landscape: Boolean, leanAmount: 
         b = laneBottom,
     )
     val counterLeftX = w * bear.r
-    val lean = KitchenLayout.bearLean(bearBox, counterLeftX, h)
+    val lean = KitchenLayout.bearLean(bearBox, counterLeftX)
+    // K2j's own measurement log: real on-screen boxes (device px), not a second model of them,
+    // collected once leanAmount reaches (about) full and reported together once every piece is
+    // in (see the LaunchedEffect below).
+    val wantRects = onBiteRects != null && leanAmount >= 0.999f
+    var seatRect by remember { mutableStateOf<Rect?>(null) }
+    var stoolRect by remember { mutableStateOf<Rect?>(null) }
+    var localHeadRect by remember { mutableStateOf<Rect?>(null) }
+    var critterOrigin by remember { mutableStateOf<Offset?>(null) }
+    var counterLeftPx by remember { mutableStateOf<Float?>(null) }
+    if (wantRects) {
+        // A zero-size marker at the counter's own left edge (same dp-value coordinate space as
+        // [counterLeftX]), measured the same way as everything else here (`positionInWindow`),
+        // so the final log line never mixes dp-value numbers with device px (which would be
+        // wrong whenever density != 1).
+        Box(Modifier.offset(x = counterLeftX.dp, y = (h * bear.t).dp).onGloballyPositioned { c -> counterLeftPx = c.positionInWindow().x })
+    }
     Box(
         Modifier.offset(x = laneLeft.dp, y = (h * bear.t).dp).size(laneWidth.dp, laneHeight.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        // The stool keeps only Bear's constant resting turn (K2i): the bite lean never moves it,
-        // so his seat stays exactly where his own graphicsLayer pivots below.
+        // The stool keeps only Bear's constant resting turn (K2i/K2j): the bite lean never moves
+        // it, so his seat stays exactly where it's always drawn.
         Canvas(
             Modifier.fillMaxWidth(0.6f).fillMaxHeight(0.22f).align(Alignment.BottomCenter)
                 .graphicsLayer {
                     rotationZ = BearFacingTiltDeg
                     rotationY = BearFacingTurnDeg
                     cameraDistance = BearTurnCameraDistance * density
-                },
+                }
+                .let { m -> if (!wantRects) m else m.onGloballyPositioned { c -> stoolRect = c.windowRect() } },
         ) { paperStool() }
         Critter(
             Species.BEAR,
             Modifier.height(bearHeight.dp).aspectRatio(CritterArtRatio)
                 .graphicsLayer {
-                    rotationZ = BearFacingTiltDeg + lean.angleDeg * leanAmount
+                    // Bear's constant "turned toward the pan" stance (K2e/K2f) only: the bite
+                    // lean itself is Critter's own `lean`/`leanForward` below, which moves only
+                    // his head+arms, never this whole-puppet layer (K2i's bug).
+                    rotationZ = BearFacingTiltDeg
                     rotationY = BearFacingTurnDeg
                     cameraDistance = BearTurnCameraDistance * density
-                    // lean.dx is in the same Dp-value units as the box KitchenBear fed to
-                    // bearLean; graphicsLayer's translationX wants device px, hence * density.
-                    translationX = lean.dx * leanAmount * density
-                    scaleX = 1f + 0.06f * leanAmount
-                    scaleY = 1f + 0.06f * leanAmount
                     transformOrigin = TransformOrigin(0.5f, 1f)
-                },
+                }
+                .let { m -> if (!wantRects) m else m.onGloballyPositioned { c -> critterOrigin = c.positionInWindow(); seatRect = c.windowRect() } },
             mood = if (leanAmount > 0.1f) Mood.CHEER else Mood.HAPPY,
             animate = false, lookX = BearPanLookX,
+            lean = lean.angleDeg * leanAmount,
+            leanForward = lean.forwardUnits * leanAmount,
+            onHeadBounds = if (!wantRects) null else { r -> localHeadRect = r },
         )
     }
+    if (wantRects) {
+        LaunchedEffect(seatRect, stoolRect, localHeadRect, critterOrigin, counterLeftPx) {
+            val seat = seatRect
+            val stool = stoolRect
+            val headLocal = localHeadRect
+            val origin = critterOrigin
+            val counterLeft = counterLeftPx
+            if (seat != null && stool != null && headLocal != null && origin != null && counterLeft != null) {
+                val head = Rect(origin.x + headLocal.left, origin.y + headLocal.top, origin.x + headLocal.right, origin.y + headLocal.bottom)
+                fun fmt(r: Rect) = "${r.left.roundToInt()},${r.top.roundToInt()},${r.right.roundToInt()},${r.bottom.roundToInt()}"
+                onBiteRects?.invoke("KITCHEN bite bear-head=${fmt(head)} bear-seat=${fmt(seat)} stool=${fmt(stool)} counterLeft=${counterLeft.roundToInt()}")
+            }
+        }
+    }
+}
+
+private fun androidx.compose.ui.layout.LayoutCoordinates.windowRect(): Rect {
+    val p = positionInWindow()
+    return Rect(p.x, p.y, p.x + size.width, p.y + size.height)
 }
 
 /**

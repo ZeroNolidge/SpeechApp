@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -95,6 +96,20 @@ fun Critter(
      * the eyes: for a character who needs to visibly look toward something specific (Rory's
      * Kitchen's Bear, toward the pan) rather than just whatever [mood] happens to imply. */
     lookX: Float = 0f,
+    /** Rory's Kitchen's bite lean (K2j): an extra clockwise rotation (degrees), on top of
+     * whatever [mood] already tilts the head by, applied to the head+arms group only, about the
+     * same neck pivot the mood tilt already uses -- his body (legs, belly, feet) never moves, so
+     * a character seated on something (Bear, on his stool) stays put on it while only leaning in
+     * with his top half, instead of the whole puppet swinging off its seat (K2i's bug). */
+    lean: Float = 0f,
+    /** How far that same head+arms group also shifts sideways (local art units, positive =
+     * toward the puppet's own right), applied after the rotation above, in screen space. */
+    leanForward: Float = 0f,
+    /** Rory's Kitchen's own KITCHEN-bite measurement log (K2j): reports the head's own drawn
+     * bounding box, in this composable's local px (its own top-left is (0,0)), once per draw, so
+     * a caller that must keep it clear of some on-screen edge can log what was *actually* drawn
+     * rather than trusting a separate geometric model of it. */
+    onHeadBounds: ((Rect) -> Unit)? = null,
 ) {
     val still = LocalReduceMotion.current || !animate
     val t = rememberInfiniteTransition(label = "critter")
@@ -155,7 +170,7 @@ fun Critter(
         modifier
             .aspectRatio(W / H)
             .graphicsLayer { scaleX = if (mirrored) -1f else 1f }
-            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX), motion)),
+            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX), motion, lean, leanForward, onHeadBounds)),
     )
 }
 
@@ -207,23 +222,41 @@ private class PuppetMotion(
 // HEAD_TALK(_BLINK): the head without its mouth, which is drawn live while Rory talks.
 private enum class Part { BODY, HEAD, HEAD_BLINK, HEAD_TALK, HEAD_TALK_BLINK, FRONT, ARM_L, ARM_R }
 
-private class PuppetElement(val spec: PuppetSpec, val motion: PuppetMotion) : ModifierNodeElement<PuppetNode>() {
-    override fun create() = PuppetNode(spec, motion)
+private class PuppetElement(
+    val spec: PuppetSpec,
+    val motion: PuppetMotion,
+    val lean: Float,
+    val leanForward: Float,
+    val onHeadBounds: ((Rect) -> Unit)?,
+) : ModifierNodeElement<PuppetNode>() {
+    override fun create() = PuppetNode(spec, motion, lean, leanForward, onHeadBounds)
 
     override fun update(node: PuppetNode) {
         node.motion = motion
+        node.lean = lean
+        node.leanForward = leanForward
+        node.onHeadBounds = onHeadBounds
         if (node.spec != spec) {
             node.spec = spec
             node.parts.clear()
-            node.invalidateDraw()
         }
+        // lean/leanForward are plain fields (not read via snapshot state in draw(), unlike
+        // motion's own State values), so a change needs an explicit redraw, not just a rebake.
+        node.invalidateDraw()
     }
 
-    override fun equals(other: Any?) = other is PuppetElement && other.spec == spec && other.motion === motion
+    override fun equals(other: Any?) =
+        other is PuppetElement && other.spec == spec && other.motion === motion && other.lean == lean && other.leanForward == leanForward
     override fun hashCode() = spec.hashCode()
 }
 
-private class PuppetNode(var spec: PuppetSpec, var motion: PuppetMotion) : Modifier.Node(), DrawModifierNode {
+private class PuppetNode(
+    var spec: PuppetSpec,
+    var motion: PuppetMotion,
+    var lean: Float,
+    var leanForward: Float,
+    var onHeadBounds: ((Rect) -> Unit)?,
+) : Modifier.Node(), DrawModifierNode {
     val parts = HashMap<Part, Baked>()
     private var bakedSize = Size.Zero
 
@@ -254,37 +287,61 @@ private class PuppetNode(var spec: PuppetSpec, var motion: PuppetMotion) : Modif
         val blinking = !still && s.mood != Mood.SLEEP && m.blink.value > 0.5f
         fun o(x: Float, y: Float) = Offset(x * u, (y + OY) * u)
         val boxy = s.species.boxy
+        val headCenterY = if (boxy) 61f else 63f
+        val headHalfWidth = if (boxy) 28f else 33f
 
         // The ground shadow stays put while the puppet bobs.
         drawOval(Color(0x22000000), Offset(25 * u, (H - 8) * u), Size(50 * u, 7 * u))
         translate(0f, lift * u) {
             drawBaked(part(Part.BODY))
-            val tilt = when (s.mood) {
-                Mood.THINK -> -8f
-                Mood.SAD -> 5f
-                Mood.SLEEP -> 10f
-                Mood.LISTEN -> 6f
-                else -> 0f
-            }
-            val mouth = if (boxy) m.mouth.value else -1f
-            rotate(tilt + wig * 4f, o(50f, if (boxy) 86f else 90f)) {
-                if (mouth == -1f) {
-                    drawBaked(part(if (blinking) Part.HEAD_BLINK else Part.HEAD))
-                } else {
-                    drawBaked(part(if (blinking) Part.HEAD_TALK_BLINK else Part.HEAD_TALK))
-                    robotMouth(o(50f, 65f), u, mouth)
+            val neckPivot = o(50f, if (boxy) 86f else 90f)
+            // Rory's Kitchen's bite lean (K2j): rotating (then shifting) only this group, about
+            // the same neck pivot the mood tilt below uses, leaves BODY (legs, belly, feet --
+            // already drawn above, outside this transform) exactly where it is: a puppet seated
+            // on something stays seated while only his top half leans in (K2i rotated the whole
+            // puppet about a different pivot, which is how his seat swung off the stool).
+            translate(leanForward * u, 0f) {
+                rotate(lean, neckPivot) {
+                    val tilt = when (s.mood) {
+                        Mood.THINK -> -8f
+                        Mood.SAD -> 5f
+                        Mood.SLEEP -> 10f
+                        Mood.LISTEN -> 6f
+                        else -> 0f
+                    }
+                    val mouth = if (boxy) m.mouth.value else -1f
+                    rotate(tilt + wig * 4f, neckPivot) {
+                        if (mouth == -1f) {
+                            drawBaked(part(if (blinking) Part.HEAD_BLINK else Part.HEAD))
+                        } else {
+                            drawBaked(part(if (blinking) Part.HEAD_TALK_BLINK else Part.HEAD_TALK))
+                            robotMouth(o(50f, 65f), u, mouth)
+                        }
+                    }
+                    drawBaked(part(Part.FRONT))
+                    val (l, r) = armAngles(s.mood)
+                    val wave = if (s.mood == Mood.CHEER) (bob - 0.5f) * 16f else 0f
+                    // A real wave: up, side to side twice, down.
+                    val w = if (still) 0f else m.wave.value
+                    val up = if (w <= 0f || w >= 1f) 0f else minOf(w / 0.15f, (1f - w) / 0.12f, 1f)
+                    val swing = if (w in 0.15f..0.85f) sin((w - 0.15f) / 0.7f * 2f * PI.toFloat() * 2f) * 26f else 0f
+                    val rWave = (r - wave + wig * 14f) * (1f - up) + (-150f + swing) * up
+                    rotate(l + wave - wig * 4f, shoulder(u, boxy, false)) { drawBaked(part(Part.ARM_L)) }
+                    rotate(rWave, shoulder(u, boxy, true)) { drawBaked(part(Part.ARM_R)) }
                 }
             }
-            drawBaked(part(Part.FRONT))
-            val (l, r) = armAngles(s.mood)
-            val wave = if (s.mood == Mood.CHEER) (bob - 0.5f) * 16f else 0f
-            // A real wave: up, side to side twice, down.
-            val w = if (still) 0f else m.wave.value
-            val up = if (w <= 0f || w >= 1f) 0f else minOf(w / 0.15f, (1f - w) / 0.12f, 1f)
-            val swing = if (w in 0.15f..0.85f) sin((w - 0.15f) / 0.7f * 2f * PI.toFloat() * 2f) * 26f else 0f
-            val rWave = (r - wave + wig * 14f) * (1f - up) + (-150f + swing) * up
-            rotate(l + wave - wig * 4f, shoulder(u, boxy, false)) { drawBaked(part(Part.ARM_L)) }
-            rotate(rWave, shoulder(u, boxy, true)) { drawBaked(part(Part.ARM_R)) }
+            // Reports the head's own drawn bounds (K2j's KITCHEN bite log), in this node's own
+            // local px (its top-left is (0,0)): the same neck-pivot rotation plus forward shift
+            // just drawn above, not a second model of it. [lift]'s own translate is added back in
+            // (it moves the whole group including BODY, so it's not part of the lean itself).
+            onHeadBounds?.let { cb ->
+                val rad = lean * PI.toFloat() / 180f
+                val pivotToHead = (if (boxy) 86f else 90f) - headCenterY
+                val headCx = neckPivot.x + pivotToHead * u * sin(rad) + leanForward * u
+                val headCy = neckPivot.y - pivotToHead * u * cos(rad) + lift * u
+                val half = headHalfWidth * u
+                cb(Rect(headCx - half, headCy - half, headCx + half, headCy + half))
+            }
         }
         drawContent()
     }
