@@ -82,8 +82,10 @@ data class KitchenBeatState(
         else -> copy(phase = KitchenPhase.SHOW_ANSWER, misses = misses + 1)
     }
 
-    /** The right choice glows from the first wrong tap on. */
-    val glow: Boolean get() = misses >= 1
+    /** The right choice glows throughout the tap phase (including mid-wiggle), from the moment
+     * Rory's finished naming the problem -- not only once he's gotten it wrong once (K2l): a
+     * 3-year-old shouldn't have to guess wrong first to be shown the answer. */
+    val glow: Boolean get() = phase == KitchenPhase.TAP || phase == KitchenPhase.WIGGLE
 
     /** The wiggle has played: back to tapping, with the right choice now glowing. */
     fun wiggled(): KitchenBeatState = if (phase == KitchenPhase.WIGGLE) copy(phase = KitchenPhase.TAP) else this
@@ -109,8 +111,9 @@ data class KitchenBeatState(
  * the counter, shuffled so the answer isn't always in the same spot (mirrors [BalloonGame.make]).
  */
 object KitchenGame {
-    /** Distractor items for the "tap the bowl" beat's choices: a cup, a spoon. */
-    val distractors = listOf("cup", "spoon")
+    /** Distractor items for the "tap the bowl" beat's choices: a pan, a spoon (K2l: a coffee cup
+     * doesn't belong in a toddler pancake kitchen; a pan is just as familiar and clearly not a bowl). */
+    val distractors = listOf("pan", "spoon")
 
     fun tapRound(answer: String, count: Int, rnd: Random): Choice<String> = choiceOf(answer, distractors, count, rnd)
 }

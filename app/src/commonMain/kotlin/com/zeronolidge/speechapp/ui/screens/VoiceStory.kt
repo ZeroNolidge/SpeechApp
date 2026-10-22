@@ -97,6 +97,7 @@ import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.LocalScreenHeight
 import com.zeronolidge.speechapp.ui.components.PaperChip
+import com.zeronolidge.speechapp.ui.components.PointingHand
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.peelIn
 import com.zeronolidge.speechapp.ui.components.revealLine
@@ -480,6 +481,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             kitchenWrong = -1
             phase = VPhase.KITCHEN
             app.rememberInstruction(b.problem)
+            b.caption?.let { println("KITCHEN cue step=$k text=$it") }
             logKitchen(kitchenPhase)
             app.speaker.say(b.problem) { if (s == session) { kitchenPhase = kitchenPhase.named(); logKitchen(kitchenPhase) } }
         } else if (b.game) {
@@ -499,7 +501,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory's Kitchen's plain talk-turn beats (milk, pour, "mmm") carry no KitchenFlow of
             // their own, but Ruby's K2c test script still drives them from the same KITCHEN log
             // the flow beats print (see `listen`/`after` below for TALK/DONE).
-            if (b.backdrop == Backdrop.KITCHEN) println("KITCHEN step=$k phase=NAME")
+            if (b.backdrop == Backdrop.KITCHEN) {
+                println("KITCHEN step=$k phase=NAME")
+                b.caption?.let { println("KITCHEN cue step=$k text=$it") }
+            }
             app.speaker.say(b.problem) { modelWord(k, s) }
         }
     }
@@ -993,7 +998,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     ExpandChip(line(k), more)
                 }
             }
-            if (k >= 0 && phase != VPhase.END && phase != VPhase.ACT && phase != VPhase.GAME && phase != VPhase.KITCHEN) {
+            if (k >= 0 && beats[k].backdrop != Backdrop.KITCHEN && phase != VPhase.END && phase != VPhase.ACT && phase != VPhase.GAME && phase != VPhase.KITCHEN) {
                 Row(
                     Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
                         .padding(top = 8.dp, start = 8.dp)
@@ -1007,6 +1012,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     Text(beats[k].emoji, fontSize = 40.sp, modifier = Modifier.wiggleOnTap())
                     Spacer(Modifier.width(10.dp))
                     Text(line(k), fontSize = if (line(k).length > 14) 28.sp else 40.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1)
+                }
+            }
+            // Rory's Kitchen (K2l): a short plain caption instead of the word chip above, since he
+            // can't read it anyway but a grown-up watching can see every step is clear. Shown for
+            // the whole beat (tap and talk turns alike), top-centre, clear of the top bar, Bear,
+            // Rory, the counter and the tap tiles below.
+            if (k >= 0 && beats[k].backdrop == Backdrop.KITCHEN && phase != VPhase.END && phase != VPhase.ACT) {
+                beats[k].caption?.let { cap ->
+                    Text(
+                        cap, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
+                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).zIndex(4f)
+                            .paperCard(PaperStyle.chip, 22.dp).padding(horizontal = 18.dp, vertical = 6.dp),
+                    )
                 }
             }
             // Rory models a sound: his mouth shape for it, big, top-right.
@@ -1165,7 +1183,7 @@ private fun BalloonPatternPuzzle(
  * (see [KitchenGame.distractors]); nothing else ever shows here. */
 private fun kitchenWordEmoji(word: String): String = when (word) {
     "bowl" -> "🥣"
-    "cup" -> "☕"
+    "pan" -> "🍳"
     "spoon" -> "🥄"
     else -> "❓"
 }
@@ -1185,13 +1203,32 @@ private val KitchenBerryTileSize = 44.dp
 
 private val KitchenChoiceGap = 32.dp
 
+/** The small bouncing hand above whichever tile is right (K2l): kept well clear of the tile itself
+ * (its own reserved slot above it, see [KitchenTapRow]), never covering it. */
+private val KitchenHintHandSize = 24.dp
+
+/**
+ * Which tile Rory's pointing hand should hover over, once his line's finished (see
+ * [KitchenBeatState.glow]): the real answer for [KitchenFlow.TAP_CHOICE] (never a distractor), the
+ * next un-hopped berry for [KitchenFlow.COUNT] (one at a time, in order), the pancake itself for
+ * [KitchenFlow.FLIP] (its only tile). -1 for the flows with no tap phase at all.
+ */
+private fun kitchenTargetIndex(state: KitchenBeatState, round: Choice<String>?, tiles: List<String>, hopped: Set<Int>): Int = when (state.flow) {
+    KitchenFlow.TAP_CHOICE -> round?.options?.indexOf(round.answer) ?: -1
+    KitchenFlow.COUNT -> tiles.indices.firstOrNull { it !in hopped } ?: -1
+    KitchenFlow.FLIP -> 0
+    KitchenFlow.STIR, KitchenFlow.BUBBLES -> -1
+}
+
 /**
  * Rory's Kitchen's tap tiles (see [KitchenBeatState]), drawn in the same reserved bottom strip as
- * the balloon puzzle above: "Tap the bowl!" among its distractors (wrong taps wiggle, the right
- * one glows after a first miss, same as [BalloonPatternPuzzle]'s choices), three berries that hop
- * in as he taps each one, or the pancake to flip. Empty (and drawn nothing) for the stir/bubbles
- * flows, which have no tap phase. [onCenter] reports each tile's screen centre for the KITCHEN log
- * the screenshot test reads.
+ * the balloon puzzle above: "Tap the bowl!" among its distractors (wrong taps wiggle, then show
+ * the answer, same as [BalloonPatternPuzzle]'s choices), three berries that hop in as he taps each
+ * one, or the pancake to flip. Empty (and drawn nothing) for the stir/bubbles flows, which have no
+ * tap phase. [onCenter] reports each tile's screen centre for the KITCHEN log the screenshot test
+ * reads. The right tile (K2l) glows and gets a small pointing hand above it as soon as Rory's
+ * finished his line, not only once he's gotten it wrong once: every tile keeps the same hand-sized
+ * slot above it regardless, so nothing shifts as the hint comes and goes.
  */
 @Composable
 private fun KitchenTapRow(
@@ -1209,6 +1246,7 @@ private fun KitchenTapRow(
     val tiles = kitchenTiles(beat, state.flow, round)
     if (tiles.isEmpty()) return
     val answerShown = state.phase == KitchenPhase.SHOW_ANSWER
+    val targetIndex = kitchenTargetIndex(state, round, tiles, hopped)
     Box(modifier) {
         Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp),
@@ -1217,13 +1255,17 @@ private fun KitchenTapRow(
         ) {
             tiles.forEachIndexed { i, emoji ->
                 val isAnswer = state.flow == KitchenFlow.TAP_CHOICE && round != null && round.options.getOrNull(i) == round.answer
-                AnswerCard(
-                    modifier = Modifier.size(BalloonChoiceSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
-                    correct = (answerShown && isAnswer) || i in hopped,
-                    glow = state.glow && isAnswer && !answerShown,
-                    wiggle = if (i == wrongChoice) wiggleBump else 0,
-                    onClick = { onTap(i) },
-                ) { if (state.flow == KitchenFlow.COUNT) BlueberryArt(KitchenBerryTileSize) else Text(emoji, fontSize = 40.sp) }
+                val hint = state.glow && i == targetIndex
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (hint) PointingHand(size = KitchenHintHandSize, pointDown = true) else Spacer(Modifier.size(KitchenHintHandSize))
+                    AnswerCard(
+                        modifier = Modifier.size(BalloonChoiceSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
+                        correct = (answerShown && isAnswer) || i in hopped,
+                        glow = hint,
+                        wiggle = if (i == wrongChoice) wiggleBump else 0,
+                        onClick = { onTap(i) },
+                    ) { if (state.flow == KitchenFlow.COUNT) BlueberryArt(KitchenBerryTileSize) else Text(emoji, fontSize = 40.sp) }
+                }
             }
         }
     }

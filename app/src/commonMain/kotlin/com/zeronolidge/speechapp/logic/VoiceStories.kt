@@ -66,6 +66,11 @@ data class VoiceBeat(
     /** How many taps or talk turns [kitchen]'s flow needs (see [KitchenFlow.tapGoal] /
      * [KitchenFlow.talkGoal]); unused when [kitchen] is null. */
     val kitchenGoal: Int = 1,
+    /** A short plain-language cue shown on screen for the whole beat (K2l), at most 4 words, e.g.
+     * "Tap the bowl", "Say mix!": he can't read yet, so this is a steady visual anchor beside
+     * Rory's spoken line, not a substitute for it. Null for every beat but Rory's Kitchen's own
+     * (every other story relies on the word chip instead; see VoiceStoryScreen). */
+    val caption: String? = null,
 ) {
     val word: String get() = lines[0]
 
@@ -188,6 +193,8 @@ object VoiceStories {
      * pop three bubbles, tap the pancake then say "flip!". The other three beats (milk, pour,
      * his taste of it) are the usual one talk-turn beat. Placed by Market Town (food, not the
      * already-busy Meadow) though the scene itself is Rory's kitchen counter ([Backdrop.KITCHEN]).
+     * Every beat carries its own [VoiceBeat.caption] (K2l): he can't read yet, so it's a steady
+     * on-screen cue ("Tap the bowl", "Say mix!") beside Rory's spoken line, not instead of it.
      */
     val kitchen = VoiceStory(
         id = "kitchen", title = "Rory's Kitchen", emoji = "🥞", land = Land.MARKET, sounds = listOf("p", "b", "m"),
@@ -196,26 +203,31 @@ object VoiceStories {
             VoiceBeat(
                 Backdrop.KITCHEN, "We need a bowl!", listOf("bowl", "big bowl", "Get the bowl!"), "b", Prop.BOWL, Move.SLIDE,
                 "Bowl! The bowl slides onto the counter!", "🥣", kitchen = KitchenFlow.TAP_CHOICE, kitchenChoices = KitchenGame.distractors,
+                caption = "Tap the bowl",
             ),
-            VoiceBeat(Backdrop.KITCHEN, "The bowl is empty. Time for milk!", listOf("milk", "pour milk", "Pour in the milk!"), "m", Prop.MILK, Move.SINK, "Milk! The milk pours into the bowl!", "🥛", still = Prop.BOWL),
+            VoiceBeat(Backdrop.KITCHEN, "The bowl is empty. Time for milk!", listOf("milk", "pour milk", "Pour in the milk!"), "m", Prop.MILK, Move.SINK, "Milk! The milk pours into the bowl!", "🥛", still = Prop.BOWL, caption = "Say milk!"),
             VoiceBeat(
                 Backdrop.KITCHEN, "Now we stir it all up!", listOf("mix", "mix it", "Mix it all up!"), "m", Prop.BATTER, Move.SHAKE,
                 "Mix! The batter is all ready!", "🥣", kitchen = KitchenFlow.STIR, kitchenGoal = 3,
+                caption = "Say mix!",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's add some berries! Help me count them in.", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
                 "Three! The berries tumble into the batter!", "🫐", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.BATTER,
+                caption = "Count the berries",
             ),
-            VoiceBeat(Backdrop.KITCHEN, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.BATTER, Move.SINK, "Pour! The batter pours into the pan!", "🥞", still = Prop.PAN),
+            VoiceBeat(Backdrop.KITCHEN, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.BATTER, Move.SINK, "Pour! The batter pours into the pan!", "🥞", still = Prop.PAN, caption = "Say pour!"),
             VoiceBeat(
                 Backdrop.KITCHEN, "Look! Bubbles are popping on the pancake!", listOf("pop", "pop pop", "Pop it!"), "p", Prop.BUBBLE, Move.POP,
                 "Pop! The pancake is bubbling and ready to flip!", "🎉", kitchen = KitchenFlow.BUBBLES, kitchenGoal = 3, still = Prop.STEAM,
+                caption = "Pop the bubbles",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Tap the pancake, then flip it!", listOf("flip", "flip it", "Flip the pancake!"), null, Prop.PANCAKE, Move.RISE,
                 "Flip! The pancake flips up and lands with a soft plop!", "🥞", kitchen = KitchenFlow.FLIP, still = Prop.PAN,
+                caption = "Tap to flip",
             ),
-            VoiceBeat(Backdrop.KITCHEN, "Bear takes a big bite!", listOf("mmm", "mmm good", "Mmm, so good!"), "m", Prop.PANCAKE, Move.SHAKE, "Mmm! Bear says thank you, and gives a happy wave!", "😋", goodbye = true),
+            VoiceBeat(Backdrop.KITCHEN, "Bear takes a big bite!", listOf("mmm", "mmm good", "Mmm, so good!"), "m", Prop.PANCAKE, Move.SHAKE, "Mmm! Bear says thank you, and gives a happy wave!", "😋", goodbye = true, caption = "Say mmm"),
         ),
         swap = null, sticker = "pancake" to "🥞",
         ending = "What a treat! You got a pancake sticker. See you next time!",

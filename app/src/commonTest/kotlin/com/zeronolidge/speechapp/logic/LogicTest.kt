@@ -1935,7 +1935,7 @@ class KitchenStoryTest {
     fun theFiveSpecialBeatsCarryTheRightFlowAndGoal() {
         val byWord = VoiceStories.kitchen.beats.associateBy { it.word }
         assertEquals(KitchenFlow.TAP_CHOICE, byWord.getValue("bowl").kitchen)
-        assertEquals(listOf("cup", "spoon"), byWord.getValue("bowl").kitchenChoices)
+        assertEquals(listOf("pan", "spoon"), byWord.getValue("bowl").kitchenChoices)
         assertEquals(KitchenFlow.STIR, byWord.getValue("mix").kitchen)
         assertEquals(3, byWord.getValue("mix").kitchenGoal)
         assertEquals(KitchenFlow.COUNT, byWord.getValue("three").kitchen)
@@ -1959,6 +1959,25 @@ class KitchenStoryTest {
             seenIndex += round.options.indexOf("bowl")
         }
         assertTrue(seenIndex.size > 1, "the bowl landed at the same index every time: $seenIndex")
+    }
+
+    /** K2l: a toddler-clear on-screen cue for every step, at most 4 words so it's a quick glance,
+     * not a reading task (he can't read yet anyway). */
+    @Test
+    fun everyKitchenBeatHasAShortCaption() {
+        for (b in VoiceStories.kitchen.beats) {
+            val caption = b.caption
+            assertTrue(!caption.isNullOrBlank(), "kitchen beat '${b.word}' has no caption")
+            val words = caption.trim().split(Regex("\\s+"))
+            assertTrue(words.size <= 4, "kitchen beat '${b.word}' caption too long: '$caption'")
+        }
+    }
+
+    /** K2l: a coffee cup doesn't belong in a toddler pancake kitchen (Ruby's screenshot catch). */
+    @Test
+    fun theBowlDistractorsNeverIncludeACup() {
+        assertTrue("cup" !in KitchenGame.distractors)
+        assertTrue("cup" !in VoiceStories.kitchen.beats.first { it.word == "bowl" }.kitchenChoices)
     }
 }
 
