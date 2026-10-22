@@ -1415,6 +1415,34 @@ class VoicePushTest {
         loud.pressed()
         assertEquals(s, loud.strength)
     }
+
+    /** Rory's Kitchen's milk beat (Aida): a short or quiet "mmm" must still pour a little milk,
+     * never nothing, while a longer one still clearly pours more; only true silence pours none. */
+    @Test
+    fun aShortOrQuietHoldStillPoursSomethingNeverZero() {
+        // A quiet "mmm" right at VoiceMeter's own push floor (0.08), held about 150 ms: short
+        // and quiet is exactly the case that used to work out to only a few percent.
+        val shortQuiet = VoicePush(VoicePush.Mode.HOLD).apply { repeat(3) { feed(0.08f, 50) } }
+        assertTrue(shortQuiet.progress > 0f)
+        assertTrue(shortQuiet.progress >= VoicePush.FIRST_VOICE_FLOOR, "${shortQuiet.progress}")
+        // The same quiet level held twice as long (about 300 ms) pours more, never less.
+        val longerQuiet = VoicePush(VoicePush.Mode.HOLD).apply { repeat(6) { feed(0.08f, 50) } }
+        assertTrue(longerQuiet.progress > shortQuiet.progress)
+        // The same holds for a word with no named sound (LOUDNESS mode).
+        val shortLoudness = VoicePush().apply { repeat(3) { feed(0.08f, 50) } }
+        assertTrue(shortLoudness.progress >= VoicePush.FIRST_VOICE_FLOOR)
+        // Nothing voiced at all pours nothing.
+        val none = VoicePush(VoicePush.Mode.HOLD).apply { repeat(10) { feed(0f, 50) } }
+        assertEquals(0f, none.progress)
+        // "I said it!" shows some result too, even pressed cold with no voice attempted at all.
+        val pressedCold = VoicePush().apply { pressed() }
+        assertTrue(pressedCold.progress >= VoicePush.FIRST_VOICE_FLOOR)
+        // The floor never shrinks the gap between a quiet short try and a loud one that reaches
+        // the end by itself (the existing louder-pushes-further guarantee must still hold).
+        val quiet4 = VoicePush().apply { repeat(4) { feed(0.15f, 50) } }
+        val loud4 = VoicePush().apply { repeat(4) { feed(0.9f, 50) } }
+        assertTrue(loud4.progress > quiet4.progress * 2, "${loud4.progress} vs ${quiet4.progress}")
+    }
 }
 
 /** The room's loudness is reused between turns, so it's never measured while Rory talks. */
@@ -2029,6 +2057,22 @@ class KitchenBeatStateTest {
         val start = KitchenBeatState(KitchenFlow.STIR, goal = 3)
         assertEquals(start, start.talked())
         assertEquals(start, start.tap(true))
+    }
+
+    /** Aida (speech therapist): "mix!" and "pop!" must model once per try, then wait quietly for
+     * the child, never nag. The state machine itself must never drop back to NAME or TAP mid-flow
+     * (VoiceStoryScreen's startKitchenTalk explicitly starts each new try; see the TALK case in
+     * its `LaunchedEffect(kitchenPhase.phase)`): a return to NAME is what would replay the model
+     * line from scratch instead of just listening again. */
+    @Test
+    fun stirAndBubblesStayInTalkAcrossEveryTryNeverReNamingOrRetapping() {
+        for (flow in listOf(KitchenFlow.STIR, KitchenFlow.BUBBLES)) {
+            var s = KitchenBeatState(flow, goal = 3).named()
+            val phases = mutableListOf(s.phase)
+            repeat(3) { s = s.talked(); phases += s.phase }
+            assertTrue(phases.dropLast(1).all { it == KitchenPhase.TALK }, "$flow: $phases")
+            assertEquals(KitchenPhase.CLOSE, phases.last())
+        }
     }
 
     @Test

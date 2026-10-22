@@ -438,6 +438,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val say = line(k)
         fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
         pulse(false)
+        if (beats[k].backdrop == Backdrop.KITCHEN) {
+            // Kitchen (Aida): Rory models the word once, then goes quiet and waits.
+            app.speaker.say(say) { if (s == session && phase == VPhase.MODEL) { pulse(true); listen(k) } }
+            return
+        }
         app.speaker.say(say) { pulse(false) }
         app.speaker.then(say) { pulse(true) }
         app.speaker.then(say, slow = true) { if (s == session && phase == VPhase.MODEL) listen(k) }

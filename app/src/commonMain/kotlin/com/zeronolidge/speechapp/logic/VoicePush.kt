@@ -36,6 +36,14 @@ class VoicePush(val mode: Mode = Mode.LOUDNESS) {
     /** One reading of [push] (0 to 1, see [VoiceMeter.push]) lasting [ms]. Returns true once it reaches the end. */
     fun feed(push: Float, ms: Int): Boolean {
         if (push > 0f) {
+            // A short or quiet try (a quiet voice right at [VoiceMeter]'s floor, held barely
+            // 150 ms) worked out to only a few percent under HOLD/LOUDNESS's own maths: too small
+            // to read as "something happened" (Rory's Kitchen's milk jug barely dipped). The very
+            // first reading of any try bumps it up to [FIRST_VOICE_FLOOR] once, so any detected
+            // voicing shows at once; a longer or louder try still ends up further still (BURSTS
+            // words are already well above this floor from one pop alone, so it never applies
+            // there in practice).
+            val firstVoice = peak == 0f
             peak = maxOf(peak, push)
             when (mode) {
                 Mode.BURSTS -> if (quietMs >= BURST_GAP_MS) {
@@ -45,6 +53,7 @@ class VoicePush(val mode: Mode = Mode.LOUDNESS) {
                 Mode.HOLD -> progress = minOf(1f, progress + ms / 1000f * holdSpeed(push))
                 Mode.LOUDNESS -> progress = minOf(1f, progress + ms / 1000f * speed(push))
             }
+            if (firstVoice) progress = minOf(1f, maxOf(progress, FIRST_VOICE_FLOOR))
             quietMs = 0
         } else {
             quietMs += ms
@@ -79,6 +88,8 @@ class VoicePush(val mode: Mode = Mode.LOUDNESS) {
     fun pressed() {
         // Never weaker than medium, even after a faint try.
         peak = maxOf(peak, PRESSED)
+        // The backup button always shows some visible result too, not just a loud flourish.
+        progress = minOf(1f, maxOf(progress, FIRST_VOICE_FLOOR))
     }
 
     /**
@@ -106,6 +117,12 @@ class VoicePush(val mode: Mode = Mode.LOUDNESS) {
 
         /** "I said it!" plays at least this strong (medium). */
         const val PRESSED = 0.5f
+
+        /** The least any detected voicing (or "I said it!") ever shows, so a short or quiet try
+         * (down at [VoiceMeter]'s own floor, say 150 ms of a quiet "mmm") never looks like nothing
+         * happened: chosen well under a single quiet LOUDNESS/HOLD reading's own push over a few
+         * tenths of a second, so a longer or louder try still clearly goes further. */
+        const val FIRST_VOICE_FLOOR = 0.06f
 
         /** The same for a word or line with no named sound: its first consonant's. */
         fun modeForLine(line: String, sound: String?): Mode = modeFor(sound ?: Swaps.firstSound(line.trim().lowercase()))
