@@ -1,6 +1,23 @@
 package com.zeronolidge.speechapp.ui.art
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import com.zeronolidge.speechapp.logic.KitchenCut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
@@ -41,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.logic.Backdrop
 import com.zeronolidge.speechapp.logic.Cosmetic
 import com.zeronolidge.speechapp.logic.KitchenEndStage
+import com.zeronolidge.speechapp.logic.KitchenFlow
 import com.zeronolidge.speechapp.logic.KitchenLayout
 import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Light
@@ -117,12 +135,18 @@ private fun propSize(p: Prop) = when (p) {
     // lane, see KitchenLayout), so these five had to shrink to fit inside them without the two
     // stations' props reaching into each other or into Rory -- the old sizes (up to 0.34 for the
     // pan) were sized for the wider, Rory-straddling band K3b used, not K3c's two slimmer ones.
-    Prop.BOWL -> 0.18f
-    Prop.MILK -> 0.2f
-    Prop.BATTER -> 0.18f
+    // K6: bowl/batter/milk shrank further still, to make room for milk's own ingredient station
+    // (KitchenLayout.ingredientBox) beside the bowl's -- a real screenshot showed the milk carton
+    // drawn right on top of the bowl, hiding it completely.
+    Prop.BOWL -> 0.14f
+    Prop.MILK -> 0.12f
+    Prop.BATTER -> 0.14f
     Prop.PAN -> 0.16f
     Prop.PANCAKE -> 0.15f
     Prop.STEAM -> 0.14f
+    // K6: the butter-cutting mini-sequence's own plate, on the same ingredient station milk uses
+    // (by the time it plays, milk's long since poured).
+    Prop.BUTTER -> 0.14f
 }
 
 /** [Prop.BUBBLE]'s own [propSize] (0.3) is shared with the River story's bubble-pop beat, where
@@ -244,6 +268,25 @@ fun VoiceBeatScene(
     /** Rory's Kitchen only (K3a): a paper speech-bubble beside him for the whole of a talk-type
      * beat (never a tap step), the same visual anchor the hint hand already is for a tap step. */
     kitchenSpeechBubble: Boolean = false,
+    /** Rory's Kitchen only (K6): a real wide stage, independent of [landscape] (which only turns
+     * on alongside the choice-strip lift) -- grows Rory and Bear 20-30% ([KitchenLayout.bearBox]/
+     * [KitchenRory]'s own `wide`), since a landscape TALK step (no strip at all) used to pass
+     * `landscape = false` throughout and left them looking small under a lot of empty wall. */
+    wide: Boolean = landscape,
+    /** Rory's Kitchen only (K6): [Prop.BUTTER] draws as two slid-apart pieces once the
+     * butter-cutting step's swipe has fired (or, in the beat right after it, already cut), one
+     * pat before that. */
+    butterCut: Boolean = false,
+    /** Rory's Kitchen only (K6): the counting beat's berries already hopped into the bowl, and
+     * the tap handler for the three waiting on the counter (null on every other beat). */
+    countHopped: Set<Int> = emptySet(),
+    onBerryTap: ((Int) -> Unit)? = null,
+    /** Rory's Kitchen only (K6): the swipe-to-cut step is live (dotted line, hint, knife). */
+    onCut: (() -> Unit)? = null,
+    /** Rory's Kitchen only (K6): a big numeral popped up beside the bowl/butter ("2"). */
+    bigNumeral: String? = null,
+    /** Rory's Kitchen only (K6): each on-counter tap target's window centre, for the KITCHEN log. */
+    onKitchenTarget: ((Int, Offset) -> Unit)? = null,
     /** Rory's Kitchen only: reports the scene's own on-screen box, for the KITCHEN rects log. */
     onSceneRect: ((androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
     /** Rory's Kitchen only (K3e): reports each kitchen prop's own real drawn box (window
@@ -275,8 +318,8 @@ fun VoiceBeatScene(
             // counter (K2f; see KitchenRory/KitchenCounterFront): every other backdrop is one
             // flat layer (BackdropExtras).
             if (isKitchen) {
-                KitchenWall()
-                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble)
+                KitchenWall(landscape)
+                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble, wide)
                 KitchenCounterFront(landscape)
             } else {
                 BackdropExtras(beat.backdrop)
@@ -296,22 +339,32 @@ fun VoiceBeatScene(
                 Item(
                     if (isKitchen) kitchenUnit * kitchenPropSize(sp) else unit * propSize(sp) * 0.8f, { sx }, { sy },
                     onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(sp, c) },
-                ) { PropArt(sp, { 1f }, null, beat) }
+                ) { PropArt(sp, { 1f }, null, beat, butterCut) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
             val kitchenPropCenter = if (isKitchen) kitchenCenter(beat.prop) else null
+            // K6: the counting beat draws its own three waiting berries right on the counter
+            // (`KitchenCountRow` in VoiceStory.kt), beside the bowl -- the generic single-pile
+            // render below would draw a 4th, separate pile centred on the bowl itself instead.
+            val suppressed = isKitchen && beat.kitchen == KitchenFlow.COUNT
             // While the pattern puzzle is up, the beat's own prop is tucked into a safe corner,
             // clear of the pattern row above the choice strip (it used to sit left-of-centre and
             // cover the row's first balloon); it stays small but visible, Bear and all. Rory's
             // Kitchen's own choice strip never needs this: its counter position is already clear
             // of it (K3b).
-            Item(
+            if (!suppressed) Item(
                 if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(beat.prop, c) },
-            ) { PropArt(beat.prop, f, beat.propEmoji, beat) }
+            ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut) }
+            if (isKitchen && beat.kitchen == KitchenFlow.COUNT) KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
+            // the "how many berries?" ask keeps the three berries in the bowl, with no numeral
+            // (it would give the answer away)
+            if (isKitchen && beat.kitchen == KitchenFlow.ASK && beat.prop == Prop.BATTER) KitchenCountRow(landscape, setOf(0, 1, 2), null, null, showCount = false)
+            if (isKitchen && onCut != null) KitchenCutOverlay(landscape, onCut, onKitchenTarget)
+            if (isKitchen && bigNumeral != null) KitchenNumeral(bigNumeral, if (beat.prop == Prop.BUTTER) KitchenLayout.ingredientBox(landscape) else KitchenLayout.bowlBox(landscape))
             // The light changes with the move: the sun comes up (dawn) or night falls (dusk).
             if (beat.light != Light.SAME) {
                 Canvas(Modifier.fillMaxSize()) {
@@ -321,7 +374,7 @@ fun VoiceBeatScene(
             }
             // Bear sits in front of the counter and its props (K2f), drawn last so his lean
             // never disappears behind anything on it.
-            if (beat.backdrop == Backdrop.KITCHEN) KitchenBear(landscape)
+            if (beat.backdrop == Backdrop.KITCHEN) KitchenBear(landscape, wide = wide)
         }
     }
 }
@@ -345,17 +398,32 @@ fun KitchenEndingScene(
      * [KitchenBear]'s own `onBiteRects`); the caller (VoiceStory.kt) decides whether/when to
      * actually print it. */
     onBiteRects: ((String) -> Unit)? = null,
+    /** K6: a real wide stage, same as every other kitchen beat's own `wide` (see
+     * [VoiceBeatScene]) -- the ending gets the same bigger Rory and Bear, and the same wall
+     * decor, as any other landscape beat. */
+    wide: Boolean = landscape,
 ) {
     val bitten = stage != KitchenEndStage.STACK
     Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val unit = minOf(maxWidth, maxHeight * 1.4f)
-            KitchenWall()
-            KitchenRory(landscape, talking = false, roryVisible = true)
+            KitchenWall(landscape)
+            KitchenRory(landscape, talking = false, roryVisible = true, wide = wide)
             KitchenCounterFront(landscape)
+            // K6: a real plate on the counter, next to Rory, about half his own height and as
+            // wide as his body (Ruby's old version floated free, taller than Rory, no plate at
+            // all) -- sized straight off his own real fitted box ([KitchenLayout.roryFittedBox]),
+            // so it always reads as sitting beside him, whatever his own size ends up being.
+            val rory = KitchenLayout.roryFittedBox(maxWidth.value, maxHeight.value, landscape, wide)
             val ct = KitchenLayout.counterTop(landscape)
-            Item(unit * 0.4f, { 0.56f }, { ct + (1f - ct) * 0.42f }) { PancakeStackArt(bitten) }
-            KitchenBear(landscape, leanAmount, onBiteRects)
+            val counterTopPx = maxHeight.value * ct
+            val stackHeight = (rory.b - rory.t) * 0.5f
+            val stackWidth = (rory.r - rory.l).coerceAtMost(maxWidth.value * 0.97f - rory.r)
+            val stackLeft = (rory.r + maxWidth.value * 0.015f).coerceAtMost(maxWidth.value * 0.97f - stackWidth)
+            Box(
+                Modifier.offset(x = stackLeft.dp, y = (counterTopPx - stackHeight).dp)
+                    .size(stackWidth.dp, stackHeight.dp),
+            ) { PancakeStackArt(bitten) }
+            KitchenBear(landscape, leanAmount, onBiteRects, wide)
         }
     }
 }
@@ -393,14 +461,54 @@ private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop) {
     if (b == Backdrop.ISLAND) Item(unit * 0.16f, { 0.84f }, { 0.5f }) { Emoji("🌴", unit * 0.16f) }
 }
 
-/** Rory's Kitchen's back-most layer (K2f): one flat cream wall/floor, covering the whole scene.
+/**
+ * Rory's Kitchen's back-most layer (K2f): one flat cream wall/floor, covering the whole scene.
  * [KitchenCounterFront] paints over the counter's own share of it afterwards; because this is one
  * uninterrupted rect rather than two separately-positioned pieces meeting at the counter top line
  * (K2a to K2e's approach), there's no seam to line up at all. Drawn before [KitchenRory] so he
- * stands in front of the wall but behind the counter that follows him. */
+ * stands in front of the wall but behind the counter that follows him.
+ *
+ * K6: Timothy's landscape screenshot of a talk step (no choice strip -- `VoiceBeatScene` only
+ * ever passes `landscape = true` here alongside the strip lift, see its own doc) showed a wide,
+ * empty cream band above the counter. A small paper-art window (a pale sky patch with a plain
+ * cross mullion) and a shelf with a jar or two fill that space without competing with anything
+ * that moves: both sit well to the right of Rory and Bear's lanes (`WALL_LEFT`, clear of
+ * [KitchenLayout.bearRight]/[KitchenLayout.roryLeft] at any width, even the widened `wide` ones)
+ * and well above the counter top line, scaled to whatever share of the wall is actually on screen
+ * ([ct]) so neither ever dips down into the counter itself.
+ */
+private const val WALL_LEFT = 0.56f
+private const val WALL_RIGHT = 0.92f
+
 @Composable
-private fun KitchenWall() {
-    Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xFFFFF3E3)) }
+private fun KitchenWall(landscape: Boolean = false) {
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        drawRect(Color(0xFFFFF3E3))
+        val ct = KitchenLayout.counterTop(landscape)
+        val windowTop = ct * 0.08f
+        val windowBottom = ct * 0.50f
+        val wx0 = w * WALL_LEFT
+        val wx1 = w * WALL_RIGHT
+        paperRoundRect(
+            Color(0xFFBEE3F5), Offset(wx0, h * windowTop), Size(wx1 - wx0, h * (windowBottom - windowTop)),
+            CornerRadius(w * 0.02f),
+        )
+        drawLine(Color(0xFFFFFFFF), Offset((wx0 + wx1) / 2f, h * windowTop), Offset((wx0 + wx1) / 2f, h * windowBottom), 3.dp.toPx())
+        drawLine(Color(0xFFFFFFFF), Offset(wx0, h * (windowTop + windowBottom) / 2f), Offset(wx1, h * (windowTop + windowBottom) / 2f), 3.dp.toPx())
+        drawRect(Color(0xFF9E7B52), Offset(wx0, h * windowTop), Size(wx1 - wx0, h * (windowBottom - windowTop)), style = Stroke(3.dp.toPx()))
+        // A little paper shelf below the window, with a jar or two sitting on it.
+        val shelfY = ct * 0.64f
+        paperRect(Color(0xFF9E7B52), Offset(wx0, h * shelfY), Size(wx1 - wx0, h * 0.02f))
+        listOf(0.2f, 0.55f).forEach { jx ->
+            val jarW = (wx1 - wx0) * 0.18f
+            val jarH = h * ct * 0.14f
+            val jl = wx0 + (wx1 - wx0) * jx
+            paperRoundRect(Color(0xFFDCEEDC), Offset(jl, h * shelfY - jarH), Size(jarW, jarH), CornerRadius(jarW * 0.2f))
+            paperRect(Color(0xFFC9773A), Offset(jl + jarW * 0.2f, h * shelfY - jarH - jarH * 0.18f), Size(jarW * 0.6f, jarH * 0.2f))
+        }
+    }
 }
 
 /** Rory's Kitchen's counter, its front face only (K2f): drawn after [KitchenRory] so it paints
@@ -440,7 +548,11 @@ private fun DrawScope.paperStool() {
     listOf(w * 0.2f, w * 0.5f, w * 0.8f).forEach { x ->
         drawLine(legColor, Offset(x, seatY), Offset(x, h), w * 0.1f, cap = StrokeCap.Round)
     }
-    paperOval(Color(0xFFD1492F), Offset(w * 0.08f, 0f), Size(w * 0.84f, seatY * 1.3f))
+    // K6: the seat's own side margins (equal on both sides) are KitchenLayout's shared constant,
+    // not a bare literal, so [KitchenLayout.stoolSeatCenterXFraction]'s own promise that the seat
+    // is centred within this canvas stays true for however this margin is tuned later.
+    val margin = KitchenLayout.STOOL_SEAT_SIDE_MARGIN
+    paperOval(Color(0xFFD1492F), Offset(w * margin, 0f), Size(w * (1f - 2f * margin), seatY * 1.3f))
 }
 
 /** Bear's constant "turned toward the pan" stance (K2e, widened at K2f): a clockwise lean and a
@@ -505,10 +617,13 @@ private fun BoxWithConstraintsScope.KitchenBear(
     landscape: Boolean,
     leanAmount: Float = 0f,
     onBiteRects: ((String) -> Unit)? = null,
+    /** K6: a real wide stage (see [VoiceBeatScene]'s own `wide`) grows Bear 20-30% into the gap
+     * between his own lane and Rory's -- see [KitchenLayout.bearBox]'s own doc. */
+    wide: Boolean = false,
 ) {
     val w = maxWidth.value
     val h = maxHeight.value
-    val bear = KitchenLayout.bearBox(landscape)
+    val bear = KitchenLayout.bearBox(landscape, wide)
     val laneWidth = w * (bear.r - bear.l)
     val laneHeight = h * (bear.b - bear.t)
     // K2k: fitted to a slice of the lane this much narrower than the lane itself (never less than
@@ -562,12 +677,19 @@ private fun BoxWithConstraintsScope.KitchenBear(
     // Bear's own bottom (drawn below, at seatY, and on top of this Canvas in draw order) always
     // overlaps the stool's own drawn seat by that much instead of merely touching it (a real
     // screenshot showed a hairline gap between the two that read as him floating).
-    val stoolTopY = h * KitchenLayout.stoolTop(landscape)
+    val stoolTopY = h * KitchenLayout.stoolTop(landscape, wide)
     Box(
         Modifier.offset(x = laneLeft.dp, y = stoolTopY.dp).size(bearWidth.dp, (floorY - stoolTopY).dp),
+        // K6: Timothy's screenshot showed the stool's own seat sitting well left of Bear's own
+        // body -- this canvas used to default to `Alignment.TopStart` (a plain `Box`'s own
+        // default), pinning it to this box's LEFT edge instead of centring it the way Bear's own
+        // puppet below fills the whole box; `Alignment.TopCenter` keeps
+        // [KitchenLayout.stoolSeatCenterXFraction]'s own promise (always 0.5, Bear's own centre)
+        // true for any width.
+        contentAlignment = Alignment.TopCenter,
     ) {
         Canvas(
-            Modifier.fillMaxWidth(0.6f).fillMaxHeight()
+            Modifier.fillMaxWidth(KitchenLayout.STOOL_CANVAS_WIDTH_FRACTION).fillMaxHeight()
                 .graphicsLayer {
                     rotationZ = BearFacingTiltDeg
                     rotationY = BearFacingTurnDeg
@@ -667,10 +789,13 @@ private fun BoxWithConstraintsScope.KitchenRory(
     roryVisible: Boolean,
     pointing: Boolean = false,
     speechBubble: Boolean = false,
+    /** K6: a real wide stage (see [VoiceBeatScene]'s own `wide`) grows Rory 20-30% into the gap
+     * between his own lane and Bear's -- see [KitchenLayout.roryBox]'s own doc. */
+    wide: Boolean = false,
 ) {
     val w = maxWidth.value
     val h = maxHeight.value
-    val rory = KitchenLayout.roryBox(landscape)
+    val rory = KitchenLayout.roryBox(landscape, wide)
     val laneLeft = w * rory.l
     val laneTop = h * rory.t
     val laneWidth = w * (rory.r - rory.l)
@@ -688,7 +813,7 @@ private fun BoxWithConstraintsScope.KitchenRory(
             // instead of behind it. [KitchenLayout.roryFittedBox] anchors his feet to the counter
             // top line directly, by his own fitted height, so he always emerges from behind it by
             // the same proportion however much the lane narrows him.
-            val fitted = KitchenLayout.roryFittedBox(w, h, landscape)
+            val fitted = KitchenLayout.roryFittedBox(w, h, landscape, wide)
             Critter(
                 Species.ROBOT,
                 Modifier.offset(x = (fitted.l - laneLeft).dp, y = (fitted.t - laneTop).dp)
@@ -710,7 +835,7 @@ private fun BoxWithConstraintsScope.KitchenRory(
  * leaves flip to their darker side, Owl wakes up. [emoji] shows his own word instead.
  */
 @Composable
-private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat) {
+private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat, butterCut: Boolean = false) {
     if (emoji != null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 44.sp) }
         return
@@ -1008,6 +1133,24 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat)
                 drawPath(wisp, Color.White.copy(alpha = 0.55f - i * 0.1f), style = Stroke(4.dp.toPx()))
             }
         }
+        // K6: the butter-cutting mini-sequence's own small plate -- one pat (before the cut) or
+        // two pieces, slid a little apart (after it); `butterCut` comes from VoiceStoryScreen (the
+        // beat's own phase, not this prop's usual move/f -- the cut is a swipe, not a voice push).
+        Prop.BUTTER -> {
+            // The halves slide apart once cut (and stay apart on the beat after).
+            val sep by animateFloatAsState(if (butterCut) 1f else 0f, tween(450), label = "butterSep")
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                paperOval(Color.White, Offset(w * 0.04f, h * 0.68f), Size(w * 0.92f, h * 0.24f))
+                drawOval(Color(0xFFE0E0E0), Offset(w * 0.1f, h * 0.71f), Size(w * 0.8f, h * 0.15f), style = Stroke(1.5.dp.toPx()))
+                val pw = w * 0.2f
+                val ph = h * 0.26f
+                val top = h * 0.48f
+                paperRoundRect(Color(0xFFFFE066), Offset(w * 0.3f - w * 0.09f * sep, top), Size(pw, ph), CornerRadius(w * 0.04f))
+                paperRoundRect(Color(0xFFFFE066), Offset(w * 0.5f + w * 0.09f * sep, top), Size(pw, ph), CornerRadius(w * 0.04f))
+            }
+        }
     }
 }
 
@@ -1062,14 +1205,17 @@ private fun PancakeSteam(modifier: Modifier = Modifier) {
         val w = size.width
         val h = size.height
         val p = if (still) 0f else phase
-        listOf(0.28f, 0.5f, 0.72f).forEachIndexed { i, x ->
+        // K6: 3 SHORT wisps, starting just above the stack's own top (py~0.26, see
+        // PancakeStackArt) and fading out well before the top of the box -- the old version ran
+        // the full height of the box, from near the counter up past the top, which read as tall
+        // lines through the counter once the box itself shrank to a sane, Rory-relative size.
+        listOf(0.3f, 0.5f, 0.68f).forEachIndexed { i, x ->
             val rise = (p + i / 3f) % 1f
             val wisp = Path().apply {
-                moveTo(w * x, h * (0.96f - rise * 0.1f))
-                quadraticTo(w * (x - 0.09f), h * (0.56f - rise * 0.12f), w * x, h * (0.3f - rise * 0.1f))
-                quadraticTo(w * (x + 0.09f), h * (0.12f - rise * 0.1f), w * x, h * (-0.04f - rise * 0.08f))
+                moveTo(w * x, h * (0.24f - rise * 0.03f))
+                quadraticTo(w * (x - 0.06f), h * (0.12f - rise * 0.05f), w * x, h * (0.02f - rise * 0.06f))
             }
-            drawPath(wisp, Color.White.copy(alpha = 0.6f * (1f - rise)), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(wisp, Color.White.copy(alpha = 0.55f * (1f - rise)), style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
         }
     }
 }
@@ -1090,19 +1236,36 @@ private fun PancakeSteam(modifier: Modifier = Modifier) {
 @Composable
 fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize()) {
+        // K6: 2-3 short wisps, just above the stack's own top (py~0.42 below), never the full
+        // height of the box -- a tall line used to run straight down through where the counter
+        // sits once the box itself shrank to a sane, Rory-relative size (see KitchenEndingScene).
         PancakeSteam(Modifier.fillMaxSize())
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            val layers = listOf(0.86f to 0.62f, 0.76f to 0.46f, 0.66f to 0.3f)
+            // K6: a real plate under the stack (Ruby's old version floated free with no plate at
+            // all) -- a wide, flat white oval sitting on the counter, the stack's own lowest
+            // pancake resting just inside its own rim.
+            paperOval(Color.White, Offset(w * 0.04f, h * 0.74f), Size(w * 0.92f, h * 0.2f))
+            paperOval(Color(0xFFE0E0E0), Offset(w * 0.1f, h * 0.78f), Size(w * 0.8f, h * 0.1f))
+            // Three puffy pancakes, each a touch smaller and lighter-edged than the one below, a
+            // slightly uneven outline (not a perfect oval) so they read as stacked, not stamped.
+            val layers = listOf(0.7f to 0.56f, 0.6f to 0.4f, 0.5f to 0.26f)
             layers.forEachIndexed { i, (pw, py) ->
-                val top = Path().apply { addOval(Rect(Offset(w * (0.5f - pw / 2f), h * py), Size(w * pw, h * 0.22f))) }
+                val top = Path().apply {
+                    moveTo(w * (0.5f - pw / 2f), h * (py + 0.11f))
+                    quadraticTo(w * (0.5f - pw * 0.3f), h * (py - 0.02f), w * 0.5f, h * (py + 0.01f))
+                    quadraticTo(w * (0.5f + pw * 0.32f), h * (py - 0.015f), w * (0.5f + pw / 2f), h * (py + 0.1f))
+                    quadraticTo(w * (0.5f + pw * 0.3f), h * (py + 0.21f), w * 0.5f, h * (py + 0.2f))
+                    quadraticTo(w * (0.5f - pw * 0.32f), h * (py + 0.215f), w * (0.5f - pw / 2f), h * (py + 0.11f))
+                    close()
+                }
                 val highlight = Path().apply {
-                    addOval(Rect(Offset(w * (0.5f - pw * 0.39f), h * (py + 0.02f)), Size(w * pw * 0.78f, h * 0.15f)))
+                    addOval(Rect(Offset(w * (0.5f - pw * 0.36f), h * (py + 0.02f)), Size(w * pw * 0.72f, h * 0.14f)))
                 }
                 if (bitten && i == layers.lastIndex) {
-                    val biteTotalW = w * pw * 0.35f
-                    val scallopD = h * 0.22f * 0.5f
+                    val biteTotalW = w * pw * 0.4f
+                    val scallopD = h * 0.2f * 0.5f
                     val scallopR = scallopD / 2f
                     val edgeX = w * (0.5f - pw / 2f)
                     val centerY = h * (py + 0.11f)
@@ -1122,8 +1285,16 @@ fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
                     paperPath(highlight, Color(0xFFF2C06B))
                 }
             }
-            // A pat of butter, melting on top.
-            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.44f, h * 0.24f), Size(w * 0.12f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
+            // The two cut butter pieces (K6: the butter-cutting step's own halves) on top, with a
+            // syrup drip down the stack's own side.
+            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.37f, h * 0.16f), Size(w * 0.1f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
+            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.52f, h * 0.15f), Size(w * 0.1f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
+            val drip = Path().apply {
+                moveTo(w * 0.62f, h * 0.22f)
+                quadraticTo(w * 0.68f, h * 0.4f, w * 0.64f, h * 0.6f)
+                quadraticTo(w * 0.6f, h * 0.7f, w * 0.66f, h * 0.76f)
+            }
+            drawPath(drip, Color(0xFFB9752E), style = Stroke(w * 0.025f, cap = StrokeCap.Round))
         }
     }
 }
@@ -1201,6 +1372,146 @@ fun HolePunchConfetti(at: Offset, f: () -> Float, modifier: Modifier = Modifier)
             val d = u * speed * kotlin.math.sqrt(t)
             val c = Offset(size.width * at.x + cos(a) * d, size.height * at.y + sin(a) * d * 0.7f + u * 0.25f * t * t)
             paperCircle(colors[k % colors.size].copy(alpha = 1f - t), u * 0.011f, c)
+        }
+    }
+}
+
+/** K6: the counting beat's three big berries, waiting in a row on the counter beside the bowl
+ * (the pan isn't out yet, so they use the ingredient and pan stations together); a tap hops one
+ * into the bowl in an arc, where it stays, sitting on the batter. */
+@Composable
+private fun BoxWithConstraintsScope.KitchenCountRow(landscape: Boolean, hopped: Set<Int>, onTap: ((Int) -> Unit)?, onTarget: ((Int, Offset) -> Unit)?, showCount: Boolean = true) {
+    val bowl = KitchenLayout.bowlBox(landscape)
+    val counter = KitchenLayout.counterTop(landscape) + KitchenLayout.PROPS_MARGIN
+    val size = minOf(maxWidth * 0.085f, maxHeight * 0.11f, 84.dp)
+    val sizeFracY = size / maxHeight
+    val sizeFracX = size / maxWidth
+    val bowlCx = (bowl.l + bowl.r) / 2f
+    // Props stand ON the counter line (their bottoms at the station's top), so the bowl's rim
+    // is about one bowl-height above it.
+    val bowlH = (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BATTER)) / maxHeight
+    val bowlTop = bowl.t - bowlH * 0.62f
+    val pulse = rememberInfiniteTransition(label = "berryPulse").animateFloat(
+        1f, 1.12f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "p",
+    )
+    val next = (0..2).firstOrNull { it !in hopped }
+    for (i in 0..2) {
+        val restX = 0.66f + i * 0.1f
+        val restY = counter - sizeFracY * 0.5f
+        val inX = bowlCx + (i - 1) * sizeFracX * 0.5f
+        val inY = bowlTop
+        val t by animateFloatAsState(if (i in hopped) 1f else 0f, tween(550), label = "hop$i")
+        val x = restX + (inX - restX) * t
+        val y = restY + (inY - restY) * t - 0.18f * kotlin.math.sin(kotlin.math.PI.toFloat() * t)
+        val s = if (i in hopped) 0.8f + 0.2f * (1f - t) else if (i == next) pulse.value else 1f
+        Item(size, { x }, { y }, scale = { s }) {
+            Box(
+                Modifier.fillMaxSize().onGloballyPositioned { c ->
+                    val pos = c.positionInWindow()
+                    onTarget?.invoke(i, Offset(pos.x + c.size.width / 2f, pos.y + c.size.height / 2f))
+                }.let { m ->
+                    if (onTap == null || i in hopped) m
+                    else m.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onTap(i) }
+                },
+            ) { BigBerry(Modifier.fillMaxSize()) }
+        }
+    }
+    val count = hopped.size
+    if (count > 0 && showCount) KitchenNumeral(count.toString(), bowl, key = count)
+}
+
+@Composable
+private fun BigBerry(modifier: Modifier) = Canvas(modifier) {
+    val r = size.minDimension * 0.42f
+    val c = Offset(size.width / 2f, size.height * 0.55f)
+    drawCircle(Color(0xFF3949AB), r, c)
+    drawCircle(Color(0xFF5C6BC0), r * 0.82f, c.copy(y = c.y - r * 0.08f))
+    drawCircle(Color.White.copy(alpha = 0.55f), r * 0.2f, Offset(c.x - r * 0.38f, c.y - r * 0.38f))
+    // the little crown on top
+    for (k in -1..1) drawLine(Color(0xFF283593), Offset(c.x, c.y - r * 0.72f), Offset(c.x + k * r * 0.28f, c.y - r * 0.98f), r * 0.12f, cap = StrokeCap.Round)
+}
+
+/** K6: a big numeral that pops up above [box] (scene fractions), counting as it changes. */
+@Composable
+private fun BoxWithConstraintsScope.KitchenNumeral(text: String, box: KitchenLayout.Rect, key: Any = text) {
+    val pop = remember(key) { Animatable(0.3f) }
+    LaunchedEffect(key) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 300f)) }
+    val size = minOf(maxWidth * 0.12f, maxHeight * 0.16f, 120.dp)
+    val cx = (box.l + box.r) / 2f
+    // Above the prop itself (props stand on the counter line, box.t), never over it.
+    val propH = (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BATTER)) / maxHeight
+    val cy = (box.t - propH * 1.15f - (size / maxHeight) * 0.5f).coerceAtLeast(0.08f)
+    Item(size, { cx }, { cy }, scale = { pop.value }) {
+        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.92f), CircleShape), contentAlignment = Alignment.Center) {
+            Text(text, fontSize = (size.value * 0.6f).sp, fontWeight = FontWeight.Black, color = Color(0xFFE65100))
+        }
+    }
+}
+
+/** K6: the swipe-to-cut step: a glowing dotted line over the butter, a one-time hand-swipe hint,
+ * and a rounded wooden toy knife that follows the finger only while cutting. Any drag of at least
+ * [KitchenCut.THRESHOLD_DP] counts, any direction; a tap on the line is the backup. */
+@Composable
+private fun BoxWithConstraintsScope.KitchenCutOverlay(landscape: Boolean, onCut: () -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
+    val box = KitchenLayout.ingredientBox(landscape)
+    val density = LocalDensity.current
+    val wPx = constraints.maxWidth.toFloat()
+    val hPx = constraints.maxHeight.toFloat()
+    val cx = (box.l + box.r) / 2f * wPx
+    val butter = with(density) { (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BUTTER)).toPx() }
+    val cy = box.t * hPx - butter * 0.45f
+    val zone = butter * 1.7f
+    var done by remember { mutableStateOf(false) }
+    var knife by remember { mutableStateOf<Offset?>(null) }
+    var dragged by remember { mutableStateOf(0f) }
+    val glow = rememberInfiniteTransition(label = "cutGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
+    val hint = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(900); hint.animateTo(1f, tween(1300)) }
+    // The knife stays under his finger until he lets go, even once the cut has fired.
+    fun fire() { if (!done) { done = true; onCut() } }
+    Box(
+        Modifier.offset { IntOffset((cx - zone / 2f).roundToInt(), (cy - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
+            .onGloballyPositioned { c ->
+                val pos = c.positionInWindow()
+                onTarget?.invoke(0, Offset(pos.x + c.size.width / 2f, pos.y + c.size.height / 2f))
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { knife = it; dragged = 0f },
+                    onDragEnd = { knife = null }, onDragCancel = { knife = null },
+                ) { change, amount ->
+                    knife = change.position
+                    dragged += amount.getDistance()
+                    if (KitchenCut.crossed(dragged, density.density)) fire()
+                }
+            }
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+                // tap backup: the knife shows briefly on the line, then the cut
+                knife = Offset(zone / 2f, zone * 0.6f); fire()
+            },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            if (!done) {
+                val dash = PathEffect.dashPathEffect(floatArrayOf(size.width * 0.05f, size.width * 0.04f))
+                val top = Offset(size.width / 2f, size.height * 0.12f)
+                val bot = Offset(size.width / 2f, size.height * 0.88f)
+                drawLine(Color(0xFFFFF59D).copy(alpha = 0.5f * glow.value), top, bot, size.width * 0.07f, cap = StrokeCap.Round)
+                drawLine(Color(0xFFFF8F00).copy(alpha = glow.value), top, bot, size.width * 0.025f, cap = StrokeCap.Round, pathEffect = dash)
+            }
+            val h = hint.value
+            if (!done && knife == null && h > 0f && h < 1f) {
+                // the one-time hand-swipe hint: a finger dot sweeping down the line
+                val p = Offset(size.width / 2f + size.width * 0.06f, size.height * (0.15f + 0.7f * h))
+                val a = kotlin.math.sin(kotlin.math.PI.toFloat() * h)
+                drawCircle(Color(0xFFFFE0B2).copy(alpha = a), size.width * 0.07f, p)
+                drawCircle(Color(0xFF8D6E63).copy(alpha = a), size.width * 0.07f, p, style = Stroke(size.width * 0.012f))
+            }
+            knife?.let { k ->
+                // rounded wooden toy knife: a fat round-ended blade and a handle, never pointy
+                val bladeW = size.width * 0.09f
+                drawLine(Color(0xFFD7B98E), k.copy(y = k.y - size.height * 0.02f), k.copy(y = k.y - size.height * 0.24f), bladeW, cap = StrokeCap.Round)
+                drawLine(Color(0xFF8D6E63), k.copy(y = k.y - size.height * 0.26f), k.copy(y = k.y - size.height * 0.42f), bladeW * 0.8f, cap = StrokeCap.Round)
+            }
         }
     }
 }

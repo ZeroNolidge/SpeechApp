@@ -71,6 +71,11 @@ data class VoiceBeat(
      * Rory's spoken line, not a substitute for it. Null for every beat but Rory's Kitchen's own
      * (every other story relies on the word chip instead; see VoiceStoryScreen). */
     val caption: String? = null,
+    /** [KitchenFlow.ASK] only (K6): what Rory says instead of the generic "I heard you!" if he's
+     * still quiet after the usual re-try -- a plain reveal said OUT LOUD, pointing at what he's
+     * asked about, that still counts as the try (never a third ask): "One, two... three!" for "how
+     * many berries?", "One!" / "One... two!" for the butter steps. Null for every other flow. */
+    val kitchenFallback: String? = null,
 ) {
     val word: String get() = lines[0]
 
@@ -98,9 +103,11 @@ enum class Move {
 }
 
 /** The props, each a piece of paper art any move can carry. [BOWL]/[MILK]/[BATTER]/[PAN]/
- * [PANCAKE]/[STEAM] are Rory's Kitchen's own (see [Backdrop.KITCHEN]); the bubbles and berries
- * beats there reuse [BUBBLE] and [BERRIES]. */
-enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON, BOWL, MILK, BATTER, PAN, PANCAKE, STEAM }
+ * [PANCAKE]/[STEAM]/[BUTTER] are Rory's Kitchen's own (see [Backdrop.KITCHEN]); the bubbles and
+ * berries beats there reuse [BUBBLE] and [BERRIES]. [BUTTER] (K6) is the butter-cutting
+ * mini-sequence's own plate and pat, drawn whole or already cut in two (see `PropArt` in
+ * VoiceScenes.kt). */
+enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON, BOWL, MILK, BATTER, PAN, PANCAKE, STEAM, BUTTER }
 
 /** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky,
  * Rory's kitchen counter). */
@@ -136,6 +143,12 @@ data class VoiceStory(
 
 object VoiceStories {
     const val MAX_BEATS = 8
+
+    /** Rory's Kitchen alone (K6): it was already the odd one out, breaking the uniform "3 to 4
+     * minutes" pattern with tap/talk flows and its own ending, so it gets its own, higher ceiling
+     * for the "how many?" asks and the butter-cutting mini-sequence rather than forcing every
+     * other voice story's [MAX_BEATS] up to make room for one story's extra steps. */
+    const val KITCHEN_MAX_BEATS = 13
 
     val boat = VoiceStory(
         id = "boat", title = "Pip's Boat Trip", emoji = "⛵", land = Land.LAGOON, sounds = listOf("p", "b", "g"),
@@ -187,15 +200,17 @@ object VoiceStories {
     )
 
     /**
-     * Rory's Kitchen: pancakes for Bear's picnic. Five beats reuse a tap/talk flow (see
+     * Rory's Kitchen: pancakes for Bear's picnic. Several beats reuse a tap/talk flow (see
      * [KitchenFlow], [KitchenBeatState]) instead of the usual single talk turn, and every one is
      * now either tap-only or talk-only, never both (K3a: Timothy's iPad notes -- a tap step that
      * then also asked him to talk read as the tiles vanishing into an unexplained listening
-     * screen): tap the bowl (among distractors), count three berries in, tap the pancake to flip
-     * it (all three: one tap, then straight to the fix, no talk turn) -- stir three times and pop
-     * three bubbles (no tap at all, several talk tries in a row). The other three beats (milk,
-     * pour, his taste of it) are the usual one talk-turn beat. Placed by Market Town (food, not
-     * the already-busy Meadow) though the scene itself is Rory's kitchen counter
+     * screen): tap the bowl (among distractors), tap three berries in, tap the pancake to flip it
+     * (one tap, then straight to the fix, no talk turn) and the butter-cutting step's own swipe
+     * (K6, [KitchenFlow.CUT]) -- stir three times and pop three bubbles (no tap at all, several
+     * talk tries in a row) -- and three plain "how many?" asks (K6, [KitchenFlow.ASK]: he answers
+     * without Rory saying the number first, see [KitchenFlow]'s own doc). The other three beats
+     * (milk, pour, his taste of it) are the usual one talk-turn beat. Placed by Market Town (food,
+     * not the already-busy Meadow) though the scene itself is Rory's kitchen counter
      * ([Backdrop.KITCHEN]). Every beat carries its own [VoiceBeat.caption] (K2l): he can't read
      * yet, so it's a steady on-screen cue ("Tap the bowl", "Say mix!") beside Rory's spoken line,
      * not instead of it -- every step's instruction, and on a talk step the cue to speak, is
@@ -216,10 +231,23 @@ object VoiceStories {
                 "Mix! The batter is all ready!", "🥣", kitchen = KitchenFlow.STIR, kitchenGoal = 3,
                 caption = "Say mix!",
             ),
+            // K6: Timothy's notes split the old single "count the berries" tap-then-count beat in
+            // two -- tap them in (no talk turn, same as before), then a SEPARATE talk-only beat
+            // asks how many there were, so a step is always tap OR talk, never both. The berries
+            // are drawn right on the counter beside the bowl, not as choice tiles.
             VoiceBeat(
-                Backdrop.KITCHEN, "Let's add some berries! Tap one, two, three!", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
+                Backdrop.KITCHEN, "Let's add some berries! Tap them in!", listOf("three", "three berries", "Three berries, please!"), null, Prop.BERRIES, Move.SINK,
                 "Three! The berries tumble into the batter!", "🫐", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.BATTER,
-                caption = "Count the berries",
+                caption = "Tap the berries",
+            ),
+            // The scene stays exactly as the tap step left it (the batter-filled bowl, berries
+            // already in): only one item renders (Prop.BATTER, no separate still), or the generic
+            // single-prop berries pile would draw right on top of it, the same overlap bug as the
+            // old milk-on-the-bowl one (K6).
+            VoiceBeat(
+                Backdrop.KITCHEN, "How many berries did we put in?", listOf("three", "three berries", "Three berries, all counted!"), null, Prop.BATTER, Move.SHAKE,
+                "Three! That's three juicy berries in the batter!", "🫐", kitchen = KitchenFlow.ASK,
+                caption = "How many berries?", kitchenFallback = "One, two... three!",
             ),
             VoiceBeat(Backdrop.KITCHEN, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.BATTER, Move.SINK, "Pour! The batter pours into the pan!", "🥞", still = Prop.PAN, caption = "Say pour!"),
             VoiceBeat(
@@ -231,6 +259,20 @@ object VoiceStories {
                 Backdrop.KITCHEN, "Tap the pancake, then flip it!", listOf("flip", "flip it", "Flip the pancake!"), null, Prop.PANCAKE, Move.RISE,
                 "Flip! The pancake flips up and lands with a soft plop!", "🥞", kitchen = KitchenFlow.FLIP, still = Prop.PAN,
                 caption = "Tap to flip",
+            ),
+            // K6: the butter-cutting mini-sequence, right before it goes on the pancakes -- ask,
+            // swipe to cut (narrated only, never a talk turn), ask again.
+            VoiceBeat(
+                Backdrop.KITCHEN, "How many butters?", listOf("one", "one butter", "One pat of butter, please!"), null, Prop.BUTTER, Move.SLIDE,
+                "One! Just one pat of butter!", "🧈", kitchen = KitchenFlow.ASK, caption = "How many butters?", kitchenFallback = "One!",
+            ),
+            VoiceBeat(
+                Backdrop.KITCHEN, "Let's cut the butter! Cut!", listOf("cut", "cut it", "Cut it in two!"), null, Prop.BUTTER, Move.SHAKE,
+                "Cut! The butter splits into two pieces!", "🧈", kitchen = KitchenFlow.CUT, caption = "Cut!",
+            ),
+            VoiceBeat(
+                Backdrop.KITCHEN, "Now how many?", listOf("two", "two pieces", "Two pieces of butter now!"), null, Prop.BUTTER, Move.SLIDE,
+                "Two! Two pieces, ready to melt!", "🧈", kitchen = KitchenFlow.ASK, caption = "Now how many?", kitchenFallback = "One... two!",
             ),
             VoiceBeat(Backdrop.KITCHEN, "Bear takes a big bite!", listOf("mmm", "mmm good", "Mmm, so good!"), "m", Prop.PANCAKE, Move.SHAKE, "Mmm! Bear says thank you, and gives a happy wave!", "😋", goodbye = true, caption = "Say mmm"),
         ),

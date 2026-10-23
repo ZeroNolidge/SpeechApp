@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.audio.VoiceTry
+import com.zeronolidge.speechapp.logic.usesStrip
 import com.zeronolidge.speechapp.logic.VoiceBeat
 import com.zeronolidge.speechapp.logic.Backdrop
 import com.zeronolidge.speechapp.logic.BalloonGame
@@ -202,8 +203,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     fun logKitchen(k: KitchenBeatState) {
         val b = beats.getOrNull(index) ?: return
         val tiles = kitchenTiles(b, k.flow, kitchenRound)
-        val pts = tiles.indices.joinToString(";") { i -> kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" } }
-        println("KITCHEN step=$index phase=${k.phase} targets=$pts")
+        // K6: the counting berries and the cut line live on the counter itself, not in tiles.
+        val n = when (k.flow) { KitchenFlow.COUNT -> 3; KitchenFlow.CUT -> 1; else -> tiles.size }
+        val pts = (0 until n).joinToString(";") { i ->
+            if (k.flow == KitchenFlow.COUNT && i in kitchenHopped) "0,0"
+            else kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" }
+        }
+        println("KITCHEN step=$index phase=${k.phase} targets=$pts${if (k.flow == KitchenFlow.CUT) " cut=1" else ""}")
     }
     // The counter's on-screen span, in landscape (Ruby, K2a): logged once per step AND again
     // whenever the phase changes (K3d), not just on the step's first frame -- a tap flow's own
@@ -426,6 +432,17 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 app.listenLevel = 0f
                 pushNow = 0f
                 if (t == VoiceTry.NO_MIC) {
+                    // K6: a "how many?" ask never stalls on the green button: Rory counts it
+                    // out himself, pointing, and that still counts.
+                    val fallback = beats[k].kitchenFallback
+                    if (fallback != null) {
+                        phase = VPhase.MODEL
+                        app.listening = false
+                        kitchenPointing = true
+                        println("KITCHEN fallback step=$k text=$fallback")
+                        app.speaker.say(fallback) { kitchenPointing = false; if (s == session) finishGently(k, heard = false, micUsed = false) }
+                        return@handle
+                    }
                     waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
                     return@handle
                 }
@@ -478,7 +495,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         leaning = false
                         phase = VPhase.MODEL
                         app.listening = false
-                        app.speaker.say("I heard you!") { if (s == session) finishGently(k, heard = false, micUsed = false) }
+                        val fallback = beats[k].kitchenFallback
+                        if (fallback != null) { kitchenPointing = true; println("KITCHEN fallback step=$k text=$fallback") }
+                        app.speaker.say(fallback ?: "I heard you!") { kitchenPointing = false; if (s == session) finishGently(k, heard = false, micUsed = false) }
                         app.rememberInstruction(line(k))
                     }
                 }
@@ -631,6 +650,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
      * nothing but "pop" repeated with no audible "now you say it" at all). */
     fun modelKitchenWord(k: Int, s: Int) {
         if (s == session) { chipBig = false; chipBeat++ }
+        // K6: a "how many?" ask never says the answer first -- Rory's question (the beat's own
+        // problem line, already said) is the cue; he just cups his ear and waits.
+        if (beats[k].kitchen == KitchenFlow.ASK) { if (s == session && phase == VPhase.MODEL) listen(k); return }
         kitchenSayItOutLoud(k, s)
     }
 
@@ -728,7 +750,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 app.speaker.say(Numbers.word(next.tapsDone))
                 logKitchen(next)
             }
-            KitchenFlow.FLIP -> {
+            KitchenFlow.FLIP, KitchenFlow.CUT -> {
+                if (beats[index].kitchen == KitchenFlow.CUT) { app.sfx.crinkle(); println("KITCHEN cut step=$index") }
                 val next = kitchenPhase.tap(true)
                 kitchenPhase = next
                 logKitchen(next)
@@ -819,7 +842,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 app.listening = false
                 app.listenLevel = 0f
                 pushNow = 0f
-                app.speaker.say(VoiceStories.kitchenYourTurnLine(b.word)) {
+                app.speaker.say(if (b.kitchen == KitchenFlow.ASK) b.problem else VoiceStories.kitchenYourTurnLine(b.word)) {
                     if (s == session && phase == VPhase.LISTEN) listen(index)
                 }
             }
@@ -990,7 +1013,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // K3d: whether THIS beat's own flow ever has a tap phase at all (bowl, berries,
                     // flip) -- stir/bubbles never do (KitchenFlow.tapGoal is 0 for both), so their
                     // brief NAME announcement never needs the strip reserved either.
-                    val kitchenTapFlow = beat.kitchen?.tapGoal(beat.kitchenGoal)?.let { it > 0 } == true
+                    val kitchenTapFlow = beat.kitchen?.let { it.usesStrip() && it.tapGoal(beat.kitchenGoal) > 0 } == true
                     // K3d: a tap flow's own fix (ACT, right after its last tap/CLOSE) keeps the
                     // same strip-reserved, lifted layout its tapping just used, instead of
                     // collapsing it the instant the tiles go away. Before this, the scene's lift
@@ -1013,6 +1036,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // whole time he's talking or listening, so a child who can't read still sees
                     // it's his turn to talk; the hand near his mouth shows only for the "Say it
                     // out loud!" cue itself.
+                    val kitchenCutIndex = beats.indexOfFirst { it.kitchen == KitchenFlow.CUT }
+                    val kitchenButterCut = kitchenCutIndex >= 0 && beat.prop == Prop.BUTTER &&
+                        (index > kitchenCutIndex || (index == kitchenCutIndex && phase == VPhase.ACT))
+                    // K6: after a "how many?" answer (or Rory's fallback count) the number pops up big.
+                    val kitchenNumeral = if (beat.kitchen == KitchenFlow.ASK && phase == VPhase.ACT)
+                        when (beat.word) { "one" -> "1"; "two" -> "2"; "three" -> "3"; else -> null } else null
                     val kitchenTalkStep = beat.backdrop == Backdrop.KITCHEN && (phase == VPhase.MODEL || phase == VPhase.LISTEN)
                     // Bear, Rory, the bowl, the pan and the choice strip's own on-screen boxes
                     // (CSS px), once per kitchen beat, so Ruby's overlap check can run against a
@@ -1089,6 +1118,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         puzzleSafe = stripShown, landscape = true,
                                         kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
+                                        wide = w > h, butterCut = kitchenButterCut, countHopped = kitchenHopped,
+                                        onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
+                                        onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
+                                        bigNumeral = kitchenNumeral,
+                                        onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
                                         onKitchenPropRect = if (beat.backdrop == Backdrop.KITCHEN) { p, c -> kitchenPropRects[p] = c.boundsInWindow() } else null,
                                     )
@@ -1104,6 +1138,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     puzzleSafe = stripShown,
                                     kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
+                                        wide = w > h, butterCut = kitchenButterCut, countHopped = kitchenHopped,
+                                        onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
+                                        onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
+                                        bigNumeral = kitchenNumeral,
+                                        onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
                                     onKitchenPropRect = if (beat.backdrop == Backdrop.KITCHEN) { p, c -> kitchenPropRects[p] = c.boundsInWindow() } else null,
                                 )
@@ -1396,9 +1435,8 @@ private fun kitchenWordEmoji(word: String): String = when (word) {
  * see [KitchenFlow.tapGoal]). */
 private fun kitchenTiles(beat: VoiceBeat, flow: KitchenFlow, round: Choice<String>?): List<String> = when (flow) {
     KitchenFlow.TAP_CHOICE -> round?.options?.map(::kitchenWordEmoji) ?: emptyList()
-    KitchenFlow.COUNT -> List(3) { "🫐" }
     KitchenFlow.FLIP -> listOf(beat.emoji)
-    KitchenFlow.STIR, KitchenFlow.BUBBLES -> emptyList()
+    KitchenFlow.COUNT, KitchenFlow.CUT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> emptyList()
 }
 
 private val KitchenBerryTileSize = 44.dp
@@ -1419,7 +1457,7 @@ private fun kitchenTargetIndex(state: KitchenBeatState, round: Choice<String>?, 
     KitchenFlow.TAP_CHOICE -> round?.options?.indexOf(round.answer) ?: -1
     KitchenFlow.COUNT -> tiles.indices.firstOrNull { it !in hopped } ?: -1
     KitchenFlow.FLIP -> 0
-    KitchenFlow.STIR, KitchenFlow.BUBBLES -> -1
+    KitchenFlow.CUT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> -1
 }
 
 /**

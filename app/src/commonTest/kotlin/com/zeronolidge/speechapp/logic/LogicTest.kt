@@ -1268,7 +1268,8 @@ class VoiceStoriesTest {
     @Test
     fun everyStoryFollowsThePattern() {
         for (s in VoiceStories.all) {
-            assertTrue(s.beats.size in 6..VoiceStories.MAX_BEATS, "${s.id}: ${s.beats.size} beats")
+            val maxBeats = if (s.id == "kitchen") VoiceStories.KITCHEN_MAX_BEATS else VoiceStories.MAX_BEATS
+            assertTrue(s.beats.size in 6..maxBeats, "${s.id}: ${s.beats.size} beats")
             // His sounds start the words of at least 4 beats; each beat's sound is really in its word.
             val starting = s.beats.count { b -> b.sound != null && VoiceStories.startsWith(b.word, b.sound!!) }
             assertTrue(starting >= 4, "${s.id}: only $starting beats start with their sound")
@@ -1945,7 +1946,10 @@ class LipSyncTest {
 class KitchenStoryTest {
     @Test
     fun everyKitchenWordIsPBMOrAnAllowedException() {
-        val allowed = setOf("flip", "three")
+        // K6: "three" (the berry count), "cut" (the butter swipe) and "one"/"two" (the butter
+        // counts) aren't p/b/m words -- they're never scored as speech targets (every new K6 beat
+        // has `sound = null`), just said back and counted.
+        val allowed = setOf("flip", "three", "cut", "one", "two")
         for (b in VoiceStories.kitchen.beats) {
             val first = b.word.first().lowercaseChar()
             assertTrue(first in "pbm" || b.word in allowed, "unexpected kitchen target word '${b.word}'")
@@ -1953,17 +1957,23 @@ class KitchenStoryTest {
     }
 
     @Test
-    fun theFiveSpecialBeatsCarryTheRightFlowAndGoal() {
-        val byWord = VoiceStories.kitchen.beats.associateBy { it.word }
-        assertEquals(KitchenFlow.TAP_CHOICE, byWord.getValue("bowl").kitchen)
-        assertEquals(listOf("pan", "spoon"), byWord.getValue("bowl").kitchenChoices)
-        assertEquals(KitchenFlow.STIR, byWord.getValue("mix").kitchen)
-        assertEquals(3, byWord.getValue("mix").kitchenGoal)
-        assertEquals(KitchenFlow.COUNT, byWord.getValue("three").kitchen)
-        assertEquals(3, byWord.getValue("three").kitchenGoal)
-        assertEquals(KitchenFlow.BUBBLES, byWord.getValue("pop").kitchen)
-        assertEquals(3, byWord.getValue("pop").kitchenGoal)
-        assertEquals(KitchenFlow.FLIP, byWord.getValue("flip").kitchen)
+    fun theSpecialBeatsCarryTheRightFlowAndGoal() {
+        val byWord = VoiceStories.kitchen.beats.associateBy { it.word to it.kitchen }
+        fun beat(word: String, flow: KitchenFlow) = byWord.getValue(word to flow)
+        assertEquals(listOf("pan", "spoon"), beat("bowl", KitchenFlow.TAP_CHOICE).kitchenChoices)
+        assertEquals(3, beat("mix", KitchenFlow.STIR).kitchenGoal)
+        assertEquals(3, beat("three", KitchenFlow.COUNT).kitchenGoal)
+        assertEquals(3, beat("pop", KitchenFlow.BUBBLES).kitchenGoal)
+        assertEquals(KitchenFlow.FLIP, beat("flip", KitchenFlow.FLIP).kitchen)
+        // The "how many?" asks (K6): he answers without Rory saying the number first, and a
+        // persistent silence still has a fixed, spoken fallback that counts.
+        assertEquals("One, two... three!", beat("three", KitchenFlow.ASK).kitchenFallback)
+        assertEquals("One!", beat("one", KitchenFlow.ASK).kitchenFallback)
+        assertEquals("One... two!", beat("two", KitchenFlow.ASK).kitchenFallback)
+        // The butter swipe (K6): narrated only, never a wrong tap, never a talk turn.
+        val cut = beat("cut", KitchenFlow.CUT)
+        assertEquals(0, cut.kitchen!!.talkGoal(cut.kitchenGoal))
+        assertFalse(cut.kitchen!!.hasWrongTaps())
         // The other three beats (milk, pour, mmm) are the usual single talk turn: no kitchen flow.
         assertEquals(3, VoiceStories.kitchen.beats.count { it.kitchen == null })
     }
@@ -2120,6 +2130,40 @@ class KitchenBeatStateTest {
         assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.TAP_CHOICE, listOf(false, false)).phase)
         assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.FLIP, listOf(true)).phase)
         assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.COUNT, listOf(true, true, true)).phase)
+        assertEquals(KitchenPhase.CLOSE, drive(KitchenFlow.CUT, listOf(true)).phase)
+    }
+
+    /** K6: the butter swipe is narrated only -- it must never reach TAP's own wrong-answer path
+     * ([KitchenFlow.hasWrongTaps] false) or a talk turn either side of it. */
+    @Test
+    fun cutIsAPlainTapWithNoWrongAnswerAndNoTalkTurn() {
+        assertFalse(KitchenFlow.CUT.hasWrongTaps())
+        assertEquals(1, KitchenFlow.CUT.tapGoal(1))
+        assertEquals(0, KitchenFlow.CUT.talkGoal(1))
+        val s = KitchenBeatState(KitchenFlow.CUT).named().tap(true)
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+    }
+
+    /** K6: [KitchenFlow.ASK] ("how many?") never taps and always listens, straight from NAME. */
+    @Test
+    fun askIsTalkOnlyAndNeverTaps() {
+        assertEquals(0, KitchenFlow.ASK.tapGoal(1))
+        assertEquals(1, KitchenFlow.ASK.talkGoal(1))
+        val s = KitchenBeatState(KitchenFlow.ASK).named()
+        assertEquals(KitchenPhase.TALK, s.phase)
+        assertEquals(KitchenPhase.CLOSE, s.talked().phase)
+    }
+
+    /** K6: only the bowl choice and the pancake flip ever reserve the bottom choice strip --
+     * counting (now tapped right on the counter) and the butter swipe (a drag, not a tile) never
+     * do. */
+    @Test
+    fun onlyTapChoiceAndFlipUseTheChoiceStrip() {
+        assertTrue(KitchenFlow.TAP_CHOICE.usesStrip())
+        assertTrue(KitchenFlow.FLIP.usesStrip())
+        for (flow in listOf(KitchenFlow.COUNT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.CUT, KitchenFlow.ASK)) {
+            assertFalse(flow.usesStrip(), "$flow shouldn't use the choice strip")
+        }
     }
 
     /** The flip side of [tapFlowsNeverEnterTalkPhase]: every flow is tap-only (goes NAME -> TAP,
@@ -2159,11 +2203,45 @@ class KitchenBeatStateTest {
             KitchenBeatState(KitchenFlow.STIR, goal = 3).named().talked().talked().talked(),
             KitchenBeatState(KitchenFlow.BUBBLES, goal = 3).named().talked().talked().talked(),
             KitchenBeatState(KitchenFlow.COUNT, goal = 3).named().tap(true).tap(true).tap(true),
+            KitchenBeatState(KitchenFlow.CUT).named().tap(true),
+            KitchenBeatState(KitchenFlow.ASK).named().talked(),
         )
         for (p in paths) {
             assertEquals(KitchenPhase.CLOSE, p.phase)
             assertEquals(KitchenPhase.DONE, p.closed().phase)
         }
+    }
+}
+
+/** The butter-cutting step's own swipe (K6, [KitchenFlow.CUT]): forgiving, any direction, scaled
+ * to the device's own density. */
+class KitchenCutTest {
+    @Test
+    fun aDragShorterThanTheThresholdDoesNotCount() {
+        assertFalse(KitchenCut.crossed(dragDistancePx = 40f, densityScale = 1f))
+    }
+
+    @Test
+    fun aDragAtOrPastTheThresholdCounts() {
+        assertTrue(KitchenCut.crossed(dragDistancePx = 60f, densityScale = 1f))
+        assertTrue(KitchenCut.crossed(dragDistancePx = 90f, densityScale = 1f))
+    }
+
+    @Test
+    fun theThresholdScalesWithDensity() {
+        // A 2x-density screen needs twice the px for the same physical 60dp swipe.
+        assertFalse(KitchenCut.crossed(dragDistancePx = 90f, densityScale = 2f))
+        assertTrue(KitchenCut.crossed(dragDistancePx = 130f, densityScale = 2f))
+    }
+
+    @Test
+    fun anyDirectionCountsTheSameWay() {
+        // The threshold is a plain distance, not a signed one: a drag left crosses it exactly
+        // like a drag right, up or down.
+        assertEquals(
+            KitchenCut.crossed(60f, 1f),
+            KitchenCut.crossed(kotlin.math.abs(-60f), 1f),
+        )
     }
 }
 
@@ -2306,6 +2384,35 @@ class KitchenLayoutTest {
                 val (nameB, b) = boxes[j]
                 assertFalse(a.overlaps(b), "$nameA overlaps $nameB in ${if (landscape) "landscape" else "portrait"}")
             }
+        }
+    }
+
+    /**
+     * K6: Timothy's landscape screenshot of a talk step showed Rory and Bear looking small under
+     * a lot of empty wall -- `wide` (a real wide stage, independent of the choice strip) grows
+     * both of them 20-30% by borrowing the unused gap between their lanes ([bearRight]/[roryLeft]
+     * in KitchenBeat.kt), never from the bowl's side, so they must still never overlap each other,
+     * the bowl or the pan, and must actually have grown (not just moved).
+     */
+    @Test
+    fun wideBearAndRoryGrowWithoutOverlappingAnything() {
+        for (landscape in listOf(false, true)) {
+            val bear = KitchenLayout.bearBox(landscape, wide = true)
+            val rory = KitchenLayout.roryVisibleBox(landscape, wide = true)
+            val bowl = KitchenLayout.bowlBox(landscape)
+            val pan = KitchenLayout.panBox(landscape)
+            val boxes = listOf("bear" to bear, "rory" to rory, "bowl" to bowl, "pan" to pan)
+            for (i in boxes.indices) for (j in i + 1 until boxes.size) {
+                val (nameA, a) = boxes[i]
+                val (nameB, b) = boxes[j]
+                assertFalse(a.overlaps(b), "wide $nameA overlaps $nameB in ${if (landscape) "landscape" else "portrait"}")
+            }
+            val narrowBear = KitchenLayout.bearBox(landscape, wide = false)
+            val narrowRory = KitchenLayout.roryVisibleBox(landscape, wide = false)
+            val bearGrowth = (bear.r - bear.l) / (narrowBear.r - narrowBear.l)
+            val roryGrowth = (rory.r - rory.l) / (narrowRory.r - narrowRory.l)
+            assertTrue(bearGrowth in 1.15f..1.35f, "Bear didn't grow 20-30% wide: x$bearGrowth")
+            assertTrue(roryGrowth in 1.15f..1.35f, "Rory didn't grow 20-30% wide: x$roryGrowth")
         }
     }
 
@@ -2568,7 +2675,17 @@ class KitchenLayoutTest {
      * pancake's). */
     @Test
     fun kitchenPropsNeverOverlapRoryOrTheOtherStation() {
-        val bowlStationSizes = mapOf(Prop.BOWL to 0.18f, Prop.MILK to 0.2f, Prop.BATTER to 0.18f, Prop.BERRIES to 0.2f)
+        // K6: milk moved off the bowl's own station onto the ingredient one (see
+        // [KitchenLayout.ingredientBox]'s own doc -- Timothy's screenshot showed it drawn flush on
+        // top of the bowl, hiding it completely); sizes mirror `kitchenPropSize` in VoiceScenes.kt.
+        // Prop.BERRIES isn't checked here any more: the counting beat draws its own three waiting
+        // berries directly (see [KitchenLayout.berryBox]/[coOccurringKitchenPropsNeverOverlapEachOther]),
+        // and the "how many?" ask beat that follows reuses Prop.BATTER instead of a second,
+        // overlapping single-pile render at the very same spot (K6's own milk-on-the-bowl bug, in
+        // a new place) -- the generic single-prop Prop.BERRIES render is never reached in Rory's
+        // Kitchen any more.
+        val bowlStationSizes = mapOf(Prop.BOWL to 0.12f, Prop.BATTER to 0.12f)
+        val ingredientStationSizes = mapOf(Prop.MILK to 0.12f, Prop.BUTTER to 0.12f)
         val panStationSizes = mapOf(Prop.PAN to 0.16f, Prop.PANCAKE to 0.15f, Prop.BUBBLE to 0.18f, Prop.STEAM to 0.14f)
         val sizes = listOf(
             1024f to 768f, 768f to 1024f, 1180f to 820f, 820f to 1180f, 1366f to 1024f, 390f to 844f, 844f to 390f,
@@ -2577,24 +2694,65 @@ class KitchenLayoutTest {
             val landscape = w > h
             val rory = KitchenLayout.roryVisibleBox(landscape)
             val bowlBoxes = bowlStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
+            val ingBoxes = ingredientStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
             val panBoxes = panStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
-            for ((prop, box) in bowlBoxes + panBoxes) {
+            for ((prop, box) in bowlBoxes + ingBoxes + panBoxes) {
                 assertFalse(rory.overlaps(box), "rory overlaps $prop at ${w}x$h")
             }
             for ((bowlProp, bowlBox) in bowlBoxes) for ((panProp, panBox) in panBoxes) {
                 assertFalse(bowlBox.overlaps(panBox), "$bowlProp overlaps $panProp at ${w}x$h")
             }
+            for ((bowlProp, bowlBox) in bowlBoxes) for ((ingProp, ingBox) in ingBoxes) {
+                assertFalse(bowlBox.overlaps(ingBox), "$bowlProp overlaps $ingProp at ${w}x$h")
+            }
+            for ((ingProp, ingBox) in ingBoxes) for ((panProp, panBox) in panBoxes) {
+                assertFalse(ingBox.overlaps(panBox), "$ingProp overlaps $panProp at ${w}x$h")
+            }
         }
     }
 
-    /** The bowl/milk/batter/berries beats and the pan/pancake/bubble/steam beats never share a
-     * station (K3b): each kitchen prop goes to exactly one of the two counter slots. */
+    /**
+     * K6: Timothy's screenshot showed the milk carton drawn exactly on top of the bowl (both
+     * mapped to the same station, same centre) -- the fix gives milk its own ingredient station
+     * ([KitchenLayout.ingredientBox]), but nothing before this checked the specific PAIRS of props
+     * that actually appear together in one beat, only "this station's props" vs "that station's
+     * props" as two whole groups ([kitchenPropsNeverOverlapRoryOrTheOtherStation] above). Checks
+     * every beat's own real combination directly, at the sizes Timothy reported (a landscape
+     * tablet and its portrait twin): bowl+milk (beat 2, milk pours in) and bowl/batter+the three
+     * waiting berries (the counting beat, [KitchenLayout.berrySlot]). Local-fraction overlap is
+     * the same whether or not the choice strip is reserved below (the strip only rescales the
+     * WHOLE stage afterward, see [KitchenLayout.onStage] -- a monotonic rescale can't make two
+     * boxes that were clear of each other start overlapping), so checking both orientations here
+     * covers every combination of strip-shown-or-not Timothy asked about too.
+     */
+    @Test
+    fun coOccurringKitchenPropsNeverOverlapEachOther() {
+        val sizes = listOf(1024f to 768f, 768f to 1024f)
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val bowl = KitchenLayout.propNaturalBox(Prop.BOWL, landscape, 0.12f, w, h)
+            val milk = KitchenLayout.propNaturalBox(Prop.MILK, landscape, 0.12f, w, h)
+            assertFalse(bowl.overlaps(milk), "bowl overlaps milk at ${w}x$h")
+            val batter = KitchenLayout.propNaturalBox(Prop.BATTER, landscape, 0.12f, w, h)
+            val berries = (0..2).map { i -> KitchenLayout.berryBox(i, landscape, w, h) }
+            for (b in berries) assertFalse(batter.overlaps(b), "batter overlaps a waiting berry at ${w}x$h")
+            for (i in berries.indices) for (j in i + 1 until berries.size) {
+                assertFalse(berries[i].overlaps(berries[j]), "berry $i overlaps berry $j at ${w}x$h")
+            }
+        }
+    }
+
+    /** The bowl/batter/berries beats, the ingredient (milk/butter) beats and the
+     * pan/pancake/bubble/steam beats never share a station (K3b; K6 split the old bowl/milk
+     * station in two): each kitchen prop goes to exactly one of the three counter slots. */
     @Test
     fun everyKitchenPropHasExactlyOneStation() {
-        val bowlProps = setOf(Prop.BOWL, Prop.MILK, Prop.BATTER, Prop.BERRIES)
+        val bowlProps = setOf(Prop.BOWL, Prop.BATTER, Prop.BERRIES)
+        val ingredientProps = setOf(Prop.MILK, Prop.BUTTER)
         val panProps = setOf(Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM)
         for (landscape in listOf(false, true)) {
             for (prop in bowlProps) assertEquals(KitchenLayout.bowlBox(landscape), KitchenLayout.propSlot(prop, landscape))
+            for (prop in ingredientProps) assertEquals(KitchenLayout.ingredientBox(landscape), KitchenLayout.propSlot(prop, landscape))
             for (prop in panProps) assertEquals(KitchenLayout.panBox(landscape), KitchenLayout.propSlot(prop, landscape))
         }
     }
@@ -2617,6 +2775,22 @@ class KitchenLayoutTest {
                 diff <= 0.02f,
                 "stool seat too far from the counter top in ${if (landscape) "landscape" else "portrait"}: stoolTop=$stoolTop ct=$ct diff=$diff",
             )
+        }
+    }
+
+    /**
+     * K6: Timothy's screenshot measured Bear's own body at x~55-115 (centre ~85) and the stool's
+     * drawn seat at x~38-90 (centre ~64) -- he read as sitting beside the stool, not on it, since
+     * the seat's own canvas (`KitchenBear` in VoiceScenes.kt) used to be pinned to the lane's left
+     * edge while Bear's own puppet filled the whole lane. [KitchenLayout.stoolSeatCenterXFraction]
+     * must always land at 0.5 (the same centre Bear's own box sits at, for any width -- his lane's
+     * width, Bear's own box width, whatever), at every phase and orientation, since both are pure
+     * functions of the box width alone: the fix isn't phase- or orientation-specific, so neither
+     * is this check. */
+    @Test
+    fun stoolSeatIsHorizontallyCentredUnderBear() {
+        for (boxWidth in listOf(77f, 123f, 200f, 340f)) {
+            assertEquals(0.5f, KitchenLayout.stoolSeatCenterXFraction(boxWidth), 0.0001f, "stool not centred at width $boxWidth")
         }
     }
 
