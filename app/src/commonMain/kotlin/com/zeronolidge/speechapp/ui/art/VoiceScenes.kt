@@ -184,7 +184,7 @@ private fun propSize(p: Prop) = when (p) {
 private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
     Prop.BUBBLE -> 0.18f
     Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.19f
-    Prop.BUTTER -> if (landscape) 0.21f else 0.13f
+    Prop.BUTTER -> if (landscape) 0.27f else 0.27f
     Prop.PAN -> if (landscape) 0.144f else propSize(p)
     else -> propSize(p)
 }
@@ -659,6 +659,7 @@ private val ChefHat = Cosmetic("hat_chef", Slot.HAT, "Chef hat", 0xFFFFFFFF)
 /** How far [KitchenRory] zooms in while its "f" pose shows (K-f): a close-up, Ruby's own
  * 1.6-1.8x ask. */
 private const val FPoseZoom = 1.7f
+private const val FPoseZoomLandscape = 1.45f
 
 /**
  * A simple paper stool for Bear to sit on: a round padded seat on three warm-red legs, joined by a
@@ -922,14 +923,16 @@ private fun BoxWithConstraintsScope.KitchenRory(
     val laneWidth = w * (rory.r - rory.l)
     val laneHeight = h * (rory.b - rory.t)
     val still = LocalReduceMotion.current
-    val zoom by animateFloatAsState(if (fPose) FPoseZoom else 1f, tween(if (still) 0 else 350), label = "fPoseZoom")
-    // Zoom about his face (not the lane's top) and lift that face to ~38% of the scene height,
-    // so the close-up shows his whole screen above the counter, never behind it or his hat.
+    val zoom by animateFloatAsState(if (fPose) (if (landscape) FPoseZoomLandscape else FPoseZoom) else 1f, tween(if (still) 0 else 350), label = "fPoseZoom")
+    // K7d: zoom about the bottom of his face screen, so the screen grows UP and the body grows
+    // down behind the counter (the scene box clips anything below it, so no feet). Landscape has
+    // little headroom above him (its top is clipped by the lift), so it zooms less and stays put;
+    // portrait has a tall wall above, so it zooms more and lifts the face to ~40% of the scene.
     val fit0 = KitchenLayout.roryFittedBox(w, h, landscape)
-    val faceY = fit0.t + (fit0.b - fit0.t) * 0.42f
+    val faceY = fit0.t + (fit0.b - fit0.t) * 0.40f
     val faceX = (fit0.l + fit0.r) / 2f
     val zf = ((zoom - 1f) / (FPoseZoom - 1f)).coerceIn(0f, 1f)
-    val liftPx = (h * (if (landscape) 0.47f else 0.40f) - faceY) * zf
+    val liftPx = if (landscape) 0f else (h * 0.40f - faceY) * zf
     val shiftPx = (w * (if (landscape) 0.30f else 0.36f) - faceX).coerceAtLeast(0f) * zf
     Box(
         Modifier.offset(x = laneLeft.dp, y = laneTop.dp).size(laneWidth.dp, laneHeight.dp)
@@ -963,7 +966,7 @@ private fun BoxWithConstraintsScope.KitchenRory(
                 outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking, pointMouth = pointing,
                 fPose = fPose,
             )
-            if (speechBubble) KitchenSpeechBubble(
+            if (speechBubble && !fPose) KitchenSpeechBubble(
                 Modifier.align(Alignment.TopEnd).offset(x = (laneWidth * 0.1f).dp, y = -(laneHeight * 0.15f).dp)
                     .fillMaxWidth(0.55f).aspectRatio(1.1f),
             )

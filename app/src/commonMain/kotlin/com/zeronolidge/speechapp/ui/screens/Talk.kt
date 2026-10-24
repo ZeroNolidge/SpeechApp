@@ -771,6 +771,9 @@ internal fun ListeningStage(
     /** True after a first quiet try (Ruby + Aida's miss flow): Rory leans a little closer while
      * he listens again, a small scale and lift, never a jump. */
     lean: Boolean = false,
+    /** K7d: where (fraction of the stage width) the listening Rory stands instead of the middle;
+     * Rory's Kitchen puts him over his own counter spot so he never covers the thing asked about. */
+    spotCx: Float? = null,
     /** Drawn over the dimmed scene, under Rory (a voice story's wind strips and confetti); gets Rory's centre. */
     aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.(roryAt: Offset) -> Unit)? = null,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
@@ -783,7 +786,7 @@ internal fun ListeningStage(
         val w = maxWidth
         val h = maxHeight
         content()
-        val spot = listenSpot(w.value, h.value, lowerHalf)
+        val spot = listenSpot(w.value, h.value, lowerHalf).let { sp -> if (spotCx != null) ListenSpot(spotCx, sp.cy, sp.size) else sp }
         // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
         val rory = spot.size.dp
         val box = rory * 1.35f

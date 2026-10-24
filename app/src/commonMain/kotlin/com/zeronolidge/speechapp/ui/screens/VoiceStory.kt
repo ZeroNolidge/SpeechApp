@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -996,6 +997,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             ListeningStage(
                 Modifier.fillMaxSize(),
                 lean = leaning,
+                spotCx = if (beat.backdrop == Backdrop.KITCHEN) 0.26f else null,
                 aboveDim = { rory ->
                     // The thing to move glows; his voice streams to it as paper wind strips.
                     if (index >= 0 && phase != VPhase.END) {
@@ -1135,12 +1137,16 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                 // lifting clear, which left a gameStrip-sized gap of empty cream
                                 // between the counter's own (now-short) bottom and the strip below
                                 // it on a real landscape screenshot. requiredHeight ignores the
+                                // incoming max -- but an over-tall child is then CENTRED in the
+                                // smaller parent (K7d: that was the ~gameStrip/2 cream gap left in
+                                // test26), so it is pinned to the top with wrapContentHeight(Top,
+                                // unbounded) first. Ignores the
                                 // incoming max and forces the full h, so the lift (which still
                                 // assumes a full-height scene) lands the counter's real bottom
                                 // exactly at the strip's own top, as KitchenLayout.onStage already
                                 // modelled. Scoped to Kitchen alone: the balloon puzzle's own
                                 // landscape sizing is unchanged.
-                                Modifier.fillMaxWidth().let { m -> if (isKitchen) m.requiredHeight(h) else m.height(h) }.offset(y = -lift).let { m ->
+                                Modifier.fillMaxWidth().let { m -> if (isKitchen) m.wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(h) else m.height(h) }.offset(y = -lift).let { m ->
                                     if (!isKitchen) return@let m
                                     m.onGloballyPositioned { c ->
                                         if (kitchenLayoutLoggedStep == index to phase) return@onGloballyPositioned

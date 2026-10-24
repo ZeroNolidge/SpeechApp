@@ -2760,7 +2760,9 @@ class KitchenLayoutTest {
         // a new place) -- the generic single-prop Prop.BERRIES render is never reached in Rory's
         // Kitchen any more.
         val bowlStationProps = listOf(Prop.BOWL, Prop.BATTER)
-        val ingredientStationProps = listOf(Prop.MILK, Prop.BUTTER)
+        // K7d: BUTTER has its own station (KitchenLayout.butterBox) and is only ever drawn alone;
+        // it's checked against Rory below and by KitchenSceneRulesTest's per-beat co-occurrence check.
+        val ingredientStationProps = listOf(Prop.MILK)
         val panStationProps = listOf(Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM)
         val sizes = listOf(
             1024f to 768f, 768f to 1024f, 1180f to 820f, 820f to 1180f, 1366f to 1024f, 390f to 844f, 844f to 390f,
@@ -2771,6 +2773,9 @@ class KitchenLayoutTest {
             val bowlBoxes = bowlStationProps.map { p -> p to KitchenLayout.propNaturalBox(p, landscape, kitchenSizeMirror(p, landscape), w, h) }
             val ingBoxes = ingredientStationProps.map { p -> p to KitchenLayout.propNaturalBox(p, landscape, kitchenSizeMirror(p, landscape), w, h) }
             val panBoxes = panStationProps.map { p -> p to KitchenLayout.propNaturalBox(p, landscape, kitchenSizeMirror(p, landscape), w, h) }
+            val butterBox = KitchenLayout.propNaturalBox(Prop.BUTTER, landscape, kitchenSizeMirror(Prop.BUTTER, landscape), w, h)
+            assertFalse(rory.overlaps(butterBox), "rory overlaps BUTTER at ${w}x$h")
+            assertTrue(butterBox.r <= 1f, "BUTTER off the right edge at ${w}x$h")
             for ((prop, box) in bowlBoxes + ingBoxes + panBoxes) {
                 assertFalse(rory.overlaps(box), "rory overlaps $prop at ${w}x$h")
             }
@@ -2826,7 +2831,7 @@ class KitchenLayoutTest {
     private fun kitchenSizeMirror(prop: Prop, landscape: Boolean): Float = when (prop) {
         Prop.BUBBLE -> 0.18f
         Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.17f
-        Prop.BUTTER -> if (landscape) 0.21f else 0.13f
+        Prop.BUTTER -> if (landscape) 0.27f else 0.27f
         Prop.PAN -> if (landscape) 0.144f else 0.16f
         Prop.MILK -> 0.12f
         Prop.PANCAKE -> 0.15f
@@ -2840,11 +2845,12 @@ class KitchenLayoutTest {
     @Test
     fun everyKitchenPropHasExactlyOneStation() {
         val bowlProps = setOf(Prop.BOWL, Prop.BATTER, Prop.BERRIES)
-        val ingredientProps = setOf(Prop.MILK, Prop.BUTTER)
+        val ingredientProps = setOf(Prop.MILK)
         val panProps = setOf(Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM)
         for (landscape in listOf(false, true)) {
             for (prop in bowlProps) assertEquals(KitchenLayout.bowlBox(landscape), KitchenLayout.propSlot(prop, landscape))
             for (prop in ingredientProps) assertEquals(KitchenLayout.ingredientBox(landscape), KitchenLayout.propSlot(prop, landscape))
+            assertEquals(KitchenLayout.butterBox(landscape), KitchenLayout.propSlot(Prop.BUTTER, landscape))
             for (prop in panProps) assertEquals(KitchenLayout.panBox(landscape), KitchenLayout.propSlot(prop, landscape))
         }
     }
@@ -2953,7 +2959,7 @@ class KitchenSceneRulesTest {
     private fun kitchenSize(prop: Prop, landscape: Boolean): Float = when (prop) {
         Prop.BUBBLE -> 0.18f
         Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.19f
-        Prop.BUTTER -> if (landscape) 0.21f else 0.13f
+        Prop.BUTTER -> if (landscape) 0.27f else 0.27f
         Prop.PAN -> if (landscape) 0.144f else 0.16f
         Prop.MILK -> 0.12f
         Prop.PANCAKE -> 0.15f

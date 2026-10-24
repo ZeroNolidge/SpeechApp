@@ -332,8 +332,8 @@ object KitchenLayout {
      * pancake's own single prop, not three side-by-side things like the bowl/ingredient stations,
      * has the least to lose): every gap between stations stays exactly what it was, so nothing
      * that didn't already overlap can newly start to. */
-    private fun roryLeft(landscape: Boolean): Float = if (landscape) 0.165f else 0.20f
-    private fun roryRight(landscape: Boolean): Float = if (landscape) 0.44f else 0.48f
+    private fun roryLeft(landscape: Boolean): Float = if (landscape) 0.165f else 0.19f
+    private fun roryRight(landscape: Boolean): Float = if (landscape) 0.44f else 0.50f
 
     /** Rory's own height, as a fraction of the kitchen scene's own height. K4 grew this from a
      * quarter: with the counter top itself moved down (see
@@ -381,14 +381,14 @@ object KitchenLayout {
      * keeping the same 0.02 gap -- its own width is unchanged (the bowl/batter already read a fair
      * size there; [kitchenPropSize] in VoiceScenes.kt gives the actual prop its own K9 size bump
      * instead, independent of the station it's clamped into). */
-    private fun bowlLeft(landscape: Boolean) = if (landscape) 0.46f else 0.50f
+    private fun bowlLeft(landscape: Boolean) = if (landscape) 0.46f else 0.51f
 
     /** K7: widened in landscape so the bigger bowl/batter ([kitchenPropSize] in VoiceScenes.kt,
      * ~1.6x there) still fits inside its own station without reaching into the ingredient
      * station's. K8: widened a little further still in landscape (Timothy's own "bowl still looks
      * small" ask), and portrait keeps the old, un-widened station (its own props only grow a
      * little, see [kitchenPropSize]). K9: portrait shifts right with [bowlLeft], same width. */
-    private fun bowlRight(landscape: Boolean) = if (landscape) 0.65f else 0.67f
+    private fun bowlRight(landscape: Boolean) = if (landscape) 0.65f else 0.69f
 
     /** The ingredient station (K6): milk, on its own, while it pours into the bowl (beat 2) -- or,
      * once it's a different beat, three berries in a row waiting to be tapped into the bowl (see
@@ -398,7 +398,7 @@ object KitchenLayout {
      * orientations shift right a touch to follow [bowlRight]/[bowlLeft]'s own K8 moves, keeping the
      * same gaps either side. K9: portrait shifts right again with [bowlRight], same width (so
      * [berrySlot]'s own three-way split, and [COUNT_BERRY_SIZE], are unaffected). */
-    private fun ingLeft(landscape: Boolean) = if (landscape) 0.67f else 0.69f
+    private fun ingLeft(landscape: Boolean) = if (landscape) 0.67f else 0.70f
     private fun ingRight(landscape: Boolean) = if (landscape) 0.815f else 0.83f
 
     /** The pan station (the pan itself and everything cooking in it): clear of the ingredient
@@ -658,6 +658,16 @@ object KitchenLayout {
     }
 
     /** The pan's own slot (and whatever's on it). */
+    /** K7d: the butter's own station. The three butter beats (ask, cut, ask again) show the butter
+     * plate ALONE -- no bowl, milk or pan is drawn then (see [VoiceStories.kitchen]) -- so instead of
+     * squeezing it into the narrow ingredient slot (portrait butter was ~40px), it gets the whole
+     * free counter right of Rory, centred, big enough that its two cut pieces are easy to count.
+     * [KitchenSceneRulesTest] still checks it never meets Rory and never co-occurs with another prop. */
+    fun butterBox(landscape: Boolean): Rect {
+        val top = counterTop(landscape) + PROPS_MARGIN
+        return Rect(roryRight(landscape) + 0.04f, top, 0.96f, BEAR_FLOOR)
+    }
+
     fun panBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
         return Rect(panLeft(landscape), top, panRight(landscape), BEAR_FLOOR)
@@ -672,7 +682,8 @@ object KitchenLayout {
      * free for the butter plate. */
     fun propSlot(prop: Prop, landscape: Boolean): Rect = when (prop) {
         Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM -> panBox(landscape)
-        Prop.MILK, Prop.BUTTER -> ingredientBox(landscape)
+        Prop.MILK -> ingredientBox(landscape)
+        Prop.BUTTER -> butterBox(landscape)
         else -> bowlBox(landscape)
     }
 
