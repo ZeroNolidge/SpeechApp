@@ -115,6 +115,12 @@ fun Critter(
      * a caller that must keep it clear of some on-screen edge can log what was *actually* drawn
      * rather than trusting a separate geometric model of it. */
     onHeadBounds: ((Rect) -> Unit)? = null,
+    /** The "f" mouth pose (robot/boxy species only): happy upturned eye arcs, soft pink cheek
+     * glows, and two big rounded teeth over a thick pink lower lip, in place of the usual eyes and
+     * mouth -- shown for about a second while Rory models a word starting with the "f" sound (see
+     * [com.zeronolidge.speechapp.logic.VoiceStories.isFWord]). Replaces the live lip-sync mouth
+     * entirely while true, whatever [talking] is doing. */
+    fPose: Boolean = false,
 ) {
     val still = LocalReduceMotion.current || !animate
     val t = rememberInfiniteTransition(label = "critter")
@@ -175,7 +181,7 @@ fun Critter(
         modifier
             .aspectRatio(W / H)
             .graphicsLayer { scaleX = if (mirrored) -1f else 1f }
-            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX), motion, lean, leanForward, pointMouth, onHeadBounds)),
+            .then(PuppetElement(PuppetSpec(species, color, outfit, mood, scarf, still, lookX, fPose), motion, lean, leanForward, pointMouth, onHeadBounds)),
     )
 }
 
@@ -213,6 +219,7 @@ private data class PuppetSpec(
     val scarf: Boolean,
     val still: Boolean,
     val lookX: Float = 0f,
+    val fPose: Boolean = false,
 )
 
 private class PuppetMotion(
@@ -285,7 +292,7 @@ private class PuppetNode(
             bakePaper(
                 size.width, size.height, 6.dp.toPx(), 3.dp.toPx(), 1.2.dp.toPx(), 9.dp.toPx(),
                 grain = true, maxPx = 520f, shapeShadows = true,
-            ) { drawPuppetPart(p, u, s.species, s.color, s.outfit, s.mood, s.scarf, s.lookX) }
+            ) { drawPuppetPart(p, u, s.species, s.color, s.outfit, s.mood, s.scarf, s.lookX, s.fPose) }
         }
     }
 
@@ -329,6 +336,13 @@ private class PuppetNode(
                             drawBaked(part(if (blinking) Part.HEAD_BLINK else Part.HEAD))
                         } else {
                             drawBaked(part(if (blinking) Part.HEAD_TALK_BLINK else Part.HEAD_TALK))
+                        }
+                        // The "f" pose replaces the live lip-synced mouth entirely (its own baked
+                        // part leaves the mouth blank, see drawPuppetPart's own `noMouth`), so it
+                        // never fights with whatever loudness-driven shape robotMouth would draw.
+                        if (s.fPose && boxy) {
+                            fMouth(o(50f, 65f), u)
+                        } else if (mouth != -1f) {
                             robotMouth(o(50f, 65f), u, mouth)
                         }
                     }
@@ -369,10 +383,18 @@ private class PuppetNode(
 }
 
 /** The right arm's own rotation (degrees, about its shoulder pin) for `pointMouth` (K3d): swings
- * the paper hand on its end up from hanging straight down to just beside the mouth (`o(50f, 65f)`,
- * the same spot [robotMouth] draws at, measured from the right shoulder pin at (72, 80) -- as
- * close as a fixed-length arm reaches). */
-private const val PointMouthAngle = 120f
+ * the paper hand on its end up from hanging straight down to beside the cheek, near the mouth
+ * (`o(50f, 65f)`, the same spot [robotMouth] draws at), without landing on top of it.
+ *
+ * K8 (Ruby's scene checklist -- a talk step's pointing hand must never cover the eyes or mouth):
+ * real Rory's Kitchen screenshots showed this hand as a dark blob sitting right over his mouth.
+ * 120 degrees swings the resting hand (hanging straight down off the right shoulder pin at
+ * `(70, 82)`, non-boxy) to local `(70 - 20*sin(120), 82 + 20*cos(120)) = (~53, 72)` -- almost
+ * exactly on top of the mouth at `(50, 65)`. 235 degrees instead swings it to roughly `(86, 71)`:
+ * clear of the mouth and the eyes above it (both near the face's own centre, `(50, 63)`), just
+ * past the head circle's own right edge (radius 30 from that centre) -- read as a hand touching
+ * his cheek, pointing in at his mouth from the side, never over it. */
+private const val PointMouthAngle = 235f
 
 /** How each mood holds the arms on their pins (degrees; arms hang straight down at 0). */
 private fun armAngles(mood: Mood): Pair<Float, Float> = when (mood) {
@@ -410,6 +432,7 @@ private fun DrawScope.drawPuppetPart(
     mood: Mood,
     scarf: Boolean,
     lookX: Float = 0f,
+    fPose: Boolean = false,
 ) {
     val lift = 0f
     fun o(x: Float, y: Float) = Offset(x * u, (y + OY + lift) * u)
@@ -429,7 +452,10 @@ private fun DrawScope.drawPuppetPart(
     val belly = if (kid) lighter(color, 0.35f) else Color(sp.bellyColor)
     val dark = darker(body)
     val blink = if (part == Part.HEAD_BLINK || part == Part.HEAD_TALK_BLINK) 1f else 0f
-    val noMouth = part == Part.HEAD_TALK || part == Part.HEAD_TALK_BLINK
+    // The "f" pose's own mouth is drawn live (fMouth, Critter.kt's own draw()), never baked, so
+    // it can replace the live lip-synced one on ANY of the four head parts, not just the
+    // HEAD_TALK variants that already leave the mouth out for that reason.
+    val noMouth = part == Part.HEAD_TALK || part == Part.HEAD_TALK_BLINK || fPose
 
     when (part) {
         Part.BODY -> {
@@ -610,7 +636,19 @@ private fun DrawScope.drawPuppetPart(
             if (sp.boxy) {
                 // Robot screen face.
                 val glow = Color(0xFF4DD0E1)
-                if (blink > 0.5f) {
+                if (fPose) {
+                    // The "f" pose's own happy eyes: thick upturned cyan arcs (the top of a
+                    // circle, same shape `mouth()`'s own SAD frown uses, just at the eyes and
+                    // without its downward offset) instead of the usual round pupils, and a soft
+                    // pink cheek glow out toward each edge of the screen.
+                    val r = 6f * u
+                    listOf(39f, 61f).forEach { ex ->
+                        val c = o(ex, 53f)
+                        drawArc(glow, 200f, 140f, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), style = Stroke(2.6f * u, cap = StrokeCap.Round))
+                    }
+                    paperCircle(Blush.copy(alpha = 0.6f), 5.5f * u, o(31f, 62f))
+                    paperCircle(Blush.copy(alpha = 0.6f), 5.5f * u, o(69f, 62f))
+                } else if (blink > 0.5f) {
                     drawLine(glow, o(34f, 56f), o(44f, 56f), 3f * u); drawLine(glow, o(56f, 56f), o(66f, 56f), 3f * u)
                 } else {
                     circle(39f, 56f, 6f, glow); circle(61f, 56f, 6f, glow)
@@ -843,6 +881,26 @@ private fun DrawScope.robotMouth(center: Offset, u: Float, open: Float) {
     val h = (2.5f + 9.5f * open) * u
     drawOval(Color(0xFF0E2A3A), Offset(center.x - w / 2, center.y - h / 2), Size(w, h))
     drawOval(glow, Offset(center.x - w / 2, center.y - h / 2), Size(w, h), style = Stroke(1.8f * u))
+}
+
+/**
+ * Rory's one-off "f" mouth pose (robot/boxy species only, see [Critter]'s own `fPose`): a thick,
+ * soft pink rounded lower lip with two big rounded white top teeth overlapping its top third --
+ * the shape his mouth makes starting an "f"/"ph" word (teeth resting on the lower lip). Drawn live
+ * (like [robotMouth]), never baked, so it can show on any head part and always wins over whatever
+ * the live lip-sync would otherwise be drawing.
+ */
+private fun DrawScope.fMouth(center: Offset, u: Float) {
+    val lip = Color(0xFFEC7FA0)
+    val lipW = 20f * u
+    val lipH = 9f * u
+    paperRoundRect(lip, Offset(center.x - lipW / 2f, center.y - 0.5f * u), Size(lipW, lipH), CornerRadius(lipH / 2f))
+    val toothW = 9f * u
+    val toothH = 9f * u
+    val toothTop = center.y - 5f * u
+    val gap = 0.6f * u
+    paperRoundRect(Color.White, Offset(center.x - toothW - gap / 2f, toothTop), Size(toothW, toothH), CornerRadius(2.4f * u))
+    paperRoundRect(Color.White, Offset(center.x + gap / 2f, toothTop), Size(toothW, toothH), CornerRadius(2.4f * u))
 }
 
 private fun DrawScope.mouth(center: Offset, r: Float, color: Color, mood: Mood) {

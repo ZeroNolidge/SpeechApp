@@ -13,6 +13,7 @@ class AndroidSfx : Sfx {
     private val rate = 22050
     private val crinkleTrack by lazy { track(crinkleSamples()) }
     private val popTrack by lazy { track(popSamples()) }
+    private val chopTrack by lazy { track(chopSamples()) }
 
     private fun crinkleSamples(): ShortArray {
         val n = (rate * 0.09).toInt()
@@ -39,6 +40,22 @@ class AndroidSfx : Sfx {
         }
     }
 
+    // Rory's Kitchen's butter-cutting swipe (K7): a short wooden "tok" -- a brief noise burst and
+    // a quick low thump, shorter and lower than the paper crinkle/pop.
+    private fun chopSamples(): ShortArray {
+        val n = (rate * 0.12).toInt()
+        val r = Random(5)
+        var phase = 0.0
+        return ShortArray(n) { i ->
+            val t = i / rate.toDouble()
+            val noise = if (t < 0.04) (r.nextFloat() * 2 - 1) * (1 - t / 0.04).toFloat() * 0.14f else 0f
+            val f = 180
+            phase += 2 * PI * f / rate
+            val thump = (sin(phase) * exp(-t * 20) * 0.18).toFloat()
+            ((noise + thump) * Short.MAX_VALUE).toInt().toShort()
+        }
+    }
+
     private fun track(samples: ShortArray): AudioTrack? = runCatching {
         AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
@@ -60,4 +77,5 @@ class AndroidSfx : Sfx {
 
     override fun crinkle() = play(crinkleTrack)
     override fun pop() = play(popTrack)
+    override fun chop() = play(chopTrack)
 }

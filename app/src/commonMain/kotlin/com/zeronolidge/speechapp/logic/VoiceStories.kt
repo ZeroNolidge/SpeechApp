@@ -263,8 +263,8 @@ object VoiceStories {
             // K6: the butter-cutting mini-sequence, right before it goes on the pancakes -- ask,
             // swipe to cut (narrated only, never a talk turn), ask again.
             VoiceBeat(
-                Backdrop.KITCHEN, "How many butters?", listOf("one", "one butter", "One pat of butter, please!"), null, Prop.BUTTER, Move.SLIDE,
-                "One! Just one pat of butter!", "🧈", kitchen = KitchenFlow.ASK, caption = "How many butters?", kitchenFallback = "One!",
+                Backdrop.KITCHEN, "How many pieces?", listOf("one", "one butter", "One pat of butter, please!"), null, Prop.BUTTER, Move.SLIDE,
+                "One! Just one pat of butter!", "🧈", kitchen = KitchenFlow.ASK, caption = "How many pieces?", kitchenFallback = "One!",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's cut the butter! Cut!", listOf("cut", "cut it", "Cut it in two!"), null, Prop.BUTTER, Move.SHAKE,
@@ -338,6 +338,12 @@ object VoiceStories {
 
     /** True when [word] ends with the speech sound [sound] ("up", "stop"). */
     fun endsWith(word: String, sound: String): Boolean = word.trim().lowercase().trimEnd('!', '.').endsWith(sound.lowercase())
+
+    /** True when [word] begins with the "f" sound: a plain "f" ("fish") or the silent-h spelling
+     * "ph" ("phone"). Rory's one-off "f" mouth pose (tucked lips, two big rounded teeth over the
+     * lower lip, see `Critter`'s own `mouthPose`) shows for about a second while he models a word
+     * like this. */
+    fun isFWord(word: String): Boolean = startsWith(word, "f") || startsWith(word, "ph")
 
     /** The stories, best first for his target sounds (most beats practising one of them). */
     fun forSounds(focus: Set<String>): List<VoiceStory> =

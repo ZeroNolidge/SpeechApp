@@ -1349,6 +1349,18 @@ class VoiceStoriesTest {
         val loud = meter(room + List(10) { 0.05f } + List(20) { 0.004f })
         assertTrue(loud.heard && !loud.soft)
     }
+
+    @Test
+    fun isFWordCatchesFAndSilentHPhButNotOtherSounds() {
+        assertTrue(VoiceStories.isFWord("fly"))
+        assertTrue(VoiceStories.isFWord("Fly up high, owl!"))
+        assertTrue(VoiceStories.isFWord("fish"))
+        assertTrue(VoiceStories.isFWord("phone"))
+        assertTrue(VoiceStories.isFWord("  Fox"))
+        assertFalse(VoiceStories.isFWord("van"))
+        assertFalse(VoiceStories.isFWord("pancake"))
+        assertFalse(VoiceStories.isFWord(""))
+    }
 }
 
 /** His voice pushes a voice story's action: louder is faster, holding keeps going, quiet is never a miss. */
@@ -2256,8 +2268,13 @@ class KitchenLayoutTest {
     @Test
     fun portraitCounterTopLandsInTheTargetVisibleBand() {
         // Portrait never lifts/clips (see onStage), so its local fraction IS its visible one.
+        // K9: raised again (0.55 to 0.75, Timothy's own "counter front 22-25% of the screen" ask,
+        // a real portrait screenshot having measured it at ~45%): most of the scene is wall/window
+        // above the line now, with far more headroom for a bigger Rory and Bear.
         val ct = KitchenLayout.counterTop(landscape = false)
-        assertTrue(ct in 0.60f..0.65f, "portrait counter top not in the target band: $ct")
+        assertTrue(ct in 0.73f..0.78f, "portrait counter top not in the target band: $ct")
+        val counterFront = 1f - ct
+        assertTrue(counterFront in 0.22f..0.25f, "portrait counter front not in Timothy's 22-25% ask: $counterFront")
     }
 
     @Test
@@ -2327,6 +2344,47 @@ class KitchenLayoutTest {
         }
     }
 
+    /**
+     * K8: real screenshots (1024x768 landscape, 768x1024 portrait) measured the drawn Bear at only
+     * about a third of his own lane's box, pressed against the screen's own left edge, with a
+     * bowl that stayed small next to Rory's now-bigger size -- a box-only check (like
+     * [bearsSeatIsWithinTenPercentOfTheCounterTop] below) could never catch any of this, since it
+     * never looks at the FITTED size `KitchenBear`/`KitchenRory` actually draw (see
+     * [KitchenLayout.bearFittedBox]/[KitchenLayout.roryFittedBox]). Checks the real drawn boxes
+     * directly, at the two sizes Timothy reported: Bear reads about half Rory's own real visible
+     * height (never a sliver of it, nor as tall as him), the bowl is a real fraction of Rory's own
+     * drawn width (not swamped next to him), and Bear never sits closer than 16px to the screen's
+     * own left edge.
+     */
+    @Test
+    fun bearAndTheBowlStayProportionateToRorysRealDrawnSize() {
+        for ((w, h) in listOf(1024f to 768f, 768f to 1024f)) {
+            val landscape = w > h
+            val rory = KitchenLayout.roryFittedBox(w, h, landscape)
+            val bear = KitchenLayout.bearFittedBox(w, h, landscape)
+            val roryVisibleHeight = h * KitchenLayout.counterTop(landscape) - rory.t
+            val bearHeight = bear.b - bear.t
+            val ratio = bearHeight / roryVisibleHeight
+            assertTrue(
+                ratio in 0.4f..0.65f,
+                "Bear isn't about half Rory's real drawn height at ${w}x$h: bear=$bearHeight rory=$roryVisibleHeight ratio=$ratio",
+            )
+            assertTrue(bear.l >= 16f, "Bear sits too close to the screen's own left edge at ${w}x$h: ${bear.l}")
+            // Mirrors VoiceScenes.kt's own kitchenPropSize for the bowl (landscape 0.2533, portrait
+            // 0.17, see that file's own K8 doc): `logic` stays platform-free, so this can't import
+            // it directly (same reason kitchenPropsSitOnTheRealDrawnCounterTopInLandscape can't,
+            // above).
+            val bowlSizeFraction = if (landscape) 0.2533f else 0.17f
+            val unit = minOf(w, h)
+            val bowlWidth = unit * bowlSizeFraction
+            val roryWidth = rory.r - rory.l
+            assertTrue(
+                bowlWidth >= roryWidth * 0.4f,
+                "Bowl isn't at least 0.4x Rory's real drawn width at ${w}x$h: bowl=$bowlWidth rory=$roryWidth",
+            )
+        }
+    }
+
     /** K4: Timothy's screenshots showed Bear sitting on a low stool far below the counter -- his
      * seat ([KitchenLayout.bearBox]'s own bottom) must now land close to the counter top, within
      * a tenth of the scene's own height, in both orientations. */
@@ -2388,39 +2446,48 @@ class KitchenLayoutTest {
     }
 
     /**
-     * K6: Timothy's landscape screenshot of a talk step showed Rory and Bear looking small under
-     * a lot of empty wall -- `wide` (a real wide stage, independent of the choice strip) grows
-     * both of them 20-30% by borrowing the unused gap between their lanes ([bearRight]/[roryLeft]
-     * in KitchenBeat.kt), never from the bowl's side, so they must still never overlap each other,
-     * the bowl or the pan, and must actually have grown (not just moved).
+     * K7: Rory's Kitchen now frames itself by the real screen orientation on every step, not only
+     * while a tap step's own tiles are up (see VoiceStoryScreen's own `isKitchen`), so the old K6
+     * "wide" flag (a real wide stage, independent of whether the choice strip was reserved) is
+     * gone -- [bearBox]/[roryVisibleBox] take `landscape` alone now. Landscape's own Rory and Bear
+     * must still read bigger than portrait's (Timothy's K7 ask), without overlapping each other,
+     * the bowl or the pan in either orientation.
      */
     @Test
-    fun wideBearAndRoryGrowWithoutOverlappingAnything() {
+    fun landscapeBearAndRoryAreBiggerThanPortraitWithoutOverlappingAnything() {
         for (landscape in listOf(false, true)) {
-            val bear = KitchenLayout.bearBox(landscape, wide = true)
-            val rory = KitchenLayout.roryVisibleBox(landscape, wide = true)
+            val bear = KitchenLayout.bearBox(landscape)
+            val rory = KitchenLayout.roryVisibleBox(landscape)
             val bowl = KitchenLayout.bowlBox(landscape)
             val pan = KitchenLayout.panBox(landscape)
             val boxes = listOf("bear" to bear, "rory" to rory, "bowl" to bowl, "pan" to pan)
             for (i in boxes.indices) for (j in i + 1 until boxes.size) {
                 val (nameA, a) = boxes[i]
                 val (nameB, b) = boxes[j]
-                assertFalse(a.overlaps(b), "wide $nameA overlaps $nameB in ${if (landscape) "landscape" else "portrait"}")
+                assertFalse(a.overlaps(b), "$nameA overlaps $nameB in ${if (landscape) "landscape" else "portrait"}")
             }
-            val narrowBear = KitchenLayout.bearBox(landscape, wide = false)
-            val narrowRory = KitchenLayout.roryVisibleBox(landscape, wide = false)
-            val bearGrowth = (bear.r - bear.l) / (narrowBear.r - narrowBear.l)
-            val roryGrowth = (rory.r - rory.l) / (narrowRory.r - narrowRory.l)
-            assertTrue(bearGrowth in 1.15f..1.35f, "Bear didn't grow 20-30% wide: x$bearGrowth")
-            assertTrue(roryGrowth in 1.15f..1.35f, "Rory didn't grow 20-30% wide: x$roryGrowth")
         }
+        val portraitBear = KitchenLayout.bearBox(false)
+        val landscapeBear = KitchenLayout.bearBox(true)
+        val portraitRory = KitchenLayout.roryVisibleBox(false)
+        val landscapeRory = KitchenLayout.roryVisibleBox(true)
+        assertTrue(
+            (landscapeBear.b - landscapeBear.t) > (portraitBear.b - portraitBear.t),
+            "Bear isn't taller in landscape than portrait",
+        )
+        assertTrue(
+            (landscapeRory.b - landscapeRory.t) > (portraitRory.b - portraitRory.t),
+            "Rory's visible slice isn't taller in landscape than portrait",
+        )
     }
 
-    /** K2f: Rory is the same full height in both orientations now (no more landscape shrink),
-     * and his visible part (above the counter top) is a strict top slice of his full box, never
-     * reaching past the line itself. */
+    /** K2f: his visible part (above the counter top) is a strict top slice of his full box, never
+     * reaching past the line itself, in both orientations. K7: Rory is no longer the same full
+     * height in both (that was K2f's own, now-superseded rule) -- landscape reads bigger than
+     * portrait (Timothy's K7 ask; see [landscapeBearAndRoryAreBiggerThanPortraitWithoutOverlappingAnything]
+     * for the actual size check). */
     @Test
-    fun roryIsOneSizeInBothOrientationsWithAVisibleSliceAboveTheCounter() {
+    fun roryHasAVisibleSliceAboveTheCounterInBothOrientations() {
         for (landscape in listOf(false, true)) {
             val box = KitchenLayout.roryBox(landscape)
             val visible = KitchenLayout.roryVisibleBox(landscape)
@@ -2430,9 +2497,6 @@ class KitchenLayoutTest {
             assertEquals(KitchenLayout.counterTop(landscape), visible.b)
             assertTrue(visible.b < box.b, "rory's visible box should stop at the counter top, short of his full box's bottom")
         }
-        val portraitHeight = KitchenLayout.roryBox(false).b - KitchenLayout.roryBox(false).t
-        val landscapeHeight = KitchenLayout.roryBox(true).b - KitchenLayout.roryBox(true).t
-        assertEquals(portraitHeight, landscapeHeight, 0.0001f)
     }
 
     /** None of the four ever reach down into the choice strip's own reserved band, at every size
@@ -2498,31 +2562,41 @@ class KitchenLayoutTest {
         }
     }
 
+    /**
+     * K9: a real landscape screenshot (1024x768) showed a ~120px band of empty cream between the
+     * counter's own (real, drawn) bottom and the choice strip below it -- VoiceStoryScreen's own
+     * landscape lift used a plain `Modifier.height(h)` on the scene box, which Compose silently
+     * clamps down to its parent's own smaller incoming max-height instead of forcing the full `h`
+     * the lift's own maths ([KitchenLayout.onStage]) assumes; fixed there with `requiredHeight`.
+     * [onStage] itself already modelled the gap-free version correctly (that's what the fix now
+     * actually draws): the counter's own real bottom (a local fraction of 1f; the counter's own
+     * front, `KitchenCounterFront` in VoiceScenes.kt, paints full-height) must land, in on-stage
+     * terms, at exactly the same position as the strip's own top -- `1 - strip / h`, the same
+     * `strip` (coerced to its own minimum height) VoiceStory reserves for it -- at every stage
+     * height this story runs at, with no gap and no overlap.
+     */
+    @Test
+    fun landscapeCounterBottomMeetsTheStripTopWithNoGap() {
+        val stripFraction = 0.18f
+        val stripMinHeight = 128f
+        for (h in listOf(390f, 600f, 768f, 1024f, 1366f)) {
+            val counterBottomOnStage = KitchenLayout.onStage(1f, true, h, stripFraction, stripMinHeight)
+            val strip = (h * stripFraction).coerceAtLeast(stripMinHeight)
+            val stripTopOnStage = 1f - strip / h
+            assertEquals(stripTopOnStage, counterBottomOnStage, 0.0001f, "gap between the counter's own bottom and the strip's own top at height $h")
+        }
+    }
+
     /** Mirrors `KitchenBear`'s own geometry in VoiceScenes.kt: Bear's actual on-screen box (not
      * his lane), fitted to a slice of the lane's width the same way (his drawn puppet never
      * floats above the stool, K2g) and pinned to the lane's own left edge, not centred (K2k: his
      * lane is fitted narrower than itself by [KitchenLayout.BEAR_SHIFT_FRACTION] and left-aligned,
      * so his bite lean gets a real gap before the counter that stays open however far he leans),
-     * for a scene of [w] by [h]. */
+     * for a scene of [w] by [h]. K8: this is now just [KitchenLayout.bearFittedBox] itself (shared
+     * with `KitchenBear`'s own real draw and the [bearAndTheBowlStayProportionateToRorysRealDrawnSize]
+     * test below), not a second copy of the same formula. */
     private fun bearOnScreenBox(w: Float, h: Float, landscape: Boolean): KitchenLayout.Rect {
-        val critterArtRatio = 100f / 140f
-        val bear = KitchenLayout.bearBox(landscape)
-        val laneWidth = w * (bear.r - bear.l)
-        val laneHeight = h * (bear.b - bear.t)
-        val fitWidth = (laneWidth - w * KitchenLayout.BEAR_SHIFT_FRACTION).coerceAtLeast(laneWidth * 0.5f)
-        // K4: the lane IS his own body box now (head to seat), not a shared space with the
-        // stool's legs any more (see KitchenLayout.bearBox's own doc), so no `* 0.85f` margin is
-        // held back from it any more.
-        val bearHeight = minOf(laneHeight, fitWidth / critterArtRatio)
-        val bearWidth = bearHeight * critterArtRatio
-        val laneLeft = w * bear.l
-        val laneBottom = h * bear.b
-        return KitchenLayout.Rect(
-            l = laneLeft,
-            t = laneBottom - bearHeight,
-            r = laneLeft + bearWidth,
-            b = laneBottom,
-        )
+        return KitchenLayout.bearFittedBox(w, h, landscape)
     }
 
     /** K2j: K2i's whole-body bite lean (rotating and shifting the entire Critter about a
@@ -2672,7 +2746,8 @@ class KitchenLayoutTest {
      * Sizes mirror `kitchenPropSize` in VoiceScenes.kt (BOWL/MILK/BATTER/BERRIES/PAN/PANCAKE/STEAM
      * match [propSize] there exactly; BUBBLE is Rory's Kitchen's own smaller override of that
      * function, since [propSize]'s own 0.3 is sized for the River story's open-air bubble, not a
-     * pancake's). */
+     * pancake's; K7: BOWL/BATTER/BUTTER grow and PAN shrinks a little, in landscape only, see
+     * [kitchenSizeMirror]'s own doc). */
     @Test
     fun kitchenPropsNeverOverlapRoryOrTheOtherStation() {
         // K6: milk moved off the bowl's own station onto the ingredient one (see
@@ -2684,18 +2759,18 @@ class KitchenLayoutTest {
         // overlapping single-pile render at the very same spot (K6's own milk-on-the-bowl bug, in
         // a new place) -- the generic single-prop Prop.BERRIES render is never reached in Rory's
         // Kitchen any more.
-        val bowlStationSizes = mapOf(Prop.BOWL to 0.12f, Prop.BATTER to 0.12f)
-        val ingredientStationSizes = mapOf(Prop.MILK to 0.12f, Prop.BUTTER to 0.12f)
-        val panStationSizes = mapOf(Prop.PAN to 0.16f, Prop.PANCAKE to 0.15f, Prop.BUBBLE to 0.18f, Prop.STEAM to 0.14f)
+        val bowlStationProps = listOf(Prop.BOWL, Prop.BATTER)
+        val ingredientStationProps = listOf(Prop.MILK, Prop.BUTTER)
+        val panStationProps = listOf(Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM)
         val sizes = listOf(
             1024f to 768f, 768f to 1024f, 1180f to 820f, 820f to 1180f, 1366f to 1024f, 390f to 844f, 844f to 390f,
         )
         for ((w, h) in sizes) {
             val landscape = w > h
             val rory = KitchenLayout.roryVisibleBox(landscape)
-            val bowlBoxes = bowlStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
-            val ingBoxes = ingredientStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
-            val panBoxes = panStationSizes.map { (p, s) -> p to KitchenLayout.propNaturalBox(p, landscape, s, w, h) }
+            val bowlBoxes = bowlStationProps.map { p -> p to KitchenLayout.propNaturalBox(p, landscape, kitchenSizeMirror(p, landscape), w, h) }
+            val ingBoxes = ingredientStationProps.map { p -> p to KitchenLayout.propNaturalBox(p, landscape, kitchenSizeMirror(p, landscape), w, h) }
+            val panBoxes = panStationProps.map { p -> p to KitchenLayout.propNaturalBox(p, landscape, kitchenSizeMirror(p, landscape), w, h) }
             for ((prop, box) in bowlBoxes + ingBoxes + panBoxes) {
                 assertFalse(rory.overlaps(box), "rory overlaps $prop at ${w}x$h")
             }
@@ -2730,16 +2805,33 @@ class KitchenLayoutTest {
         val sizes = listOf(1024f to 768f, 768f to 1024f)
         for ((w, h) in sizes) {
             val landscape = w > h
-            val bowl = KitchenLayout.propNaturalBox(Prop.BOWL, landscape, 0.12f, w, h)
-            val milk = KitchenLayout.propNaturalBox(Prop.MILK, landscape, 0.12f, w, h)
+            val bowl = KitchenLayout.propNaturalBox(Prop.BOWL, landscape, kitchenSizeMirror(Prop.BOWL, landscape), w, h)
+            val milk = KitchenLayout.propNaturalBox(Prop.MILK, landscape, kitchenSizeMirror(Prop.MILK, landscape), w, h)
             assertFalse(bowl.overlaps(milk), "bowl overlaps milk at ${w}x$h")
-            val batter = KitchenLayout.propNaturalBox(Prop.BATTER, landscape, 0.12f, w, h)
+            val batter = KitchenLayout.propNaturalBox(Prop.BATTER, landscape, kitchenSizeMirror(Prop.BATTER, landscape), w, h)
             val berries = (0..2).map { i -> KitchenLayout.berryBox(i, landscape, w, h) }
             for (b in berries) assertFalse(batter.overlaps(b), "batter overlaps a waiting berry at ${w}x$h")
             for (i in berries.indices) for (j in i + 1 until berries.size) {
                 assertFalse(berries[i].overlaps(berries[j]), "berry $i overlaps berry $j at ${w}x$h")
             }
         }
+    }
+
+    /** K7/K8: a duplicate, platform-free mirror of `kitchenPropSize` in VoiceScenes.kt (the one
+     * thing this and that must agree on, same spirit as [KitchenLayout.symmetricQuadApexY]'s own
+     * shared-constant fix) -- the bowl and its batter read bigger again in both orientations (K8:
+     * Timothy's own "bowl still looks small" ask), the butter plate splitting off its own, smaller
+     * size (it has its own target, not the bowl's), and the pan a little smaller in landscape to
+     * leave them the room. */
+    private fun kitchenSizeMirror(prop: Prop, landscape: Boolean): Float = when (prop) {
+        Prop.BUBBLE -> 0.18f
+        Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.17f
+        Prop.BUTTER -> if (landscape) 0.21f else 0.13f
+        Prop.PAN -> if (landscape) 0.144f else 0.16f
+        Prop.MILK -> 0.12f
+        Prop.PANCAKE -> 0.15f
+        Prop.STEAM -> 0.14f
+        else -> 0.14f
     }
 
     /** The bowl/batter/berries beats, the ingredient (milk/butter) beats and the
@@ -2831,6 +2923,151 @@ class KitchenLayoutTest {
             tolerance,
             "the pancake's own drawn bottom doesn't touch its box's bottom edge",
         )
+    }
+}
+
+/**
+ * K7 (Ruby's scene checklist, one shared set of rules for every kitchen beat): props never
+ * overlap unless it's a real "in/on" relationship ([ALLOWED_OVERLAP_PAIRS]); whatever's drawn
+ * never covers Rory's or Bear's own face ([KitchenLayout.roryFaceBox]/[bearFaceBox]); Rory is the
+ * biggest thing on the counter, Bear about half his height ([KitchenLayout.MIN_RORY_TO_BEAR_RATIO]);
+ * Bear keeps a real gap above the choice strip; and both of them stay mostly on screen. Pure
+ * [KitchenLayout] maths against every real beat in [VoiceStories.kitchen], so this is cheap to run
+ * and needs no rendering.
+ */
+class KitchenSceneRulesTest {
+    /** The three co-occurring (prop, still) pairs in [VoiceStories.kitchen] that share a counter
+     * station ON PURPOSE (both map to the same [KitchenLayout.propSlot]), since one really sits
+     * in or on the other: the berries tumble into the batter, the pancake sits in the pan, and the
+     * pan's own steam rises from the same cooking pan as its pancake's bubbles. */
+    private val allowedOverlapPairs = setOf(
+        setOf(Prop.BERRIES, Prop.BATTER),
+        setOf(Prop.PANCAKE, Prop.PAN),
+        setOf(Prop.BUBBLE, Prop.STEAM),
+    )
+
+    /** A duplicate, platform-free mirror of `kitchenPropSize` in VoiceScenes.kt (the one thing
+     * this and that must agree on): the bowl and its batter read bigger in both orientations (K8),
+     * the butter plate its own smaller size, the pan a little smaller in landscape to leave them
+     * room. */
+    private fun kitchenSize(prop: Prop, landscape: Boolean): Float = when (prop) {
+        Prop.BUBBLE -> 0.18f
+        Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.19f
+        Prop.BUTTER -> if (landscape) 0.21f else 0.13f
+        Prop.PAN -> if (landscape) 0.144f else 0.16f
+        Prop.MILK -> 0.12f
+        Prop.PANCAKE -> 0.15f
+        Prop.STEAM -> 0.14f
+        else -> 0.14f
+    }
+
+    private val sizes = listOf(1024f to 768f, 768f to 1024f)
+
+    @Test
+    fun noTwoRestingPropsInABeatOverlapUnlessItsARealInOrOnPair() {
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            for (beat in VoiceStories.kitchen.beats) {
+                val still = beat.still ?: continue
+                val propBox = KitchenLayout.propNaturalBox(beat.prop, landscape, kitchenSize(beat.prop, landscape), w, h)
+                val stillBox = KitchenLayout.propNaturalBox(still, landscape, kitchenSize(still, landscape), w, h)
+                if (setOf(beat.prop, still) in allowedOverlapPairs) continue
+                assertFalse(
+                    propBox.overlaps(stillBox),
+                    "${beat.prop} overlaps $still at ${w}x$h (beat '${beat.caption}') -- not a real in/on pair",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun noRestingPropEverCoversRoryOrBearsFace() {
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val roryFace = KitchenLayout.roryFaceBox(landscape)
+            val bearFace = KitchenLayout.bearFaceBox(landscape)
+            for (beat in VoiceStories.kitchen.beats) {
+                for (prop in listOfNotNull(beat.prop, beat.still)) {
+                    val box = KitchenLayout.propNaturalBox(prop, landscape, kitchenSize(prop, landscape), w, h)
+                    assertFalse(box.overlaps(roryFace), "$prop covers Rory's face at ${w}x$h (beat '${beat.caption}')")
+                    assertFalse(box.overlaps(bearFace), "$prop covers Bear's face at ${w}x$h (beat '${beat.caption}')")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun roryIsTheBiggestThingBearAboutHalfHisHeight() {
+        // K8: checks the real FITTED boxes now (what `KitchenRory`/`KitchenBear` actually draw),
+        // not the nominal lane boxes -- a real screenshot showed the two lanes' own nominal
+        // heights are a poor stand-in for this once their fitted sizes (narrowed by each lane's
+        // own width, see [KitchenLayout.roryFittedBox]/[KitchenLayout.bearFittedBox]) no longer
+        // shrink by the same proportion (K8 widened Bear's lane relatively more than Rory's own,
+        // see [bearRight]/[roryLeft]'s own K8 notes in KitchenBeat.kt).
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val rory = KitchenLayout.roryFittedBox(w, h, landscape)
+            val bear = KitchenLayout.bearFittedBox(w, h, landscape)
+            val roryVisibleHeight = h * KitchenLayout.counterTop(landscape) - rory.t
+            val bearHeight = bear.b - bear.t
+            assertTrue(
+                roryVisibleHeight >= bearHeight * KitchenLayout.MIN_RORY_TO_BEAR_RATIO,
+                "Rory isn't at least ${KitchenLayout.MIN_RORY_TO_BEAR_RATIO}x Bear's real drawn height at ${w}x$h: rory=$roryVisibleHeight bear=$bearHeight",
+            )
+        }
+    }
+
+    /** Mirrors VoiceStory.kt's own strip reservation exactly ([KitchenLayout.onStage] for the
+     * landscape lift, a plain shrink for portrait -- same two formulas
+     * [bearRoryBowlAndPanNeverReachTheChoiceStrip]/[kitchenPropsSitOnTheRealDrawnCounterTopInLandscape]
+     * already use), at the two sizes Timothy reported. */
+    @Test
+    fun bearKeepsAtLeastASixteenPixelGapAboveTheChoiceStrip() {
+        val minGapPx = 16f
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val stripFraction = if (landscape) 0.18f else 0.22f
+            val stripMinHeight = 128f
+            fun onStage(local: Float) = if (landscape) {
+                KitchenLayout.onStage(local, true, h, stripFraction, stripMinHeight)
+            } else {
+                local * (1f - stripFraction)
+            }
+            val gapPx = (onStage(1f) - onStage(KitchenLayout.BEAR_FLOOR)) * h
+            assertTrue(gapPx >= minGapPx, "gap above the strip under Bear too small at ${w}x$h: ${gapPx}px")
+        }
+    }
+
+    /** The landscape lift clips away whatever's above the visible scene's own top ([onStage]);
+     * portrait never clips, only shrinks. Both of them must still keep at least two thirds of
+     * Rory's and Bear's own box on screen. */
+    @Test
+    fun atLeastTwoThirdsOfRoryAndBearStayOnScreen() {
+        for ((w, h) in sizes) {
+            val landscape = w > h
+            val stripFraction = if (landscape) 0.18f else 0.22f
+            val stripMinHeight = 128f
+            fun onStage(local: Float) = if (landscape) {
+                KitchenLayout.onStage(local, true, h, stripFraction, stripMinHeight)
+            } else {
+                local * (1f - stripFraction)
+            }
+            fun visibleFraction(box: KitchenLayout.Rect): Float {
+                val fullTop = onStage(box.t)
+                val fullBottom = onStage(box.b)
+                val visibleTop = maxOf(fullTop, 0f)
+                val fullHeight = fullBottom - fullTop
+                return ((fullBottom - visibleTop).coerceAtLeast(0f)) / fullHeight
+            }
+            assertTrue(
+                visibleFraction(KitchenLayout.roryBox(landscape)) >= 2f / 3f,
+                "Rory not 2/3 on screen at ${w}x$h",
+            )
+            assertTrue(
+                visibleFraction(KitchenLayout.bearBox(landscape)) >= 2f / 3f,
+                "Bear not 2/3 on screen at ${w}x$h",
+            )
+        }
     }
 }
 

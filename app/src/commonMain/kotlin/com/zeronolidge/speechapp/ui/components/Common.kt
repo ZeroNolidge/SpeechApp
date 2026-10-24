@@ -135,6 +135,11 @@ class AppServices(
     /** Opened from a #test= link (the automatic check): places aren't remembered. */
     var testMode = false
 
+    /** "#test=...&fpose=1" (the automatic check): Rory's "f" mouth pose (see `Critter`'s own
+     * `fPose`) stays shown and zoomed in permanently, instead of its usual one-second flash while
+     * he models an "f" word, so a screenshot can catch it. */
+    var testForceFPose = false
+
     /** Saves where he is now (see Screen.placeKey), so a page reload opens back there. */
     fun notePlace(key: String?) {
         if (key != null && !testMode) progress.savePlace(key, nowMillis())

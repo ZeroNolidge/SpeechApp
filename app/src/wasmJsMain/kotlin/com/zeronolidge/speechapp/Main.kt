@@ -97,9 +97,11 @@ private fun locationHash(): String = js("""(() => {
 /**
  * For the automatic screenshot check only: "#test=ADD" opens that practice game and
  * "#test=land-MEADOW" an area's games, so layouts can be checked at different screen sizes.
+ * Extra "&..." flags (K-f's own "&fpose=1") sit after the screen key and are stripped here before
+ * it's matched below; [testHasFPose] reads that one back out of the raw hash.
  */
 private fun testStart(hash: String): Screen? {
-    val v = hash.removePrefix("#test=").removeSuffix("+words").takeIf { hash.startsWith("#test=") } ?: return null
+    val v = hash.removePrefix("#test=").substringBefore("&").removeSuffix("+words").takeIf { hash.startsWith("#test=") } ?: return null
     return runCatching {
         when {
             v.startsWith("land-") -> Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
@@ -117,6 +119,12 @@ private fun testStart(hash: String): Screen? {
         }
     }.getOrNull()
 }
+
+/** "#test=story-kitchen&fpose=1" (or any "#test=..." hash with that flag): keeps Rory's "f" mouth
+ * pose shown and zoomed in permanently (see `AppServices.testForceFPose`), so a screenshot can
+ * catch it without needing to catch the real one-second flash mid-story. */
+private fun testHasFPose(hash: String): Boolean =
+    hash.startsWith("#test=") && hash.removePrefix("#test=").split("&").drop(1).any { it == "fpose=1" }
 
 private fun hideLoading(): Unit = js("(() => { const l = document.getElementById('loading'); if (l) l.remove(); })()")
 
@@ -143,7 +151,10 @@ private fun WebRoot(services: AppServices) {
         if (testHash.startsWith("#test=") || !services.progress.micAsked || services.progress.hero == null) null
         else services.placeToResume()
     }
-    LaunchedEffect(Unit) { services.testMode = testHash.startsWith("#test=") }
+    LaunchedEffect(Unit) {
+        services.testMode = testHash.startsWith("#test=")
+        services.testForceFPose = testHasFPose(testHash)
+    }
     var started by remember { mutableStateOf(false) }
     // The tap is taken at once: Rory waves and the button pops away in the very next frame, and
     // only then (two frames later, so that wave is on screen) is the rest of the app built, which

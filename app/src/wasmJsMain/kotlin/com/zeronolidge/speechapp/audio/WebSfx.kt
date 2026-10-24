@@ -24,7 +24,25 @@ private fun jsPop(): Unit = js("""(() => { try {
     o.connect(g); g.connect(C.destination); o.start(t); o.stop(t + 0.15);
 } catch (e) {} })()""")
 
+// Rory's Kitchen's butter-cutting swipe (K7): a short filtered noise "tok" plus a quick low
+// thump, like a wooden toy knife on a board -- shorter and lower than the paper crinkle/pop.
+private fun jsChop(): Unit = js("""(() => { try {
+    const C = window.__tlAC || (window.__tlAC = new (window.AudioContext || window.webkitAudioContext)());
+    if (C.state === 'suspended') C.resume();
+    const n = Math.floor(C.sampleRate * 0.04), b = C.createBuffer(1, n, C.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) { const t = i / n; d[i] = (Math.random() * 2 - 1) * (1 - t); }
+    const s = C.createBufferSource(); s.buffer = b;
+    const f = C.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 0.9;
+    const ng = C.createGain(); ng.gain.value = 0.14;
+    s.connect(f); f.connect(ng); ng.connect(C.destination); s.start();
+    const o = C.createOscillator(), g = C.createGain(), t = C.currentTime;
+    o.type = 'sine'; o.frequency.setValueAtTime(180, t);
+    g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(g); g.connect(C.destination); o.start(t); o.stop(t + 0.12);
+} catch (e) {} })()""")
+
 class WebSfx : Sfx {
     override fun crinkle() = jsCrinkle()
     override fun pop() = jsPop()
+    override fun chop() = jsChop()
 }

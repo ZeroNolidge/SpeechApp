@@ -109,13 +109,16 @@ interface Parrot {
     fun stop()
 }
 
-/** Tiny paper sounds for taps: a soft crinkle when a button is pressed, a pop for other taps. */
+/** Tiny paper sounds for taps: a soft crinkle when a button is pressed, a pop for other taps, a
+ * wooden "tok" for Rory's Kitchen's butter-cutting swipe ([chop]). */
 interface Sfx {
     fun crinkle()
     fun pop()
+    fun chop()
 
     object Silent : Sfx {
         override fun crinkle() {}
         override fun pop() {}
+        override fun chop() {}
     }
 }

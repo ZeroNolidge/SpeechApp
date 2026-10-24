@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -81,6 +82,7 @@ import com.zeronolidge.speechapp.ui.art.VoiceListenExtras
 import com.zeronolidge.speechapp.ui.art.HolePunchConfetti
 import com.zeronolidge.speechapp.ui.art.balloonColor
 import com.zeronolidge.speechapp.ui.art.kitchenPropSizeFraction
+import com.zeronolidge.speechapp.ui.art.KitchenStripFloor
 import com.zeronolidge.speechapp.ui.art.loop
 import com.zeronolidge.speechapp.ui.art.paperBalloon
 import com.zeronolidge.speechapp.ui.art.voiceTarget
@@ -189,6 +191,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // bubble shows beside him, so a child who can't read the caption still sees, not just hears,
     // that this is his turn to talk.
     var kitchenPointing by remember { mutableStateOf(false) }
+    // K-f: Rory's "f" mouth pose (see Critter's own `fPose`), held ~1 s from the moment he starts
+    // modelling a word beginning with the "f" sound (VoiceStories.isFWord), whichever beat it's
+    // on -- or forced permanently on by the "&fpose=1" test hook (AppServices.testForceFPose), for
+    // a screenshot check that can't catch a one-second flash.
+    var fPoseFlash by remember { mutableStateOf(false) }
+    val fPoseShown = fPoseFlash || app.testForceFPose
+    LaunchedEffect(fPoseFlash) {
+        if (fPoseFlash) {
+            delay(1000)
+            fPoseFlash = false
+        }
+    }
     // K3a: a tap step (bowl, berries, flip) replays its instruction once if nothing's tapped
     // within about 6 s; reset every time a fresh tap phase begins (see KitchenPhase.TAP's own
     // LaunchedEffect below).
@@ -523,11 +537,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    /** K-f: flashes Rory's "f" mouth pose for about a second, right as he starts modelling [k]'s
+     * word, when that word begins with the "f" sound. */
+    fun triggerFPose(k: Int) {
+        if (VoiceStories.isFWord(beats[k].word)) fPoseFlash = true
+    }
+
     /** Rory says the word three times, slower the third time (the word chip pulses once as each
      * one starts, the slow third one bigger), then listens. Shared by every beat's model turn and,
      * once the puzzle below has picked a word, the game beat's own. */
     fun modelWord(k: Int, s: Int) {
         val say = line(k)
+        triggerFPose(k)
         fun pulse(big: Boolean) { if (s == session) { chipBig = big; chipBeat++ } }
         pulse(false)
         if (beats[k].backdrop == Backdrop.KITCHEN) {
@@ -649,6 +670,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
      * longer says the plain word again first; that left the bubbles beat's own try sounding like
      * nothing but "pop" repeated with no audible "now you say it" at all). */
     fun modelKitchenWord(k: Int, s: Int) {
+        triggerFPose(k)
         if (s == session) { chipBig = false; chipBeat++ }
         // K6: a "how many?" ask never says the answer first -- Rory's question (the beat's own
         // problem line, already said) is the cue; he just cups his ear and waits.
@@ -751,7 +773,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 logKitchen(next)
             }
             KitchenFlow.FLIP, KitchenFlow.CUT -> {
-                if (beats[index].kitchen == KitchenFlow.CUT) { app.sfx.crinkle(); println("KITCHEN cut step=$index") }
+                if (beats[index].kitchen == KitchenFlow.CUT) { app.sfx.chop(); println("KITCHEN cut step=$index") }
                 val next = kitchenPhase.tap(true)
                 kitchenPhase = next
                 logKitchen(next)
@@ -1014,18 +1036,28 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // flip) -- stir/bubbles never do (KitchenFlow.tapGoal is 0 for both), so their
                     // brief NAME announcement never needs the strip reserved either.
                     val kitchenTapFlow = beat.kitchen?.let { it.usesStrip() && it.tapGoal(beat.kitchenGoal) > 0 } == true
-                    // K3d: a tap flow's own fix (ACT, right after its last tap/CLOSE) keeps the
-                    // same strip-reserved, lifted layout its tapping just used, instead of
-                    // collapsing it the instant the tiles go away. Before this, the scene's lift
-                    // and size changed in the same frame the tiles vanished and the success line
-                    // started -- Timothy's screenshots showed the counter (and the berries/bowl/pan
-                    // on it) jump to the portrait-style, un-lifted position mid-celebration, which
-                    // read as the props floating up over the wall.
+                    // K3d (superseded by K7, see below): a tap flow's own fix (ACT, right after its
+                    // last tap/CLOSE) used to keep the same strip-reserved, lifted layout its
+                    // tapping just used, instead of collapsing it the instant the tiles go away --
+                    // still true (`stripShown` below still spans ACT), but no longer the only thing
+                    // holding the layout steady: K7 reserves the same band on every kitchen step.
                     val stripShown = phase == VPhase.GAME || (kitchenTapFlow && (phase == VPhase.KITCHEN || phase == VPhase.ACT))
-                    val landscape = stripShown && w > h
-                    val isKitchen = kitchenTapFlow && (phase == VPhase.KITCHEN || phase == VPhase.ACT)
+                    // K7: Timothy's screenshots showed the counter, Rory and Bear jump between two
+                    // different sizes and positions every time a beat's own flow switched between
+                    // tapping (tiles up, `stripShown` true, landscape lifted and the strip reserved)
+                    // and talking (tiles down, `stripShown` false, drawn full-height and un-lifted,
+                    // portrait-shaped even on a landscape screen) -- the fix this file's own K3a
+                    // already applied to make every beat tap-only or talk-only never touched the
+                    // SCENE's own framing, only which turn plays. Rory's Kitchen (`isKitchen`, every
+                    // phase of every beat, the ending included) now always reserves the strip's own
+                    // band and always frames itself by the REAL screen orientation, whether or not
+                    // its own tiles happen to be up this phase: one fixed geometry per orientation,
+                    // for the whole story. The balloon puzzle (every other `stripShown` user) is
+                    // untouched: it still only lifts/reserves while its own GAME phase is up.
+                    val isKitchen = beat.backdrop == Backdrop.KITCHEN
+                    val landscape = if (isKitchen) w > h else stripShown && w > h
                     val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
-                    val gameStrip = if (stripShown) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
+                    val gameStrip = if (isKitchen || stripShown) (h * stripFraction).coerceAtLeast(BalloonStripMinHeight) else 0.dp
                     // Rory's Kitchen: his mouth talks whenever Rory is the one speaking (naming
                     // the step, modelling the word, or echoing after it), and he hides while the
                     // big listening Rory takes over, same as the small bottom-left Rory he replaces.
@@ -1076,7 +1108,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         fun fmtReal(r: androidx.compose.ui.geometry.Rect) =
                             "${r.left.roundToInt()},${r.top.roundToInt()},${r.right.roundToInt()},${r.bottom.roundToInt()}"
                         fun propRect(p: Prop) = kitchenPropRects[p]?.let(::fmtReal)
-                            ?: fmt(KitchenLayout.propBox(p, sceneLandscape, kitchenPropSizeFraction(p), sw, sh))
+                            ?: fmt(KitchenLayout.propBox(p, sceneLandscape, kitchenPropSizeFraction(p, sceneLandscape), sw, sh))
                         val counterTopPx = (origin.y + KitchenLayout.counterTop(sceneLandscape) * sh).roundToInt()
                         val counterLeftPx = (origin.x + KitchenLayout.bearBox(sceneLandscape).r * sw).roundToInt()
                         println(
@@ -1095,7 +1127,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             // KitchenLayoutTest): the balloon puzzle's bigger gap would clip into it.
                             val lift = gameStrip + (if (isKitchen) KitchenLandscapeGap else BalloonLandscapeGap)
                             Box(
-                                Modifier.fillMaxWidth().height(h).offset(y = -lift).let { m ->
+                                // K9: Rory's Kitchen only uses requiredHeight, not height, here --
+                                // the outer Box just above is only (h - gameStrip) tall (clipped to
+                                // that), and a plain .height(h) is CLAMPED DOWN to that same
+                                // smaller incoming max, not forced to h: this scene was quietly
+                                // shrinking to (h - gameStrip) instead of staying full size and
+                                // lifting clear, which left a gameStrip-sized gap of empty cream
+                                // between the counter's own (now-short) bottom and the strip below
+                                // it on a real landscape screenshot. requiredHeight ignores the
+                                // incoming max and forces the full h, so the lift (which still
+                                // assumes a full-height scene) lands the counter's real bottom
+                                // exactly at the strip's own top, as KitchenLayout.onStage already
+                                // modelled. Scoped to Kitchen alone: the balloon puzzle's own
+                                // landscape sizing is unchanged.
+                                Modifier.fillMaxWidth().let { m -> if (isKitchen) m.requiredHeight(h) else m.height(h) }.offset(y = -lift).let { m ->
                                     if (!isKitchen) return@let m
                                     m.onGloballyPositioned { c ->
                                         if (kitchenLayoutLoggedStep == index to phase) return@onGloballyPositioned
@@ -1118,7 +1163,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         puzzleSafe = stripShown, landscape = true,
                                         kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
-                                        wide = w > h, butterCut = kitchenButterCut, countHopped = kitchenHopped,
+                                        kitchenFPose = fPoseShown,
+                                        butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         bigNumeral = kitchenNumeral,
@@ -1138,7 +1184,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     puzzleSafe = stripShown,
                                     kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
-                                        wide = w > h, butterCut = kitchenButterCut, countHopped = kitchenHopped,
+                                        kitchenFPose = fPoseShown,
+                                        butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         bigNumeral = kitchenNumeral,
@@ -1149,6 +1196,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             }
                         }
                     }
+                    // K7: the reserved strip band, always kept now (see `gameStrip` above) --
+                    // the same counter-front colour as the scene's own counter whenever nothing
+                    // else draws over it, so a talk step's silent band reads as the counter's own
+                    // floor rather than an empty gap; KitchenTapRow's own wash+tiles stack right on
+                    // top of it the moment a tap step's tiles do show (declared after this, below).
+                    if (isKitchen) KitchenStripFloor(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(gameStrip))
                     // The sticker he earned, peeling on in the middle at the end. Rory's Kitchen's
                     // own ending flies its sticker into the backpack instead (see below): no
                     // screen-takeover card for that story.
@@ -1191,7 +1244,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         HeroWithPet(species, p.heroColor(species), p.outfit, null, Modifier.fillMaxHeight().wiggleOnTap(), if (phase == VPhase.END) Mood.CHEER else Mood.HAPPY)
                         // Rory beside the buddy, his mouth going as he models each word (on a phone
                         // too while he talks; the big listening Rory takes over on his turn).
-                        if (listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT)
+                        if (listenLookGone() && (!narrow || phase == VPhase.MODEL)) Critter(Species.ROBOT, Modifier.fillMaxHeight(0.75f), Color(0xFFFFCC80), mood = Mood.HAPPY, talking = phase == VPhase.MODEL || phase == VPhase.ACT, fPose = fPoseShown)
                     }
                     // The balloon pattern puzzle, right in the scene: Rory's named the problem, now
                     // it waits for a tap (see GameBeatState). Nothing times out, nothing else moves.

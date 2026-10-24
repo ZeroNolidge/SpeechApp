@@ -180,7 +180,22 @@ object KitchenLayout {
      * drawn top lands at roughly 60-65% of the visible scene's own height (so the counter band
      * itself is only the lower ~35-40%), matching Timothy's ask that Rory show from the chest up
      * and Bear's stool read as sitting at counter height, not far below it. */
-    const val COUNTER_TOP_PORTRAIT = 0.62f
+    /** K8: Timothy's portrait screenshot (768x1024) showed the wall/window taking nearly two
+     * thirds of the scene with a cramped counter below it -- lowered from 0.62 so the wall above
+     * (window, shelf) and the counter front read as roughly balanced (counter ~45% of the scene,
+     * matching his own "counter top ~55% of the scene" ask), and so there's more room below the
+     * line for a bigger Rory/Bear/bowl (see [roryHeight]/[bearHeight]/[kitchenPropSize] in
+     * VoiceScenes.kt). [KitchenLayoutTest.portraitCounterTopLandsInTheTargetVisibleBand]'s own band
+     * moved down with it.
+     *
+     * K9: a real portrait screenshot (768x1024) measured the counter front at ~45% of the scene's
+     * own height, with Rory and Bear both reading small against it -- raised further (counter front
+     * now ~1 - 0.75 = 25%, Timothy's own "22-25%" ask) so most of the scene is wall/window above the
+     * line, with far more headroom for [roryLeft]/[roryRight]/[bearRight] to fit a bigger Rory and
+     * Bear into (their own height fractions, [roryHeight]/[bearHeight], stay put: both are already
+     * comfortably WIDTH-bound at this scene size, see [roryFittedBox]/[bearFittedBox], so only a
+     * wider lane -- not a taller nominal box -- actually grows what's drawn). */
+    const val COUNTER_TOP_PORTRAIT = 0.75f
 
     /** K4: landscape's local fraction ends up BIGGER than portrait's now (the opposite of K2a's
      * old "shorter wall" rule), because the lift clips away local fractions below its own clip
@@ -200,30 +215,44 @@ object KitchenLayout {
 
     fun counterTop(landscape: Boolean): Float = if (landscape) COUNTER_TOP_LANDSCAPE else COUNTER_TOP_PORTRAIT
 
-    /** K6: Timothy's screenshot of a landscape talk step (no choice strip, so [counterTop] is
-     * always called with `landscape = false` there -- see [VoiceBeatScene]'s own `landscape`
-     * param, which only ever turns on alongside the strip lift) showed a wide, empty cream band
-     * above the counter: [COUNTER_TOP_PORTRAIT] (0.62) is already within the 58-62% visible band
-     * Timothy asked for, so the counter line itself didn't need moving -- the fix is giving Rory
-     * and Bear more room ([bearRight]/[roryLeft]/[roryHeight]/[BEAR_HEIGHT], all gated on a real
-     * wide stage, `wide`) and decorating the rest of that band ([KitchenWall]'s window and shelf),
-     * not a third counter-top number. */
-    private const val WIDE_SCALE = 1.25f
+    /** K7: Rory's Kitchen now reserves the choice strip's own band, and frames itself by the
+     * real screen orientation, on EVERY step (see VoiceStoryScreen's own `isKitchen`/`landscape`),
+     * never only while a tap step's own tiles happen to be up -- so [counterTop] (and everything
+     * below that used to be gated on a real "wide" stage independent of a strip lift, `wide`) now
+     * applies the same way to every kitchen beat's own talk turns too, not just its taps. The old
+     * K6 "wide" flag is gone: it only ever meant "the real stage is landscape-shaped", which
+     * [landscape] itself now always means for Rory's Kitchen, so every lane/height function below
+     * takes `landscape` directly instead of a second, redundant boolean.
+     *
+     * Timothy's own K7 ask, now that this no longer only applies mid-tap: both Rory and Bear read
+     * noticeably bigger than before (about 1.6x their old landscape height, 1.3x portrait's), with
+     * Rory clearly the bigger of the two ([roryHeight]/[bearHeight] are picked so his own visible
+     * height is always at least [MIN_RORY_TO_BEAR_RATIO] times Bear's, matching the scene rule
+     * "Rory is the biggest thing, Bear about half his height"; see
+     * [KitchenLayoutTest.roryIsTheBiggestThingBearAboutHalfHisHeight]). */
+    const val MIN_RORY_TO_BEAR_RATIO = 1.6f
 
     // --- Ruby's K2b: Bear (on his stool), Rory (behind the counter, chef's hat) and the
     // counter's own props, in explicit lanes so none of them ever overlap. Lanes below are
     // fractions of the kitchen scene's own box (0 to 1); [stageBox] rescales one onto the whole
     // stage once a choice strip is reserved below it (see VoiceStory's `gameStrip`).
 
-    /** Bear's lane (his stool), the far end of the counter from the props: stays inside a fifth
-     * of the scene's width, on the floor (K2e: the counter itself starts just to his right, see
+    /** Bear's lane (his stool), the far end of the counter from the props: stays clear of the
+     * floor beside the counter (K2e: the counter itself starts just to his right, see
      * [BackdropExtras] in VoiceScenes.kt, so he reads as sitting *beside* it, not floating over
-     * its front). K6: Timothy's landscape screenshot showed a lot of spare wall between Bear and
-     * Rory's own lane ([roryLeft], 0.20 to 0.30) that neither of them used -- [wide] (a real wide
-     * stage, independent of whether the choice strip is reserved; see [VoiceBeatScene]'s own
-     * `wide` param) grows into that gap by [WIDE_SCALE] so both of them read bigger on a landscape
-     * screen, where Timothy's screenshot showed them looking small under a lot of empty wall. */
-    private fun bearRight(wide: Boolean): Float = if (wide) 0.01f + (0.20f - 0.01f) * WIDE_SCALE else 0.20f
+     * its front). Narrower than before in landscape (K7), giving up some of his own lane's width
+     * to Rory's widened one ([roryLeft]) so Rory can read as the bigger of the two without either
+     * of them reaching into the other's space. */
+    /** K8: real screenshots measured the drawn Bear at roughly a third of this lane's own box
+     * (width- and shift-starved, see [BEAR_SHIFT_FRACTION]'s own K8 note) -- widened in landscape
+     * (borrowing a little of the gap [roryLeft] also gives up) so his FITTED box
+     * ([bearFittedBox]) can actually reach a reasonable fraction of it.
+     *
+     * K9: portrait widened too now (0.15 to 0.18), borrowing from the same wall space
+     * [COUNTER_TOP_PORTRAIT]'s own rise freed up, moving [roryLeft]/[roryRight] along with it (same
+     * gap kept either side) -- a real portrait screenshot showed Bear drawn at only ~45px next to a
+     * much bigger Rory. */
+    private fun bearRight(landscape: Boolean): Float = if (landscape) 0.155f else 0.18f
 
     /** K4: Timothy's screenshots showed Bear sitting on a low stool far below the counter (his
      * seat about 45% of the scene's own height below the counter top) -- he read as sitting on
@@ -243,8 +272,17 @@ object KitchenLayout {
 
     /** Bear's own body height (head to seat), as a fraction of the scene's own height: tall enough
      * that his head (and ears) clearly rise above the counter top once his seat sits at
-     * [BEAR_SEAT_GAP] below it. */
-    private const val BEAR_HEIGHT = 0.30f
+     * [BEAR_SEAT_GAP] below it. K7: Timothy's own ask was both of them bigger, Rory about 1.6x in
+     * landscape, 1.3x in portrait -- grown that far, Bear's own height alone would already pass
+     * [MIN_RORY_TO_BEAR_RATIO]'s own room (there's only so much height between the counter top
+     * and the screen's own edge to share between them), so he stays at his original size here
+     * (landscape a touch over it, never under), with [roryHeight] doing almost all of the growing:
+     * real screenshots showed Bear reading plenty big already once the counter's own framing
+     * stopped jumping between steps; Rory was the one who read too small. */
+    /** K8: grown a little in landscape (alongside [bearRight]'s own widened lane) so his FITTED
+     * box has more ceiling room to grow into there too -- portrait is unchanged (its lane doesn't
+     * widen, see [bearRight]'s own K8 note). */
+    private fun bearHeight(landscape: Boolean): Float = if (landscape) 0.34f else 0.30f
 
     /** The real floor line his stool's legs reach down to (K4): drawn separately from his own body
      * box ([bearBox], which now ends at his seat, not the floor) in `KitchenBear`
@@ -260,7 +298,7 @@ object KitchenLayout {
      * in VoiceScenes.kt, so the counter's own paint covers his lower body, the way a real counter
      * hides someone's legs): his box can now be one full, un-shrunk size in both orientations
      * ([roryHeight]), reaching down past the counter top line by design
-     * ([RORY_HIDDEN_FRACTION]) instead of stopping just short of it.
+     * ([roryHiddenFraction]) instead of stopping just short of it.
      *
      * K3c: Timothy's screenshots (1024x768 and 768x1024) showed the bowl, milk and berries
      * covering Rory's face -- this lane used to be centred ([0.33, 0.67]) right on top of the
@@ -271,50 +309,117 @@ object KitchenLayout {
      * without shrinking him down to fit between the two (K3b's own station widths leave no gap
      * big enough in the middle).
      *
-     * K6: his right edge ([RORY_RIGHT]) never moves (the bowl station starts just past it, see
-     * [BOWL_LEFT]) but his LEFT edge does, on a real wide stage ([wide]; same gap Bear also grows
-     * into, see [bearRight]): [roryLeft] widens his lane (so he can be fitted bigger, see
-     * [roryFittedBox]) by borrowing from the unused wall between him and Bear, never from the
-     * props' own side. */
-    private fun roryLeft(wide: Boolean): Float = if (wide) RORY_RIGHT - (RORY_RIGHT - 0.30f) * WIDE_SCALE else 0.30f
-    private const val RORY_RIGHT = 0.44f
+     * K6/K7: his right edge ([roryRight]) barely moves (the bowl station starts just past it, see
+     * [bowlLeft]) but his LEFT edge does, widened further in K7 (same gap Bear also gives up, see
+     * [bearRight]) than K6's own more modest grow-on-a-wide-stage version: [roryLeft] widens his
+     * lane (so he can be fitted bigger, see [roryFittedBox]) by borrowing from the wall between him
+     * and Bear, never from the props' own side.
+     *
+     * K8: Timothy's own portrait screenshot (768x1024) measured his drawn FITTED box at barely a
+     * third of [roryBox]'s own nominal height -- his lane there is much narrower, relative to the
+     * height he's asked to reach, than landscape's own (portrait's own scene is taller/narrower,
+     * so the same width buys proportionally less height, see [roryFittedBox]'s own width-vs-height
+     * fit): widened further still in portrait than K7's own version, past where [bowlLeft] used to
+     * sit, with every counter station past it ([bowlLeft]/[ingLeft]/[panLeft], all in VoiceScenes.kt
+     * too via [kitchenPropSize]) shifted along to keep its own share of the counter.
+     *
+     * K9: portrait widened again (his own fitted box was still only ~180px wide on a 768px-wide
+     * screen) -- [roryLeft] moves along with [bearRight]'s own K9 widening (same 0.02 gap kept),
+     * and [roryRight] moves out a further 0.03 past that, so his FITTED width (still comfortably
+     * width-bound, see [roryFittedBox]) grows from the old ~24% of the scene's width toward ~33%.
+     * [bowlLeft]/[ingLeft]/[panLeft] (and their own right edges) all shift along by the same
+     * amount again, borrowing the rest of the room from a narrower [panRight] station (the pan/
+     * pancake's own single prop, not three side-by-side things like the bowl/ingredient stations,
+     * has the least to lose): every gap between stations stays exactly what it was, so nothing
+     * that didn't already overlap can newly start to. */
+    private fun roryLeft(landscape: Boolean): Float = if (landscape) 0.165f else 0.20f
+    private fun roryRight(landscape: Boolean): Float = if (landscape) 0.44f else 0.48f
 
-    /** Rory's own height, as a fraction of the kitchen scene's own height: the same in portrait
-     * and landscape (K2f; no more separate landscape shrink). K4 grew this from a quarter: with
-     * the counter top itself moved down (see [COUNTER_TOP_LANDSCAPE]/[COUNTER_TOP_PORTRAIT]), a
-     * bigger Rory reads as standing at a normal-sized counter instead of a tall one looming over a
-     * tiny one. K6: [WIDE_SCALE] bigger again on a real wide stage ([wide]), alongside his widened
-     * lane ([roryLeft]) -- both grow together so he's fitted bigger however his real box picks
-     * between "as tall as the lane allows" and "as wide as the lane allows" (see [roryFittedBox]). */
-    private fun roryHeight(wide: Boolean): Float = if (wide) 0.34f * WIDE_SCALE else 0.34f
+    /** Rory's own height, as a fraction of the kitchen scene's own height. K4 grew this from a
+     * quarter: with the counter top itself moved down (see
+     * [COUNTER_TOP_LANDSCAPE]/[COUNTER_TOP_PORTRAIT]), a bigger Rory reads as standing at a
+     * normal-sized counter instead of a tall one looming over a tiny one. K7: bigger again in both
+     * orientations now that the strip/lift (and so this whole layout) applies on every step, not
+     * only while a tap step's own tiles are up -- landscape grows further than portrait (more
+     * spare width to widen his lane into, see [roryLeft]), together with his widened lane so he's
+     * fitted bigger however his real box picks between "as tall as the lane allows" and "as wide
+     * as the lane allows" (see [roryFittedBox]).
+     *
+     * K8: portrait lowered a touch (0.60 to 0.58): with [roryLeft]/[roryRight] now much wider
+     * there, his fit is comfortably width-bound well short of this height ceiling (see
+     * [roryFittedBox]), so this only needs to clear that width-bound height while keeping his own
+     * nominal box's top on screen (never negative, see [COUNTER_TOP_PORTRAIT]/[roryHiddenFraction]) --
+     * never the thing actually limiting how tall he's drawn. */
+    private fun roryHeight(landscape: Boolean): Float = if (landscape) 0.64f else 0.55f
 
     /** How much of [roryHeight] sits below the counter top line, hidden behind the counter (K2g
      * was 0.45, K4 lowers it further from 0.25): Timothy's ask was chest-up, both arms included --
      * 0.18 clears his whole head, both shoulders and arms and most of his chest, so the counter
-     * front hides only his lower chest/belly and legs, the way a waist-high counter should. */
-    private const val RORY_HIDDEN_FRACTION = 0.18f
+     * front hides only his lower chest/belly and legs, the way a waist-high counter should.
+     *
+     * K8: Timothy's landscape screenshot showed his chef hat right at the very top of the scene,
+     * clipped close by VoiceStory's own landscape lift ([onStage]) -- raised in landscape (never
+     * his own fitted size, just how much of it the counter hides) so his fitted box's own visible
+     * top sits further down, clear of that lift line, with no change to his nominal height/width.
+     * Portrait lowered a little the other way: it never lifts/clips (see [onStage]), and showing a
+     * bit more of him (closer to the old 0.18) reads better now that he's actually big enough to
+     * matter there. */
+    private fun roryHiddenFraction(landscape: Boolean): Float = if (landscape) 0.22f else 0.12f
 
     /** The bowl station (the bowl choice, and the batter while it's being mixed or holding the
-     * berries): its own strip of the counter, clear of Rory's lane ([RORY_RIGHT]) on one side and
-     * the ingredient station ([ING_LEFT]) on the other (K3c: K3b's props band used to sit right
+     * berries): its own strip of the counter, clear of Rory's lane ([roryRight]) on one side and
+     * the ingredient station ([ingLeft]) on the other (K3c: K3b's props band used to sit right
      * under Rory's old centred lane; K6 narrowed it again and gave milk/the berry row their own
-     * station, see [ING_LEFT], since the milk carton used to be drawn centred in this exact same
+     * station, see [ingLeft], since the milk carton used to be drawn centred in this exact same
      * spot as the bowl -- Timothy's screenshot showed it sitting flush on top of the bowl, hiding
      * it completely). */
-    private const val BOWL_LEFT = 0.46f
-    private const val BOWL_RIGHT = 0.60f
+    /** K8: portrait's own station shifted left along with [roryRight]'s own K8 widening (its
+     * share of the counter is unchanged, just moved to make room for Rory's bigger lane); landscape
+     * is unchanged here (only [bowlRight] widens there).
+     *
+     * K9: shifted right again, by the same amount [roryRight]'s own K9 widening grew by (0.07),
+     * keeping the same 0.02 gap -- its own width is unchanged (the bowl/batter already read a fair
+     * size there; [kitchenPropSize] in VoiceScenes.kt gives the actual prop its own K9 size bump
+     * instead, independent of the station it's clamped into). */
+    private fun bowlLeft(landscape: Boolean) = if (landscape) 0.46f else 0.50f
+
+    /** K7: widened in landscape so the bigger bowl/batter ([kitchenPropSize] in VoiceScenes.kt,
+     * ~1.6x there) still fits inside its own station without reaching into the ingredient
+     * station's. K8: widened a little further still in landscape (Timothy's own "bowl still looks
+     * small" ask), and portrait keeps the old, un-widened station (its own props only grow a
+     * little, see [kitchenPropSize]). K9: portrait shifts right with [bowlLeft], same width. */
+    private fun bowlRight(landscape: Boolean) = if (landscape) 0.65f else 0.67f
 
     /** The ingredient station (K6): milk, on its own, while it pours into the bowl (beat 2) -- or,
      * once it's a different beat, three berries in a row waiting to be tapped into the bowl (see
      * [berrySlot]), never both at the same time, so one station can serve either without the two
-     * ever overlapping each other or the bowl. */
-    private const val ING_LEFT = 0.615f
-    private const val ING_RIGHT = 0.735f
+     * ever overlapping each other or the bowl. K7: widened in landscape, to match [bowlRight]'s
+     * own widening (the butter plate shares this station, and also grows ~1.6x there). K8: both
+     * orientations shift right a touch to follow [bowlRight]/[bowlLeft]'s own K8 moves, keeping the
+     * same gaps either side. K9: portrait shifts right again with [bowlRight], same width (so
+     * [berrySlot]'s own three-way split, and [COUNT_BERRY_SIZE], are unaffected). */
+    private fun ingLeft(landscape: Boolean) = if (landscape) 0.67f else 0.69f
+    private fun ingRight(landscape: Boolean) = if (landscape) 0.815f else 0.83f
 
     /** The pan station (the pan itself and everything cooking in it): clear of the ingredient
-     * station on one side and the counter's own right edge on the other (K3c). */
-    private const val PAN_LEFT = 0.74f
-    private const val PAN_RIGHT = 0.94f
+     * station on one side and the counter's own right edge on the other (K3c). K7: shrinks a
+     * little in landscape (the pan itself draws a little smaller there, [kitchenPropSize] in
+     * VoiceScenes.kt) to give the bowl and ingredient stations the room they need to grow. K8:
+     * both orientations follow [ingLeft]/[ingRight]'s own K8 shift right by the same amount, so
+     * every gap stays exactly what it was; portrait's own right edge moves out to the same margin
+     * landscape already kept (it had more spare room before Rory's own lane widened into it).
+     *
+     * K9: portrait's own left edge moves right with [ingRight] (same 0.02 gap), narrowing this
+     * station -- the one place K9's own room for a bigger Rory/Bear actually came from: a single
+     * pan (one prop at a time, never split three ways like the bowl/ingredient stations) has the
+     * least to lose, and its own natural (unclamped) width, even un-shrunk, still lands just inside
+     * the screen's own right edge at this station's new size (checked by hand against
+     * [kitchenPropSize]'s own PAN fraction in VoiceScenes.kt: 0.16 of a 768px-wide portrait scene
+     * is ~123px, comfortably inside the ~15px either side this station's own 0.85-0.98 keeps clear
+     * of both [ingRight] and the screen edge). [panRight] itself never moves: it's already the
+     * same safe margin from the screen's own right edge landscape independently settled on. */
+    private fun panLeft(landscape: Boolean) = if (landscape) 0.835f else 0.85f
+    private fun panRight(landscape: Boolean) = if (landscape) 0.98f else 0.98f
 
     /** How far below the counter-top line the props' own tap-target slots start (K2b) -- and,
      * since K3b, also where every prop's own *bottom edge* actually rests ([propBox]): a thin
@@ -383,15 +488,21 @@ object KitchenLayout {
         fun overlaps(other: Rect): Boolean = l < other.r && r > other.l && t < other.b && b > other.t
     }
 
-    /** Bear's own body box (K4: his *seat*, not his floor -- see [BEAR_SEAT_GAP]/[BEAR_HEIGHT]),
+    /** Bear's own left edge (K8): real screenshots (1024x768 landscape, 768x1024 portrait) showed
+     * him drawn pressed right against the screen's own left edge (well under 16px) -- raised from a
+     * near-zero 0.01 so he always keeps a real gap, at every size this story runs at (the smaller
+     * of the two test tablet widths, 768, is the binding one: 0.03 * 768 = ~23px). */
+    private const val BEAR_LEFT = 0.03f
+
+    /** Bear's own body box (K4: his *seat*, not his floor -- see [BEAR_SEAT_GAP]/[bearHeight]),
      * as a fraction of the kitchen scene's own box: his seat sits just below the counter top line,
-     * his head rising [BEAR_HEIGHT] above that, so he reads as sitting right at counter height.
+     * his head rising [bearHeight] above that, so he reads as sitting right at counter height.
      * His stool's own legs, drawn separately in `KitchenBear` (VoiceScenes.kt), carry on down from
      * this box's own bottom to the real floor ([BEAR_FLOOR]). */
-    fun bearBox(landscape: Boolean, wide: Boolean = false): Rect {
+    fun bearBox(landscape: Boolean): Rect {
         val seat = counterTop(landscape) + BEAR_SEAT_GAP
-        val height = if (wide) BEAR_HEIGHT * WIDE_SCALE else BEAR_HEIGHT
-        return Rect(0.01f, seat - height, bearRight(wide), seat)
+        val height = bearHeight(landscape)
+        return Rect(BEAR_LEFT, seat - height, bearRight(landscape), seat)
     }
 
     /** K4b: real screenshots (1024x768 landscape, 768x1024 portrait) showed Bear's own bottom
@@ -405,53 +516,97 @@ object KitchenLayout {
 
     /** Where the stool's own seat (drawn in `KitchenBear`, VoiceScenes.kt) starts: see
      * [BEAR_SEAT_OVERLAP]. */
-    fun stoolTop(landscape: Boolean, wide: Boolean = false): Float = bearBox(landscape, wide).b - BEAR_SEAT_OVERLAP
+    fun stoolTop(landscape: Boolean): Float = bearBox(landscape).b - BEAR_SEAT_OVERLAP
 
     /** Rory's box (with his hat), as a fraction of the kitchen scene's own box: reaches from
-     * above the counter top line down past it ([RORY_HIDDEN_FRACTION]), since the counter is
+     * above the counter top line down past it ([roryHiddenFraction]), since the counter is
      * drawn over his lower body (K2f), not clipped away by this box itself. This is his *nominal*
      * box, at his full own height ([roryHeight]); see [roryFittedBox] for the box actually drawn,
-     * which can come out shorter than this in a narrow lane. [wide] (K6) is a real wide stage,
-     * independent of orientation-driven [landscape]: see [roryLeft]/[roryHeight]'s own docs. */
-    fun roryBox(landscape: Boolean, wide: Boolean = false): Rect {
+     * which can come out shorter than this in a narrow lane. */
+    fun roryBox(landscape: Boolean): Rect {
         val ct = counterTop(landscape)
-        val height = roryHeight(wide)
-        return Rect(roryLeft(wide), ct - height * (1f - RORY_HIDDEN_FRACTION), RORY_RIGHT, ct + height * RORY_HIDDEN_FRACTION)
+        val height = roryHeight(landscape)
+        val hidden = roryHiddenFraction(landscape)
+        return Rect(roryLeft(landscape), ct - height * (1f - hidden), roryRight(landscape), ct + height * hidden)
     }
 
     /** K4b: Rory's real on-screen box, for a stage of [w] by [h]: a real portrait screenshot
      * (768x1024) showed him standing in front of the counter with his whole body, feet included,
      * visible above it. [roryBox] alone can't be trusted to draw him there: his lane
-     * ([roryLeft]/[RORY_RIGHT]) is much narrower than [CRITTER_ART_RATIO] needs for his nominal
+     * ([roryLeft]/[roryRight]) is much narrower than [CRITTER_ART_RATIO] needs for his nominal
      * height ([roryHeight]) once the scene itself is tall and narrow (portrait), so
      * `Modifier.fillMaxHeight()` plus Critter's own `aspectRatio` fought over the lane's width and
      * measured him shorter, top-anchored at [roryBox]'s own top -- his real feet landed well short
      * of the counter top line instead of reaching down past it. Anchoring from the BOTTOM instead,
-     * his hidden fraction ([RORY_HIDDEN_FRACTION]) of his own *fitted* height below the counter
+     * his hidden fraction ([roryHiddenFraction]) of his own *fitted* height below the counter
      * top line (never the lane's nominal one), keeps him emerging from behind the counter by the
      * same proportion however much the lane narrows him. `KitchenRory` (VoiceScenes.kt) draws
      * exactly this box, not [roryBox], so the two can never drift apart. */
     private const val CRITTER_ART_RATIO = 100f / 140f
 
-    fun roryFittedBox(w: Float, h: Float, landscape: Boolean, wide: Boolean = false): Rect {
-        val rory = roryBox(landscape, wide)
+    fun roryFittedBox(w: Float, h: Float, landscape: Boolean): Rect {
+        val rory = roryBox(landscape)
         val ct = counterTop(landscape)
         val laneWidth = w * (rory.r - rory.l)
         val laneHeight = h * (rory.b - rory.t)
         val fittedHeight = minOf(laneHeight, laneWidth / CRITTER_ART_RATIO)
         val fittedWidth = fittedHeight * CRITTER_ART_RATIO
         val centerX = w * (rory.l + rory.r) / 2f
-        val bottom = h * ct + fittedHeight * RORY_HIDDEN_FRACTION
+        val bottom = h * ct + fittedHeight * roryHiddenFraction(landscape)
         return Rect(centerX - fittedWidth / 2f, bottom - fittedHeight, centerX + fittedWidth / 2f, bottom)
+    }
+
+    /**
+     * K8: Bear's real on-screen box, for a stage of [w] by [h] -- the same fit `KitchenBear`
+     * (VoiceScenes.kt) actually draws (fitted to a slice of his lane narrower than itself, by
+     * [BEAR_SHIFT_FRACTION], and pinned to the lane's own LEFT edge, not centred, so his bite lean
+     * keeps a real gap before the counter, see [bearLean]'s own doc), not [bearBox]'s own nominal
+     * lane. Real screenshots (1024x768 landscape, 768x1024 portrait) showed the drawn Bear only
+     * a third or so of his own lane's box -- [KitchenLayoutTest]'s own `bearOnScreenBox` used to
+     * re-derive this exact formula separately for the bite-lean tests; sharing it here means the
+     * tests, `KitchenBear` and anything that logs his real box (see VoiceStory.kt's own `KITCHEN`
+     * logs) can never quietly drift apart again.
+     */
+    fun bearFittedBox(w: Float, h: Float, landscape: Boolean): Rect {
+        val bear = bearBox(landscape)
+        val laneWidth = w * (bear.r - bear.l)
+        val laneHeight = h * (bear.b - bear.t)
+        val fitWidth = (laneWidth - w * BEAR_SHIFT_FRACTION).coerceAtLeast(laneWidth * 0.5f)
+        val fitHeight = minOf(laneHeight, fitWidth / CRITTER_ART_RATIO)
+        val fitWidthActual = fitHeight * CRITTER_ART_RATIO
+        val laneLeft = w * bear.l
+        val laneBottom = h * bear.b
+        return Rect(laneLeft, laneBottom - fitHeight, laneLeft + fitWidthActual, laneBottom)
     }
 
     /** The part of [roryBox] that actually shows: above the counter top line, where the counter
      * can't hide him. The rest is deliberately behind the counter (K2f), so overlap checks
      * against the other kitchen elements (bear, bowl, pan) use this, not the full box: see
      * `bearRoryBowlAndPanNeverOverlapEachOther`. */
-    fun roryVisibleBox(landscape: Boolean, wide: Boolean = false): Rect {
-        val box = roryBox(landscape, wide)
+    fun roryVisibleBox(landscape: Boolean): Rect {
+        val box = roryBox(landscape)
         return Rect(box.l, box.t, box.r, counterTop(landscape))
+    }
+
+    /** K7 (Ruby's scene checklist): roughly where Rory's own eyes and mouth sit, inside his
+     * visible (above-the-counter) slice -- a prop drawn over this would read as covering his
+     * face. A soft approximation (the middle 70% of his visible box's own width, its top 65% of
+     * height, since his head sits at the top of a chest-up puppet), not Critter's exact head
+     * circle: good enough to catch a prop that's drifted up into his face, not a pixel-exact mask. */
+    fun roryFaceBox(landscape: Boolean): Rect {
+        val box = roryVisibleBox(landscape)
+        val w = box.r - box.l
+        val h = box.b - box.t
+        return Rect(box.l + w * 0.15f, box.t, box.r - w * 0.15f, box.t + h * 0.65f)
+    }
+
+    /** K7 (Ruby's scene checklist): the same soft approximation as [roryFaceBox], for Bear's own
+     * body box (head to seat) -- his head sits at the TOP of that box too. */
+    fun bearFaceBox(landscape: Boolean): Rect {
+        val box = bearBox(landscape)
+        val w = box.r - box.l
+        val h = box.b - box.t
+        return Rect(box.l + w * 0.15f, box.t, box.r - w * 0.15f, box.t + h * 0.55f)
     }
 
     /** K6: the size (as a fraction of the scene's own smaller side, same convention as
@@ -462,17 +617,17 @@ object KitchenLayout {
     /** The "tap the bowl" choice's own slot. */
     fun bowlBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
-        return Rect(BOWL_LEFT, top, BOWL_RIGHT, BEAR_FLOOR)
+        return Rect(bowlLeft(landscape), top, bowlRight(landscape), BEAR_FLOOR)
     }
 
     /** K6: the ingredient station, beside the bowl -- milk on its own (beat 2), sized to the
      * whole station; see [berrySlot] for the three-way split the counting beat uses instead. Never
      * drawn at the same time as the bowl choice's own distractors, so this never needs to dodge
      * anything but the bowl itself and the pan station, both already clear by construction
-     * ([ING_LEFT]/[ING_RIGHT]). */
+     * ([ingLeft]/[ingRight]). */
     fun ingredientBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
-        return Rect(ING_LEFT, top, ING_RIGHT, BEAR_FLOOR)
+        return Rect(ingLeft(landscape), top, ingRight(landscape), BEAR_FLOOR)
     }
 
     /** K6: one third of the ingredient station, for the counting beat's three waiting berries
@@ -505,11 +660,11 @@ object KitchenLayout {
     /** The pan's own slot (and whatever's on it). */
     fun panBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
-        return Rect(PAN_LEFT, top, PAN_RIGHT, BEAR_FLOOR)
+        return Rect(panLeft(landscape), top, panRight(landscape), BEAR_FLOOR)
     }
 
     /** Which counter station a kitchen prop uses (K3b; K6 split the old shared bowl/milk/berries
-     * station in two, see [BOWL_LEFT]'s own doc): [bowlBox] for the bowl itself and the batter
+     * station in two, see [bowlLeft]'s own doc): [bowlBox] for the bowl itself and the batter
      * (while it's being mixed, or holding the counted berries), [ingredientBox] for milk on its
      * own, or [panBox] for the pan itself and everything cooking in it (poured batter, the
      * pancake, its bubbles/steam). [Prop.BUTTER] (K6, the butter-cutting mini-sequence) reuses the
@@ -620,9 +775,15 @@ object KitchenLayout {
      * free of any Compose type, so it's directly testable: the seat oval itself is centred within
      * its own canvas too ([STOOL_SEAT_SIDE_MARGIN] equal on both sides), so a canvas centred in the
      * box always puts the seat's own centre exactly at the box's own centre (0.5), for any width.
+     *
+     * K8: Timothy's own ask -- a stool seat about as wide as Bear's own box, not a "tall thin"
+     * one -- widened the canvas (0.62 to 0.88) and narrowed its own side margin (0.08 to 0.06), so
+     * the seat itself now spans about 77% of Bear's box width instead of about 52%.
+     * [stoolSeatCenterXFraction] still always lands on 0.5 for any width, so
+     * `stoolSeatIsHorizontallyCentredUnderBear` needs no change.
      */
-    const val STOOL_CANVAS_WIDTH_FRACTION = 0.62f
-    const val STOOL_SEAT_SIDE_MARGIN = 0.08f
+    const val STOOL_CANVAS_WIDTH_FRACTION = 0.88f
+    const val STOOL_SEAT_SIDE_MARGIN = 0.06f
 
     fun stoolSeatCenterXFraction(boxWidth: Float): Float {
         if (boxWidth <= 0f) return 0.5f
@@ -711,8 +872,17 @@ object KitchenLayout {
      * tight, K2i) or the counter's own (tied to [bearRight], never shifts). The runtime clamp on
      * his real measured head bounds (`onHeadBounds`, VoiceScenes.kt) is still the actual
      * guarantee against his head crossing the counter; this is slack so that clamp is never
-     * needed at ordinary sizes. */
-    const val BEAR_SHIFT_FRACTION = 0.035f
+     * needed at ordinary sizes.
+     *
+     * K8: real screenshots showed Bear's own drawn puppet only about a third of his lane's own
+     * box -- his lane is much narrower than Rory's own to start with (there's only so much counter
+     * to split between them), so this same flat, scene-width-based shift that was tuned for K2k's
+     * wider lane was eating a disproportionate share of a narrow one. Lowered (0.035 to 0.014,
+     * still enough to keep [bearsRestingBoxLeavesAGapBeforeTheCounter]'s own 10px floor at both
+     * tablet sizes: 0.014 * 768 = ~10.8px, the tighter (portrait) of the two) so his FITTED box
+     * ([bearFittedBox]) can actually reach a sensible fraction of his own lane; the runtime clamp
+     * above is still there as the real guarantee against his bite lean crossing the counter. */
+    const val BEAR_SHIFT_FRACTION = 0.014f
 
     fun bearLean(bearBox: Rect, counterLeftX: Float): BearLean {
         val u = (bearBox.b - bearBox.t) / ART_H
