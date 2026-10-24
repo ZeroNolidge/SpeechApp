@@ -637,19 +637,7 @@ private fun DrawScope.drawPuppetPart(
             if (sp.boxy) {
                 // Robot screen face.
                 val glow = Color(0xFF4DD0E1)
-                if (fPose) {
-                    // The "f" pose's own happy eyes: thick upturned cyan arcs (the top of a
-                    // circle, same shape `mouth()`'s own SAD frown uses, just at the eyes and
-                    // without its downward offset) instead of the usual round pupils, and a soft
-                    // pink cheek glow out toward each edge of the screen.
-                    val r = 6f * u
-                    listOf(39f, 61f).forEach { ex ->
-                        val c = o(ex, 53f)
-                        drawArc(glow, 200f, 140f, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), style = Stroke(2.6f * u, cap = StrokeCap.Round))
-                    }
-                    paperCircle(Blush.copy(alpha = 0.6f), 5.5f * u, o(31f, 62f))
-                    paperCircle(Blush.copy(alpha = 0.6f), 5.5f * u, o(69f, 62f))
-                } else if (blink > 0.5f) {
+                if (blink > 0.5f) {
                     drawLine(glow, o(34f, 56f), o(44f, 56f), 3f * u); drawLine(glow, o(56f, 56f), o(66f, 56f), 3f * u)
                 } else {
                     circle(39f, 56f, 6f, glow); circle(61f, 56f, 6f, glow)

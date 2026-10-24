@@ -394,7 +394,7 @@ fun VoiceBeatScene(
                 if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
-                alpha = { now().alpha }, rotation = { now().rotation }, scale = { now().scale },
+                alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(beat.prop, c) },
             ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut) }
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
