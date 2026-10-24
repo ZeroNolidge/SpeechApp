@@ -100,12 +100,31 @@ private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> 
             const k = Math.max(1, Math.round(ctx.sampleRate / 16000));
             const n = Math.floor(buf.length / k);
             const d = new Float32Array(n);
+            // Optional browser SpeechRecognition / webkitSpeechRecognition boost so any speech
+            // detected by the browser's recognizer registers immediately even on quiet tablet mics.
+            let srHeard = 0;
+            try {
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (SR && !window.__tlDisableNativeSR) {
+                    const rec = new SR();
+                    rec.continuous = true;
+                    rec.interimResults = true;
+                    rec.lang = 'en-US';
+                    rec.onspeechstart = () => { srHeard = Date.now(); };
+                    rec.onsoundstart = () => { srHeard = Date.now(); };
+                    rec.onresult = () => { srHeard = Date.now(); };
+                    rec.onerror = () => {};
+                    st.rec = rec;
+                    rec.start();
+                }
+            } catch (e) {}
             st.timer = setInterval(() => {
                 an.getFloatTimeDomainData(buf);
                 let sum = 0;
                 for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-                const rms = Math.sqrt(sum / buf.length);
-                // Share of the energy in the voice range (150 to 2000 Hz) of 50 to 8000 Hz.
+                let rms = Math.sqrt(sum / buf.length);
+                if (srHeard > 0 && Date.now() - srHeard < 600) rms = Math.max(rms, 0.06);
+                // Share of the energy in the voice range (150 to 3000 Hz) of 50 to 8000 Hz.
                 an.getFloatFrequencyData(spec);
                 let inV = 0, all = 0;
                 for (let b = 1; b < spec.length; b++) {
@@ -113,9 +132,9 @@ private fun jsMicStart(onLevel: (Double, Double, Double) -> Unit, onFail: () -> 
                     if (f < 50 || f > 8000) continue;
                     const pw = Math.pow(10, spec[b] / 10);
                     all += pw;
-                    if (f >= 150 && f <= 2000) inV += pw;
+                    if (f >= 150 && f <= 3000) inV += pw;
                 }
-                const band = all > 0 ? inV / all : 0;
+                const band = (srHeard > 0 && Date.now() - srHeard < 600) ? Math.max(0.65, all > 0 ? inV / all : 0) : (all > 0 ? inV / all : 0);
                 // How voiced: the best normalised self-match at a child's or grown-up's pitch
                 // (80 to 600 Hz), on the sound brought down to about 16 kHz.
                 for (let i = 0; i < n; i++) { let a = 0; for (let j = 0; j < k; j++) a += buf[i * k + j]; d[i] = a / k; }
@@ -145,6 +164,7 @@ private fun jsMicStop(st: JsAny, release: Boolean): Unit = js(
     """(() => {
         st.stopped = true;
         try { if (window.__tlWords && window.__tlWords.detach) window.__tlWords.detach(); } catch (e) {}
+        try { if (st.rec) st.rec.abort(); } catch (e) {}
         try { if (st.timer) clearInterval(st.timer); } catch (e) {}
         try { if (st.src) st.src.disconnect(); } catch (e) {}
         if (release) {
@@ -274,6 +294,7 @@ private fun jsListenThenPlay(waitMs: Int, onLevel: (Double) -> Unit, onPlaying: 
 private fun jsStopParrot(st: JsAny): Unit = js(
     """(() => {
         st.stopped = true;
+        try { if (st.rec) st.rec.abort(); } catch (e) {}
         try { if (st.timer) clearInterval(st.timer); } catch (e) {}
         try { if (st.rec && st.rec.state !== 'inactive') st.rec.stop(); } catch (e) {}
         try { if (st.audio) st.audio.pause(); } catch (e) {}

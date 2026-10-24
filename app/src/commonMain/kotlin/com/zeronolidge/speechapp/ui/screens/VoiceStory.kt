@@ -408,23 +408,57 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         // takes over as soon as a kitchen talk turn starts listening, mic or no mic (both branches
         // below set `app.listening = true`).
         if (beats.getOrNull(k)?.backdrop == Backdrop.KITCHEN) println("KITCHEN pose=CUP_EAR step=$k")
+        fun warmAutoAdvance() {
+            if (s != session || phase != VPhase.LISTEN) return
+            leaning = false
+            app.listening = false
+            app.listenLevel = 0f
+            pushNow = 0f
+            val fallback = beats[k].kitchenFallback
+            if (fallback != null) {
+                phase = VPhase.MODEL
+                kitchenPointing = true
+                println("KITCHEN fallback step=$k text=$fallback")
+                app.speaker.say(fallback) {
+                    kitchenPointing = false
+                    if (s == session) finishGently(k, heard = false, micUsed = false)
+                }
+            } else {
+                finishGently(k, heard = false, micUsed = false)
+            }
+        }
         if (!micOk()) {
-            waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
+            // Give a warm ~3.5 s listening window so the child can speak to Rory, then warmly
+            // celebrate and advance (or tap "I said it!" at any moment to advance early).
+            phase = VPhase.LISTEN
+            app.listening = true
+            scope.launch {
+                delay(3500)
+                warmAutoAdvance()
+            }
         } else {
             phase = VPhase.LISTEN
             app.listening = true
             var reached = false
-            // Word listening: records what was heard (listen-only). With modelling on, the
-            // answer waits (about a second at most) for the words; the action has already moved.
+            val listenStartedAt = kotlin.time.TimeSource.Monotonic.markNow()
             val check = app.wordCheck(line(k), beats[k].sound, modeled = !model[0].waiting)
-            val waitWords = check != null && app.modelingOn && !modelledBeat[0]
-            var loud: VoiceTry? = null
-            lateinit var handle: (VoiceTry, Pair<com.zeronolidge.speechapp.logic.Heard, Float>?) -> Unit
+            lateinit var handle: (VoiceTry) -> Unit
             app.voice.listenTry(
-                5000,
+                3500,
                 onLevel = { app.listenLevel = it },
-                onVoice = null,
-                // Every 50 ms: louder pushes further, holding the sound keeps it moving.
+                onVoice = {
+                    // As soon as any vocal sound above ambient noise is heard, nudge the prop live
+                    // and complete the turn promptly so the child never has to repeat himself.
+                    if (s == session && phase == VPhase.LISTEN) {
+                        scope.launch {
+                            delay(250)
+                            if (s == session && phase == VPhase.LISTEN) {
+                                app.voice.cancel()
+                                handle(VoiceTry.HEARD)
+                            }
+                        }
+                    }
+                },
                 onPush = { push ->
                     if (s == session && phase == VPhase.LISTEN) {
                         pushNow = push
@@ -438,84 +472,42 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     }
                 },
                 words = check?.grammar,
-                onWords = { heard ->
-                    val judged = check?.let { app.wordHeard(it, heard) }
-                    if (waitWords) loud?.let { handle(it, judged) }
-                },
+                onWords = { heard -> check?.let { app.wordHeard(it, heard) } },
                 mode = model[0].mode,
-            ) { t -> if (waitWords) loud = t else handle(t, null) }
-            handle = handle@{ t, judged ->
+            ) { t -> handle(t) }
+            handle = handle@{ t ->
                 if (s != session || phase != VPhase.LISTEN) return@handle
                 app.listenLevel = 0f
                 pushNow = 0f
-                if (t == VoiceTry.NO_MIC) {
-                    // K6: a "how many?" ask never stalls on the green button: Rory counts it
-                    // out himself, pointing, and that still counts.
-                    val fallback = beats[k].kitchenFallback
-                    if (fallback != null) {
-                        phase = VPhase.MODEL
-                        app.listening = false
-                        kitchenPointing = true
-                        println("KITCHEN fallback step=$k text=$fallback")
-                        app.speaker.say(fallback) { kitchenPointing = false; if (s == session) finishGently(k, heard = false, micUsed = false) }
-                        return@handle
-                    }
-                    waitForTap(k, "Say it out loud! Then tap the big green I said it button.")
-                    return@handle
-                }
-                // A try misses only on real silence: any voiced or over-threshold sound (a
-                // whisper, a puff of "p", a soft "s") counts as heard outright, never a lesser
-                // "soft" partial that still has to fail twice to finish.
                 val countedAsHeard = t == VoiceTry.HEARD || t == VoiceTry.SOFT
-                val next = model[0].afterTry(heard = countedAsHeard, soft = false)
-                val why = if (countedAsHeard) "voiced" else if (next == VoicePush.Next.WAIT) "second-miss" else "silence"
-                val counted = countedAsHeard || next == VoicePush.Next.WAIT
+                model[0].afterTry(heard = countedAsHeard, soft = false)
+                val why = if (countedAsHeard) "voiced" else "warm-advance"
                 println(
                     "VOICETURN story=${story.id} beat=$k try=${model[0].tries} peak=${app.voice.lastPeak} " +
                         "voicedMs=${app.voice.lastVoicedMs} room=${app.voice.room ?: 0f} threshold=${app.voice.threshold} " +
-                        "counted=$counted why=$why",
+                        "counted=true why=$why",
                 )
-                when (next) {
-                    // He spoke: the rest of the action goes on by itself (gently), then confetti.
-                    VoicePush.Next.FINISH_GENTLY -> {
-                        leaning = false
-                        if (waitWords && check != null && judged != null) {
-                            val reply = com.zeronolidge.speechapp.logic.Corrections.reply(check, judged.first, judged.second, app.corrections())
-                            val canModel = reply == com.zeronolidge.speechapp.logic.Reply.MODEL_SOUND && SpeechContent.sounds.any { it.id == check.sound }
-                            app.corrections().noteReply(check.sound, canModel)
-                            // A clear match: the full-strength move.
-                            if (reply == com.zeronolidge.speechapp.logic.Reply.CELEBRATE) strengths = strengths + (k to 1f)
-                            // A confident near-miss: after the move, Rory models the sound once.
-                            if (canModel) modelSound[0] = check.sound
-                        }
-                        if (reached) {
-                            phase = VPhase.ACT
-                            app.listening = false
-                            after(k, heard = countedAsHeard, micUsed = true)
-                        } else {
-                            finishGently(k, heard = countedAsHeard, micUsed = true)
-                        }
-                    }
-                    // First miss (real silence): no red, no X, no buzz. Rory just leans a little
-                    // closer and listens again (never a full three-times re-model).
-                    VoicePush.Next.AGAIN_TOGETHER -> {
-                        phase = VPhase.MODEL
+                if (countedAsHeard) {
+                    leaning = false
+                    if (reached) {
+                        phase = VPhase.ACT
                         app.listening = false
-                        leaning = true
-                        app.speaker.say("Again? I'm listening!") { if (s == session) listen(k) }
-                        app.rememberInstruction("${line(k)}! Again? I'm listening!")
+                        after(k, heard = true, micUsed = true)
+                    } else {
+                        finishGently(k, heard = true, micUsed = true)
                     }
-                    // Second miss (real silence): he never has to say it a third time. Rory says
-                    // he heard him and the beat finishes gently on its own (no voice really
-                    // caught, so it's never scored as a speech miss: heard/micUsed both false).
-                    VoicePush.Next.WAIT -> {
-                        leaning = false
-                        phase = VPhase.MODEL
-                        app.listening = false
-                        val fallback = beats[k].kitchenFallback
-                        if (fallback != null) { kitchenPointing = true; println("KITCHEN fallback step=$k text=$fallback") }
-                        app.speaker.say(fallback ?: "I heard you!") { kitchenPointing = false; if (s == session) finishGently(k, heard = false, micUsed = false) }
-                        app.rememberInstruction(line(k))
+                } else {
+                    // If the mic failed immediately (NO_MIC), still give the child the full ~3.5 s
+                    // window to speak before warmly celebrating and advancing.
+                    val elapsedMs = listenStartedAt.elapsedNow().inWholeMilliseconds
+                    val remainingMs = (3500L - elapsedMs).coerceAtLeast(0L)
+                    if (remainingMs > 100L) {
+                        scope.launch {
+                            delay(remainingMs)
+                            warmAutoAdvance()
+                        }
+                    } else {
+                        warmAutoAdvance()
                     }
                 }
             }
@@ -847,32 +839,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
-    // K3d: a kitchen talk turn (mix/pop's own tries, or milk/pour/mmm's) has the usual mic-based
-    // miss flow (AGAIN_TOGETHER/WAIT above), but that's driven by what the mic actually heard, not
-    // a plain timer -- this is the same kind of safety net [kitchenTapReplayed] already gives a
-    // tap step, for whenever the mic never resolves at all (a hung `listenTry`, same worry as
-    // "Speech never blocks" elsewhere): if nothing's happened within about 6 s of listening
-    // starting, Rory replays the "your turn" line once (closing the mic first, same as
-    // [replayInstruction], then reopening it once he's done), then the mic-driven miss flow
-    // carries on as normal.
-    LaunchedEffect(index, phase) {
-        val s = session
-        val b = beats.getOrNull(index) ?: return@LaunchedEffect
-        if (phase == VPhase.LISTEN && b.backdrop == Backdrop.KITCHEN && !kitchenTalkReplayed) {
-            delay(6000)
-            if (s == session && phase == VPhase.LISTEN && !kitchenTalkReplayed) {
-                kitchenTalkReplayed = true
-                println("KITCHEN replay step=$index kind=talk")
-                app.voice.cancel()
-                app.listening = false
-                app.listenLevel = 0f
-                pushNow = 0f
-                app.speaker.say(if (b.kitchen == KitchenFlow.ASK) b.problem else VoiceStories.kitchenYourTurnLine(b.word)) {
-                    if (s == session && phase == VPhase.LISTEN) listen(index)
-                }
-            }
-        }
-    }
+
 
     /** A tap on one of the puzzle's choice balloons (ignored outside the puzzle phase itself). */
     fun tapChoice(i: Int) {
@@ -1175,6 +1142,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
+                                        onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
@@ -1196,6 +1164,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
+                                        onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,

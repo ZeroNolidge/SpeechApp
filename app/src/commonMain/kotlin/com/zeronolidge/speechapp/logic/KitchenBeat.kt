@@ -288,7 +288,7 @@ object KitchenLayout {
      * box ([bearBox], which now ends at his seat, not the floor) in `KitchenBear`
      * (VoiceScenes.kt), a tall stool spanning from his seat down to here, so "stool feet on the
      * floor line" and "seat at counter height" can both be true at once. */
-    const val BEAR_FLOOR = 0.92f
+    const val BEAR_FLOOR = 1.0f
 
     /** Rory's lane (with his chef's hat): his own strip of the counter, left of the props.
      * K2d/K2e kept shrinking his height (down to a 9%-tall sliver in landscape) to fit him
@@ -388,7 +388,7 @@ object KitchenLayout {
      * station's. K8: widened a little further still in landscape (Timothy's own "bowl still looks
      * small" ask), and portrait keeps the old, un-widened station (its own props only grow a
      * little, see [kitchenPropSize]). K9: portrait shifts right with [bowlLeft], same width. */
-    private fun bowlRight(landscape: Boolean) = if (landscape) 0.65f else 0.745f
+    private fun bowlRight(landscape: Boolean) = if (landscape) 0.64f else 0.745f
 
     /** The ingredient station (K6): milk, on its own, while it pours into the bowl (beat 2) -- or,
      * once it's a different beat, three berries in a row waiting to be tapped into the bowl (see
@@ -398,8 +398,8 @@ object KitchenLayout {
      * orientations shift right a touch to follow [bowlRight]/[bowlLeft]'s own K8 moves, keeping the
      * same gaps either side. K9: portrait shifts right again with [bowlRight], same width (so
      * [berrySlot]'s own three-way split, and [COUNT_BERRY_SIZE], are unaffected). */
-    private fun ingLeft(landscape: Boolean) = if (landscape) 0.67f else 0.755f
-    private fun ingRight(landscape: Boolean) = if (landscape) 0.815f else 0.89f
+    private fun ingLeft(landscape: Boolean) = if (landscape) 0.655f else 0.755f
+    private fun ingRight(landscape: Boolean) = if (landscape) 0.785f else 0.89f
 
     /** The pan station (the pan itself and everything cooking in it): clear of the ingredient
      * station on one side and the counter's own right edge on the other (K3c). K7: shrinks a
@@ -418,7 +418,7 @@ object KitchenLayout {
      * is ~123px, comfortably inside the ~15px either side this station's own 0.85-0.98 keeps clear
      * of both [ingRight] and the screen edge). [panRight] itself never moves: it's already the
      * same safe margin from the screen's own right edge landscape independently settled on. */
-    private fun panLeft(landscape: Boolean) = if (landscape) 0.835f else 0.765f
+    private fun panLeft(landscape: Boolean) = if (landscape) 0.80f else 0.765f
     private fun panRight(landscape: Boolean) = if (landscape) 0.98f else 0.99f
 
     /** How far below the counter-top line the props' own tap-target slots start (K2b) -- and,
@@ -446,16 +446,21 @@ object KitchenLayout {
     /** [Prop.BOWL]'s outer rim curve (a quadratic Bezier from `(0.1, BOWL_RIM_Y)` to
      * `(0.9, BOWL_RIM_Y)` via `(0.5, BOWL_OUTER_CONTROL_Y)`): its apex ([symmetricQuadApexY]) is
      * the bowl's own lowest drawn point, which must land at 1f. */
-    const val BOWL_RIM_Y = 0.72f
-    const val BOWL_OUTER_CONTROL_Y = 1.28f
+    const val BOWL_RIM_Y = 0.56f
+    const val BOWL_OUTER_CONTROL_Y = 1.44f
 
     /** The bowl's inner rim curve (back up from the same two rim points): purely decorative, no
      * bottom-touching requirement of its own. */
-    const val BOWL_INNER_CONTROL_Y = 0.86f
+    const val BOWL_INNER_CONTROL_Y = 0.72f
 
     /** The bowl's inner rim highlight oval. */
-    const val BOWL_INNER_RIM_TOP = 0.60f
-    const val BOWL_INNER_RIM_HEIGHT = 0.2f
+    const val BOWL_INNER_RIM_TOP = 0.44f
+    const val BOWL_INNER_RIM_HEIGHT = 0.24f
+
+    /** [Prop.BUTTER]'s plate oval: top offset and height, as fractions of the box -- their sum
+     * must land at 1f so the plate sits flush on the counter surface. */
+    const val BUTTER_PLATE_TOP = 0.76f
+    const val BUTTER_PLATE_HEIGHT = 0.24f
 
     /** [Prop.MILK]'s carton: its own drawn bottom edge, as a fraction of its box -- 1f, flush with
      * the box's own bottom, with every other carton measurement (shoulder, gable, label) shifted

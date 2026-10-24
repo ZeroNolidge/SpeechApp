@@ -228,7 +228,7 @@ object VoiceStories {
             VoiceBeat(Backdrop.KITCHEN, "The bowl is empty. Time for milk!", listOf("milk", "pour milk", "Pour in the milk!"), "m", Prop.MILK, Move.SINK, "Milk! The milk pours into the bowl!", "🥛", still = Prop.BOWL, caption = "Say milk!"),
             VoiceBeat(
                 Backdrop.KITCHEN, "Now we stir it all up!", listOf("mix", "mix it", "Mix it all up!"), "m", Prop.BATTER, Move.SHAKE,
-                "Mix! The batter is all ready!", "🥣", kitchen = KitchenFlow.STIR, kitchenGoal = 3,
+                "Mix! The batter is all ready!", "🥣", kitchen = KitchenFlow.STIR, kitchenGoal = 1,
                 caption = "Say mix!",
             ),
             // K6: Timothy's notes split the old single "count the berries" tap-then-count beat in
@@ -252,7 +252,7 @@ object VoiceStories {
             VoiceBeat(Backdrop.KITCHEN, "The batter's ready for the pan!", listOf("pour", "pour batter", "Pour in the batter!"), "p", Prop.BATTER, Move.SINK, "Pour! The batter pours into the pan!", "🥞", still = Prop.PAN, caption = "Say pour!"),
             VoiceBeat(
                 Backdrop.KITCHEN, "Look! Bubbles are popping on the pancake!", listOf("pop", "pop pop", "Pop it!"), "p", Prop.BUBBLE, Move.POP,
-                "Pop! The pancake is bubbling and ready to flip!", "🎉", kitchen = KitchenFlow.BUBBLES, kitchenGoal = 3, still = Prop.STEAM,
+                "Pop! The pancake is bubbling and ready to flip!", "🎉", kitchen = KitchenFlow.BUBBLES, kitchenGoal = 1, still = Prop.STEAM,
                 caption = "Pop the bubbles",
             ),
             VoiceBeat(
@@ -263,7 +263,7 @@ object VoiceStories {
             // K6: the butter-cutting mini-sequence, right before it goes on the pancakes -- ask,
             // swipe to cut (narrated only, never a talk turn), ask again.
             VoiceBeat(
-                Backdrop.KITCHEN, "How many pieces?", listOf("one", "one butter", "One pat of butter, please!"), null, Prop.BUTTER, Move.SLIDE,
+                Backdrop.KITCHEN, "We need some butter, but it's too big! How many pieces?", listOf("one", "one butter", "One pat of butter, please!"), null, Prop.BUTTER, Move.SLIDE,
                 "One! Just one pat of butter!", "🧈", kitchen = KitchenFlow.ASK, caption = "How many pieces?", kitchenFallback = "One!",
             ),
             VoiceBeat(

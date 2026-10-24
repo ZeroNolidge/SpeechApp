@@ -275,8 +275,8 @@ object Things {
 
 object Praise {
     val great = listOf(
-        "Great job!", "You did it!", "Awesome!", "Super star!", "Way to go!",
-        "Fantastic!", "Hooray!", "You're so smart!", "Wonderful!",
+        "Great job!", "You did it!", "Awesome!", "Good talking!", "Way to go!",
+        "Fantastic!", "Hooray!", "I love your talking!", "Wonderful!",
     )
     val tryAgain = listOf(
         "Good try! Let's try again.", "Almost! Try one more time.",

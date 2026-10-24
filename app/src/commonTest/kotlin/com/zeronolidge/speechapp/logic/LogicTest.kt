@@ -1973,9 +1973,10 @@ class KitchenStoryTest {
         val byWord = VoiceStories.kitchen.beats.associateBy { it.word to it.kitchen }
         fun beat(word: String, flow: KitchenFlow) = byWord.getValue(word to flow)
         assertEquals(listOf("pan", "spoon"), beat("bowl", KitchenFlow.TAP_CHOICE).kitchenChoices)
-        assertEquals(3, beat("mix", KitchenFlow.STIR).kitchenGoal)
+        assertEquals(1, beat("mix", KitchenFlow.STIR).kitchenGoal)
         assertEquals(3, beat("three", KitchenFlow.COUNT).kitchenGoal)
-        assertEquals(3, beat("pop", KitchenFlow.BUBBLES).kitchenGoal)
+        assertEquals(1, beat("pop", KitchenFlow.BUBBLES).kitchenGoal)
+        assertEquals("We need some butter, but it's too big! How many pieces?", beat("one", KitchenFlow.ASK).problem)
         assertEquals(KitchenFlow.FLIP, beat("flip", KitchenFlow.FLIP).kitchen)
         // The "how many?" asks (K6): he answers without Rory saying the number first, and a
         // persistent silence still has a fixed, spoken fallback that counts.
@@ -2838,14 +2839,13 @@ class KitchenLayoutTest {
      * size (it has its own target, not the bowl's), and the pan a little smaller in landscape to
      * leave them the room. */
     private fun kitchenSizeMirror(prop: Prop, landscape: Boolean): Float = when (prop) {
-        Prop.BUBBLE -> if (landscape) 0.18f else 0.17f
+        Prop.BUBBLE -> if (landscape) 0.22f else 0.19f
         Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.215f
         Prop.BUTTER -> 0.40f
-        Prop.PAN -> if (landscape) 0.144f else 0.17f
-        Prop.PANCAKE -> if (landscape) 0.15f else 0.17f
+        Prop.PAN -> if (landscape) 0.22f else 0.19f
+        Prop.PANCAKE -> if (landscape) 0.22f else 0.19f
         Prop.MILK -> 0.12f
-        Prop.PANCAKE -> 0.15f
-        Prop.STEAM -> if (landscape) 0.14f else 0.15f
+        Prop.STEAM -> if (landscape) 0.18f else 0.17f
         else -> 0.14f
     }
 
@@ -2939,6 +2939,12 @@ class KitchenLayoutTest {
             tolerance,
             "the pancake's own drawn bottom doesn't touch its box's bottom edge",
         )
+        assertEquals(
+            1f,
+            KitchenLayout.BUTTER_PLATE_TOP + KitchenLayout.BUTTER_PLATE_HEIGHT,
+            tolerance,
+            "the butter dish's own drawn bottom doesn't touch its box's bottom edge",
+        )
     }
 }
 
@@ -2967,14 +2973,13 @@ class KitchenSceneRulesTest {
      * the butter plate its own smaller size, the pan a little smaller in landscape to leave them
      * room. */
     private fun kitchenSize(prop: Prop, landscape: Boolean): Float = when (prop) {
-        Prop.BUBBLE -> if (landscape) 0.18f else 0.17f
+        Prop.BUBBLE -> if (landscape) 0.22f else 0.19f
         Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.215f
         Prop.BUTTER -> 0.40f
-        Prop.PAN -> if (landscape) 0.144f else 0.17f
-        Prop.PANCAKE -> if (landscape) 0.15f else 0.17f
+        Prop.PAN -> if (landscape) 0.22f else 0.19f
+        Prop.PANCAKE -> if (landscape) 0.22f else 0.19f
         Prop.MILK -> 0.12f
-        Prop.PANCAKE -> 0.15f
-        Prop.STEAM -> if (landscape) 0.14f else 0.15f
+        Prop.STEAM -> if (landscape) 0.18f else 0.17f
         else -> 0.14f
     }
 
@@ -3039,8 +3044,8 @@ class KitchenSceneRulesTest {
      * [bearRoryBowlAndPanNeverReachTheChoiceStrip]/[kitchenPropsSitOnTheRealDrawnCounterTopInLandscape]
      * already use), at the two sizes Timothy reported. */
     @Test
-    fun bearKeepsAtLeastASixteenPixelGapAboveTheChoiceStrip() {
-        val minGapPx = 16f
+    fun bearStoolLegsTouchTheFloorLineWithNoFloatingGap() {
+        assertEquals(1.0f, KitchenLayout.BEAR_FLOOR, 0.0001f, "Bear's stool legs must touch the floor/skirting line (1.0f), never float above it")
         for ((w, h) in sizes) {
             val landscape = w > h
             val stripFraction = if (landscape) 0.18f else 0.22f
@@ -3050,8 +3055,8 @@ class KitchenSceneRulesTest {
             } else {
                 local * (1f - stripFraction)
             }
-            val gapPx = (onStage(1f) - onStage(KitchenLayout.BEAR_FLOOR)) * h
-            assertTrue(gapPx >= minGapPx, "gap above the strip under Bear too small at ${w}x$h: ${gapPx}px")
+            val gapPx = kotlin.math.abs(onStage(1f) - onStage(KitchenLayout.BEAR_FLOOR)) * h
+            assertTrue(gapPx <= 0.5f, "stool legs float above the floor line at ${w}x$h: ${gapPx}px")
         }
     }
 

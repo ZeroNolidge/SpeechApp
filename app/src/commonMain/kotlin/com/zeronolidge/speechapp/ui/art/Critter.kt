@@ -394,7 +394,7 @@ private class PuppetNode(
  * clear of the mouth and the eyes above it (both near the face's own centre, `(50, 63)`), just
  * past the head circle's own right edge (radius 30 from that centre) -- read as a hand touching
  * his cheek, pointing in at his mouth from the side, never over it. */
-private const val PointMouthAngle = 235f
+private const val PointMouthAngle = 215f
 
 /** How each mood holds the arms on their pins (degrees; arms hang straight down at 0). */
 private fun armAngles(mood: Mood): Pair<Float, Float> = when (mood) {
@@ -850,17 +850,11 @@ private fun DrawScope.drawPuppetPart(
             val hand = if (kid) skin else darker(body, 0.1f)
             if (sp.boxy) {
                 paperRoundRect(armColor, o(pin.x - 4.5f, pin.y - 3f), Size(9f * u, 24f * u), CornerRadius(3f * u))
+                circle(pin.x, pin.y + 22f, 5f, darker(body, 0.15f))
             } else {
                 oval(pin.x, pin.y + 9f, 11f, 24f, armColor)
+                circle(pin.x, pin.y + 20f, 5.5f, hand)
             }
-            // K4: a bigger paper hand/finger for the "your turn" point-to-mouth cue -- about a
-            // third of the head's own width (HEAD_HALF_WIDTH*2 = 56 to 66 units) instead of the
-            // plain arm's small hand, with a dark outline so it stands out from his own body
-            // colour, clear enough to read at Rory's Kitchen's small on-screen size.
-            val r = 9f
-            val handY = pin.y + (if (sp.boxy) 22f else 20f)
-            circle(pin.x, handY, r, hand)
-            drawCircle(darker(hand, 0.5f), r * u, o(pin.x, handY), style = Stroke(1.8f * u))
             splitPin(o(pin.x, pin.y), 2.6f * u)
         }
     }

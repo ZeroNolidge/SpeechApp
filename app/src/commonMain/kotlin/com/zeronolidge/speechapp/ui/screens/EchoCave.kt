@@ -108,7 +108,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         // Only now, with every try done, does the cave stop waiting on the map (opening it and
         // leaving early keeps it there).
         p.updateEchoReady(false)
-        app.celebrate("All the crystals are shining! What a great talker you are!")
+        app.celebrate("All the crystals are shining! Great talking!")
         app.rememberInstruction("All the crystals are shining! Tap the big green arrow.")
     }
 

@@ -144,7 +144,7 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
         cancel()
         val s = ++session
         val pops = mode == com.zeronolidge.speechapp.logic.VoicePush.Mode.BURSTS
-        val meter = VoiceMeter(windowMs, needMs = if (pops) 50 else 90, knownRoom = room, pops = pops)
+        val meter = VoiceMeter(windowMs, needMs = 50, tailMs = 250, knownRoom = room, pops = pops)
         var voiced = false
         val listenWords = words != null && this.words.ready
         fun done(result: VoiceTry) {
@@ -193,7 +193,7 @@ class VoiceDetector(private val mic: MicLevels, val words: WordListener = WordLi
                         onLevel(VoiceMeter.display(rms))
                         val finished = meter.feed(rms, MicLevels.STEP_MS, mic.band, mic.periodic)
                         onPush?.invoke(meter.lastPush)
-                        if (meter.heard && !voiced) {
+                        if ((meter.heard || meter.soft) && !voiced) {
                             voiced = true
                             onVoice?.invoke()
                         }
