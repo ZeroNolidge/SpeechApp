@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -590,8 +591,8 @@ private fun DrawScope.drawPuppetPart(
             } else {
                 circle(50f, 63f, 30f, skin)
             }
-            if (sp.antenna) {
-                // Rory's signature: a stitched paper antenna with a gold star tip.
+            if (sp.antenna && outfit.hat?.id != "hat_chef") {
+                // Rory's signature: a stitched paper antenna with a gold star tip (tucked inside his tall chef toque in Rory's Kitchen).
                 paperRoundRect(darker(body, 0.12f), o(47.5f, 12f), Size(5f * u, 24f * u), CornerRadius(2f * u))
                 drawLine(
                     Color.White.copy(alpha = 0.9f), o(50f, 14f), o(50f, 34f), 1f * u,
@@ -797,17 +798,71 @@ private fun DrawScope.drawPuppetPart(
                         oval(50f, top + 2f, 44f, 7f, c)
                     }
                     "hat_chef" -> {
-                        // Rory's Kitchen: a toque, a white band below a puffy top made of three
-                        // overlapping rounded puffs (Ruby, K2d: one plain circle read as a big
-                        // white ball), wider than tall, thin grey outline all round.
-                        val grey = Color(0xFFBDBDBD)
-                        val bandTL = o(32f, top + 2f)
-                        val bandSize = Size(36f * u, 11f * u)
-                        paperRoundRect(c, bandTL, bandSize, CornerRadius(4f * u))
-                        drawRoundRect(grey, bandTL, bandSize, CornerRadius(4f * u, 4f * u), style = Stroke(1.2f * u))
-                        listOf(Triple(37f, top - 6f, 14f), Triple(50f, top - 13f, 15f), Triple(63f, top - 6f, 14f)).forEach { (x, y, r) ->
-                            circle(x, y, r, c)
-                            drawCircle(grey, r * u, o(x, y), style = Stroke(1.2f * u))
+                        // Rory's Kitchen: a classic unified chef toque (toque blanche) -- one continuous
+                        // outer silhouette for the puffy pleated crown tapering down into a snug ribbed
+                        // headband cuff (never separate outlined balls).
+                        val strokeCol = Color(0xFFC8B6A6)
+                        val crownWhite = Color(0xFFFAF8F5)
+                        val cuffCream = Color(0xFFF3EFE6)
+                        val crown = Path().apply {
+                            val bL = o(31f, top - 1f)
+                            moveTo(bL.x, bL.y)
+                            // Left side puffing outward into left lobe
+                            val l1 = o(21f, top - 6f); val l2 = o(19f, top - 19f); val lTop = o(32f, top - 23f)
+                            cubicTo(l1.x, l1.y, l2.x, l2.y, lTop.x, lTop.y)
+                            // Left-center lobe
+                            val lc1 = o(35f, top - 30f); val lc2 = o(45f, top - 31f); val mid = o(50f, top - 27f)
+                            cubicTo(lc1.x, lc1.y, lc2.x, lc2.y, mid.x, mid.y)
+                            // Right-center lobe
+                            val rc1 = o(55f, top - 31f); val rc2 = o(65f, top - 30f); val rTop = o(68f, top - 23f)
+                            cubicTo(rc1.x, rc1.y, rc2.x, rc2.y, rTop.x, rTop.y)
+                            // Right lobe tapering back into right side of headband
+                            val r1 = o(81f, top - 19f); val r2 = o(79f, top - 6f); val bR = o(69f, top - 1f)
+                            cubicTo(r1.x, r1.y, r2.x, r2.y, bR.x, bR.y)
+                            close()
+                        }
+                        paperPath(crown, crownWhite)
+                        drawPath(crown, strokeCol, style = Stroke(1.5f * u, join = StrokeJoin.Round))
+                        // Subtle interior vertical pleat/fold lines rising partway up from the cuff
+                        val pLeft = Path().apply {
+                            val s = o(39f, top - 2f); val c1 = o(36f, top - 9f); val e = o(35f, top - 16f)
+                            moveTo(s.x, s.y); quadraticTo(c1.x, c1.y, e.x, e.y)
+                        }
+                        val pMid = Path().apply {
+                            val s = o(50f, top - 2f); val c1 = o(50f, top - 10f); val e = o(50f, top - 19f)
+                            moveTo(s.x, s.y); quadraticTo(c1.x, c1.y, e.x, e.y)
+                        }
+                        val pRight = Path().apply {
+                            val s = o(61f, top - 2f); val c1 = o(64f, top - 9f); val e = o(65f, top - 16f)
+                            moveTo(s.x, s.y); quadraticTo(c1.x, c1.y, e.x, e.y)
+                        }
+                        drawPath(pLeft, strokeCol.copy(alpha = 0.75f), style = Stroke(1.2f * u, cap = StrokeCap.Round))
+                        drawPath(pMid, strokeCol.copy(alpha = 0.75f), style = Stroke(1.2f * u, cap = StrokeCap.Round))
+                        drawPath(pRight, strokeCol.copy(alpha = 0.75f), style = Stroke(1.2f * u, cap = StrokeCap.Round))
+                        // Snug slightly curved headband cuff at the base of the toque
+                        val cuff = Path().apply {
+                            val tl = o(30f, top - 2f)
+                            moveTo(tl.x, tl.y)
+                            val tc = o(50f, top - 4.5f); val tr = o(70f, top - 2f)
+                            quadraticTo(tc.x, tc.y, tr.x, tr.y)
+                            val br = o(69f, top + 7.5f)
+                            lineTo(br.x, br.y)
+                            val bc = o(50f, top + 5.5f); val bl = o(31f, top + 7.5f)
+                            quadraticTo(bc.x, bc.y, bl.x, bl.y)
+                            close()
+                        }
+                        paperPath(cuff, cuffCream)
+                        drawPath(cuff, strokeCol, style = Stroke(1.5f * u, join = StrokeJoin.Round))
+                        // Subtle vertical rib ticks on the cuff
+                        listOf(38f, 46f, 54f, 62f).forEach { rx ->
+                            val dy = if (rx == 46f || rx == 54f) -0.8f else -0.3f
+                            drawLine(
+                                strokeCol.copy(alpha = 0.55f),
+                                o(rx, top + 0.2f + dy),
+                                o(rx, top + 5.2f + dy),
+                                1.0f * u,
+                                cap = StrokeCap.Round,
+                            )
                         }
                     }
                 }
