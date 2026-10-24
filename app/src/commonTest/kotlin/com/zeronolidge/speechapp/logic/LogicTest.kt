@@ -2374,10 +2374,10 @@ class KitchenLayoutTest {
             // 0.17, see that file's own K8 doc): `logic` stays platform-free, so this can't import
             // it directly (same reason kitchenPropsSitOnTheRealDrawnCounterTopInLandscape can't,
             // above).
-            val bowlSizeFraction = if (landscape) 0.2533f else 0.17f
+            val bowlSizeFraction = if (landscape) 0.2533f else 0.215f
             val unit = minOf(w, h)
             val bowlWidth = unit * bowlSizeFraction
-            val roryWidth = rory.r - rory.l
+            val roryWidth = (rory.r - rory.l) * KitchenLayout.roryBodyWidthFraction(landscape)
             assertTrue(
                 bowlWidth >= roryWidth * 0.4f,
                 "Bowl isn't at least 0.4x Rory's real drawn width at ${w}x$h: bowl=$bowlWidth rory=$roryWidth",
@@ -2475,10 +2475,10 @@ class KitchenLayoutTest {
             (landscapeBear.b - landscapeBear.t) > (portraitBear.b - portraitBear.t),
             "Bear isn't taller in landscape than portrait",
         )
-        assertTrue(
-            (landscapeRory.b - landscapeRory.t) > (portraitRory.b - portraitRory.t),
-            "Rory's visible slice isn't taller in landscape than portrait",
-        )
+        // K7e: Timothy asked for portrait Rory ~1.5x taller (his lane now holds his drawn body,
+        // see KitchenLayout.roryBodyWidthFraction), so the old "landscape slice is taller" rule no
+        // longer applies; both orientations just keep a real visible slice.
+        assertTrue((portraitRory.b - portraitRory.t) > 0f && (landscapeRory.b - landscapeRory.t) > 0f)
     }
 
     /** K2f: his visible part (above the counter top) is a strict top slice of his full box, never
@@ -2576,6 +2576,11 @@ class KitchenLayoutTest {
      * height this story runs at, with no gap and no overlap.
      */
     @Test
+    // K7e: this checks the model (KitchenLayout.onStage). The REAL drawn layout is checked in a
+    // browser run: VoiceStory logs the scene node's own onGloballyPositioned bottom
+    // ("KITCHEN layout counterBottom=") and the strip's real rect ("strip="); the loop's
+    // check_gap.py fails if they differ by more than 1px (test26's 60px gap passed this unit test
+    // but not that check).
     fun landscapeCounterBottomMeetsTheStripTopWithNoGap() {
         val stripFraction = 0.18f
         val stripMinHeight = 128f
@@ -2785,7 +2790,11 @@ class KitchenLayoutTest {
             for ((bowlProp, bowlBox) in bowlBoxes) for ((ingProp, ingBox) in ingBoxes) {
                 assertFalse(bowlBox.overlaps(ingBox), "$bowlProp overlaps $ingProp at ${w}x$h")
             }
-            for ((ingProp, ingBox) in ingBoxes) for ((panProp, panBox) in panBoxes) {
+            // K7e: portrait's pan station reuses the ingredient station's counter space -- milk (beat
+            // 2) and the pan (from "Say pour!" on) never share a beat, which KitchenSceneRulesTest's
+            // per-beat co-occurrence check enforces -- so the pan can be a real size on a 768px-wide
+            // counter next to a 1.5x Rory. Landscape keeps separate stations.
+            if (landscape) for ((ingProp, ingBox) in ingBoxes) for ((panProp, panBox) in panBoxes) {
                 assertFalse(ingBox.overlaps(panBox), "$ingProp overlaps $panProp at ${w}x$h")
             }
         }
@@ -2829,13 +2838,14 @@ class KitchenLayoutTest {
      * size (it has its own target, not the bowl's), and the pan a little smaller in landscape to
      * leave them the room. */
     private fun kitchenSizeMirror(prop: Prop, landscape: Boolean): Float = when (prop) {
-        Prop.BUBBLE -> 0.18f
-        Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.17f
-        Prop.BUTTER -> if (landscape) 0.27f else 0.27f
-        Prop.PAN -> if (landscape) 0.144f else 0.16f
+        Prop.BUBBLE -> if (landscape) 0.18f else 0.17f
+        Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.215f
+        Prop.BUTTER -> 0.40f
+        Prop.PAN -> if (landscape) 0.144f else 0.17f
+        Prop.PANCAKE -> if (landscape) 0.15f else 0.17f
         Prop.MILK -> 0.12f
         Prop.PANCAKE -> 0.15f
-        Prop.STEAM -> 0.14f
+        Prop.STEAM -> if (landscape) 0.14f else 0.15f
         else -> 0.14f
     }
 
@@ -2957,13 +2967,14 @@ class KitchenSceneRulesTest {
      * the butter plate its own smaller size, the pan a little smaller in landscape to leave them
      * room. */
     private fun kitchenSize(prop: Prop, landscape: Boolean): Float = when (prop) {
-        Prop.BUBBLE -> 0.18f
-        Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.19f
-        Prop.BUTTER -> if (landscape) 0.27f else 0.27f
-        Prop.PAN -> if (landscape) 0.144f else 0.16f
+        Prop.BUBBLE -> if (landscape) 0.18f else 0.17f
+        Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.215f
+        Prop.BUTTER -> 0.40f
+        Prop.PAN -> if (landscape) 0.144f else 0.17f
+        Prop.PANCAKE -> if (landscape) 0.15f else 0.17f
         Prop.MILK -> 0.12f
         Prop.PANCAKE -> 0.15f
-        Prop.STEAM -> 0.14f
+        Prop.STEAM -> if (landscape) 0.14f else 0.15f
         else -> 0.14f
     }
 

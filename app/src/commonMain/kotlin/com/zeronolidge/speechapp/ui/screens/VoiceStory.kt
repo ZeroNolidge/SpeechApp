@@ -200,8 +200,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val fPoseShown = fPoseFlash || app.testForceFPose
     LaunchedEffect(fPoseFlash) {
         if (fPoseFlash) {
+            println("FPOSE on")
             delay(1000)
             fPoseFlash = false
+            println("FPOSE off")
         }
     }
     // K3a: a tap step (bowl, berries, flip) replays its instruction once if nothing's tapped

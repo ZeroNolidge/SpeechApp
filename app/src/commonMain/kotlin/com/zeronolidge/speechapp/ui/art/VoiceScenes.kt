@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -182,10 +184,12 @@ private fun propSize(p: Prop) = when (p) {
  * stations ([KitchenLayout]'s own `bowlLeft`/`bowlRight` etc.): Ruby's "bowl/berries/butter
  * proportionally bigger" portrait ask. */
 private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
-    Prop.BUBBLE -> 0.18f
-    Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.19f
-    Prop.BUTTER -> if (landscape) 0.27f else 0.27f
-    Prop.PAN -> if (landscape) 0.144f else propSize(p)
+    Prop.BUBBLE -> if (landscape) 0.18f else 0.17f
+    Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.215f
+    Prop.BUTTER -> 0.40f
+    Prop.PAN -> if (landscape) 0.144f else 0.17f
+    Prop.PANCAKE -> if (landscape) 0.15f else 0.17f
+    Prop.STEAM -> if (landscape) propSize(p) else 0.15f
     else -> propSize(p)
 }
 
@@ -960,8 +964,12 @@ private fun BoxWithConstraintsScope.KitchenRory(
             val fitted = KitchenLayout.roryFittedBox(w, h, landscape)
             Critter(
                 Species.ROBOT,
+                // K7e: the fitted canvas may be wider than the lane in portrait (its transparent
+                // padding spills past, see KitchenLayout.roryBodyWidthFraction), so it must not be
+                // clamped to the lane's own width (that shrank and floated him).
                 Modifier.offset(x = (fitted.l - laneLeft).dp, y = (fitted.t - laneTop).dp)
-                    .size((fitted.r - fitted.l).dp, (fitted.b - fitted.t).dp),
+                    .wrapContentSize(Alignment.TopStart, unbounded = true)
+                    .requiredSize((fitted.r - fitted.l).dp, (fitted.b - fitted.t).dp),
                 Color(0xFFFFCC80),
                 outfit = Outfit(hat = ChefHat), mood = Mood.HAPPY, talking = talking, pointMouth = pointing,
                 fPose = fPose,
@@ -981,6 +989,10 @@ private fun BoxWithConstraintsScope.KitchenRory(
  */
 @Composable
 private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat, butterCut: Boolean = false) {
+    val berriesInBatter = beat.backdrop == Backdrop.KITCHEN && com.zeronolidge.speechapp.logic.VoiceStories.kitchen.beats.let { b ->
+        val berryBeat = b.indexOfFirst { it.prop == Prop.BERRIES }
+        berryBeat >= 0 && b.indexOf(beat) > berryBeat
+    }
     if (emoji != null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 44.sp) }
         return
@@ -1277,6 +1289,11 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat,
             }
             paperPath(body, Color(0xFFFFF3E0))
             paperOval(Color(0xFFFFE9A8), Offset(w * 0.08f, h * 0.2f), Size(w * 0.84f, h * 0.22f))
+            // K7e: once the berries beat is done, its three berries stay IN the batter (Timothy's
+            // "berries inside the bowl"; the "How many berries?" ask needs them countable).
+            if (berriesInBatter) listOf(0.30f, 0.50f, 0.70f).forEachIndexed { i, x ->
+                paperBlueberry(Offset(w * x, h * (0.29f + 0.03f * (i % 2))), w * 0.085f)
+            }
         }
         // A flat frying pan (side view, no dials or flame): a dark oval with one handle. K5: top
         // offset/height are KitchenLayout's shared constants (summing to 1f) so the pan's own

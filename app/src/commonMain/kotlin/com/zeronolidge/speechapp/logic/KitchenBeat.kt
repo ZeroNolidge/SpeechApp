@@ -252,7 +252,7 @@ object KitchenLayout {
      * [COUNTER_TOP_PORTRAIT]'s own rise freed up, moving [roryLeft]/[roryRight] along with it (same
      * gap kept either side) -- a real portrait screenshot showed Bear drawn at only ~45px next to a
      * much bigger Rory. */
-    private fun bearRight(landscape: Boolean): Float = if (landscape) 0.155f else 0.18f
+    private fun bearRight(landscape: Boolean): Float = if (landscape) 0.155f else 0.215f
 
     /** K4: Timothy's screenshots showed Bear sitting on a low stool far below the counter (his
      * seat about 45% of the scene's own height below the counter top) -- he read as sitting on
@@ -332,8 +332,8 @@ object KitchenLayout {
      * pancake's own single prop, not three side-by-side things like the bowl/ingredient stations,
      * has the least to lose): every gap between stations stays exactly what it was, so nothing
      * that didn't already overlap can newly start to. */
-    private fun roryLeft(landscape: Boolean): Float = if (landscape) 0.165f else 0.19f
-    private fun roryRight(landscape: Boolean): Float = if (landscape) 0.44f else 0.50f
+    private fun roryLeft(landscape: Boolean): Float = if (landscape) 0.165f else 0.22f
+    private fun roryRight(landscape: Boolean): Float = if (landscape) 0.44f else 0.535f
 
     /** Rory's own height, as a fraction of the kitchen scene's own height. K4 grew this from a
      * quarter: with the counter top itself moved down (see
@@ -350,7 +350,7 @@ object KitchenLayout {
      * [roryFittedBox]), so this only needs to clear that width-bound height while keeping his own
      * nominal box's top on screen (never negative, see [COUNTER_TOP_PORTRAIT]/[roryHiddenFraction]) --
      * never the thing actually limiting how tall he's drawn. */
-    private fun roryHeight(landscape: Boolean): Float = if (landscape) 0.64f else 0.55f
+    private fun roryHeight(landscape: Boolean): Float = if (landscape) 0.64f else 0.70f
 
     /** How much of [roryHeight] sits below the counter top line, hidden behind the counter (K2g
      * was 0.45, K4 lowers it further from 0.25): Timothy's ask was chest-up, both arms included --
@@ -381,14 +381,14 @@ object KitchenLayout {
      * keeping the same 0.02 gap -- its own width is unchanged (the bowl/batter already read a fair
      * size there; [kitchenPropSize] in VoiceScenes.kt gives the actual prop its own K9 size bump
      * instead, independent of the station it's clamped into). */
-    private fun bowlLeft(landscape: Boolean) = if (landscape) 0.46f else 0.51f
+    private fun bowlLeft(landscape: Boolean) = if (landscape) 0.46f else 0.55f
 
     /** K7: widened in landscape so the bigger bowl/batter ([kitchenPropSize] in VoiceScenes.kt,
      * ~1.6x there) still fits inside its own station without reaching into the ingredient
      * station's. K8: widened a little further still in landscape (Timothy's own "bowl still looks
      * small" ask), and portrait keeps the old, un-widened station (its own props only grow a
      * little, see [kitchenPropSize]). K9: portrait shifts right with [bowlLeft], same width. */
-    private fun bowlRight(landscape: Boolean) = if (landscape) 0.65f else 0.69f
+    private fun bowlRight(landscape: Boolean) = if (landscape) 0.65f else 0.745f
 
     /** The ingredient station (K6): milk, on its own, while it pours into the bowl (beat 2) -- or,
      * once it's a different beat, three berries in a row waiting to be tapped into the bowl (see
@@ -398,8 +398,8 @@ object KitchenLayout {
      * orientations shift right a touch to follow [bowlRight]/[bowlLeft]'s own K8 moves, keeping the
      * same gaps either side. K9: portrait shifts right again with [bowlRight], same width (so
      * [berrySlot]'s own three-way split, and [COUNT_BERRY_SIZE], are unaffected). */
-    private fun ingLeft(landscape: Boolean) = if (landscape) 0.67f else 0.70f
-    private fun ingRight(landscape: Boolean) = if (landscape) 0.815f else 0.83f
+    private fun ingLeft(landscape: Boolean) = if (landscape) 0.67f else 0.755f
+    private fun ingRight(landscape: Boolean) = if (landscape) 0.815f else 0.89f
 
     /** The pan station (the pan itself and everything cooking in it): clear of the ingredient
      * station on one side and the counter's own right edge on the other (K3c). K7: shrinks a
@@ -418,8 +418,8 @@ object KitchenLayout {
      * is ~123px, comfortably inside the ~15px either side this station's own 0.85-0.98 keeps clear
      * of both [ingRight] and the screen edge). [panRight] itself never moves: it's already the
      * same safe margin from the screen's own right edge landscape independently settled on. */
-    private fun panLeft(landscape: Boolean) = if (landscape) 0.835f else 0.85f
-    private fun panRight(landscape: Boolean) = if (landscape) 0.98f else 0.98f
+    private fun panLeft(landscape: Boolean) = if (landscape) 0.835f else 0.765f
+    private fun panRight(landscape: Boolean) = if (landscape) 0.98f else 0.99f
 
     /** How far below the counter-top line the props' own tap-target slots start (K2b) -- and,
      * since K3b, also where every prop's own *bottom edge* actually rests ([propBox]): a thin
@@ -544,10 +544,17 @@ object KitchenLayout {
      * exactly this box, not [roryBox], so the two can never drift apart. */
     private const val CRITTER_ART_RATIO = 100f / 140f
 
+    /** K7e: the Critter canvas carries transparent padding either side of Rory's drawn body
+     * (measured on a 768x1024 screenshot: body 150px in a 229px-wide canvas, centred). In
+     * portrait, where width is the limit, his lane ([roryBox]) now holds his drawn BODY and the
+     * canvas may spill its empty padding past it, so he can be ~1.5x taller without anything
+     * overlapping what you actually see. Landscape keeps the old whole-canvas fit. */
+    fun roryBodyWidthFraction(landscape: Boolean): Float = if (landscape) 1f else 0.68f
+
     fun roryFittedBox(w: Float, h: Float, landscape: Boolean): Rect {
         val rory = roryBox(landscape)
         val ct = counterTop(landscape)
-        val laneWidth = w * (rory.r - rory.l)
+        val laneWidth = w * (rory.r - rory.l) / roryBodyWidthFraction(landscape)
         val laneHeight = h * (rory.b - rory.t)
         val fittedHeight = minOf(laneHeight, laneWidth / CRITTER_ART_RATIO)
         val fittedWidth = fittedHeight * CRITTER_ART_RATIO
