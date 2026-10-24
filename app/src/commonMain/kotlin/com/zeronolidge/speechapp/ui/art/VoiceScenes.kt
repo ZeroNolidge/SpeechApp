@@ -452,7 +452,9 @@ fun KitchenEndingScene(
             val stackWidth = (rory.r - rory.l).coerceAtMost(maxWidth.value * 0.97f - rory.r)
             val stackLeft = (rory.r + maxWidth.value * 0.015f).coerceAtMost(maxWidth.value * 0.97f - stackWidth)
             Box(
-                Modifier.offset(x = stackLeft.dp, y = (counterTopPx - stackHeight).dp)
+                // K7e: the plate's own drawn bottom is at 0.94 of the box -- drop the box so the plate
+                // rests on the counter instead of floating just above it.
+                Modifier.offset(x = stackLeft.dp, y = (counterTopPx - stackHeight * 0.94f + maxHeight.value * 0.012f).dp)
                     .size(stackWidth.dp, stackHeight.dp),
             ) { PancakeStackArt(bitten) }
             KitchenBear(landscape, leanAmount, onBiteRects)
@@ -662,7 +664,7 @@ private val ChefHat = Cosmetic("hat_chef", Slot.HAT, "Chef hat", 0xFFFFFFFF)
 
 /** How far [KitchenRory] zooms in while its "f" pose shows (K-f): a close-up, Ruby's own
  * 1.6-1.8x ask. */
-private const val FPoseZoom = 1.7f
+private const val FPoseZoom = 1.35f // K7e: portrait Rory is ~1.5x bigger now
 private const val FPoseZoomLandscape = 1.45f
 
 /**
@@ -1456,8 +1458,8 @@ fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
                     addOval(Rect(Offset(w * (0.5f - pw * 0.36f), h * (py + 0.02f)), Size(w * pw * 0.72f, h * 0.14f)))
                 }
                 if (bitten && i == layers.lastIndex) {
-                    val biteTotalW = w * pw * 0.4f
-                    val scallopD = h * 0.2f * 0.5f
+                    val biteTotalW = w * pw * 0.5f // K7e: bigger, so it reads at full size
+                    val scallopD = h * 0.16f
                     val scallopR = scallopD / 2f
                     val edgeX = w * (0.5f - pw / 2f)
                     val centerY = h * (py + 0.11f)
@@ -1479,8 +1481,8 @@ fun PancakeStackArt(bitten: Boolean, modifier: Modifier = Modifier) {
             }
             // The two cut butter pieces (K6: the butter-cutting step's own halves) on top, with a
             // syrup drip down the stack's own side.
-            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.37f, h * 0.16f), Size(w * 0.1f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
-            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.52f, h * 0.15f), Size(w * 0.1f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
+            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.37f, h * 0.215f), Size(w * 0.1f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
+            paperRoundRect(Color(0xFFFFE066), Offset(w * 0.52f, h * 0.205f), Size(w * 0.1f, h * 0.07f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
             val drip = Path().apply {
                 moveTo(w * 0.62f, h * 0.22f)
                 quadraticTo(w * 0.68f, h * 0.4f, w * 0.64f, h * 0.6f)
