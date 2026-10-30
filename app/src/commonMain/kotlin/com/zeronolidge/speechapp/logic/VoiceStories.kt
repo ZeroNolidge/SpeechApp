@@ -342,8 +342,8 @@ object VoiceStories {
                 "Four! Good talking! One, two, three, four banana slices!", "🍌", still = Prop.FRUIT_BOWL, caption = "Say four!",
             ),
             VoiceBeat(
-                Backdrop.KITCHEN, "Now drag the slices into the bowl!", listOf("drag", "drag it", "Drag the slices in!"), null, Prop.BANANA, Move.SHAKE,
-                "Drag! The banana slices land in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Drag to the bowl!",
+                Backdrop.KITCHEN, "Tap the bananas! Each slice hops into the bowl!", listOf("tap", "tap it", "Tap the bananas!"), null, Prop.BANANA, Move.SHAKE,
+                "Tap! Hop, hop, hop, hop! All the banana slices are in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Tap the bananas!",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
@@ -351,7 +351,7 @@ object VoiceStories {
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
-                "Fork! Good talking! Let's stir it all up... Fruit salad! Yum! Bear loves it!", "🥗", goodbye = true, caption = "Say fork!",
+                "Fork! Good talking! Let's stir it all up... Fruit salad! Yum! Bruno loves it!", "🥗", goodbye = true, caption = "Say fork!",
             ),
         ),
         swap = null, sticker = "fruit salad" to "🥗",

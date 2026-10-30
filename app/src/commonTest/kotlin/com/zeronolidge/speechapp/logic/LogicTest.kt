@@ -2050,7 +2050,7 @@ class FruitSaladStoryTest {
     fun theStepsFollowSliceFourDragFillFork() {
         val beats = VoiceStories.fruitSalad.beats
         assertEquals(listOf(KitchenFlow.SWIPE, null, KitchenFlow.DRAG, null, null), beats.map { it.kitchen })
-        assertEquals(listOf("slice", "four", "drag", "fill", "fork"), beats.map { it.word })
+        assertEquals(listOf("slice", "four", "tap", "fill", "fork"), beats.map { it.word })
     }
 
     /** The three talk words ("Four!", "Fill!", "Fork!") all start with the "f" sound, so Rory's

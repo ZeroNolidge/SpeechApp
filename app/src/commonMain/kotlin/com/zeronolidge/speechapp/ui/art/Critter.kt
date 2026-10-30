@@ -593,7 +593,7 @@ private fun DrawScope.drawPuppetPart(
             }
             if (sp.antenna && outfit.hat?.id != "hat_chef") {
                 // Rory's signature: a stitched paper antenna with a gold star tip (tucked inside his tall chef toque in Rory's Kitchen).
-                paperRoundRect(darker(body, 0.12f), o(47.5f, 12f), Size(5f * u, 24f * u), CornerRadius(2f * u))
+                paperRoundRect(Color(0xFF29B6F6), o(47.5f, 12f), Size(5f * u, 24f * u), CornerRadius(2f * u))
                 drawLine(
                     Color.White.copy(alpha = 0.9f), o(50f, 14f), o(50f, 34f), 1f * u,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.2f * u, 1.6f * u)),
@@ -811,6 +811,13 @@ private fun DrawScope.drawPuppetPart(
                         }
                         paperPath(crown, crownWhite)
                         drawPath(crown, strokeCol, style = Stroke(1.5f * u, join = StrokeJoin.Round))
+                        // K-fruit8: Rory's cyan-blue antenna pokes out through the top of the toque.
+                        if (sp.antenna) {
+                            val cyan = Color(0xFF29B6F6)
+                            paperRoundRect(cyan, o(48f, top - 39f), Size(4f * u, 11f * u), CornerRadius(2f * u))
+                            circle(50f, top - 40f, 4.5f, cyan)
+                            circle(48.8f, top - 41.2f, 1.4f, Color.White.copy(alpha = 0.85f))
+                        }
                         // Subtle interior vertical pleat/fold lines rising partway up from the cuff
                         val pLeft = Path().apply {
                             val s = o(39f, top - 2f); val c1 = o(36f, top - 9f); val e = o(35f, top - 16f)

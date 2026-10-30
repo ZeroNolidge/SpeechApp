@@ -1011,7 +1011,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // then every `Done` flag is already true, so it simply reads all filled/green.
             if (isFruitSaladStory) {
                 Spacer(Modifier.width(8.dp))
-                FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring)
+                FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring || kitchenEnd != null)
             }
             // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,
             // clear of 🏠 and 🔊 (this row sits between them; see ScreenFrame). Only shown once

@@ -33,8 +33,10 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -428,7 +430,7 @@ fun VoiceBeatScene(
             ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, fruitStirring) }
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
             if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
-            if (isKitchen && onDragToBowl != null) FruitDragOverlay(landscape, onDragToBowl, onKitchenTarget)
+            if (isKitchen && beat.prop == Prop.BANANA && fruitSliced && !fruitInBowl) FruitTapOverlay(landscape, onDragToBowl, onKitchenTarget)
             // the "how many berries?" ask keeps the three berries in the bowl, with no numeral
             // (it would give the answer away)
             if (isKitchen && beat.kitchen == KitchenFlow.ASK && beat.prop == Prop.BATTER) KitchenCountRow(landscape, setOf(0, 1, 2), null, null, showCount = false)
@@ -1009,7 +1011,21 @@ private fun BoxWithConstraintsScope.KitchenRory(
             // instead of behind it. [KitchenLayout.roryFittedBox] anchors his feet to the counter
             // top line directly, by his own fitted height, so he always emerges from behind it by
             // the same proportion however much the lane narrows him.
-            val fitted = KitchenLayout.roryFittedBox(w, h, landscape)
+            // K-fruit8: on a short phone in landscape the scene's top (~liftTop) is lifted off
+            // and clipped, which cut off his chef hat and head; shrink him (feet still behind the
+            // counter at the same line) so his hat and antenna stay below that visible top.
+            val fitted = KitchenLayout.roryFittedBox(w, h, landscape).let { f ->
+                val visTop = if (landscape) (h * 0.18f).coerceAtLeast(128f) + 6f else 0f
+                // the toque and antenna rise ~12% of his height above the canvas top
+                val need = visTop + (f.b - f.t) * 0.12f
+                if (!landscape || f.t >= need) f else {
+                    val newH = ((f.b - need) / 0.88f).coerceAtLeast((f.b - f.t) * 0.72f)
+                    val k = newH / (f.b - f.t)
+                    val cx = (f.l + f.r) / 2f
+                    val hw = (f.r - f.l) * k / 2f
+                    KitchenLayout.Rect(cx - hw, f.b - newH, cx + hw, f.b)
+                }
+            }
             Critter(
                 Species.ROBOT,
                 // K7e: the fitted canvas may be wider than the lane in portrait (its transparent
@@ -1497,27 +1513,35 @@ private fun PropArt(
                 paperOval(Color(0xFFFAFAFA), Offset(w * 0.06f, plateTop), Size(w * 0.88f, plateH))
                 drawOval(Color(0xFFD7CCC8), Offset(w * 0.06f, plateTop), Size(w * 0.88f, plateH), style = Stroke(1.5.dp.toPx()))
                 if (slicedLook < 0.5f) {
+                    // K-fruit8: a plump paper-cutout banana lying flat and centred on the plate:
+                    // thick in the middle, tapering to a brown stem (left) and a dark tip (right),
+                    // with a lighter highlight stripe. Its bottom rests on the plate's middle line.
+                    val rest = plateTop + plateH * 0.62f
+                    val thick = w * 0.2f
+                    val x0 = w * 0.17f
+                    val x1 = w * 0.83f
                     val banana = Path().apply {
-                        moveTo(w * 0.22f, h * 0.74f)
-                        quadraticTo(w * 0.5f, h * 0.40f, w * 0.80f, h * 0.60f)
-                        quadraticTo(w * 0.62f, h * 0.70f, w * 0.78f, h * 0.70f)
-                        quadraticTo(w * 0.48f, h * 0.58f, w * 0.26f, h * 0.80f)
+                        moveTo(x0, rest - thick * 0.55f)
+                        // underside: sags down to rest on the plate
+                        cubicTo(w * 0.32f, rest + thick * 0.05f, w * 0.68f, rest + thick * 0.05f, x1, rest - thick * 0.55f)
+                        // top edge: a shallower curve, so it's thickest in the middle
+                        cubicTo(w * 0.64f, rest - thick * 1.35f, w * 0.36f, rest - thick * 1.35f, x0, rest - thick * 0.55f)
                         close()
                     }
                     paperPath(banana, Color(0xFFF4D35E))
-                    drawPath(banana, Color(0xFF8D6E63), style = Stroke(1.8.dp.toPx()))
-                } else {
-                    // K-fruit: four round slices (Rory counts "one, two, three, four" against
-                    // them), spread across the plate at KitchenLayout.BANANA_SLICE_X -- each one
-                    // his own drag/tap target (FruitDragOverlay's own four touch zones, same x
-                    // fractions), the zone itself (not this visual radius) kept >= 56dp there.
-                    val sliceR = w * 0.11f
-                    KitchenLayout.BANANA_SLICE_X.forEach { x ->
-                        val c = Offset(w * x, plateTop + plateH * 0.5f)
-                        paperCircle(Color(0xFFFFF3C4), sliceR, c)
-                        drawCircle(Color(0xFFE8B74B), sliceR, c, style = Stroke(1.4.dp.toPx()))
-                        drawCircle(Color.White, sliceR * 0.4f, c)
+                    drawPath(banana, Color(0xFFB8860B), style = Stroke(1.6.dp.toPx()))
+                    val stripe = Path().apply {
+                        moveTo(w * 0.27f, rest - thick * 0.62f)
+                        cubicTo(w * 0.40f, rest - thick * 0.62f, w * 0.60f, rest - thick * 0.62f, w * 0.73f, rest - thick * 0.62f)
                     }
+                    drawPath(stripe, Color(0xFFFFF1A8), style = Stroke(thick * 0.14f, cap = StrokeCap.Round))
+                    // stem (brown, left) and tip (dark, right)
+                    drawLine(Color(0xFF6D4C41), Offset(x0 + w * 0.01f, rest - thick * 0.55f), Offset(x0 - w * 0.05f, rest - thick * 0.72f), thick * 0.16f, cap = StrokeCap.Round)
+                    drawCircle(Color(0xFF3E2723), thick * 0.08f, Offset(x1 - w * 0.005f, rest - thick * 0.55f))
+                } else {
+                    // K-fruit8: the four (now big) slices are drawn by FruitTapOverlay itself, right
+                    // where their own tap targets are, so art and targets can never drift apart.
+                    Unit
                 }
             }
         }
@@ -1560,18 +1584,51 @@ private fun FruitBowlArt(fruitInBowl: Boolean, fruitBerriesIn: Boolean, fruitSti
             style = Stroke(1.5.dp.toPx()),
         )
         val contentY = KitchenLayout.BOWL_INNER_RIM_TOP + KitchenLayout.BOWL_INNER_RIM_HEIGHT * 0.45f
-        if (fruitInBowl) {
-            val sliceR = w * 0.085f
-            listOf(0.28f, 0.46f, 0.64f, 0.5f).forEachIndexed { i, x ->
-                val y = contentY + if (i == 3) 0.05f else 0f
-                val c = Offset(w * x, h * y)
-                paperCircle(Color(0xFFFFF3C4), sliceR, c)
-                drawCircle(Color(0xFFE8B74B), sliceR, c, style = Stroke(1.2.dp.toPx()))
-            }
+        // K-fruit8: the fruit is a mounded pile nestled *inside* the bowl -- clipped to the bowl's
+        // opening (its inner rim oval, plus the space above it for the mound), so nothing ever sits
+        // in front of the front rim or floats. Banana slices and 6 blueberries of slightly different
+        // sizes are mixed together, each berry with a highlight and a little crown so it reads as a
+        // blueberry, not a flat dark dot.
+        val rimTop = h * KitchenLayout.BOWL_INNER_RIM_TOP
+        val rimH = h * KitchenLayout.BOWL_INNER_RIM_HEIGHT
+        val rimMid = rimTop + rimH / 2f
+        val inside = Path().apply {
+            addOval(Rect(Offset(w * 0.08f, rimTop + rimH * 0.04f), Size(w * 0.84f, rimH * 0.92f)))
+            addRect(Rect(w * 0.13f, 0f, w * 0.87f, rimMid))
         }
-        if (fruitBerriesIn) {
-            listOf(0.34f, 0.5f, 0.66f).forEachIndexed { i, x ->
-                paperBlueberry(Offset(w * x, h * (contentY + 0.1f + 0.02f * (i % 2))), w * 0.075f)
+        clipPath(inside) {
+            val base = rimMid + rimH * 0.12f
+            // Mound height at x (0..1): highest in the middle, sinking toward the sides.
+            fun mound(x: Float) = base - rimH * 0.55f * (1f - ((x - 0.5f) / 0.36f).let { it * it }).coerceAtLeast(0f)
+            if (fruitInBowl) {
+                val sliceR = w * 0.075f
+                listOf(0.27f to 0.15f, 0.44f to 0.0f, 0.60f to 0.25f, 0.72f to 0.05f).forEach { (x, dy) ->
+                    val c = Offset(w * x, mound(x) + rimH * dy)
+                    paperCircle(Color(0xFFFFF3C4), sliceR, c)
+                    drawCircle(Color(0xFFE8B74B), sliceR, c, style = Stroke(1.2.dp.toPx()))
+                    drawCircle(Color(0xFFF3E2A0), sliceR * 0.35f, c)
+                }
+            }
+            if (fruitBerriesIn) {
+                // (x, depth below the mound line as a fraction of the rim height, radius scale)
+                listOf(
+                    Triple(0.34f, 0.18f, 1.0f), Triple(0.52f, 0.10f, 1.12f), Triple(0.66f, 0.30f, 0.9f),
+                    Triple(0.40f, 0.42f, 0.95f), Triple(0.58f, 0.48f, 1.05f), Triple(0.24f, 0.40f, 0.85f),
+                ).forEach { (x, dy, sc) ->
+                    val r = w * 0.052f * sc
+                    val c = Offset(w * x, mound(x) + rimH * dy)
+                    drawCircle(Color(0xFF2E3A8C), r, c)
+                    drawCircle(Color(0xFF4A5BB8), r * 0.72f, c + Offset(-r * 0.12f, -r * 0.12f))
+                    drawCircle(Color(0xFF1B2260), r, c, style = Stroke(1.dp.toPx()))
+                    // highlight
+                    drawCircle(Color.White.copy(alpha = 0.75f), r * 0.2f, c + Offset(-r * 0.42f, -r * 0.42f))
+                    // little crown (the blossom end): a tiny dark star near the top
+                    val cc = c + Offset(r * 0.15f, -r * 0.3f)
+                    for (k in 0 until 5) {
+                        val ang = (k * 72f - 90f) * PI.toFloat() / 180f
+                        drawLine(Color(0xFF121640), cc, cc + Offset(cos(ang) * r * 0.26f, sin(ang) * r * 0.26f), 1.4.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                }
             }
         }
         if (fruitStirring) {
@@ -2038,7 +2095,8 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
     val cx = (box.l + box.r) / 2f * wPx
     val bananaUnit = with(density) { (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BANANA, landscape)).toPx() }
     val cy = box.t * hPx - bananaUnit * 0.4f
-    val zone = bananaUnit * 1.6f
+    // K-fruit8: a single tap or a short swipe anywhere on (or near) the banana slices it.
+    val zone = maxOf(bananaUnit * 1.9f, with(density) { 140.dp.toPx() })
     var done by remember { mutableStateOf(false) }
     var cutter by remember { mutableStateOf<Offset?>(null) }
     var dragged by remember { mutableStateOf(0f) }
@@ -2084,83 +2142,86 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
 }
 
 /**
- * Rory's Fruit Salad's own drag-to-bowl step ([KitchenFlow.DRAG]): each of the four sliced banana
- * pieces ([KitchenLayout.BANANA_SLICE_X], the same x fractions the art draws at) is its own touch
- * target, tracked independently -- a real drag of at least [KitchenCut.THRESHOLD_DP] toward the
- * bowl, in any direction, or a plain tap on a slice, sends that one slice; [onDrag] fires once per
- * slice (its own index), and the step itself only finishes once every slice has been sent (see
- * [KitchenFlow.tapGoal]'s own goal-many count for [KitchenFlow.DRAG]), the same forgiving gesture
- * as [FruitSliceOverlay]. A dashed arrow over each still-waiting slice hints the bowl's direction.
+ * Rory's Fruit Salad's tap-to-bowl step ([KitchenFlow.DRAG] in the state machine, but tap-only for
+ * the child; K-fruit8): four big banana slices sit on the plate, each with a generous tap target
+ * (>= 88dp, never overlapping). ANY touch anywhere near the slices counts -- it sends the slice
+ * nearest the touch that's still on the plate, which then hops in an arc into the bowl by itself.
+ * After a few seconds with no tap, the next slice gently pulses as a hint. Drawn (non-interactive)
+ * whenever the slices are out, so the "Four!" count beat shows the very same big slices.
  */
 @Composable
-private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onDrag: (Int) -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
-    val box = KitchenLayout.bananaBox(landscape)
-    val bowl = KitchenLayout.bowlBox(landscape)
+private fun BoxWithConstraintsScope.FruitTapOverlay(landscape: Boolean, onTap: ((Int) -> Unit)?, onTarget: ((Int, Offset) -> Unit)?) {
     val density = LocalDensity.current
     val wPx = constraints.maxWidth.toFloat()
     val hPx = constraints.maxHeight.toFloat()
-    val bananaUnit = with(density) { (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BANANA, landscape)).toPx() }
-    // The banana's own real box (same one `PropArt`'s `Item` actually draws into): its centre is
-    // where the four slices sit around, at [KitchenLayout.BANANA_SLICE_X]'s own x fractions and
-    // the plate's own mid-height, so each touch zone lands right on its slice.
+    val bowl = KitchenLayout.bowlBox(landscape)
     val bananaBox = KitchenLayout.propBox(Prop.BANANA, landscape, kitchenPropSize(Prop.BANANA, landscape), maxWidth.value, maxHeight.value)
     val plateCx = (bananaBox.l + bananaBox.r) / 2f * wPx
-    val sliceYFraction = KitchenLayout.BANANA_PLATE_TOP + KitchenLayout.BANANA_PLATE_HEIGHT * 0.5f
-    val plateCy = (bananaBox.t + (bananaBox.b - bananaBox.t) * sliceYFraction) * hPx
-    val sliceOffsets = KitchenLayout.BANANA_SLICE_X.map { (it - 0.5f) * bananaUnit }
-    val minZone = with(density) { 56.dp.toPx() }
-    // K-fruit: with four slices spaced closer together than the old two, each zone is also capped
-    // to a bit more than the gap between neighbouring slices (never below minZone), so the four
-    // touch targets stay distinct instead of one giant zone swallowing its neighbours whole.
-    val spacing = if (sliceOffsets.size > 1) kotlin.math.abs(sliceOffsets[1] - sliceOffsets[0]) else bananaUnit
-    val zone = maxOf(minOf(bananaUnit * 0.75f, spacing * 1.3f), minZone)
-    val towardBowl = (bowl.l + bowl.r) < (box.l + box.r)
-    val glow = rememberInfiniteTransition(label = "dragGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
-    val centers = sliceOffsets.map { dx -> Offset(plateCx + dx, plateCy) }
-    // K-fruit6: on small phones the four 56dp zones overlap, so the topmost zone can swallow
-    // every drag. Any drag on the slices sends this slice, or (if it's already in the bowl) the
-    // next one still on the plate, so every drag counts and the step can always finish.
+    val plateCy = (bananaBox.t + (bananaBox.b - bananaBox.t) * (KitchenLayout.BANANA_PLATE_TOP + KitchenLayout.BANANA_PLATE_HEIGHT * 0.5f)) * hPx
+    val zone = with(density) { (if (maxWidth < 500.dp) 56.dp else if (maxHeight < 500.dp) 64.dp else 88.dp).toPx() }
+    val cols = if (zone * 4f <= wPx * 0.6f) 4 else 2
+    val rows = 4 / cols
+    val gridW = zone * cols
+    val gridH = zone * rows
+    val gx = (plateCx - gridW / 2f).coerceIn(0f, wPx - gridW)
+    val gy = (plateCy - gridH + zone / 2f).coerceIn(0f, hPx - gridH)
+    val centers = (0 until 4).map { i -> Offset(gx + zone * (i % cols + 0.5f), gy + zone * (i / cols + 0.5f)) }
+    val target = Offset((bowl.l + bowl.r) / 2f * wPx, (bowl.t + (bowl.b - bowl.t) * 0.55f) * hPx)
     val sent = remember { mutableStateListOf<Int>() }
+    val hops = remember { List(4) { Animatable(0f) } }
+    var lastTap by remember { mutableStateOf(0L) }
+    var hint by remember { mutableStateOf(false) }
+    LaunchedEffect(lastTap, sent.size, onTap != null) {
+        hint = false
+        if (onTap != null) { kotlinx.coroutines.delay(4000); hint = true }
+    }
+    val pulse = rememberInfiniteTransition(label = "slicePulse").animateFloat(1f, 1.18f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "p")
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun send(at: Offset) {
+        val cb = onTap ?: return
+        val pick = centers.indices.filter { it !in sent }.minByOrNull { (centers[it] - at).getDistance() } ?: return
+        sent.add(pick); lastTap += 1
+        scope.launch { hops[pick].animateTo(1f, tween(520)) }
+        cb(pick)
+    }
+    val pad = zone * 0.6f
+    Box(
+        Modifier.offset { IntOffset((gx - pad).roundToInt(), (gy - pad).roundToInt()) }
+            .size(with(density) { (gridW + pad * 2f).toDp() }, with(density) { (gridH + pad * 2f).toDp() })
+            .pointerInput(onTap != null) {
+                if (onTap != null) awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent()
+                        val down = e.changes.firstOrNull { it.pressed && !it.previousPressed } ?: continue
+                        send(Offset(down.position.x + gx - pad, down.position.y + gy - pad))
+                    }
+                }
+            },
+    )
     centers.forEachIndexed { i, c ->
-        val done = i in sent
-        var dragged by remember { mutableStateOf(0f) }
-        var firedThisDrag by remember { mutableStateOf(false) }
-        fun fire() {
-            val pick = if (i !in sent) i else centers.indices.firstOrNull { it !in sent }
-            if (pick != null) { sent.add(pick); onDrag(pick) }
-        }
         Box(
             Modifier.offset { IntOffset((c.x - zone / 2f).roundToInt(), (c.y - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
                 .onGloballyPositioned { lc ->
                     val pos = lc.positionInWindow()
                     onTarget?.invoke(i, Offset(pos.x + lc.size.width / 2f, pos.y + lc.size.height / 2f))
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { dragged = 0f; firedThisDrag = false },
-                        onDragEnd = { if (!firedThisDrag && dragged >= KitchenCut.THRESHOLD_DP * density.density) { firedThisDrag = true; fire() } },
-                        onDragCancel = {},
-                    ) { _, amount ->
-                        dragged += amount.getDistance()
-                        if (!firedThisDrag && KitchenCut.crossed(dragged, density.density)) { firedThisDrag = true; fire() }
-                    }
-                }
-                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { fire() },
-        ) {
-            Canvas(Modifier.fillMaxSize()) {
-                if (!done) {
-                    val dir = if (towardBowl) -1f else 1f
-                    val start = Offset(size.width * (0.5f - 0.3f * dir), size.height * 0.5f)
-                    val end = Offset(size.width * (0.5f + 0.3f * dir), size.height * 0.5f)
-                    val dash = PathEffect.dashPathEffect(floatArrayOf(size.width * 0.05f, size.width * 0.04f))
-                    drawLine(Color(0xFFFFF59D).copy(alpha = 0.65f * glow.value), start, end, size.width * 0.05f, cap = StrokeCap.Round)
-                    drawLine(Color(0xFFE65100).copy(alpha = glow.value), start, end, size.width * 0.02f, cap = StrokeCap.Round, pathEffect = dash)
-                    val ah = size.width * 0.08f
-                    val back1 = Offset(end.x - ah * dir, end.y - ah * 0.7f)
-                    val back2 = Offset(end.x - ah * dir, end.y + ah * 0.7f)
-                    val arrow = Path().apply { moveTo(end.x, end.y); lineTo(back1.x, back1.y); lineTo(back2.x, back2.y); close() }
-                    drawPath(arrow, Color(0xFFE65100).copy(alpha = glow.value))
-                }
+                },
+        )
+    }
+    val nextHint = centers.indices.firstOrNull { it !in sent }
+    Canvas(Modifier.fillMaxSize()) {
+        centers.forEachIndexed { i, c ->
+            val t = hops[i].value
+            if (t >= 1f) return@forEachIndexed
+            val p = Offset(c.x + (target.x - c.x) * t, c.y + (target.y - c.y) * t - sin(t * PI.toFloat()) * zone * 1.6f)
+            val sc = (1f - 0.45f * t) * (if (hint && i == nextHint && t == 0f) pulse.value else 1f)
+            val r = zone * 0.40f * sc
+            if (hint && i == nextHint && t == 0f) drawCircle(Color(0xFFFFF59D).copy(alpha = 0.7f), r * 1.35f, p)
+            paperCircle(Color(0xFFFFF3C4), r, p)
+            drawCircle(Color(0xFFE8B74B), r, p, style = Stroke(2.dp.toPx()))
+            drawCircle(Color(0xFFF3E2A0), r * 0.38f, p)
+            for (k in 0 until 6) {
+                val ang = k * 60f * PI.toFloat() / 180f
+                drawCircle(Color(0xFF8D6E63).copy(alpha = 0.55f), r * 0.05f, p + Offset(cos(ang) * r * 0.2f, sin(ang) * r * 0.2f))
             }
         }
     }
