@@ -331,7 +331,7 @@ object VoiceStories {
         // -- 🍌 is already used (and confirmed drawing correctly) by the recipe card right beside
         // it, so the title reuses it rather than risk another emoji missing from the same build.
         id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🍌", land = Land.PEAKS, sounds = listOf("f", "s"),
-        setup = "Bear's hungry for something fresh! Let's make a fruit salad!",
+        setup = "Bruno's hungry for something fresh! Let's make a fruit salad!",
         beats = listOf(
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's slice the banana! Swipe across it to cut it up!", listOf("slice", "slice it", "Slice the banana!"), "s", Prop.BANANA, Move.SHAKE,
@@ -341,13 +341,17 @@ object VoiceStories {
                 Backdrop.KITCHEN, "How many banana slices are there? Count with me and say four!", listOf("four", "four slices", "Four banana slices!"), "f", Prop.BANANA, Move.SHAKE,
                 "Four! Good talking! One, two, three, four banana slices!", "🍌", still = Prop.FRUIT_BOWL, caption = "Say four!",
             ),
+            // K-fruit9: drag-first (a small nudge toward the bowl sends a slice hopping in at
+            // once; a tap is only the fallback once nothing's been dragged for a moment), so the
+            // step's own word is "drag", not "tap" -- its success line (like every beat's) must
+            // start with that word.
             VoiceBeat(
-                Backdrop.KITCHEN, "Tap the bananas! Each slice hops into the bowl!", listOf("tap", "tap it", "Tap the bananas!"), null, Prop.BANANA, Move.SHAKE,
-                "Tap! Hop, hop, hop, hop! All the banana slices are in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Tap the bananas!",
+                Backdrop.KITCHEN, "Drag the banana slices into the bowl!", listOf("drag", "drag it", "Drag it in!"), null, Prop.BANANA, Move.SHAKE,
+                "Drag! Hop, hop, hop, hop! All the banana slices are in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Drag the bananas!",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
-                "Fill! You said it! The berries pour into the bowl!", "🫐", caption = "Say fill!",
+                "Fill! Good talking! The berries pour into the bowl!", "🫐", caption = "Say fill!",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,

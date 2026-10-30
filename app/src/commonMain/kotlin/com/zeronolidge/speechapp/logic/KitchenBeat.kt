@@ -88,6 +88,42 @@ object KitchenCut {
     fun crossed(dragDistancePx: Float, densityScale: Float): Boolean = dragDistancePx >= THRESHOLD_DP * densityScale
 }
 
+/**
+ * Rory's Fruit Salad's own banana swipe ([KitchenFlow.SWIPE]): much shorter than the butter's own
+ * [KitchenCut] threshold -- a real screenshot showed only a long, deliberate swipe actually
+ * slicing the banana, so a young child's short dab-and-drag kept missing it. Any drag at least
+ * [THRESHOLD_DP] long, any direction, counts; a plain tap on the dashed line is always the backup
+ * too (never gated behind this threshold at all).
+ */
+object FruitSwipe {
+    /** About a third of the butter's own [KitchenCut.THRESHOLD_DP]: short enough that a small
+     * child's quick swipe across (or just near) the banana always crosses it. */
+    const val THRESHOLD_DP = 24f
+
+    /** Same shape as [KitchenCut.crossed]. */
+    fun crossed(dragDistancePx: Float, densityScale: Float): Boolean = dragDistancePx >= THRESHOLD_DP * densityScale
+}
+
+/**
+ * Rory's Fruit Salad's own drag-to-bowl step ([KitchenFlow.DRAG]): drag-first (K-fruit9) -- a
+ * small nudge on or near a slice, roughly toward the bowl, sends it hopping in at once. Tapping
+ * only works as a fallback, and only once [FALLBACK_DELAY_MS] has passed with no drag at all, so
+ * a child who can drag never has his tap "steal" the gesture before he's tried it; the next slice
+ * pulses the moment that fallback opens up, the same hint [KitchenFlow.COUNT]'s berries already
+ * give.
+ */
+object FruitDrag {
+    /** How far a touch has to move (any direction -- deliberately lenient, never just "toward
+     * the bowl": a young child's drag rarely travels in a straight line) before it counts as a
+     * drag, not a tap. */
+    const val THRESHOLD_DP = 40f
+
+    /** How long to wait, with no drag at all, before a plain tap on (or near) a slice also counts. */
+    const val FALLBACK_DELAY_MS = 2000L
+
+    fun crossed(dragDistancePx: Float, densityScale: Float): Boolean = dragDistancePx >= THRESHOLD_DP * densityScale
+}
+
 enum class KitchenPhase { NAME, TAP, WIGGLE, SHOW_ANSWER, TALK, CLOSE, DONE }
 
 /**

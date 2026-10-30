@@ -39,6 +39,12 @@ object KitchenEnding {
      * 2.5 s, same shape as every other "it just carries on" wait in the app). */
     const val LEAVE_DELAY_MS = 2000
 
+    /** Rory's Fruit Salad's own ending (K-fruit): instead of carrying on by itself like every
+     * other kitchen-style ending, it holds the finished bowl for about this long once the sticker
+     * has landed, then offers one big "Play again" button (see [KitchenEndStage.IN_BACKPACK]'s
+     * own hold in VoiceStory.kt) -- no score, no auto-advance, just a clear replay. */
+    const val FRUIT_HOLD_MS = 2000
+
     /** [STACK], [BITE], [STICKER_FLY] and [IN_BACKPACK] in order, each with how long it holds the
      * screen before the next stage starts. [BYE] isn't timed here: it starts right after
      * [IN_BACKPACK]'s bounce and holds until Rory's line finishes. */

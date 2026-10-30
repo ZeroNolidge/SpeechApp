@@ -101,9 +101,12 @@ import com.zeronolidge.speechapp.ui.components.AnswerCard
 import com.zeronolidge.speechapp.ui.components.ContinueAction
 import com.zeronolidge.speechapp.ui.components.ContinueHost
 import com.zeronolidge.speechapp.ui.components.ContinueReserve
+import com.zeronolidge.speechapp.ui.components.ContinueSize
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.LocalScreenHeight
+import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperChip
+import com.zeronolidge.speechapp.ui.components.PaperColorsUi
 import com.zeronolidge.speechapp.ui.components.PointingHand
 import com.zeronolidge.speechapp.ui.components.ScreenFrame
 import com.zeronolidge.speechapp.ui.components.peelIn
@@ -280,6 +283,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val isKitchenStory = story.id == "kitchen" || story.id == "fruitsalad"
     val isFruitSaladStory = story.id == "fruitsalad"
     var kitchenEnd by remember { mutableStateOf<KitchenEndStage?>(null) }
+    // Rory's Fruit Salad's own ending (K-fruit): once the sticker's landed and the bowl's held
+    // for a moment, this replaces the usual bye+auto-carry-on with one big "Play again" button
+    // (no score, no number token) -- true once that hold is over.
+    var fruitEndReady by remember { mutableStateOf(false) }
     val kitchenSticker = remember { Animatable(0f) }
     val backpackBounce = remember { Animatable(1f) }
     /** How far into leaning in for his bite Bear currently is, 0 to 1 (K2e): eases in then back
@@ -766,6 +773,17 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             }
             delay(KitchenEnding.BOUNCE_MS.toLong())
             if (s != session) return@launch
+            // Rory's Fruit Salad: hold the finished bowl a moment, then offer one big "Play
+            // again" button instead of carrying on by itself -- never a score or number token.
+            // A long sitting still wraps up the usual way (home/rest), same as every other story.
+            if (isFruitSaladStory && !app.sessionLong()) {
+                println("KITCHEN end stage=HOLD")
+                delay(KitchenEnding.FRUIT_HOLD_MS.toLong())
+                if (s != session) return@launch
+                fruitEndReady = true
+                println("KITCHEN end stage=PLAY_AGAIN")
+                return@launch
+            }
             kitchenEnd = KitchenEndStage.BYE
             println("KITCHEN end stage=BYE")
             app.rememberInstruction(story.ending)
@@ -779,6 +797,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 }
             }
         }
+    }
+
+    /** Rory's Fruit Salad's own "Play again" (K-fruit): back to the first beat, with the ending
+     * sequence's own animations reset so the next finish plays it fresh. */
+    fun restartFruitSalad() {
+        fruitEndReady = false
+        kitchenEnd = null
+        sticker = null
+        scope.launch {
+            kitchenSticker.snapTo(0f)
+            backpackBounce.snapTo(1f)
+            bearLean.snapTo(0f)
+        }
+        startBeat(0)
     }
 
     /** A tap on one of the kitchen flow's tiles (ignored outside its TAP phase; see KitchenBeatState). */
@@ -1414,6 +1446,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     VPhase.END -> if (app.sessionLong()) nav.go(Screen.Rest) else nav.home()
                 }
             }
+            // Rory's Fruit Salad's own ending (K-fruit): one big "Play again" button with a
+            // single star, in the same bottom-right spot the continue button always lives --
+            // never a score, points or a number token, just a clear way to hear it all again.
+            if (isFruitSaladStory && fruitEndReady) {
+                Box(Modifier.align(Alignment.BottomEnd).zIndex(5f)) {
+                    PaperButton(PaperColorsUi.go, Modifier.height(ContinueSize).popIn("playAgain"), corner = 999.dp, onClick = ::restartFruitSalad) {
+                        Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("⭐", fontSize = 30.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Text("Play again", fontSize = 26.sp, color = Color.White, maxLines = 1)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1430,13 +1476,12 @@ private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
     Canvas(modifier.size(size)) { paperBalloon(color) }
 }
 
-/** Rory's Fruit Salad's own 3-picture recipe card (banana, berries, fork), kept visible in the
- * top bar for the whole story -- in its own row, between the title and the 🔊 button
- * ([ScreenFrame]'s own `top` row), so it's never over Rory, Bear or the Continue button (which
- * lives bottom-right): each picture sits on its own 44dp paper circle (K-fruit: the old plain
- * 22sp emoji read tiny and faint, the fork especially, with no done state of its own beyond
- * swapping to a ✅), and turns that circle green the moment its own part is done, the picture
- * itself staying put so he can still see what it was. */
+/** Rory's Fruit Salad's own 3-picture recipe card (banana, berries, fork, no words at all), kept
+ * pinned top-left for the whole story -- right beside 🏠, before the title, in [ScreenFrame]'s
+ * own `top` row, so it's never over Rory, Bear or the Continue button (which lives bottom-right):
+ * each picture sits on its own 44dp paper circle, turning green the moment its own part is done,
+ * with a big ✅ badge overlaid on top of it (the picture itself staying put underneath, so he can
+ * still see what it was) -- never just a colour change on its own. */
 @Composable
 private fun FruitRecipeCard(bananaDone: Boolean, berriesDone: Boolean, forkDone: Boolean) {
     Row(
@@ -1448,7 +1493,16 @@ private fun FruitRecipeCard(bananaDone: Boolean, berriesDone: Boolean, forkDone:
             Box(
                 Modifier.size(44.dp).paperCard(if (done) Color(0xFF8BC34A) else PaperStyle.chip, circle = true),
                 contentAlignment = Alignment.Center,
-            ) { Text(emoji, fontSize = 24.sp) }
+            ) {
+                Text(emoji, fontSize = 24.sp)
+                if (done) {
+                    Text(
+                        "✅", fontSize = 26.sp,
+                        modifier = Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp)
+                            .paperCard(Color.White, circle = true),
+                    )
+                }
+            }
         }
     }
 }

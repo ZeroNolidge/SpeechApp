@@ -68,6 +68,13 @@ private val Blush = Color(0xFFFF8A9A)
 private val Brass = Color(0xFFD9A93A)
 private val BrassDark = Color(0xFF9C6F1C)
 
+/** Rory's one cyan, shared by his robot eyes (the glowing screen face) and his antenna, so the
+ * two always read as the same colour -- drawn from this single constant everywhere he has an
+ * antenna (every puppet part goes through this one file's own `drawPuppetPart`, so a faded or
+ * fading Rory -- the map's own walk-the-trail hint, any screen transition -- never drifts to a
+ * different, stale colour: there's no separate antenna-drawing code path to miss). */
+val RoryCyan = Color(0xFF52DAE8)
+
 /** Drawing area is 100 units wide and 140 tall; the critter's head centre sits at (50, 63). */
 private const val W = 100f
 private const val H = 140f
@@ -593,7 +600,7 @@ private fun DrawScope.drawPuppetPart(
             }
             if (sp.antenna && outfit.hat?.id != "hat_chef") {
                 // Rory's signature: a stitched paper antenna with a gold star tip (tucked inside his tall chef toque in Rory's Kitchen).
-                paperRoundRect(Color(0xFF29B6F6), o(47.5f, 12f), Size(5f * u, 24f * u), CornerRadius(2f * u))
+                paperRoundRect(RoryCyan, o(47.5f, 12f), Size(5f * u, 24f * u), CornerRadius(2f * u))
                 drawLine(
                     Color.White.copy(alpha = 0.9f), o(50f, 14f), o(50f, 34f), 1f * u,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.2f * u, 1.6f * u)),
@@ -636,7 +643,7 @@ private fun DrawScope.drawPuppetPart(
             }
             if (sp.boxy) {
                 // Robot screen face.
-                val glow = Color(0xFF4DD0E1)
+                val glow = RoryCyan
                 if (blink > 0.5f) {
                     drawLine(glow, o(34f, 56f), o(44f, 56f), 3f * u); drawLine(glow, o(56f, 56f), o(66f, 56f), 3f * u)
                 } else {
@@ -813,7 +820,7 @@ private fun DrawScope.drawPuppetPart(
                         drawPath(crown, strokeCol, style = Stroke(1.5f * u, join = StrokeJoin.Round))
                         // K-fruit8: Rory's cyan-blue antenna pokes out through the top of the toque.
                         if (sp.antenna) {
-                            val cyan = Color(0xFF29B6F6)
+                            val cyan = RoryCyan
                             paperRoundRect(cyan, o(48f, top - 39f), Size(4f * u, 11f * u), CornerRadius(2f * u))
                             circle(50f, top - 40f, 4.5f, cyan)
                             circle(48.8f, top - 41.2f, 1.4f, Color.White.copy(alpha = 0.85f))
@@ -915,7 +922,7 @@ private fun DrawScope.drawPuppetPart(
  * for lips pressed together (the start of a p, b or m word).
  */
 private fun DrawScope.robotMouth(center: Offset, u: Float, open: Float) {
-    val glow = Color(0xFF4DD0E1)
+    val glow = RoryCyan
     if (open == -3f || open < 0.06f) {
         val half = if (open == -3f) 6.5f * u else 5.5f * u
         drawLine(glow, Offset(center.x - half, center.y), Offset(center.x + half, center.y), (if (open == -3f) 3.4f else 2.6f) * u, cap = StrokeCap.Round)

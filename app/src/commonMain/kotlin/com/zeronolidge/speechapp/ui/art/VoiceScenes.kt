@@ -3,6 +3,8 @@ package com.zeronolidge.speechapp.ui.art
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.core.Animatable
@@ -18,6 +20,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import com.zeronolidge.speechapp.logic.KitchenCut
+import com.zeronolidge.speechapp.logic.FruitSwipe
+import com.zeronolidge.speechapp.logic.FruitDrag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
@@ -37,6 +41,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -430,7 +435,7 @@ fun VoiceBeatScene(
             ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, fruitStirring) }
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
             if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
-            if (isKitchen && beat.prop == Prop.BANANA && fruitSliced && !fruitInBowl) FruitTapOverlay(landscape, onDragToBowl, onKitchenTarget)
+            if (isKitchen && beat.prop == Prop.BANANA && fruitSliced && !fruitInBowl) FruitDragOverlay(landscape, onDragToBowl, onKitchenTarget)
             // the "how many berries?" ask keeps the three berries in the bowl, with no numeral
             // (it would give the answer away)
             if (isKitchen && beat.kitchen == KitchenFlow.ASK && beat.prop == Prop.BATTER) KitchenCountRow(landscape, setOf(0, 1, 2), null, null, showCount = false)
@@ -1539,7 +1544,7 @@ private fun PropArt(
                     drawLine(Color(0xFF6D4C41), Offset(x0 + w * 0.01f, rest - thick * 0.55f), Offset(x0 - w * 0.05f, rest - thick * 0.72f), thick * 0.16f, cap = StrokeCap.Round)
                     drawCircle(Color(0xFF3E2723), thick * 0.08f, Offset(x1 - w * 0.005f, rest - thick * 0.55f))
                 } else {
-                    // K-fruit8: the four (now big) slices are drawn by FruitTapOverlay itself, right
+                    // K-fruit8: the four (now big) slices are drawn by FruitDragOverlay itself, right
                     // where their own tap targets are, so art and targets can never drift apart.
                     Unit
                 }
@@ -1560,7 +1565,10 @@ private fun PropArt(
  */
 @Composable
 private fun FruitBowlArt(fruitInBowl: Boolean, fruitBerriesIn: Boolean, fruitStirring: Boolean) {
-    val stir = rememberInfiniteTransition(label = "stir").animateFloat(-14f, 14f, infiniteRepeatable(tween(260), RepeatMode.Reverse), label = "forkAngle")
+    // K-fruit10: a small wiggle around a 45-degree base, not side to side around upright -- a
+    // fork standing nearly straight up and swinging like a windshield wiper didn't read as
+    // stirring into the bowl at all.
+    val stir = rememberInfiniteTransition(label = "stir").animateFloat(-8f, 8f, infiniteRepeatable(tween(260), RepeatMode.Reverse), label = "forkAngle")
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -1632,9 +1640,14 @@ private fun FruitBowlArt(fruitInBowl: Boolean, fruitBerriesIn: Boolean, fruitSti
             }
         }
         if (fruitStirring) {
-            val angle = stir.value
+            // K-fruit10: angled about 45 degrees into the bowl (a fork standing nearly straight
+            // up read as planted, not stirring), its own length about the bowl's own width (`w`),
+            // not a fraction of the box's height -- a real screenshot showed a fork too short to
+            // read as reaching across the bowl at all.
+            val angle = 45f + stir.value
             val pivot = Offset(w * 0.5f, h * (contentY + 0.08f))
-            val tip = Offset(pivot.x + h * 0.32f * sin(angle * PI.toFloat() / 180f), pivot.y - h * 0.32f * cos(angle * PI.toFloat() / 180f))
+            val length = w * 0.55f
+            val tip = Offset(pivot.x + length * sin(angle * PI.toFloat() / 180f), pivot.y - length * cos(angle * PI.toFloat() / 180f))
             drawLine(Color(0xFFBDBDBD), tip, pivot, w * 0.045f, cap = StrokeCap.Round)
             for (t in -1..1) {
                 drawLine(Color(0xFFE0E0E0), pivot, pivot + Offset(t * w * 0.035f, -h * 0.07f), w * 0.028f, cap = StrokeCap.Round)
@@ -2081,10 +2094,12 @@ private fun DrawScope.paperFruitCutter(center: Offset, unit: Float) {
 
 /**
  * Rory's Fruit Salad's own swipe-to-slice step ([KitchenFlow.SWIPE]): a glowing dashed line over
- * the banana on its plate (the ingredient station), the same forgiving gesture as
- * [KitchenCutOverlay] -- any drag of at least [KitchenCut.THRESHOLD_DP], any direction, or a plain
- * tap, counts -- with a chunky cutter ([paperFruitCutter], no sharp blade) always visible beside the
- * banana, the same visual anchor the butter-cutting step's own knife is.
+ * the banana on its plate (the ingredient station), a forgiving gesture -- any drag of at least
+ * [FruitSwipe.THRESHOLD_DP] (K-fruit9: much shorter than the butter-cutting step's own
+ * [KitchenCut.THRESHOLD_DP], since a real screenshot showed only a long swipe actually slicing
+ * it), any direction, or a plain tap (always the backup, never gated behind any delay), counts --
+ * with a chunky cutter ([paperFruitCutter], no sharp blade) always visible beside the banana, and
+ * a pulsing paper hand hinting the swipe until the first touch.
  */
 @Composable
 private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlice: () -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
@@ -2101,6 +2116,10 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
     var cutter by remember { mutableStateOf<Offset?>(null) }
     var dragged by remember { mutableStateOf(0f) }
     val glow = rememberInfiniteTransition(label = "sliceGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
+    // K-fruit9: a hand that keeps pulsing (not a one-shot fade like the butter's own hint) until
+    // the first touch, so a child who doesn't notice the dashed line right away still gets a
+    // steady hint, not just a brief flash.
+    val handPulse = rememberInfiniteTransition(label = "sliceHandPulse").animateFloat(0.4f, 1f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "hp")
     fun fire() { if (!done) { done = true; onSlice() } }
     Box(
         Modifier.offset { IntOffset((cx - zone / 2f).roundToInt(), (cy - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
@@ -2112,14 +2131,14 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
                 detectDragGestures(
                     onDragStart = { cutter = it; dragged = 0f },
                     onDragEnd = {
-                        if (!done && dragged >= KitchenCut.THRESHOLD_DP * density.density) fire()
+                        if (!done && dragged >= FruitSwipe.THRESHOLD_DP * density.density) fire()
                         cutter = null
                     },
                     onDragCancel = { cutter = null },
                 ) { change, amount ->
                     cutter = change.position
                     dragged += amount.getDistance()
-                    if (KitchenCut.crossed(dragged, density.density)) fire()
+                    if (FruitSwipe.crossed(dragged, density.density)) fire()
                 }
             }
             .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
@@ -2137,20 +2156,29 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
             // The chunky cutter is always visible above the dashed line, following the finger
             // only while a drag is in progress.
             paperFruitCutter(cutter ?: Offset(size.width / 2f, size.height * (0.26f + 0.04f * glow.value)), size.width * 0.5f)
+            if (!done && cutter == null) {
+                val p = Offset(size.width * 0.3f, size.height * 0.62f)
+                rotate(-90f, p) { paperPointingHandDown(p, size.width * 0.16f, handPulse.value) }
+            }
         }
     }
 }
 
 /**
- * Rory's Fruit Salad's tap-to-bowl step ([KitchenFlow.DRAG] in the state machine, but tap-only for
- * the child; K-fruit8): four big banana slices sit on the plate, each with a generous tap target
- * (>= 88dp, never overlapping). ANY touch anywhere near the slices counts -- it sends the slice
- * nearest the touch that's still on the plate, which then hops in an arc into the bowl by itself.
- * After a few seconds with no tap, the next slice gently pulses as a hint. Drawn (non-interactive)
- * whenever the slices are out, so the "Four!" count beat shows the very same big slices.
+ * Rory's Fruit Salad's drag-to-bowl step ([KitchenFlow.DRAG]; K-fruit9: drag-first, tap only as a
+ * fallback -- it used to be the other way round, which read as "drag" but worked like a plain
+ * tap): four big banana slices sit on the plate, each with a generous touch target (>= 88dp on
+ * an iPad-sized screen, never overlapping). Any small nudge ([FruitDrag.THRESHOLD_DP], any
+ * direction -- deliberately lenient, not just "toward the bowl") on or near a slice sends it
+ * hopping in an arc into the bowl at once, the same as [FruitSliceOverlay]'s own short swipe.
+ * A plain tap only works once [FruitDrag.FALLBACK_DELAY_MS] has passed with no drag at all (reset
+ * every time a slice is sent, so each new slice gets its own fallback window); the next slice
+ * pulses the moment that fallback opens, so a child who hasn't found the drag yet still gets a
+ * clear hint. Drawn (non-interactive) whenever the slices are out, so the "Four!" count beat shows
+ * the very same big slices.
  */
 @Composable
-private fun BoxWithConstraintsScope.FruitTapOverlay(landscape: Boolean, onTap: ((Int) -> Unit)?, onTarget: ((Int, Offset) -> Unit)?) {
+private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: ((Int) -> Unit)?, onTarget: ((Int, Offset) -> Unit)?) {
     val density = LocalDensity.current
     val wPx = constraints.maxWidth.toFloat()
     val hPx = constraints.maxHeight.toFloat()
@@ -2158,6 +2186,7 @@ private fun BoxWithConstraintsScope.FruitTapOverlay(landscape: Boolean, onTap: (
     val bananaBox = KitchenLayout.propBox(Prop.BANANA, landscape, kitchenPropSize(Prop.BANANA, landscape), maxWidth.value, maxHeight.value)
     val plateCx = (bananaBox.l + bananaBox.r) / 2f * wPx
     val plateCy = (bananaBox.t + (bananaBox.b - bananaBox.t) * (KitchenLayout.BANANA_PLATE_TOP + KitchenLayout.BANANA_PLATE_HEIGHT * 0.5f)) * hPx
+    // >= 88dp on a screen big enough to be an iPad, same floor as before.
     val zone = with(density) { (if (maxWidth < 500.dp) 56.dp else if (maxHeight < 500.dp) 64.dp else 88.dp).toPx() }
     val cols = if (zone * 4f <= wPx * 0.6f) 4 else 2
     val rows = 4 / cols
@@ -2169,32 +2198,47 @@ private fun BoxWithConstraintsScope.FruitTapOverlay(landscape: Boolean, onTap: (
     val target = Offset((bowl.l + bowl.r) / 2f * wPx, (bowl.t + (bowl.b - bowl.t) * 0.55f) * hPx)
     val sent = remember { mutableStateListOf<Int>() }
     val hops = remember { List(4) { Animatable(0f) } }
-    var lastTap by remember { mutableStateOf(0L) }
-    var hint by remember { mutableStateOf(false) }
-    LaunchedEffect(lastTap, sent.size, onTap != null) {
-        hint = false
-        if (onTap != null) { kotlinx.coroutines.delay(4000); hint = true }
+    // K-fruit9: a tap only counts once this fallback window has opened (reset every time a slice
+    // is sent, so the NEXT slice always gets its own fresh 2 s of "try dragging it" first); the
+    // next un-sent slice pulses the moment it opens, same hint feel as KitchenFlow.COUNT's berries.
+    var fallbackReady by remember { mutableStateOf(false) }
+    LaunchedEffect(sent.size, onTap != null) {
+        fallbackReady = false
+        if (onTap != null) { kotlinx.coroutines.delay(FruitDrag.FALLBACK_DELAY_MS); fallbackReady = true }
     }
     val pulse = rememberInfiniteTransition(label = "slicePulse").animateFloat(1f, 1.18f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "p")
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     fun send(at: Offset) {
         val cb = onTap ?: return
         val pick = centers.indices.filter { it !in sent }.minByOrNull { (centers[it] - at).getDistance() } ?: return
-        sent.add(pick); lastTap += 1
+        sent.add(pick)
         scope.launch { hops[pick].animateTo(1f, tween(520)) }
         cb(pick)
     }
     val pad = zone * 0.6f
+    val dragThresholdPx = with(density) { FruitDrag.THRESHOLD_DP.dp.toPx() }
     Box(
         Modifier.offset { IntOffset((gx - pad).roundToInt(), (gy - pad).roundToInt()) }
             .size(with(density) { (gridW + pad * 2f).toDp() }, with(density) { (gridH + pad * 2f).toDp() })
             .pointerInput(onTap != null) {
-                if (onTap != null) awaitPointerEventScope {
+                if (onTap != null) awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val start = Offset(down.position.x + gx - pad, down.position.y + gy - pad)
+                    var fired = false
+                    var pointer = down.id
                     while (true) {
-                        val e = awaitPointerEvent()
-                        val down = e.changes.firstOrNull { it.pressed && !it.previousPressed } ?: continue
-                        send(Offset(down.position.x + gx - pad, down.position.y + gy - pad))
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == pointer } ?: break
+                        if (!fired) {
+                            val cur = Offset(change.position.x + gx - pad, change.position.y + gy - pad)
+                            if ((cur - start).getDistance() >= dragThresholdPx) {
+                                fired = true
+                                send(start)
+                            }
+                        }
+                        if (!change.pressed) break
                     }
+                    if (!fired && fallbackReady) send(start)
                 }
             },
     )
@@ -2213,9 +2257,9 @@ private fun BoxWithConstraintsScope.FruitTapOverlay(landscape: Boolean, onTap: (
             val t = hops[i].value
             if (t >= 1f) return@forEachIndexed
             val p = Offset(c.x + (target.x - c.x) * t, c.y + (target.y - c.y) * t - sin(t * PI.toFloat()) * zone * 1.6f)
-            val sc = (1f - 0.45f * t) * (if (hint && i == nextHint && t == 0f) pulse.value else 1f)
+            val sc = (1f - 0.45f * t) * (if (fallbackReady && i == nextHint && t == 0f) pulse.value else 1f)
             val r = zone * 0.40f * sc
-            if (hint && i == nextHint && t == 0f) drawCircle(Color(0xFFFFF59D).copy(alpha = 0.7f), r * 1.35f, p)
+            if (fallbackReady && i == nextHint && t == 0f) drawCircle(Color(0xFFFFF59D).copy(alpha = 0.7f), r * 1.35f, p)
             paperCircle(Color(0xFFFFF3C4), r, p)
             drawCircle(Color(0xFFE8B74B), r, p, style = Stroke(2.dp.toPx()))
             drawCircle(Color(0xFFF3E2A0), r * 0.38f, p)
