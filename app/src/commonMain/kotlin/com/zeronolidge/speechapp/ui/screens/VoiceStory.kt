@@ -997,7 +997,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         onHear = ::replayInstruction,
         background = {},
         top = {
-            PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
+            // K-fruit7: in Rory's Fruit Salad the title gives way (shrinks/clips) so the recipe card
+            // always fits whole on a narrow phone in portrait.
+            if (isFruitSaladStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
+            else PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
             // Rory's Fruit Salad's own recipe card (banana, berries, fork), ticked off as each
             // part is done: a steady visual anchor beside Rory's spoken line, same spirit as
             // Rory's Kitchen's own caption (K2l). Clear of 🏠/🔊 and the Continue button (this row
@@ -1007,7 +1010,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // fill in disappeared right as the last tick -- forkDone -- would have landed) -- by
             // then every `Done` flag is already true, so it simply reads all filled/green.
             if (isFruitSaladStory) {
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
                 FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring)
             }
             // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,

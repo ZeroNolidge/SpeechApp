@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -2116,10 +2117,18 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onDrag:
     val towardBowl = (bowl.l + bowl.r) < (box.l + box.r)
     val glow = rememberInfiniteTransition(label = "dragGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
     val centers = sliceOffsets.map { dx -> Offset(plateCx + dx, plateCy) }
+    // K-fruit6: on small phones the four 56dp zones overlap, so the topmost zone can swallow
+    // every drag. Any drag on the slices sends this slice, or (if it's already in the bowl) the
+    // next one still on the plate, so every drag counts and the step can always finish.
+    val sent = remember { mutableStateListOf<Int>() }
     centers.forEachIndexed { i, c ->
-        var done by remember { mutableStateOf(false) }
+        val done = i in sent
         var dragged by remember { mutableStateOf(0f) }
-        fun fire() { if (!done) { done = true; onDrag(i) } }
+        var firedThisDrag by remember { mutableStateOf(false) }
+        fun fire() {
+            val pick = if (i !in sent) i else centers.indices.firstOrNull { it !in sent }
+            if (pick != null) { sent.add(pick); onDrag(pick) }
+        }
         Box(
             Modifier.offset { IntOffset((c.x - zone / 2f).roundToInt(), (c.y - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
                 .onGloballyPositioned { lc ->
@@ -2128,12 +2137,12 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onDrag:
                 }
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { dragged = 0f },
-                        onDragEnd = { if (!done && dragged >= KitchenCut.THRESHOLD_DP * density.density) fire() },
+                        onDragStart = { dragged = 0f; firedThisDrag = false },
+                        onDragEnd = { if (!firedThisDrag && dragged >= KitchenCut.THRESHOLD_DP * density.density) { firedThisDrag = true; fire() } },
                         onDragCancel = {},
                     ) { _, amount ->
                         dragged += amount.getDistance()
-                        if (KitchenCut.crossed(dragged, density.density)) fire()
+                        if (!firedThisDrag && KitchenCut.crossed(dragged, density.density)) { firedThisDrag = true; fire() }
                     }
                 }
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { fire() },
