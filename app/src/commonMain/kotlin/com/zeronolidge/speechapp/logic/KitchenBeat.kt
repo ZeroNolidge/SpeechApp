@@ -495,6 +495,20 @@ object KitchenLayout {
     const val PANCAKE_ART_TOP = 0.6f
     const val PANCAKE_ART_HEIGHT = 0.4f
 
+    /** [Prop.BANANA]'s own plate oval (Rory's Fruit Salad): top offset and height, as fractions
+     * of the box -- their sum must land at 1f, same rule as [BUTTER_PLATE_TOP]/[BUTTER_PLATE_HEIGHT]
+     * so the plate sits flush on the counter surface instead of floating a couple of percent above
+     * it (a real screenshot showed the old 0.80/0.18 pair leaving it visibly short). */
+    const val BANANA_PLATE_TOP = 0.78f
+    const val BANANA_PLATE_HEIGHT = 0.22f
+
+    /** The two banana slice centres, once sliced (Rory's Fruit Salad), as x fractions of the
+     * banana's own box -- shared between the art ([Prop.BANANA] in VoiceScenes.kt) and the drag
+     * step's own two touch targets (`FruitDragOverlay`), so each slice is always exactly where he
+     * can actually tap or drag it. Two slices, not the old four, each big enough to read as its
+     * own draggable piece. */
+    val BANANA_SLICE_X = listOf(0.34f, 0.66f)
+
     /** A box on screen, as fractions (0 at the left/top edge, 1 at the right/bottom): [overlaps]
      * is false for boxes that merely touch at an edge. */
     data class Rect(val l: Float, val t: Float, val r: Float, val b: Float) {

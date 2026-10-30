@@ -327,7 +327,10 @@ object VoiceStories {
      * Meadow).
      */
     val fruitSalad = VoiceStory(
-        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🥗", land = Land.PEAKS, sounds = listOf("f", "s"),
+        // K-fruit: 🥗 (green salad) showed as a box glyph in the top-bar title on a real screenshot
+        // -- 🍌 is already used (and confirmed drawing correctly) by the recipe card right beside
+        // it, so the title reuses it rather than risk another emoji missing from the same build.
+        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🍌", land = Land.PEAKS, sounds = listOf("f", "s"),
         setup = "Bear's hungry for something fresh! Let's make a fruit salad!",
         beats = listOf(
             VoiceBeat(

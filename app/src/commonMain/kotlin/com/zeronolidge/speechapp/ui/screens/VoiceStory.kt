@@ -221,12 +221,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         val b = beats.getOrNull(index) ?: return
         val tiles = kitchenTiles(b, k.flow, kitchenRound)
         // K6: the counting berries and the cut line live on the counter itself, not in tiles.
-        val n = when (k.flow) { KitchenFlow.COUNT -> 3; KitchenFlow.CUT -> 1; else -> tiles.size }
+        // K-fruit: the banana swipe is one target, same as the butter cut; the drag step is its
+        // own two slice targets (kitchenCenters[0] and [1]), neither of which is a tile either.
+        val n = when (k.flow) {
+            KitchenFlow.COUNT -> 3
+            KitchenFlow.CUT, KitchenFlow.SWIPE -> 1
+            KitchenFlow.DRAG -> 2
+            else -> tiles.size
+        }
         val pts = (0 until n).joinToString(";") { i ->
             if (k.flow == KitchenFlow.COUNT && i in kitchenHopped) "0,0"
             else kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" }
         }
-        println("KITCHEN step=$index phase=${k.phase} targets=$pts${if (k.flow == KitchenFlow.CUT) " cut=1" else ""}")
+        val cutSuffix = if (k.flow == KitchenFlow.CUT || k.flow == KitchenFlow.SWIPE) " cut=1" else ""
+        println("KITCHEN step=$index phase=${k.phase} targets=$pts$cutSuffix")
     }
     // The counter's on-screen span, in landscape (Ruby, K2a): logged once per step AND again
     // whenever the phase changes (K3d), not just on the step's first frame -- a tap flow's own
@@ -1389,18 +1397,24 @@ private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
 }
 
 /** Rory's Fruit Salad's own 3-picture recipe card (banana, berries, fork), kept visible in the
- * top bar for the whole story (never over Rory, Bear or the Continue button, which lives
- * bottom-right): each picture turns into a ✅ the moment its own part is done. Only emoji (✅ is a
- * real one, not a plain ✓) so it never shows as a box on the web. */
+ * top bar for the whole story -- in its own row, between the title and the 🔊 button
+ * ([ScreenFrame]'s own `top` row), so it's never over Rory, Bear or the Continue button (which
+ * lives bottom-right): each picture sits on its own 44dp paper circle (K-fruit: the old plain
+ * 22sp emoji read tiny and faint, the fork especially, with no done state of its own beyond
+ * swapping to a ✅), and turns that circle green the moment its own part is done, the picture
+ * itself staying put so he can still see what it was. */
 @Composable
 private fun FruitRecipeCard(bananaDone: Boolean, berriesDone: Boolean, forkDone: Boolean) {
     Row(
-        Modifier.paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+        Modifier.paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         listOf("🍌" to bananaDone, "🫐" to berriesDone, "🍴" to forkDone).forEach { (emoji, done) ->
-            Text(if (done) "✅" else emoji, fontSize = 22.sp)
+            Box(
+                Modifier.size(44.dp).paperCard(if (done) Color(0xFF8BC34A) else PaperStyle.chip, circle = true),
+                contentAlignment = Alignment.Center,
+            ) { Text(emoji, fontSize = 24.sp) }
         }
     }
 }
