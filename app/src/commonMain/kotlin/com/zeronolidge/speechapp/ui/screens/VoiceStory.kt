@@ -38,6 +38,7 @@ import com.zeronolidge.speechapp.data.SpeechContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -756,6 +757,27 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 delay(if (still) 0L else KitchenEnding.LEAN_HOLD_MS.toLong())
                 bearLean.animateTo(0f, tween(if (still) 0 else KitchenEnding.LEAN_SETTLE_MS))
             }
+            if (isFruitSaladStory) {
+                // K-fruit11: the cheer, then the bonus line, then hold the finished bowl, then
+                // one big Play again -- no sticker flight / backpack token (it showed a stray
+                // number chip that jumped to the map when tapped).
+                val cheer = kotlinx.coroutines.CompletableDeferred<Unit>()
+                println("KITCHEN end stage=CHEER")
+                app.speaker.say("Fruit salad!") { cheer.complete(Unit) }
+                cheer.await()
+                if (s != session) return@launch
+                val yum = kotlinx.coroutines.CompletableDeferred<Unit>()
+                println("KITCHEN end stage=YUM")
+                app.speaker.say("Yum! Bruno loves it!") { yum.complete(Unit) }
+                yum.await()
+                if (s != session) return@launch
+                println("KITCHEN end stage=HOLD")
+                delay(KitchenEnding.FRUIT_HOLD_MS.toLong())
+                if (s != session) return@launch
+                fruitEndReady = true
+                println("KITCHEN end stage=PLAY_AGAIN")
+                return@launch
+            }
             delay(KitchenEnding.BITE_MS.toLong())
             if (s != session) return@launch
             kitchenEnd = KitchenEndStage.STICKER_FLY
@@ -1031,6 +1053,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         top = {
             // K-fruit7: in Rory's Fruit Salad the title gives way (shrinks/clips) so the recipe card
             // always fits whole on a narrow phone in portrait.
+            // K-fruit11: recipe card pinned top-left (first in the row, right after 🏠).
+            if (isFruitSaladStory) {
+                FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring || kitchenEnd != null)
+                Spacer(Modifier.width(8.dp))
+            }
             if (isFruitSaladStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
             else PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
             // Rory's Fruit Salad's own recipe card (banana, berries, fork), ticked off as each
@@ -1041,17 +1068,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // started, replaced by the backpack icon below, so the card a child had been watching
             // fill in disappeared right as the last tick -- forkDone -- would have landed) -- by
             // then every `Done` flag is already true, so it simply reads all filled/green.
-            if (isFruitSaladStory) {
-                Spacer(Modifier.width(8.dp))
-                FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring || kitchenEnd != null)
-            }
             // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,
             // clear of 🏠 and 🔊 (this row sits between them; see ScreenFrame). Only shown once
             // the ending starts, so it never crowds the title the rest of the story. Rory's Fruit
             // Salad shares this same ending sequence (and so needs the same backpack target for
             // its own flying sticker), so it sits beside the recipe card above rather than
             // replacing it -- only [isFruitSaladStory] ever shows both at once.
-            if (isKitchenStory && kitchenEnd != null) {
+            if (isKitchenStory && !isFruitSaladStory && kitchenEnd != null) {
                 Spacer(Modifier.width(if (isFruitSaladStory) 10.dp else 0.dp))
                 if (!isFruitSaladStory) Spacer(Modifier.weight(1f))
                 Box(
@@ -1496,11 +1519,16 @@ private fun FruitRecipeCard(bananaDone: Boolean, berriesDone: Boolean, forkDone:
             ) {
                 Text(emoji, fontSize = 24.sp)
                 if (done) {
-                    Text(
-                        "✅", fontSize = 26.sp,
-                        modifier = Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp)
-                            .paperCard(Color.White, circle = true),
-                    )
+                    // drawn check (the ✅ emoji glyph is missing in the web font build)
+                    Canvas(Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp).size(28.dp)) {
+                        val d = size.minDimension
+                        drawCircle(Color.White, d / 2f)
+                        drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                        val pth = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f)
+                        }
+                        drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                    }
                 }
             }
         }

@@ -1518,31 +1518,36 @@ private fun PropArt(
                 paperOval(Color(0xFFFAFAFA), Offset(w * 0.06f, plateTop), Size(w * 0.88f, plateH))
                 drawOval(Color(0xFFD7CCC8), Offset(w * 0.06f, plateTop), Size(w * 0.88f, plateH), style = Stroke(1.5.dp.toPx()))
                 if (slicedLook < 0.5f) {
-                    // K-fruit8: a plump paper-cutout banana lying flat and centred on the plate:
-                    // thick in the middle, tapering to a brown stem (left) and a dark tip (right),
-                    // with a lighter highlight stripe. Its bottom rests on the plate's middle line.
-                    val rest = plateTop + plateH * 0.62f
-                    val thick = w * 0.2f
-                    val x0 = w * 0.17f
-                    val x1 = w * 0.83f
+                    // K-fruit11: a real curved banana -- a crescent whose two ends taper and curve
+                    // up, convex underside resting on the plate, brown stem (left), dark tip (right).
+                    val rest = plateTop + plateH * 0.55f
+                    val thick = w * 0.24f
+                    val x0 = w * 0.04f
+                    val x1 = w * 0.96f
+                    val endY = rest - thick * 1.45f
                     val banana = Path().apply {
-                        moveTo(x0, rest - thick * 0.55f)
-                        // underside: sags down to rest on the plate
-                        cubicTo(w * 0.32f, rest + thick * 0.05f, w * 0.68f, rest + thick * 0.05f, x1, rest - thick * 0.55f)
-                        // top edge: a shallower curve, so it's thickest in the middle
-                        cubicTo(w * 0.64f, rest - thick * 1.35f, w * 0.36f, rest - thick * 1.35f, x0, rest - thick * 0.55f)
+                        moveTo(x0 + w * 0.04f, endY)
+                        // underside: a deep convex curve down to the plate and back up
+                        cubicTo(w * 0.16f, rest + thick * 0.15f, w * 0.84f, rest + thick * 0.15f, x1, endY - thick * 0.05f)
+                        // tip end, then the inner (top) curve, much shallower so it's fat in the middle
+                        quadraticTo(x1 - w * 0.02f, endY + thick * 0.2f, x1 - w * 0.06f, endY + thick * 0.18f)
+                        cubicTo(w * 0.74f, rest - thick * 0.55f, w * 0.26f, rest - thick * 0.55f, x0 + w * 0.09f, endY + thick * 0.22f)
                         close()
                     }
                     paperPath(banana, Color(0xFFF4D35E))
-                    drawPath(banana, Color(0xFFB8860B), style = Stroke(1.6.dp.toPx()))
+                    drawPath(banana, Color(0xFFB8860B), style = Stroke(1.8.dp.toPx()))
                     val stripe = Path().apply {
-                        moveTo(w * 0.27f, rest - thick * 0.62f)
-                        cubicTo(w * 0.40f, rest - thick * 0.62f, w * 0.60f, rest - thick * 0.62f, w * 0.73f, rest - thick * 0.62f)
+                        moveTo(w * 0.2f, rest - thick * 0.42f)
+                        cubicTo(w * 0.36f, rest - thick * 0.02f, w * 0.64f, rest - thick * 0.02f, w * 0.8f, rest - thick * 0.42f)
                     }
-                    drawPath(stripe, Color(0xFFFFF1A8), style = Stroke(thick * 0.14f, cap = StrokeCap.Round))
-                    // stem (brown, left) and tip (dark, right)
-                    drawLine(Color(0xFF6D4C41), Offset(x0 + w * 0.01f, rest - thick * 0.55f), Offset(x0 - w * 0.05f, rest - thick * 0.72f), thick * 0.16f, cap = StrokeCap.Round)
-                    drawCircle(Color(0xFF3E2723), thick * 0.08f, Offset(x1 - w * 0.005f, rest - thick * 0.55f))
+                    drawPath(stripe, Color(0xFFFFF1A8), style = Stroke(thick * 0.12f, cap = StrokeCap.Round))
+                    val ridge = Path().apply {
+                        moveTo(w * 0.16f, rest - thick * 0.75f)
+                        cubicTo(w * 0.34f, rest - thick * 0.2f, w * 0.66f, rest - thick * 0.2f, w * 0.86f, rest - thick * 0.75f)
+                    }
+                    drawPath(ridge, Color(0xFFD9A93A).copy(alpha = 0.6f), style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round))
+                    drawLine(Color(0xFF6D4C41), Offset(x0 + w * 0.06f, endY + thick * 0.08f), Offset(x0 - w * 0.0f, endY - thick * 0.35f), thick * 0.18f, cap = StrokeCap.Round)
+                    drawCircle(Color(0xFF3E2723), thick * 0.09f, Offset(x1 - w * 0.01f, endY + thick * 0.02f))
                 } else {
                     // K-fruit8: the four (now big) slices are drawn by FruitDragOverlay itself, right
                     // where their own tap targets are, so art and targets can never drift apart.

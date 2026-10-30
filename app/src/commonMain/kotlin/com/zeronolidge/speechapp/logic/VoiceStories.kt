@@ -355,7 +355,7 @@ object VoiceStories {
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
-                "Fork! Good talking! Let's stir it all up... Fruit salad! Yum! Bruno loves it!", "🥗", goodbye = true, caption = "Say fork!",
+                "Fork! Good talking! Let's stir it all up!", "🥗", goodbye = true, caption = "Say fork!",
             ),
         ),
         swap = null, sticker = "fruit salad" to "🥗",
