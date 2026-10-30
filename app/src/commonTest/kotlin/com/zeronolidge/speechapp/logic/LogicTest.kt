@@ -1269,7 +1269,10 @@ class VoiceStoriesTest {
     fun everyStoryFollowsThePattern() {
         for (s in VoiceStories.all) {
             val maxBeats = if (s.id == "kitchen") VoiceStories.KITCHEN_MAX_BEATS else VoiceStories.MAX_BEATS
-            assertTrue(s.beats.size in 6..maxBeats, "${s.id}: ${s.beats.size} beats")
+            // Rory's Fruit Salad (a kitchen-style sibling, like "kitchen" itself) is deliberately
+            // shorter: 5 steps, not the usual 6 to 8.
+            val minBeats = if (s.id == "fruitsalad") 5 else 6
+            assertTrue(s.beats.size in minBeats..maxBeats, "${s.id}: ${s.beats.size} beats")
             // His sounds start the words of at least 4 beats; each beat's sound is really in its word.
             val starting = s.beats.count { b -> b.sound != null && VoiceStories.startsWith(b.word, b.sound!!) }
             assertTrue(starting >= 4, "${s.id}: only $starting beats start with their sound")
@@ -2025,6 +2028,77 @@ class KitchenStoryTest {
     }
 }
 
+/** Rory's Fruit Salad (a sibling of Rory's Kitchen, same counter/bowl/Rory/Bear): 5 steps, each
+ * either touch-only ([KitchenFlow.SWIPE]/[KitchenFlow.DRAG]) or talk-only, never both. */
+class FruitSaladStoryTest {
+    @Test
+    fun hasExactlyFiveStepsEachTouchOnlyOrTalkOnlyNeverBoth() {
+        val beats = VoiceStories.fruitSalad.beats
+        assertEquals(5, beats.size)
+        for (b in beats) {
+            if (b.kitchen != null) {
+                assertTrue(b.kitchen!!.tapGoal(b.kitchenGoal) > 0, "${b.word} should be touch-only")
+                assertEquals(0, b.kitchen!!.talkGoal(b.kitchenGoal), "${b.word} should be touch-only")
+                assertFalse(b.kitchen!!.hasWrongTaps(), "${b.word} should never have a wrong answer")
+            }
+        }
+        assertEquals(2, beats.count { it.kitchen != null })
+        assertEquals(3, beats.count { it.kitchen == null })
+    }
+
+    @Test
+    fun theStepsFollowSliceFourDragFillFork() {
+        val beats = VoiceStories.fruitSalad.beats
+        assertEquals(listOf(KitchenFlow.SWIPE, null, KitchenFlow.DRAG, null, null), beats.map { it.kitchen })
+        assertEquals(listOf("slice", "four", "drag", "fill", "fork"), beats.map { it.word })
+    }
+
+    /** The three talk words ("Four!", "Fill!", "Fork!") all start with the "f" sound, so Rory's
+     * f-pose (round cyan eyes, no cheek blush, the cyan-blue antenna) shows while he models them. */
+    @Test
+    fun theThreeTalkWordsAllTriggerTheFPose() {
+        val talkWords = VoiceStories.fruitSalad.beats.filter { it.kitchen == null }.map { it.word }
+        assertEquals(listOf("four", "fill", "fork"), talkWords)
+        talkWords.forEach { assertTrue(VoiceStories.isFWord(it), "'$it' should trigger the f-pose") }
+    }
+
+    @Test
+    fun everyFruitSaladBeatHasAShortCaption() {
+        for (b in VoiceStories.fruitSalad.beats) {
+            val caption = b.caption
+            assertTrue(!caption.isNullOrBlank(), "fruit salad beat '${b.word}' has no caption")
+            val words = caption!!.trim().split(" ")
+            assertTrue(words.size <= 4, "fruit salad beat '${b.word}' caption too long: '$caption'")
+        }
+    }
+
+    @Test
+    fun onlyTheLastBeatIsTheCalmGoodbye() {
+        val beats = VoiceStories.fruitSalad.beats
+        assertTrue(beats.last().goodbye)
+        assertTrue(beats.dropLast(1).none { it.goodbye })
+    }
+
+    /** Growth without numbers: no word here ever praises being clever or smart, only the trying. */
+    @Test
+    fun neverPraisesIntelligence() {
+        val banned = listOf("smart", "clever", "genius")
+        val story = VoiceStories.fruitSalad
+        val allText = (
+            listOf(story.setup, story.ending) +
+                story.beats.flatMap { listOf(it.problem, it.success) + it.lines + listOfNotNull(it.caption) }
+            ).joinToString(" ").lowercase()
+        banned.forEach { assertTrue(it !in allText, "found banned praise word '$it' in fruit salad's lines") }
+    }
+
+    @Test
+    fun noChildsNameAnywhereInFruitSalad() {
+        // The story never uses `$name`-style interpolation or a hardcoded child's name: it has no
+        // own-word swap at all (unlike boat/owl/balloon), so nothing here is ever personalised.
+        assertEquals(null, VoiceStories.fruitSalad.swap)
+    }
+}
+
 /** The kitchen flows' pure state machine (see [KitchenBeatState]): nothing ever fails, and every
  * path reaches [KitchenPhase.DONE]. */
 class KitchenBeatStateTest {
@@ -2255,6 +2329,23 @@ class KitchenCutTest {
             KitchenCut.crossed(60f, 1f),
             KitchenCut.crossed(kotlin.math.abs(-60f), 1f),
         )
+    }
+}
+
+/** Rory's Fruit Salad's own swipe-to-slice and drag-to-bowl steps (sharing the same state machine
+ * as Rory's Kitchen's own [KitchenFlow.CUT]/[KitchenFlow.FLIP]): a plain single gesture, never a
+ * wrong answer, never a talk turn either side of it. */
+class FruitSaladFlowTest {
+    @Test
+    fun swipeAndDragAreBothPlainSingleGesturesWithNoWrongAnswerAndNoTalkTurn() {
+        for (flow in listOf(KitchenFlow.SWIPE, KitchenFlow.DRAG)) {
+            assertFalse(flow.hasWrongTaps())
+            assertEquals(1, flow.tapGoal(1))
+            assertEquals(0, flow.talkGoal(1))
+            assertFalse(flow.usesStrip())
+            val s = KitchenBeatState(flow).named().tap(true)
+            assertEquals(KitchenPhase.CLOSE, s.phase)
+        }
     }
 }
 

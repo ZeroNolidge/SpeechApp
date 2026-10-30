@@ -106,8 +106,14 @@ enum class Move {
  * [PANCAKE]/[STEAM]/[BUTTER] are Rory's Kitchen's own (see [Backdrop.KITCHEN]); the bubbles and
  * berries beats there reuse [BUBBLE] and [BERRIES]. [BUTTER] (K6) is the butter-cutting
  * mini-sequence's own plate and pat, drawn whole or already cut in two (see `PropArt` in
- * VoiceScenes.kt). */
-enum class Prop { BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON, BOWL, MILK, BATTER, PAN, PANCAKE, STEAM, BUTTER }
+ * VoiceScenes.kt). [BANANA]/[FRUIT_BOWL] are Rory's Fruit Salad's own, sharing the same kitchen
+ * counter and bowl shape: [BANANA] is the banana on its plate, whole until swiped then shown as
+ * round slices; [FRUIT_BOWL] is the mixing bowl itself, with the slices, [BERRIES] and a stirring
+ * fork added one at a time as the story's own steps finish (see `PropArt`). */
+enum class Prop {
+    BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON,
+    BOWL, MILK, BATTER, PAN, PANCAKE, STEAM, BUTTER, BANANA, FRUIT_BOWL,
+}
 
 /** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky,
  * Rory's kitchen counter). */
@@ -285,19 +291,71 @@ object VoiceStories {
      * generic "Say it out loud!" every other kitchen talk turn used -- it reads the same for every
      * word, so a child who can't read the caption had only the picture to tell him which word was
      * his turn to say. Covers the kitchen's five plain talk beats (milk, mix, pour, pop, mmm;
-     * bowl/three/flip are tap-only and never reach a talk turn at all). Falls back to the old
-     * line for any word that isn't one of these (there are none today, kept only so a future
-     * kitchen word never goes silent waiting on a new clip). */
+     * bowl/three/flip are tap-only and never reach a talk turn at all) and, since both stories
+     * share the same `Backdrop.KITCHEN` talk-turn code path, Rory's Fruit Salad's three too (four,
+     * fill, fork). Falls back to the old line for any word that isn't one of these (kept only so a
+     * future kitchen-style word never goes silent waiting on a new clip). */
     fun kitchenYourTurnLine(word: String): String = when (word) {
         "milk" -> "Milk! Now you say it... milk!"
         "mix" -> "Mix! Now you say it... mix!"
         "pour" -> "Pour! Now you say it... pour!"
         "pop" -> "Pop! Now you say it... pop!"
         "mmm" -> "Mmm! Now you say it... mmm!"
+        "four" -> "Four! Now you say it... four!"
+        "fill" -> "Fill! Now you say it... fill!"
+        "fork" -> "Fork! Now you say it... fork!"
         else -> "Say it out loud!"
     }
 
-    val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen)
+    /**
+     * Rory's Fruit Salad: a sibling of [kitchen], sharing its counter, bowl, Rory and Bear, and
+     * the same single-try talk rule (every talk beat here carries no [KitchenFlow] of its own,
+     * same as kitchen's own milk/pour/mmm: one model, one listen, then the fix plays -- heard or
+     * not). Five steps, each tap-only or talk-only, never both (the same K3a rule [kitchen]
+     * follows):
+     *  1. [SWIPE] a banana on its plate to slice it (a tap also works).
+     *  2. A talk turn: "Four!" -- the slices are already there to count, Rory counting them aloud
+     *     in the fix line.
+     *  3. [DRAG] the slices into the bowl (a tap on them also works).
+     *  4. A talk turn: "Fill!" -- the berries pour in.
+     *  5. A talk turn: "Fork!" -- Rory stirs with a big fork, then he and Bear cheer "Fruit
+     *     salad!", with a bonus "Yum!" line bundled into the same fix (never its own voice check),
+     *     then the usual kitchen-style ending (sticker into the backpack, no tap needed).
+     * Placed by Puzzle Peaks (clear of Market Town's own Rory's Kitchen stop) even though the
+     * scene itself is the same kitchen counter ([Backdrop.KITCHEN]'s own land is independent of
+     * where a story's map stop sits, same as [kitchen]'s own choice of Market over the busier
+     * Meadow).
+     */
+    val fruitSalad = VoiceStory(
+        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🥗", land = Land.PEAKS, sounds = listOf("f", "s"),
+        setup = "Bear's hungry for something fresh! Let's make a fruit salad!",
+        beats = listOf(
+            VoiceBeat(
+                Backdrop.KITCHEN, "Let's slice the banana! Swipe across it to cut it up!", listOf("slice", "slice it", "Slice the banana!"), "s", Prop.BANANA, Move.SHAKE,
+                "Slice! The banana splits into slices!", "🍌", kitchen = KitchenFlow.SWIPE, still = Prop.FRUIT_BOWL, caption = "Swipe to slice!",
+            ),
+            VoiceBeat(
+                Backdrop.KITCHEN, "How many banana slices are there? Count with me and say four!", listOf("four", "four slices", "Four banana slices!"), "f", Prop.BANANA, Move.SHAKE,
+                "Four! Good talking! One, two, three, four banana slices!", "🍌", still = Prop.FRUIT_BOWL, caption = "Say four!",
+            ),
+            VoiceBeat(
+                Backdrop.KITCHEN, "Now drag the slices into the bowl!", listOf("drag", "drag it", "Drag the slices in!"), null, Prop.BANANA, Move.SHAKE,
+                "Drag! The banana slices land in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, still = Prop.FRUIT_BOWL, caption = "Drag to the bowl!",
+            ),
+            VoiceBeat(
+                Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
+                "Fill! You said it! The berries pour into the bowl!", "🫐", caption = "Say fill!",
+            ),
+            VoiceBeat(
+                Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
+                "Fork! Good talking! Let's stir it all up... Fruit salad! Yum! Bear loves it!", "🥗", goodbye = true, caption = "Say fork!",
+            ),
+        ),
+        swap = null, sticker = "fruit salad" to "🥗",
+        ending = "What a treat! You got a fruit salad sticker. See you next time!",
+    )
+
+    val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen, fruitSalad)
 
     fun byId(id: String): VoiceStory? = all.firstOrNull { it.id == id }
 

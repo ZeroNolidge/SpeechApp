@@ -29,9 +29,17 @@ import kotlin.random.Random
  *    for this flow). Silence after the usual re-try still counts (never a third ask), but Rory's
  *    fallback line is the beat's own [VoiceBeat.kitchenFallback] (e.g. "One, two... three!"),
  *    never the generic "I heard you!".
- * How many taps or talk turns a beat's flow needs is [VoiceBeat.kitchenGoal].
+ *  - [SWIPE] (Rory's Fruit Salad: "Swipe to slice!"): one plain swipe/tap (no wrong answer, never
+ *    listens), the same shape as [FLIP]/[CUT] -- only the gesture's own art differs (a banana on
+ *    its plate, not a dotted line over butter).
+ *  - [DRAG] (Rory's Fruit Salad: "Drag to the bowl!"): one plain drag/tap (no wrong answer, never
+ *    listens), the same shape again -- dragging the sliced banana into the bowl, with a tap on the
+ *    slices as the backup.
+ * How many taps or talk turns a beat's flow needs is [VoiceBeat.kitchenGoal]. This same state
+ * machine now also covers Rory's Fruit Salad (bananas and berries, not pancakes), so every doc
+ * comment's "kitchen" here means either story, not just the pancake one.
  */
-enum class KitchenFlow { TAP_CHOICE, COUNT, STIR, BUBBLES, FLIP, CUT, ASK }
+enum class KitchenFlow { TAP_CHOICE, COUNT, STIR, BUBBLES, FLIP, CUT, ASK, SWIPE, DRAG }
 
 /** True when [KitchenFlow]'s tap phase can be tapped wrong (only [KitchenFlow.TAP_CHOICE]: a real
  * choice among distractors; the others are plain taps that always count, so they can never fail). */
@@ -39,7 +47,7 @@ fun KitchenFlow.hasWrongTaps(): Boolean = this == KitchenFlow.TAP_CHOICE
 
 /** How many taps this flow needs before moving on (0: no tap phase at all). */
 fun KitchenFlow.tapGoal(goal: Int): Int = when (this) {
-    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT -> 1
+    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE, KitchenFlow.DRAG -> 1
     KitchenFlow.COUNT -> goal
     KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> 0
 }
@@ -47,7 +55,7 @@ fun KitchenFlow.tapGoal(goal: Int): Int = when (this) {
 /** How many talk turns this flow needs before the fix plays (0: no talk turn at all; K3a: every
  * tap flow is now 0, so a tap step never slides into a talk/listening turn afterward). */
 fun KitchenFlow.talkGoal(goal: Int): Int = when (this) {
-    KitchenFlow.COUNT, KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT -> 0
+    KitchenFlow.COUNT, KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE, KitchenFlow.DRAG -> 0
     KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> goal
 }
 
@@ -694,8 +702,10 @@ object KitchenLayout {
      * free for the butter plate. */
     fun propSlot(prop: Prop, landscape: Boolean): Rect = when (prop) {
         Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM -> panBox(landscape)
-        Prop.MILK -> ingredientBox(landscape)
+        Prop.MILK, Prop.BANANA -> ingredientBox(landscape)
         Prop.BUTTER -> butterBox(landscape)
+        // Prop.FRUIT_BOWL (Rory's Fruit Salad's own bowl) falls through to the bowl station below,
+        // same as Prop.BOWL/Prop.BATTER.
         else -> bowlBox(landscape)
     }
 

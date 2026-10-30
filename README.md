@@ -35,7 +35,9 @@ choices at a time. No ads, links, purchases, timers, lives, streaks or buzzers.
 3. **Story chapters.** Each chapter is one of 8 illustrated stories with a random friend (Benny
    Bunny, Penny Penguin…). Obstacles are drawn as scenes: a river, a broken bridge, a locked
    door. Solving a challenge changes the picture. Before the twist, someone is fast asleep, and
-   your child wakes them by calling their name.
+   your child wakes them by calling their name. A few map stops are bonus voice-driven stories
+   instead (Pip's Boat Trip, Sleepy Owl's Morning, The Balloon Picnic, Rory's Kitchen, Rory's
+   Fruit Salad…), where saying the word makes the very next thing happen, right there in the scene.
 4. **Talking makes the story happen.** Saying "open" opens the door, and "jump" gets everyone
    across the river. Each word is played slowly with its picture, then "Your turn!" and
    the microphone listens for about 4 seconds. It only listens for a voice, not the exact word, so

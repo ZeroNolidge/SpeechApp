@@ -263,7 +263,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // played; [kitchenSticker] is the sticker's 0 to 1 flight, [backpackBounce] its little landing
     // bounce, [backpackCenter] the backpack icon's own window position once it's drawn (see the
     // `top` row below), captured so the sticker can arc into exactly where it sits.
-    val isKitchenStory = story.id == "kitchen"
+    // Rory's Fruit Salad is a sibling of Rory's Kitchen (same counter/bowl/Rory/Bear, same
+    // ending), so both share every `isKitchenStory`-gated bit of this screen.
+    val isKitchenStory = story.id == "kitchen" || story.id == "fruitsalad"
+    val isFruitSaladStory = story.id == "fruitsalad"
     var kitchenEnd by remember { mutableStateOf<KitchenEndStage?>(null) }
     val kitchenSticker = remember { Animatable(0f) }
     val backpackBounce = remember { Animatable(1f) }
@@ -273,6 +276,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val bearLean = remember { Animatable(0f) }
     var backpackCenter by remember { mutableStateOf<Offset?>(null) }
     var sceneOrigin by remember { mutableStateOf<Offset?>(null) }
+
+    // Rory's Fruit Salad's own recipe card (banana, berries, fork), ticked off as each step
+    // finishes: derived straight from which beat he's on and how far its own fix has got, never a
+    // separate flag that could drift out of step with what's actually drawn (see PropArt's own
+    // `fruitSliced`/`fruitInBowl`/`fruitBerriesIn`/`fruitStirring`, computed the same way below).
+    val fruitSliceIndex = if (isFruitSaladStory) beats.indexOfFirst { it.kitchen == KitchenFlow.SWIPE } else -1
+    val fruitDragIndex = if (isFruitSaladStory) beats.indexOfFirst { it.kitchen == KitchenFlow.DRAG } else -1
+    val fruitFillIndex = fruitDragIndex + 1
+    val fruitForkIndex = beats.lastIndex
+    val fruitSliced = isFruitSaladStory && fruitSliceIndex >= 0 && (index > fruitSliceIndex || (index == fruitSliceIndex && phase == VPhase.ACT))
+    val fruitInBowl = isFruitSaladStory && fruitDragIndex >= 0 && (index > fruitDragIndex || (index == fruitDragIndex && phase == VPhase.ACT))
+    val fruitBerriesIn = isFruitSaladStory && fruitFillIndex in beats.indices && (index > fruitFillIndex || (index == fruitFillIndex && phase == VPhase.ACT))
+    val fruitStirring = isFruitSaladStory && index == fruitForkIndex && phase == VPhase.ACT
 
     lateinit var startBeat: (Int) -> Unit
     lateinit var startKitchenTalk: () -> Unit
@@ -773,6 +789,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 kitchenPhase = next
                 logKitchen(next)
             }
+            KitchenFlow.SWIPE -> {
+                app.sfx.chop()
+                println("KITCHEN slice step=$index")
+                val next = kitchenPhase.tap(true)
+                kitchenPhase = next
+                logKitchen(next)
+            }
+            KitchenFlow.DRAG -> {
+                println("KITCHEN drag step=$index")
+                val next = kitchenPhase.tap(true)
+                kitchenPhase = next
+                logKitchen(next)
+            }
             else -> {}
         }
     }
@@ -945,6 +974,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         background = {},
         top = {
             PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
+            // Rory's Fruit Salad's own recipe card (banana, berries, fork), ticked off as each
+            // part is done: a steady visual anchor beside Rory's spoken line, same spirit as
+            // Rory's Kitchen's own caption (K2l). Clear of 🏠/🔊 and the Continue button (this row
+            // sits between the two, see ScreenFrame; the button itself is pinned bottom-right).
+            // Hidden once the ending starts: the backpack icon takes this same spot then.
+            if (isFruitSaladStory && kitchenEnd == null) {
+                Spacer(Modifier.weight(1f))
+                FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring)
+            }
             // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,
             // clear of 🏠 and 🔊 (this row sits between them; see ScreenFrame). Only shown once
             // the ending starts, so it never crowds the title the rest of the story.
@@ -1131,7 +1169,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             ) {
                                 val end = kitchenEnd
                                 if (end != null) {
-                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects)
+                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSalad = isFruitSaladStory)
                                 } else {
                                     VoiceBeatScene(
                                         beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
@@ -1140,9 +1178,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = fruitBerriesIn, fruitStirring = fruitStirring,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
+                                        onSlice = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.SWIPE) { { tapKitchen(0) } } else null,
+                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { tapKitchen(0) } } else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
@@ -1153,7 +1194,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         } else {
                             val end = kitchenEnd
                             if (end != null) {
-                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects)
+                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSalad = isFruitSaladStory)
                             } else {
                                 VoiceBeatScene(
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
@@ -1162,9 +1203,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = fruitBerriesIn, fruitStirring = fruitStirring,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
+                                        onSlice = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.SWIPE) { { tapKitchen(0) } } else null,
+                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { tapKitchen(0) } } else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
@@ -1344,6 +1388,23 @@ private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
     Canvas(modifier.size(size)) { paperBalloon(color) }
 }
 
+/** Rory's Fruit Salad's own 3-picture recipe card (banana, berries, fork), kept visible in the
+ * top bar for the whole story (never over Rory, Bear or the Continue button, which lives
+ * bottom-right): each picture turns into a ✅ the moment its own part is done. Only emoji (✅ is a
+ * real one, not a plain ✓) so it never shows as a box on the web. */
+@Composable
+private fun FruitRecipeCard(bananaDone: Boolean, berriesDone: Boolean, forkDone: Boolean) {
+    Row(
+        Modifier.paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf("🍌" to bananaDone, "🫐" to berriesDone, "🍴" to forkDone).forEach { (emoji, done) ->
+            Text(if (done) "✅" else emoji, fontSize = 22.sp)
+        }
+    }
+}
+
 /** The pattern's empty slot: a dashed outline (gently pulsing while he decides) until the answer
  * is shown, then the same balloon. */
 @Composable
@@ -1466,7 +1527,9 @@ private fun kitchenWordEmoji(word: String): String = when (word) {
 private fun kitchenTiles(beat: VoiceBeat, flow: KitchenFlow, round: Choice<String>?): List<String> = when (flow) {
     KitchenFlow.TAP_CHOICE -> round?.options?.map(::kitchenWordEmoji) ?: emptyList()
     KitchenFlow.FLIP -> listOf(beat.emoji)
-    KitchenFlow.COUNT, KitchenFlow.CUT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> emptyList()
+    KitchenFlow.COUNT, KitchenFlow.CUT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK,
+    KitchenFlow.SWIPE, KitchenFlow.DRAG,
+    -> emptyList()
 }
 
 private val KitchenBerryTileSize = 44.dp
@@ -1487,7 +1550,7 @@ private fun kitchenTargetIndex(state: KitchenBeatState, round: Choice<String>?, 
     KitchenFlow.TAP_CHOICE -> round?.options?.indexOf(round.answer) ?: -1
     KitchenFlow.COUNT -> tiles.indices.firstOrNull { it !in hopped } ?: -1
     KitchenFlow.FLIP -> 0
-    KitchenFlow.CUT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> -1
+    KitchenFlow.CUT, KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK, KitchenFlow.SWIPE, KitchenFlow.DRAG -> -1
 }
 
 /**

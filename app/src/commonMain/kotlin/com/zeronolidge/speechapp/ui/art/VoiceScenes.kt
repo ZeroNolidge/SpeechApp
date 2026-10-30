@@ -149,6 +149,10 @@ private fun propSize(p: Prop) = when (p) {
     // K6: the butter-cutting mini-sequence's own plate, on the same ingredient station milk uses
     // (by the time it plays, milk's long since poured).
     Prop.BUTTER -> 0.14f
+    // Rory's Fruit Salad: the banana's own plate (same ingredient station as milk/butter), and
+    // the mixing bowl itself (same bowl station as Prop.BOWL/Prop.BATTER).
+    Prop.BANANA -> 0.16f
+    Prop.FRUIT_BOWL -> 0.22f
 }
 
 /** [Prop.BUBBLE]'s own [propSize] (0.3) is shared with the River story's bubble-pop beat, where
@@ -185,7 +189,7 @@ private fun propSize(p: Prop) = when (p) {
  * proportionally bigger" portrait ask. */
 private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
     Prop.BUBBLE -> if (landscape) 0.22f else 0.19f
-    Prop.BOWL, Prop.BATTER -> if (landscape) 0.2533f else 0.215f
+    Prop.BOWL, Prop.BATTER, Prop.FRUIT_BOWL -> if (landscape) 0.2533f else 0.215f
     Prop.BUTTER -> 0.40f
     Prop.PAN -> if (landscape) 0.22f else 0.19f
     Prop.PANCAKE -> if (landscape) 0.22f else 0.19f
@@ -321,6 +325,20 @@ fun VoiceBeatScene(
     onCut: (() -> Unit)? = null,
     /** Rory's Kitchen only: tapping the pancake bubbles pops them too. */
     onBubbleTap: (() -> Unit)? = null,
+    /** Rory's Fruit Salad only: [Prop.BANANA] draws as round slices once the swipe-to-slice step
+     * has fired (or any beat after it). */
+    fruitSliced: Boolean = false,
+    /** Rory's Fruit Salad only: the banana slices have been dragged into [Prop.FRUIT_BOWL] (the
+     * banana's own plate empties out as this turns true). */
+    fruitInBowl: Boolean = false,
+    /** Rory's Fruit Salad only: the berries have been poured into [Prop.FRUIT_BOWL]. */
+    fruitBerriesIn: Boolean = false,
+    /** Rory's Fruit Salad only: a big fork stirs [Prop.FRUIT_BOWL]. */
+    fruitStirring: Boolean = false,
+    /** Rory's Fruit Salad only: the swipe-to-slice step is live (a swipe hint over the banana). */
+    onSlice: (() -> Unit)? = null,
+    /** Rory's Fruit Salad only: the drag-to-bowl step is live (a drag hint over the slices). */
+    onDragToBowl: (() -> Unit)? = null,
     /** Rory's Kitchen only (K6): a big numeral popped up beside the bowl/butter ("2"). */
     bigNumeral: String? = null,
     /** Rory's Kitchen only (K6): each on-counter tap target's window centre, for the KITCHEN log. */
@@ -377,7 +395,7 @@ fun VoiceBeatScene(
                 Item(
                     if (isKitchen) kitchenUnit * kitchenPropSize(sp, landscape) else unit * propSize(sp) * 0.8f, { sx }, { sy },
                     onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(sp, c) },
-                ) { PropArt(sp, { 1f }, null, beat, butterCut) }
+                ) { PropArt(sp, { 1f }, null, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, fruitStirring) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
             val kitchenPropCenter = if (isKitchen) kitchenCenter(beat.prop) else null
@@ -396,8 +414,10 @@ fun VoiceBeatScene(
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(beat.prop, c) },
-            ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut) }
+            ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, fruitStirring) }
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
+            if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
+            if (isKitchen && onDragToBowl != null) FruitDragOverlay(landscape, onDragToBowl, onKitchenTarget)
             // the "how many berries?" ask keeps the three berries in the bowl, with no numeral
             // (it would give the answer away)
             if (isKitchen && beat.kitchen == KitchenFlow.ASK && beat.prop == Prop.BATTER) KitchenCountRow(landscape, setOf(0, 1, 2), null, null, showCount = false)
@@ -447,6 +467,9 @@ fun KitchenEndingScene(
      * [KitchenBear]'s own `onBiteRects`); the caller (VoiceStory.kt) decides whether/when to
      * actually print it. */
     onBiteRects: ((String) -> Unit)? = null,
+    /** Rory's Fruit Salad's own ending (a sibling of Rory's Kitchen's): the finished bowl beside
+     * Rory, banana slices and berries both in, instead of the pancake stack. */
+    fruitSalad: Boolean = false,
 ) {
     val bitten = stage != KitchenEndStage.STACK
     Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
@@ -469,7 +492,7 @@ fun KitchenEndingScene(
                 // rests on the counter instead of floating just above it.
                 Modifier.offset(x = stackLeft.dp, y = (counterTopPx - stackHeight * 0.94f + maxHeight.value * 0.012f).dp)
                     .size(stackWidth.dp, stackHeight.dp),
-            ) { PancakeStackArt(bitten) }
+            ) { if (fruitSalad) FruitBowlArt(fruitInBowl = true, fruitBerriesIn = true, fruitStirring = false) else PancakeStackArt(bitten) }
             KitchenBear(landscape, leanAmount, onBiteRects)
         }
     }
@@ -1005,7 +1028,10 @@ private fun BoxWithConstraintsScope.KitchenRory(
  * leaves flip to their darker side, Owl wakes up. [emoji] shows his own word instead.
  */
 @Composable
-private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat, butterCut: Boolean = false) {
+private fun PropArt(
+    prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat, butterCut: Boolean = false,
+    fruitSliced: Boolean = false, fruitInBowl: Boolean = false, fruitBerriesIn: Boolean = false, fruitStirring: Boolean = false,
+) {
     val berriesInBatter = beat.backdrop == Backdrop.KITCHEN && com.zeronolidge.speechapp.logic.VoiceStories.kitchen.beats.let { b ->
         val berryBeat = b.indexOfFirst { it.prop == Prop.BERRIES }
         berryBeat >= 0 && b.indexOf(beat) > berryBeat
@@ -1438,6 +1464,102 @@ private fun PropArt(prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat,
                 }
             }
         }
+        // Rory's Fruit Salad: a banana on a small plate -- whole until the swipe-to-slice step
+        // fires, then shown as round slices; fades out as those slices move into the bowl (see
+        // Prop.FRUIT_BOWL below), both driven by the same `fruitInBowl` flag so the two always agree.
+        Prop.BANANA -> {
+            val slicedLook by animateFloatAsState(if (fruitSliced) 1f else 0f, tween(400), label = "bananaSliced")
+            val movedOut by animateFloatAsState(if (fruitInBowl) 1f else 0f, tween(500), label = "bananaToBowl")
+            Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - movedOut }) {
+                val w = size.width
+                val h = size.height
+                val plateTop = h * 0.80f
+                val plateH = h * 0.18f
+                paperOval(Color(0xFFFAFAFA), Offset(w * 0.06f, plateTop), Size(w * 0.88f, plateH))
+                drawOval(Color(0xFFD7CCC8), Offset(w * 0.06f, plateTop), Size(w * 0.88f, plateH), style = Stroke(1.5.dp.toPx()))
+                if (slicedLook < 0.5f) {
+                    val banana = Path().apply {
+                        moveTo(w * 0.22f, h * 0.74f)
+                        quadraticTo(w * 0.5f, h * 0.40f, w * 0.80f, h * 0.60f)
+                        quadraticTo(w * 0.62f, h * 0.70f, w * 0.78f, h * 0.70f)
+                        quadraticTo(w * 0.48f, h * 0.58f, w * 0.26f, h * 0.80f)
+                        close()
+                    }
+                    paperPath(banana, Color(0xFFF4D35E))
+                    drawPath(banana, Color(0xFF8D6E63), style = Stroke(1.8.dp.toPx()))
+                } else {
+                    val sliceR = w * 0.095f
+                    listOf(0.22f, 0.40f, 0.58f, 0.76f).forEach { x ->
+                        val c = Offset(w * x, plateTop + plateH * 0.45f)
+                        paperCircle(Color(0xFFFFF3C4), sliceR, c)
+                        drawCircle(Color(0xFFE8B74B), sliceR, c, style = Stroke(1.2.dp.toPx()))
+                        drawCircle(Color.White, sliceR * 0.4f, c)
+                    }
+                }
+            }
+        }
+        // Rory's Fruit Salad: the mixing bowl, same shared art as the ending scene's own.
+        Prop.FRUIT_BOWL -> FruitBowlArt(fruitInBowl, fruitBerriesIn, fruitStirring)
+    }
+}
+
+/**
+ * Rory's Fruit Salad's own mixing bowl (the same grounded bowl shape as Prop.BOWL/Prop.BATTER),
+ * with the banana slices once dragged in, berries once poured, and a big fork stirring once he
+ * says "Fork!" -- three independent flags, never guessed from the beat/story elsewhere, so a
+ * screenshot of any step always matches what's actually happened. Shared by [PropArt]'s own
+ * [Prop.FRUIT_BOWL] and [KitchenEndingScene] (the finished bowl, beside Rory, in place of the
+ * pancake stack Rory's Kitchen's own ending shows).
+ */
+@Composable
+private fun FruitBowlArt(fruitInBowl: Boolean, fruitBerriesIn: Boolean, fruitStirring: Boolean) {
+    val stir = rememberInfiniteTransition(label = "stir").animateFloat(-14f, 14f, infiniteRepeatable(tween(260), RepeatMode.Reverse), label = "forkAngle")
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val body = Path().apply {
+            moveTo(w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
+            quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_OUTER_CONTROL_Y, w * 0.9f, h * KitchenLayout.BOWL_RIM_Y)
+            quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_INNER_CONTROL_Y, w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
+            close()
+        }
+        paperPath(body, Color(0xFFFFF3E0))
+        drawPath(body, Color(0xFFC8B6A6), style = Stroke(2.dp.toPx()))
+        paperOval(
+            Color(0xFFFFFDF7),
+            Offset(w * 0.06f, h * KitchenLayout.BOWL_INNER_RIM_TOP),
+            Size(w * 0.88f, h * KitchenLayout.BOWL_INNER_RIM_HEIGHT),
+        )
+        drawOval(
+            Color(0xFFD7CCC8),
+            Offset(w * 0.06f, h * KitchenLayout.BOWL_INNER_RIM_TOP),
+            Size(w * 0.88f, h * KitchenLayout.BOWL_INNER_RIM_HEIGHT),
+            style = Stroke(1.5.dp.toPx()),
+        )
+        val contentY = KitchenLayout.BOWL_INNER_RIM_TOP + KitchenLayout.BOWL_INNER_RIM_HEIGHT * 0.45f
+        if (fruitInBowl) {
+            val sliceR = w * 0.085f
+            listOf(0.28f, 0.46f, 0.64f, 0.5f).forEachIndexed { i, x ->
+                val y = contentY + if (i == 3) 0.05f else 0f
+                val c = Offset(w * x, h * y)
+                paperCircle(Color(0xFFFFF3C4), sliceR, c)
+                drawCircle(Color(0xFFE8B74B), sliceR, c, style = Stroke(1.2.dp.toPx()))
+            }
+        }
+        if (fruitBerriesIn) {
+            listOf(0.34f, 0.5f, 0.66f).forEachIndexed { i, x ->
+                paperBlueberry(Offset(w * x, h * (contentY + 0.1f + 0.02f * (i % 2))), w * 0.075f)
+            }
+        }
+        if (fruitStirring) {
+            val angle = stir.value
+            val pivot = Offset(w * 0.5f, h * (contentY + 0.08f))
+            val tip = Offset(pivot.x + h * 0.32f * sin(angle * PI.toFloat() / 180f), pivot.y - h * 0.32f * cos(angle * PI.toFloat() / 180f))
+            drawLine(Color(0xFFBDBDBD), tip, pivot, w * 0.045f, cap = StrokeCap.Round)
+            for (t in -1..1) {
+                drawLine(Color(0xFFE0E0E0), pivot, pivot + Offset(t * w * 0.035f, -h * 0.07f), w * 0.028f, cap = StrokeCap.Round)
+            }
+        }
     }
 }
 
@@ -1848,6 +1970,114 @@ private fun BoxWithConstraintsScope.KitchenCutOverlay(landscape: Boolean, onCut:
                 val p = Offset(size.width / 2f + size.width * 0.06f, size.height * (0.20f + 0.55f * h))
                 val a = kotlin.math.sin(kotlin.math.PI.toFloat() * h)
                 paperPointingHandDown(p, size.width * 0.20f, a)
+            }
+        }
+    }
+}
+
+/**
+ * Rory's Fruit Salad's own swipe-to-slice step ([KitchenFlow.SWIPE]): a glowing dashed line over
+ * the banana on its plate (the ingredient station), the same forgiving gesture as
+ * [KitchenCutOverlay] -- any drag of at least [KitchenCut.THRESHOLD_DP], any direction, or a plain
+ * tap, counts. No knife: nothing is cut in two here, just divided into round slices, so a plain
+ * swipe line is the whole hint.
+ */
+@Composable
+private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlice: () -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
+    val box = KitchenLayout.ingredientBox(landscape)
+    val density = LocalDensity.current
+    val wPx = constraints.maxWidth.toFloat()
+    val hPx = constraints.maxHeight.toFloat()
+    val cx = (box.l + box.r) / 2f * wPx
+    val bananaUnit = with(density) { (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BANANA, landscape)).toPx() }
+    val cy = box.t * hPx - bananaUnit * 0.35f
+    val zone = bananaUnit * 1.4f
+    var done by remember { mutableStateOf(false) }
+    var dragged by remember { mutableStateOf(0f) }
+    val glow = rememberInfiniteTransition(label = "sliceGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
+    fun fire() { if (!done) { done = true; onSlice() } }
+    Box(
+        Modifier.offset { IntOffset((cx - zone / 2f).roundToInt(), (cy - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
+            .onGloballyPositioned { c ->
+                val pos = c.positionInWindow()
+                onTarget?.invoke(0, Offset(pos.x + c.size.width / 2f, pos.y + c.size.height / 2f))
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { if (!done && dragged >= KitchenCut.THRESHOLD_DP * density.density) fire() },
+                    onDragCancel = {},
+                ) { _, amount ->
+                    dragged += amount.getDistance()
+                    if (KitchenCut.crossed(dragged, density.density)) fire()
+                }
+            }
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { fire() },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            if (!done) {
+                val dash = PathEffect.dashPathEffect(floatArrayOf(size.width * 0.05f, size.width * 0.04f))
+                val left = Offset(size.width * 0.18f, size.height * 0.5f)
+                val right = Offset(size.width * 0.82f, size.height * 0.5f)
+                drawLine(Color(0xFFFFF59D).copy(alpha = 0.65f * glow.value), left, right, size.width * 0.06f, cap = StrokeCap.Round)
+                drawLine(Color(0xFFE65100).copy(alpha = glow.value), left, right, size.width * 0.025f, cap = StrokeCap.Round, pathEffect = dash)
+            }
+        }
+    }
+}
+
+/**
+ * Rory's Fruit Salad's own drag-to-bowl step ([KitchenFlow.DRAG]): the same forgiving gesture as
+ * [FruitSliceOverlay], over the sliced banana (still at its own plate), with a dashed arrow hinting
+ * the direction of the bowl. A plain tap on the slices counts too.
+ */
+@Composable
+private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onDrag: () -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
+    val box = KitchenLayout.ingredientBox(landscape)
+    val bowl = KitchenLayout.bowlBox(landscape)
+    val density = LocalDensity.current
+    val wPx = constraints.maxWidth.toFloat()
+    val hPx = constraints.maxHeight.toFloat()
+    val cx = (box.l + box.r) / 2f * wPx
+    val bananaUnit = with(density) { (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BANANA, landscape)).toPx() }
+    val cy = box.t * hPx - bananaUnit * 0.35f
+    val zone = bananaUnit * 1.4f
+    val towardBowl = (bowl.l + bowl.r) < (box.l + box.r)
+    var done by remember { mutableStateOf(false) }
+    var dragged by remember { mutableStateOf(0f) }
+    val glow = rememberInfiniteTransition(label = "dragGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
+    fun fire() { if (!done) { done = true; onDrag() } }
+    Box(
+        Modifier.offset { IntOffset((cx - zone / 2f).roundToInt(), (cy - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
+            .onGloballyPositioned { c ->
+                val pos = c.positionInWindow()
+                onTarget?.invoke(0, Offset(pos.x + c.size.width / 2f, pos.y + c.size.height / 2f))
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { if (!done && dragged >= KitchenCut.THRESHOLD_DP * density.density) fire() },
+                    onDragCancel = {},
+                ) { _, amount ->
+                    dragged += amount.getDistance()
+                    if (KitchenCut.crossed(dragged, density.density)) fire()
+                }
+            }
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { fire() },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            if (!done) {
+                val dir = if (towardBowl) -1f else 1f
+                val start = Offset(size.width * (0.5f - 0.28f * dir), size.height * 0.5f)
+                val end = Offset(size.width * (0.5f + 0.28f * dir), size.height * 0.5f)
+                val dash = PathEffect.dashPathEffect(floatArrayOf(size.width * 0.05f, size.width * 0.04f))
+                drawLine(Color(0xFFFFF59D).copy(alpha = 0.65f * glow.value), start, end, size.width * 0.06f, cap = StrokeCap.Round)
+                drawLine(Color(0xFFE65100).copy(alpha = glow.value), start, end, size.width * 0.025f, cap = StrokeCap.Round, pathEffect = dash)
+                val ah = size.width * 0.07f
+                val back1 = Offset(end.x - ah * dir, end.y - ah * 0.7f)
+                val back2 = Offset(end.x - ah * dir, end.y + ah * 0.7f)
+                val arrow = Path().apply { moveTo(end.x, end.y); lineTo(back1.x, back1.y); lineTo(back2.x, back2.y); close() }
+                drawPath(arrow, Color(0xFFE65100).copy(alpha = glow.value))
             }
         }
     }
