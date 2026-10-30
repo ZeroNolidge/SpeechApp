@@ -2333,18 +2333,63 @@ class KitchenCutTest {
 }
 
 /** Rory's Fruit Salad's own swipe-to-slice and drag-to-bowl steps (sharing the same state machine
- * as Rory's Kitchen's own [KitchenFlow.CUT]/[KitchenFlow.FLIP]): a plain single gesture, never a
- * wrong answer, never a talk turn either side of it. */
+ * as Rory's Kitchen's own [KitchenFlow.CUT]/[KitchenFlow.FLIP]/[KitchenFlow.COUNT]): never a wrong
+ * answer, never a talk turn either side of it. [KitchenFlow.SWIPE] is always a single gesture;
+ * [KitchenFlow.DRAG] takes goal-many (K-fruit: four, one per slice), same shape as
+ * [KitchenFlow.COUNT]'s own goal-many berries. */
 class FruitSaladFlowTest {
     @Test
-    fun swipeAndDragAreBothPlainSingleGesturesWithNoWrongAnswerAndNoTalkTurn() {
+    fun swipeAndDragAreBothPlainGesturesWithNoWrongAnswerAndNoTalkTurn() {
         for (flow in listOf(KitchenFlow.SWIPE, KitchenFlow.DRAG)) {
             assertFalse(flow.hasWrongTaps())
-            assertEquals(1, flow.tapGoal(1))
             assertEquals(0, flow.talkGoal(1))
             assertFalse(flow.usesStrip())
-            val s = KitchenBeatState(flow).named().tap(true)
-            assertEquals(KitchenPhase.CLOSE, s.phase)
+        }
+    }
+
+    @Test
+    fun swipeIsOneTapAndDragNeedsEverySliceBeforeItCloses() {
+        assertEquals(1, KitchenFlow.SWIPE.tapGoal(1))
+        var s = KitchenBeatState(KitchenFlow.SWIPE).named().tap(true)
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+
+        // The real fruit salad beat's own goal (4 slices): tapping fewer than all of them never
+        // closes the step, so a single slice (or three) can no longer finish the whole drag.
+        val goal = VoiceStories.fruitSalad.beats.first { it.kitchen == KitchenFlow.DRAG }.kitchenGoal
+        assertEquals(4, goal)
+        assertEquals(4, KitchenFlow.DRAG.tapGoal(goal))
+        s = KitchenBeatState(KitchenFlow.DRAG, goal = goal).named()
+        repeat(goal - 1) {
+            s = s.tap(true)
+            assertEquals(KitchenPhase.TAP, s.phase, "drag step closed early after ${it + 1} of $goal slices")
+        }
+        s = s.tap(true)
+        assertEquals(KitchenPhase.CLOSE, s.phase, "drag step didn't close once every slice was sent")
+    }
+
+    /** [KitchenLayout.BANANA_SLICE_X] has one x fraction per slice the drag step's own touch
+     * targets and the recipe card's "four slices" both rely on (K-fruit: the banana art, the drag
+     * overlay and Rory's own "how many slices?" beat must all agree there are four). */
+    @Test
+    fun thereAreExactlyFourBananaSliceXFractionsSpreadAcrossThePlate() {
+        val xs = KitchenLayout.BANANA_SLICE_X
+        assertEquals(4, xs.size)
+        assertEquals(xs.sorted(), xs, "slice fractions should already be left-to-right")
+        for (x in xs) assertTrue(x in 0.05f..0.95f, "slice fraction $x not on the plate")
+        for (i in 1 until xs.size) assertTrue(xs[i] - xs[i - 1] >= 0.1f, "slices $i and ${i - 1} too close together: $xs")
+    }
+
+    /** [KitchenLayout.bananaBox] (K-fruit: the banana's own wider station, not the narrow milk/
+     * berries slot) never overlaps [KitchenLayout.bowlBox]/[Prop.FRUIT_BOWL]'s own station --
+     * [VoiceStories.fruitSalad]'s swipe/four/drag beats all draw the banana and the bowl at once
+     * (the bowl is their shared `still` prop), so the two stations must stay apart. */
+    @Test
+    fun bananaStationNeverOverlapsTheBowlStation() {
+        for (landscape in listOf(false, true)) {
+            assertFalse(
+                KitchenLayout.bananaBox(landscape).overlaps(KitchenLayout.bowlBox(landscape)),
+                "banana station overlaps the bowl station in ${if (landscape) "landscape" else "portrait"}",
+            )
         }
     }
 }

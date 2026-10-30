@@ -32,9 +32,10 @@ import kotlin.random.Random
  *  - [SWIPE] (Rory's Fruit Salad: "Swipe to slice!"): one plain swipe/tap (no wrong answer, never
  *    listens), the same shape as [FLIP]/[CUT] -- only the gesture's own art differs (a banana on
  *    its plate, not a dotted line over butter).
- *  - [DRAG] (Rory's Fruit Salad: "Drag to the bowl!"): one plain drag/tap (no wrong answer, never
- *    listens), the same shape again -- dragging the sliced banana into the bowl, with a tap on the
- *    slices as the backup.
+ *  - [DRAG] (Rory's Fruit Salad: "Drag to the bowl!"): drags ALL of [VoiceBeat.kitchenGoal]'s own
+ *    slices into the bowl (4, same as [COUNT]'s own goal-many taps), no wrong answer, never
+ *    listens -- each slice is its own touch target, and a tap on any one of them is the same
+ *    forgiving backup [COUNT]'s berries already use.
  * How many taps or talk turns a beat's flow needs is [VoiceBeat.kitchenGoal]. This same state
  * machine now also covers Rory's Fruit Salad (bananas and berries, not pancakes), so every doc
  * comment's "kitchen" here means either story, not just the pancake one.
@@ -45,10 +46,12 @@ enum class KitchenFlow { TAP_CHOICE, COUNT, STIR, BUBBLES, FLIP, CUT, ASK, SWIPE
  * choice among distractors; the others are plain taps that always count, so they can never fail). */
 fun KitchenFlow.hasWrongTaps(): Boolean = this == KitchenFlow.TAP_CHOICE
 
-/** How many taps this flow needs before moving on (0: no tap phase at all). */
+/** How many taps this flow needs before moving on (0: no tap phase at all). [DRAG] counts its own
+ * goal-many slices (K-fruit: four, one per [KitchenLayout.BANANA_SLICE_X] entry), the same shape
+ * as [COUNT]'s own goal-many berries, so dragging/tapping only one slice can never finish the step. */
 fun KitchenFlow.tapGoal(goal: Int): Int = when (this) {
-    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE, KitchenFlow.DRAG -> 1
-    KitchenFlow.COUNT -> goal
+    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE -> 1
+    KitchenFlow.COUNT, KitchenFlow.DRAG -> goal
     KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> 0
 }
 
@@ -502,12 +505,14 @@ object KitchenLayout {
     const val BANANA_PLATE_TOP = 0.78f
     const val BANANA_PLATE_HEIGHT = 0.22f
 
-    /** The two banana slice centres, once sliced (Rory's Fruit Salad), as x fractions of the
+    /** The four banana slice centres, once sliced (Rory's Fruit Salad), as x fractions of the
      * banana's own box -- shared between the art ([Prop.BANANA] in VoiceScenes.kt) and the drag
-     * step's own two touch targets (`FruitDragOverlay`), so each slice is always exactly where he
-     * can actually tap or drag it. Two slices, not the old four, each big enough to read as its
-     * own draggable piece. */
-    val BANANA_SLICE_X = listOf(0.34f, 0.66f)
+     * step's own four touch targets (`FruitDragOverlay`), so each slice is always exactly where he
+     * can actually tap or drag it, and Rory can count "one, two, three, four" against something
+     * really there. Spread across the banana's own box (now sized and stationed like the bowl, see
+     * [bananaBox]), each one's own touch zone still at least 56dp ([FruitDragOverlay]'s own
+     * `minZone`) however far apart these four fractions sit. */
+    val BANANA_SLICE_X = listOf(0.16f, 0.39f, 0.61f, 0.84f)
 
     /** A box on screen, as fractions (0 at the left/top edge, 1 at the right/bottom): [overlaps]
      * is false for boxes that merely touch at an edge. */
@@ -707,16 +712,30 @@ object KitchenLayout {
         return Rect(panLeft(landscape), top, panRight(landscape), BEAR_FLOOR)
     }
 
+    /** [Prop.BANANA]'s own station (Rory's Fruit Salad, K-fruit): the ingredient AND pan stations
+     * combined -- Fruit Salad never shows milk, a pan or a pancake (those are Rory's Kitchen's own
+     * props), so both are free for the one banana/slices prop the whole story through. A real
+     * screenshot showed the banana squeezed into the narrow ingredient slot alone, well short of
+     * [Prop.FRUIT_BOWL]'s own width even once [kitchenPropSize] in VoiceScenes.kt grew it to match
+     * the bowl's -- this gives it the room that size actually needs, while staying clear of
+     * [bowlBox] (the bowl/[Prop.FRUIT_BOWL] station, drawn alongside it as the beat's own `still`
+     * prop) on its left. */
+    fun bananaBox(landscape: Boolean): Rect {
+        val top = counterTop(landscape) + PROPS_MARGIN
+        return Rect(ingLeft(landscape), top, panRight(landscape), BEAR_FLOOR)
+    }
+
     /** Which counter station a kitchen prop uses (K3b; K6 split the old shared bowl/milk/berries
      * station in two, see [bowlLeft]'s own doc): [bowlBox] for the bowl itself and the batter
      * (while it's being mixed, or holding the counted berries), [ingredientBox] for milk on its
-     * own, or [panBox] for the pan itself and everything cooking in it (poured batter, the
-     * pancake, its bubbles/steam). [Prop.BUTTER] (K6, the butter-cutting mini-sequence) reuses the
-     * ingredient station too: by the time it plays, milk's long since poured, so the same spot is
-     * free for the butter plate. */
+     * own, [bananaBox] for Rory's Fruit Salad's own banana/slices, or [panBox] for the pan itself
+     * and everything cooking in it (poured batter, the pancake, its bubbles/steam). [Prop.BUTTER]
+     * (K6, the butter-cutting mini-sequence) reuses the ingredient station too: by the time it
+     * plays, milk's long since poured, so the same spot is free for the butter plate. */
     fun propSlot(prop: Prop, landscape: Boolean): Rect = when (prop) {
         Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM -> panBox(landscape)
-        Prop.MILK, Prop.BANANA -> ingredientBox(landscape)
+        Prop.MILK -> ingredientBox(landscape)
+        Prop.BANANA -> bananaBox(landscape)
         Prop.BUTTER -> butterBox(landscape)
         // Prop.FRUIT_BOWL (Rory's Fruit Salad's own bowl) falls through to the bowl station below,
         // same as Prop.BOWL/Prop.BATTER.

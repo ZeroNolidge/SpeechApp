@@ -149,8 +149,9 @@ private fun propSize(p: Prop) = when (p) {
     // K6: the butter-cutting mini-sequence's own plate, on the same ingredient station milk uses
     // (by the time it plays, milk's long since poured).
     Prop.BUTTER -> 0.14f
-    // Rory's Fruit Salad: the banana's own plate (same ingredient station as milk/butter), and
-    // the mixing bowl itself (same bowl station as Prop.BOWL/Prop.BATTER).
+    // Rory's Fruit Salad: the banana's own plate (its own station, KitchenLayout.bananaBox; see
+    // kitchenPropSize for the real on-screen size kitchen beats actually use), and the mixing
+    // bowl itself (same bowl station as Prop.BOWL/Prop.BATTER).
     Prop.BANANA -> 0.16f
     Prop.FRUIT_BOWL -> 0.22f
 }
@@ -189,18 +190,19 @@ private fun propSize(p: Prop) = when (p) {
  * proportionally bigger" portrait ask.
  *
  * K-fruit: [Prop.BANANA] (Rory's Fruit Salad) grows from its old, generic [propSize] (0.16, sized
- * for a prop sharing the wider BUTTER-era band) to about the mixing bowl's own size -- Timothy's
- * real screenshot showed it tiny on a tiny plate next to a now much bigger bowl; close to, but a
- * touch under, [Prop.FRUIT_BOWL]'s own 0.2533/0.215 so the bowl still reads as the bigger of the
- * two. */
+ * for a prop sharing the wider BUTTER-era band) to [Prop.FRUIT_BOWL]'s own size exactly -- a real
+ * screenshot still showed it small next to the bowl even after an earlier bump to a touch under
+ * the bowl's own 0.2533/0.215, since its old station ([KitchenLayout.ingredientBox]) clamped its
+ * on-screen centring tight; now that it has its own wider station
+ * ([KitchenLayout.bananaBox]) there's room for it to actually read as "about the bowl's width",
+ * matched here exactly rather than a touch under it. */
 private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
     Prop.BUBBLE -> if (landscape) 0.22f else 0.19f
-    Prop.BOWL, Prop.BATTER, Prop.FRUIT_BOWL -> if (landscape) 0.2533f else 0.215f
+    Prop.BOWL, Prop.BATTER, Prop.FRUIT_BOWL, Prop.BANANA -> if (landscape) 0.2533f else 0.215f
     Prop.BUTTER -> 0.40f
     Prop.PAN -> if (landscape) 0.22f else 0.19f
     Prop.PANCAKE -> if (landscape) 0.22f else 0.19f
     Prop.STEAM -> if (landscape) 0.18f else 0.17f
-    Prop.BANANA -> if (landscape) 0.23f else 0.20f
     else -> propSize(p)
 }
 
@@ -344,8 +346,9 @@ fun VoiceBeatScene(
     fruitStirring: Boolean = false,
     /** Rory's Fruit Salad only: the swipe-to-slice step is live (a swipe hint over the banana). */
     onSlice: (() -> Unit)? = null,
-    /** Rory's Fruit Salad only: the drag-to-bowl step is live (a drag hint over the slices). */
-    onDragToBowl: (() -> Unit)? = null,
+    /** Rory's Fruit Salad only: the drag-to-bowl step is live (a drag hint over the slices); fires
+     * once per slice sent, with that slice's own index (K-fruit: four slices, not one). */
+    onDragToBowl: ((Int) -> Unit)? = null,
     /** Rory's Kitchen only (K6): a big numeral popped up beside the bowl/butter ("2"). */
     bigNumeral: String? = null,
     /** Rory's Kitchen only (K6): each on-counter tap target's window centre, for the KITCHEN log. */
@@ -499,7 +502,11 @@ fun KitchenEndingScene(
                 // rests on the counter instead of floating just above it.
                 Modifier.offset(x = stackLeft.dp, y = (counterTopPx - stackHeight * 0.94f + maxHeight.value * 0.012f).dp)
                     .size(stackWidth.dp, stackHeight.dp),
-            ) { if (fruitSalad) FruitBowlArt(fruitInBowl = true, fruitBerriesIn = true, fruitStirring = false) else PancakeStackArt(bitten) }
+                // K-fruit: the fork keeps stirring right through the ending (stack/bite/sticker/
+                // bye) -- it used to vanish the instant the fork beat's own ACT phase ended, so by
+                // the time the cheer and sticker played, the bowl showed berries with no fork at
+                // all (`fruitStirring = false` here, unconditionally, however the beat itself left it).
+            ) { if (fruitSalad) FruitBowlArt(fruitInBowl = true, fruitBerriesIn = true, fruitStirring = true) else PancakeStackArt(bitten) }
             KitchenBear(landscape, leanAmount, onBiteRects)
         }
     }
@@ -1499,11 +1506,11 @@ private fun PropArt(
                     paperPath(banana, Color(0xFFF4D35E))
                     drawPath(banana, Color(0xFF8D6E63), style = Stroke(1.8.dp.toPx()))
                 } else {
-                    // K-fruit: two big round slices, not four small ones -- each one his own
-                    // drag/tap target ([FruitDragOverlay]'s own two touch zones, same x fractions),
-                    // big enough on screen to count as a real drag target (the backpack/recipe-card
-                    // ask: slices "big enough to drag", >= 56dp).
-                    val sliceR = w * 0.20f
+                    // K-fruit: four round slices (Rory counts "one, two, three, four" against
+                    // them), spread across the plate at KitchenLayout.BANANA_SLICE_X -- each one
+                    // his own drag/tap target (FruitDragOverlay's own four touch zones, same x
+                    // fractions), the zone itself (not this visual radius) kept >= 56dp there.
+                    val sliceR = w * 0.11f
                     KitchenLayout.BANANA_SLICE_X.forEach { x ->
                         val c = Offset(w * x, plateTop + plateH * 0.5f)
                         paperCircle(Color(0xFFFFF3C4), sliceR, c)
@@ -2076,37 +2083,43 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
 }
 
 /**
- * Rory's Fruit Salad's own drag-to-bowl step ([KitchenFlow.DRAG]): each sliced banana piece
- * ([KitchenLayout.BANANA_SLICE_X], the same two x fractions the art draws at) is its own touch
- * target -- a real drag of at least [KitchenCut.THRESHOLD_DP] toward the bowl, in any direction, or
- * a plain tap on either slice, counts, same forgiving gesture as [FruitSliceOverlay]. A dashed
- * arrow over each slice hints the bowl's direction.
+ * Rory's Fruit Salad's own drag-to-bowl step ([KitchenFlow.DRAG]): each of the four sliced banana
+ * pieces ([KitchenLayout.BANANA_SLICE_X], the same x fractions the art draws at) is its own touch
+ * target, tracked independently -- a real drag of at least [KitchenCut.THRESHOLD_DP] toward the
+ * bowl, in any direction, or a plain tap on a slice, sends that one slice; [onDrag] fires once per
+ * slice (its own index), and the step itself only finishes once every slice has been sent (see
+ * [KitchenFlow.tapGoal]'s own goal-many count for [KitchenFlow.DRAG]), the same forgiving gesture
+ * as [FruitSliceOverlay]. A dashed arrow over each still-waiting slice hints the bowl's direction.
  */
 @Composable
-private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onDrag: () -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
-    val box = KitchenLayout.ingredientBox(landscape)
+private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onDrag: (Int) -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
+    val box = KitchenLayout.bananaBox(landscape)
     val bowl = KitchenLayout.bowlBox(landscape)
     val density = LocalDensity.current
     val wPx = constraints.maxWidth.toFloat()
     val hPx = constraints.maxHeight.toFloat()
     val bananaUnit = with(density) { (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BANANA, landscape)).toPx() }
     // The banana's own real box (same one `PropArt`'s `Item` actually draws into): its centre is
-    // where the two slices sit either side of, at [KitchenLayout.BANANA_SLICE_X]'s own x fractions
-    // and the plate's own mid-height, so each touch zone lands right on its slice.
+    // where the four slices sit around, at [KitchenLayout.BANANA_SLICE_X]'s own x fractions and
+    // the plate's own mid-height, so each touch zone lands right on its slice.
     val bananaBox = KitchenLayout.propBox(Prop.BANANA, landscape, kitchenPropSize(Prop.BANANA, landscape), maxWidth.value, maxHeight.value)
     val plateCx = (bananaBox.l + bananaBox.r) / 2f * wPx
     val sliceYFraction = KitchenLayout.BANANA_PLATE_TOP + KitchenLayout.BANANA_PLATE_HEIGHT * 0.5f
     val plateCy = (bananaBox.t + (bananaBox.b - bananaBox.t) * sliceYFraction) * hPx
     val sliceOffsets = KitchenLayout.BANANA_SLICE_X.map { (it - 0.5f) * bananaUnit }
     val minZone = with(density) { 56.dp.toPx() }
-    val zone = maxOf(bananaUnit * 0.75f, minZone)
+    // K-fruit: with four slices spaced closer together than the old two, each zone is also capped
+    // to a bit more than the gap between neighbouring slices (never below minZone), so the four
+    // touch targets stay distinct instead of one giant zone swallowing its neighbours whole.
+    val spacing = if (sliceOffsets.size > 1) kotlin.math.abs(sliceOffsets[1] - sliceOffsets[0]) else bananaUnit
+    val zone = maxOf(minOf(bananaUnit * 0.75f, spacing * 1.3f), minZone)
     val towardBowl = (bowl.l + bowl.r) < (box.l + box.r)
-    var done by remember { mutableStateOf(false) }
     val glow = rememberInfiniteTransition(label = "dragGlow").animateFloat(0.45f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "g")
-    fun fire() { if (!done) { done = true; onDrag() } }
     val centers = sliceOffsets.map { dx -> Offset(plateCx + dx, plateCy) }
     centers.forEachIndexed { i, c ->
+        var done by remember { mutableStateOf(false) }
         var dragged by remember { mutableStateOf(0f) }
+        fun fire() { if (!done) { done = true; onDrag(i) } }
         Box(
             Modifier.offset { IntOffset((c.x - zone / 2f).roundToInt(), (c.y - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })
                 .onGloballyPositioned { lc ->

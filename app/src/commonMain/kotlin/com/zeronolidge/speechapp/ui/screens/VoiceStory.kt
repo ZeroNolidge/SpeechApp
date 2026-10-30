@@ -215,20 +215,24 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // as [kitchenTapReplayed]'s own; reset once per beat (see `startBeat` below), not per try, so
     // it only ever fires once across the whole beat's talk turn(s).
     var kitchenTalkReplayed by remember { mutableStateOf(false) }
-    // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below.
-    val kitchenCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero) }
+    // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below. Sized for the
+    // most any one flow ever needs at once: the drag step's own four slices (K-fruit).
+    val kitchenCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero, Offset.Zero) }
     fun logKitchen(k: KitchenBeatState) {
         val b = beats.getOrNull(index) ?: return
         val tiles = kitchenTiles(b, k.flow, kitchenRound)
         // K6: the counting berries and the cut line live on the counter itself, not in tiles.
         // K-fruit: the banana swipe is one target, same as the butter cut; the drag step is its
-        // own two slice targets (kitchenCenters[0] and [1]), neither of which is a tile either.
+        // own four slice targets (kitchenCenters[0] to [3]), neither of which is a tile either.
         val n = when (k.flow) {
             KitchenFlow.COUNT -> 3
             KitchenFlow.CUT, KitchenFlow.SWIPE -> 1
-            KitchenFlow.DRAG -> 2
+            KitchenFlow.DRAG -> 4
             else -> tiles.size
         }
+        // K-fruit: the drag step's own four slice boxes stay put on screen (unlike a counted
+        // berry, which hops away) however many have already been sent, so this always logs all
+        // four slices' real centres, never zeroed out -- only COUNT's berries do that.
         val pts = (0 until n).joinToString(";") { i ->
             if (k.flow == KitchenFlow.COUNT && i in kitchenHopped) "0,0"
             else kitchenCenters.getOrElse(i) { Offset.Zero }.let { "${it.x.toInt()},${it.y.toInt()}" }
@@ -296,6 +300,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val fruitSliced = isFruitSaladStory && fruitSliceIndex >= 0 && (index > fruitSliceIndex || (index == fruitSliceIndex && phase == VPhase.ACT))
     val fruitInBowl = isFruitSaladStory && fruitDragIndex >= 0 && (index > fruitDragIndex || (index == fruitDragIndex && phase == VPhase.ACT))
     val fruitBerriesIn = isFruitSaladStory && fruitFillIndex in beats.indices && (index > fruitFillIndex || (index == fruitFillIndex && phase == VPhase.ACT))
+    // True only while this (last) beat's own ACT fix is playing: fruitForkIndex is always
+    // beats.lastIndex, so there's no later beat whose `index > fruitForkIndex` could keep this
+    // true the way the other three flags above stay true afterwards. Once `finish()` moves phase
+    // to VPhase.END and the kitchen ending takes over, this flag goes false again on its own --
+    // KitchenEndingScene (VoiceScenes.kt) draws its own ending-only FruitBowlArt with
+    // `fruitStirring = true` hardcoded, independently of this flag, so the fork keeps stirring
+    // through the cheer and the rest of the ending (K-fruit: it used to be hardcoded false there).
     val fruitStirring = isFruitSaladStory && index == fruitForkIndex && phase == VPhase.ACT
 
     lateinit var startBeat: (Int) -> Unit
@@ -805,7 +816,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 logKitchen(next)
             }
             KitchenFlow.DRAG -> {
-                println("KITCHEN drag step=$index")
+                // K-fruit: four slices, each its own index (same dedup `kitchenHopped` set
+                // KitchenFlow.COUNT already uses) -- a slice already sent can't be double-counted,
+                // and the step itself only completes once all four have been.
+                if (i in kitchenHopped) return
+                kitchenHopped = kitchenHopped + i
+                println("KITCHEN drag step=$index slice=$i")
                 val next = kitchenPhase.tap(true)
                 kitchenPhase = next
                 logKitchen(next)
@@ -986,16 +1002,23 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // part is done: a steady visual anchor beside Rory's spoken line, same spirit as
             // Rory's Kitchen's own caption (K2l). Clear of 🏠/🔊 and the Continue button (this row
             // sits between the two, see ScreenFrame; the button itself is pinned bottom-right).
-            // Hidden once the ending starts: the backpack icon takes this same spot then.
-            if (isFruitSaladStory && kitchenEnd == null) {
+            // K-fruit: stays up through the ending too (it used to vanish the moment the ending
+            // started, replaced by the backpack icon below, so the card a child had been watching
+            // fill in disappeared right as the last tick -- forkDone -- would have landed) -- by
+            // then every `Done` flag is already true, so it simply reads all filled/green.
+            if (isFruitSaladStory) {
                 Spacer(Modifier.weight(1f))
                 FruitRecipeCard(bananaDone = fruitInBowl, berriesDone = fruitBerriesIn, forkDone = fruitStirring)
             }
             // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,
             // clear of 🏠 and 🔊 (this row sits between them; see ScreenFrame). Only shown once
-            // the ending starts, so it never crowds the title the rest of the story.
+            // the ending starts, so it never crowds the title the rest of the story. Rory's Fruit
+            // Salad shares this same ending sequence (and so needs the same backpack target for
+            // its own flying sticker), so it sits beside the recipe card above rather than
+            // replacing it -- only [isFruitSaladStory] ever shows both at once.
             if (isKitchenStory && kitchenEnd != null) {
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(if (isFruitSaladStory) 10.dp else 0.dp))
+                if (!isFruitSaladStory) Spacer(Modifier.weight(1f))
                 Box(
                     Modifier.size(40.dp)
                         .graphicsLayer { scaleX = backpackBounce.value; scaleY = backpackBounce.value }
@@ -1012,7 +1035,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             ListeningStage(
                 Modifier.fillMaxSize(),
                 lean = leaning,
-                spotCx = if (beat.backdrop == Backdrop.KITCHEN) 0.26f else null,
+                // K-fruit: a real screenshot showed the listening bubble's left edge reaching well
+                // into Bear's own stool lane (and most of Rory's own counter lane too) at 0.26 --
+                // its own width is capped at 0.75 of the stage width by `listenSpot`'s own
+                // `w * 0.75f / 1.35f` term, so a centre this far right always keeps its LEFT edge
+                // at or past (0.88 - 0.75/2) = 0.505 of the stage, clear of both Bear's lane
+                // (bearRight tops out at 0.215, portrait) and, in every orientation but the
+                // narrowest phone portrait, Rory's own lane too (roryRight tops out at 0.535) --
+                // over the counter's own centre/right, never over either of them.
+                spotCx = if (beat.backdrop == Backdrop.KITCHEN) 0.88f else null,
                 aboveDim = { rory ->
                     // The thing to move glows; his voice streams to it as paper wind strips.
                     if (index >= 0 && phase != VPhase.END) {
@@ -1191,7 +1222,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
                                         onSlice = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.SWIPE) { { tapKitchen(0) } } else null,
-                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { tapKitchen(0) } } else null,
+                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { i -> tapKitchen(i) } } else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
@@ -1216,7 +1247,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
                                         onSlice = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.SWIPE) { { tapKitchen(0) } } else null,
-                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { tapKitchen(0) } } else null,
+                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { i -> tapKitchen(i) } } else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,

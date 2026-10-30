@@ -343,7 +343,7 @@ object VoiceStories {
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Now drag the slices into the bowl!", listOf("drag", "drag it", "Drag the slices in!"), null, Prop.BANANA, Move.SHAKE,
-                "Drag! The banana slices land in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, still = Prop.FRUIT_BOWL, caption = "Drag to the bowl!",
+                "Drag! The banana slices land in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Drag to the bowl!",
             ),
             VoiceBeat(
                 Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
