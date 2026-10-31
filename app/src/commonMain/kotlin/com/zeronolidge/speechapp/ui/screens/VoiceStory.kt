@@ -1751,6 +1751,7 @@ private val KitchenChoiceGap = 32.dp
 /** The small bouncing hand above whichever tile is right (K2l): kept well clear of the tile itself
  * (its own reserved slot above it, see [KitchenTapRow]), never covering it. */
 private val KitchenHintHandSize = 24.dp
+private val PickerTileSize = 120.dp
 
 /**
  * Which tile Rory's pointing hand should hover over, once his line's finished (see
@@ -1800,19 +1801,28 @@ private fun KitchenTapRow(
         // would overflow a 360px-wide phone, so once there are more than 3, the tile size (never
         // the gap) shrinks to fit the strip's own width instead, the same adaptive-size idea
         // BalloonPatternPuzzle's own pattern row already uses for a variable count.
-        val tileSize = if (tiles.size > 3) {
-            minOf(BalloonChoiceSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size)
-        } else BalloonChoiceSize
+        val isPick = state.flow == KitchenFlow.PICK
+        // test36: the picker's 4 fruits are the big choice (Ruby: ~120pt), and on a short
+        // landscape phone the strip is only ~50dp tall -- the old hand-spacer + 88dp column was
+        // clipped to the cards' top edges. For PICK the tiles may rise above the strip (over the
+        // counter front, never over Rory), sized by width and by the scene's own height, and the
+        // hint hand floats over the tile instead of taking layout room.
+        val tileSize = when {
+            isPick -> minOf(PickerTileSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size, maxHeight * 0.26f)
+            tiles.size > 3 -> minOf(BalloonChoiceSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size)
+            else -> BalloonChoiceSize
+        }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
         Row(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp),
+            if (isPick) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 6.dp)
+            else Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight),
             horizontalArrangement = Arrangement.spacedBy(KitchenChoiceGap, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = if (isPick) Alignment.Bottom else Alignment.CenterVertically,
         ) {
             tiles.forEachIndexed { i, emoji ->
                 val isAnswer = state.flow == KitchenFlow.TAP_CHOICE && round != null && round.options.getOrNull(i) == round.answer
                 val hint = state.glow && i == targetIndex
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (hint) PointingHand(size = KitchenHintHandSize, pointDown = true) else Spacer(Modifier.size(KitchenHintHandSize))
+                val card: @Composable () -> Unit = {
                     AnswerCard(
                         modifier = Modifier.size(tileSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
                         correct = (answerShown && isAnswer) || i in hopped,
@@ -1821,8 +1831,15 @@ private fun KitchenTapRow(
                         onClick = { onTap(i) },
                     ) {
                         if (state.flow == KitchenFlow.COUNT) BlueberryArt(KitchenBerryTileSize)
-                        else Text(emoji, fontSize = if (tileSize < BalloonChoiceSize) 30.sp else 40.sp)
+                        else Text(emoji, fontSize = if (isPick) (tileSize.value * 0.5f).sp else if (tileSize < BalloonChoiceSize) 30.sp else 40.sp)
                     }
+                }
+                if (isPick) Box(contentAlignment = Alignment.TopCenter) {
+                    card()
+                    if (hint) PointingHand(size = KitchenHintHandSize, pointDown = true, modifier = Modifier.offset(y = -KitchenHintHandSize))
+                } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (hint) PointingHand(size = KitchenHintHandSize, pointDown = true) else Spacer(Modifier.size(KitchenHintHandSize))
+                    card()
                 }
             }
         }
