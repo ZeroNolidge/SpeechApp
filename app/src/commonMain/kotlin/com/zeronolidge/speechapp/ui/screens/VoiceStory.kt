@@ -222,7 +222,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     var kitchenTalkReplayed by remember { mutableStateOf(false) }
     // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below. Sized for the
     // most any one flow ever needs at once: the drag step's own four slices (K-fruit).
-    val kitchenCenters = remember { arrayOf(Offset.Zero, Offset.Zero, Offset.Zero, Offset.Zero) }
+    val kitchenCenters = remember { Array(6) { Offset.Zero } }
     fun logKitchen(k: KitchenBeatState) {
         val b = beats.getOrNull(index) ?: return
         val tiles = kitchenTiles(b, k.flow, kitchenRound)
@@ -230,7 +230,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         // K-fruit: the banana swipe is one target, same as the butter cut; the drag step is its
         // own four slice targets (kitchenCenters[0] to [3]), neither of which is a tile either.
         val n = when (k.flow) {
-            KitchenFlow.COUNT -> 3
+            KitchenFlow.COUNT -> k.goal.coerceIn(1, 6)
             KitchenFlow.CUT, KitchenFlow.SWIPE -> 1
             KitchenFlow.DRAG -> 4
             else -> tiles.size
