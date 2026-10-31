@@ -36,11 +36,15 @@ import kotlin.random.Random
  *    slices into the bowl (4, same as [COUNT]'s own goal-many taps), no wrong answer, never
  *    listens -- each slice is its own touch target, and a tap on any one of them is the same
  *    forgiving backup [COUNT]'s berries already use.
+ *  - [PICK] (Rory's Fruit Salad's own fruit picker): one plain tap, same shape as [FLIP]/[CUT]/
+ *    [SWIPE] -- the only difference is which of 4 on-counter fruits the tap lands on, which
+ *    `VoiceStoryScreen` reads off the tap itself (not this state machine) to splice that fruit's
+ *    own task beats in next. Never a wrong tap: any of the 4 unpicked fruits is a fine choice.
  * How many taps or talk turns a beat's flow needs is [VoiceBeat.kitchenGoal]. This same state
  * machine now also covers Rory's Fruit Salad (bananas and berries, not pancakes), so every doc
  * comment's "kitchen" here means either story, not just the pancake one.
  */
-enum class KitchenFlow { TAP_CHOICE, COUNT, STIR, BUBBLES, FLIP, CUT, ASK, SWIPE, DRAG }
+enum class KitchenFlow { TAP_CHOICE, COUNT, STIR, BUBBLES, FLIP, CUT, ASK, SWIPE, DRAG, PICK }
 
 /** True when [KitchenFlow]'s tap phase can be tapped wrong (only [KitchenFlow.TAP_CHOICE]: a real
  * choice among distractors; the others are plain taps that always count, so they can never fail). */
@@ -50,7 +54,7 @@ fun KitchenFlow.hasWrongTaps(): Boolean = this == KitchenFlow.TAP_CHOICE
  * goal-many slices (K-fruit: four, one per [KitchenLayout.BANANA_SLICE_X] entry), the same shape
  * as [COUNT]'s own goal-many berries, so dragging/tapping only one slice can never finish the step. */
 fun KitchenFlow.tapGoal(goal: Int): Int = when (this) {
-    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE -> 1
+    KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE, KitchenFlow.PICK -> 1
     KitchenFlow.COUNT, KitchenFlow.DRAG -> goal
     KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> 0
 }
@@ -58,17 +62,19 @@ fun KitchenFlow.tapGoal(goal: Int): Int = when (this) {
 /** How many talk turns this flow needs before the fix plays (0: no talk turn at all; K3a: every
  * tap flow is now 0, so a tap step never slides into a talk/listening turn afterward). */
 fun KitchenFlow.talkGoal(goal: Int): Int = when (this) {
-    KitchenFlow.COUNT, KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE, KitchenFlow.DRAG -> 0
+    KitchenFlow.COUNT, KitchenFlow.TAP_CHOICE, KitchenFlow.FLIP, KitchenFlow.CUT, KitchenFlow.SWIPE, KitchenFlow.DRAG, KitchenFlow.PICK -> 0
     KitchenFlow.STIR, KitchenFlow.BUBBLES, KitchenFlow.ASK -> goal
 }
 
-/** The two flows (K6) whose tap happens on the shared choice strip at the bottom of the screen,
- * same as the balloon puzzle's choices: [KitchenFlow.TAP_CHOICE]'s bowl-among-distractors and
- * [KitchenFlow.FLIP]'s single pancake tile. [KitchenFlow.COUNT] (three berries, tapped right on
- * the counter beside the bowl) and [KitchenFlow.CUT] (a swipe across the butter) never reserve
- * the strip -- Timothy's notes (K6) asked the counting step to lose its choice tiles entirely, and
- * a swipe has nowhere to put a "tile" at all. */
-fun KitchenFlow.usesStrip(): Boolean = this == KitchenFlow.TAP_CHOICE || this == KitchenFlow.FLIP
+/** The flows whose tap happens on the shared choice strip at the bottom of the screen, same as the
+ * balloon puzzle's choices: [KitchenFlow.TAP_CHOICE]'s bowl-among-distractors, [KitchenFlow.FLIP]'s
+ * single pancake tile (K6), and [KitchenFlow.PICK]'s own 4 fruits (K-fruit picker: "2 to 4 choices
+ * at a time", the same rule `PagedChoices` follows everywhere else, so the picker reuses this
+ * already-tested strip instead of a bespoke on-counter layout). [KitchenFlow.COUNT] (three berries,
+ * tapped right on the counter beside the bowl) and [KitchenFlow.CUT] (a swipe across the butter)
+ * never reserve the strip -- Timothy's notes (K6) asked the counting step to lose its choice tiles
+ * entirely, and a swipe has nowhere to put a "tile" at all. */
+fun KitchenFlow.usesStrip(): Boolean = this == KitchenFlow.TAP_CHOICE || this == KitchenFlow.FLIP || this == KitchenFlow.PICK
 
 /**
  * The butter-cutting step's own swipe (K6, [KitchenFlow.CUT]): forgiving on purpose, since a young
@@ -761,6 +767,42 @@ object KitchenLayout {
         return Rect(ingLeft(landscape), top, panRight(landscape), BEAR_FLOOR)
     }
 
+    /** The fruit picker's own 4 on-counter tiles (banana, strawberries, grapes, blueberries): the
+     * whole free counter right of Rory (bowl station through the banana/pan station, the same span
+     * [bowlBox] through [bananaBox] cover together), split into 4 equal columns so all 4 fruits sit
+     * side by side with no labels, same spirit as [berrySlot]'s own 3-way split of a single station. */
+    fun pickerSlot(index: Int, landscape: Boolean): Rect {
+        val top = counterTop(landscape) + PROPS_MARGIN
+        val left = bowlLeft(landscape)
+        val right = panRight(landscape)
+        val w = (right - left) / 4f
+        val l = left + w * index
+        return Rect(l, top, l + w, BEAR_FLOOR)
+    }
+
+    /** The active fruit task's own work area (K-fruit picker): reuses [bananaBox], the banana's
+     * wide single-prop station, for whichever fruit is currently being worked -- only one fruit
+     * task is ever active at a time (the picker returns in between), so there's never a second
+     * fruit needing a station of its own. [total] splits it evenly (3 strawberries, 5 grapes),
+     * the same shape as [berrySlot]'s own fixed 3-way split. */
+    fun fruitWorkSlot(index: Int, total: Int, landscape: Boolean): Rect {
+        val whole = bananaBox(landscape)
+        val w = (whole.r - whole.l) / total
+        val l = whole.l + w * index
+        return Rect(l, whole.t, l + w, whole.b)
+    }
+
+    /** The choice strip's own shared 128dp floor ([BalloonStripMinHeight] in VoiceStory.kt) can,
+     * on a very short landscape phone (K-fruit picker, 844x390), eat so much of a small scene that
+     * the landscape lift ([onStage]) clips Rory's own chef hat and antenna clean off the top of
+     * the scene -- his box's own top sits at roughly 20% down the scene (see [roryBox]: at
+     * landscape's own [COUNTER_TOP_LANDSCAPE]/[roryHeight]/[roryHiddenFraction], `0.70 - 0.64 *
+     * (1 - 0.22)` = ~0.20). Kitchen-only (the balloon puzzle's own strip is unaffected): once the
+     * scene is short enough that the shared floor alone would push the lift's own clip line past
+     * his hat, this scales the floor down instead, well under that ~0.20 line, so the top bar and
+     * the choice strip shrink before Rory does, never the other way round. */
+    fun kitchenStripFloorDp(sceneHeightDp: Float, sharedFloorDp: Float): Float = minOf(sharedFloorDp, sceneHeightDp * 0.14f)
+
     /** Which counter station a kitchen prop uses (K3b; K6 split the old shared bowl/milk/berries
      * station in two, see [bowlLeft]'s own doc): [bowlBox] for the bowl itself and the batter
      * (while it's being mixed, or holding the counted berries), [ingredientBox] for milk on its
@@ -771,7 +813,9 @@ object KitchenLayout {
     fun propSlot(prop: Prop, landscape: Boolean): Rect = when (prop) {
         Prop.PAN, Prop.PANCAKE, Prop.BUBBLE, Prop.STEAM -> panBox(landscape)
         Prop.MILK -> ingredientBox(landscape)
-        Prop.BANANA -> bananaBox(landscape)
+        // K-fruit picker: whichever fruit is the active task shares the banana's own wide
+        // station -- only one is ever active at a time (the picker sits in between).
+        Prop.BANANA, Prop.STRAWBERRY, Prop.GRAPE, Prop.BLUEBERRY_BOX -> bananaBox(landscape)
         Prop.BUTTER -> butterBox(landscape)
         // Prop.FRUIT_BOWL (Rory's Fruit Salad's own bowl) falls through to the bowl station below,
         // same as Prop.BOWL/Prop.BATTER.

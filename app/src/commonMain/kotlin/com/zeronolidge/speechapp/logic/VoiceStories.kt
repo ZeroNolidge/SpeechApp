@@ -76,6 +76,11 @@ data class VoiceBeat(
      * asked about, that still counts as the try (never a third ask): "One, two... three!" for "how
      * many berries?", "One!" / "One... two!" for the butter steps. Null for every other flow. */
     val kitchenFallback: String? = null,
+    /** Rory's Fruit Salad's own picker (K-fruit picker): which fruit this beat belongs to, set on
+     * every beat of a fruit's own task (its tap step and its talk step both carry the same tag) so
+     * `VoiceStoryScreen` can tell which fruit just finished without guessing from word/prop. Null
+     * for every beat outside a fruit's own task (the picker beat itself, and the fork beat). */
+    val fruitTag: VoiceStories.FruitPicker.Fruit? = null,
 ) {
     val word: String get() = lines[0]
 
@@ -113,6 +118,11 @@ enum class Move {
 enum class Prop {
     BOAT, SAIL, BUBBLE, DUCK, SUN, OWL, SLEEPY_OWL, LEAVES, BERRIES, BALLOON, BIRD, CUPCAKE, MOON, GAP_BALLOON,
     BOWL, MILK, BATTER, PAN, PANCAKE, STEAM, BUTTER, BANANA, FRUIT_BOWL,
+    // Rory's Fruit Salad's own picker (K-fruit picker): the 3 fruits besides the banana, each with
+    // its own tap task (STRAWBERRY/GRAPE: tap several off, one at a time; BLUEBERRY_BOX: one tap
+    // pours it in). All 3 draw at the picker's own 4-tile tray (`FruitPickerOverlay`) and, once
+    // picked, at the single shared work area ([KitchenLayout.fruitWorkSlot]/[KitchenLayout.bananaBox]).
+    STRAWBERRY, GRAPE, BLUEBERRY_BOX,
 }
 
 /** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky,
@@ -308,19 +318,100 @@ object VoiceStories {
     }
 
     /**
+     * Rory's Fruit Salad's own fruit picker (K-fruit picker): 4 big fruits sit on the counter with
+     * no labels (banana, strawberries, grapes, blueberries); he taps 3 of the 4, each hopping to
+     * the one shared work area for its own short task, then back to the picker, until 3 are done.
+     * Every task is tap-only or talk-only, never both (the same K3a rule [kitchen] follows), and
+     * every task's own tap step moves its fruit into the bowl at once (K-fruit picker: the bowl
+     * always reflects exactly the fruits picked so far, never guessed from a fixed beat index).
+     *
+     * [picker]/[fork] are the two fixed beats; [task] is the 4 fruits' own short sequences, spliced
+     * in by `VoiceStoryScreen` as each is picked (the picker beat's own [VoiceBeat.kitchenGoal]-1
+     * tap just records which fruit was tapped -- the state machine itself only ever sees one plain
+     * tap, like [KitchenFlow.FLIP]).
+     */
+    object FruitPicker {
+        enum class Fruit(val emoji: String) { BANANA("🍌"), STRAWBERRY("🍓"), GRAPE("🍇"), BLUEBERRY("🫐") }
+
+        val picker = VoiceBeat(
+            Backdrop.KITCHEN, "Which fruit should we use? Tap one!", listOf("fruit", "which fruit", "Which fruit should we use?"), null,
+            Prop.FRUIT_BOWL, Move.SHAKE, "", "🍽️", kitchen = KitchenFlow.PICK, caption = "Which fruit?",
+        )
+
+        val fork = VoiceBeat(
+            Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
+            "Fork! Good talking! Let's stir it all up!", "🥗", goodbye = true, caption = "Say fork!",
+        )
+
+        /** The fruit's own short task: tap-only (its own word, never "tap"), then a talk turn
+         * (its own different word) once it's in the bowl -- the same two-beats-then-done shape for
+         * every fruit but the banana, which keeps its existing 3-beat slice-then-drag-then-count
+         * (K-fruit picker reorders it: drag before the count, so "Four!" counts slices already
+         * sitting in the bowl, not loose ones still on the plate). */
+        fun task(fruit: Fruit): List<VoiceBeat> = when (fruit) {
+            Fruit.BANANA -> listOf(
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's slice the banana! Swipe across it to cut it up!", listOf("slice", "slice it", "Slice the banana!"), "s", Prop.BANANA, Move.SHAKE,
+                    "Slice! The banana splits into slices!", "🍌", kitchen = KitchenFlow.SWIPE, still = Prop.FRUIT_BOWL, caption = "Swipe to slice!", fruitTag = Fruit.BANANA,
+                ),
+                // K-fruit9: drag-first (a small nudge toward the bowl sends a slice hopping in at
+                // once; a tap is only the fallback once nothing's been dragged for a moment), so
+                // the step's own word is "drag", not "tap".
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Drag the banana slices into the bowl!", listOf("drag", "drag it", "Drag it in!"), null, Prop.BANANA, Move.SHAKE,
+                    "Drag! Hop, hop, hop, hop! All the banana slices are in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Drag the bananas!", fruitTag = Fruit.BANANA,
+                ),
+                VoiceBeat(
+                    Backdrop.KITCHEN, "How many banana slices are there? Count with me and say four!", listOf("four", "four slices", "Four banana slices!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
+                    "Four! Good talking! One, two, three, four banana slices!", "🍌", caption = "Say four!", fruitTag = Fruit.BANANA,
+                ),
+            )
+            Fruit.STRAWBERRY -> listOf(
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's pop the green tops off the strawberries! Tap each one!", listOf("pop", "pop it", "Pop the tops off!"), "p", Prop.STRAWBERRY, Move.SHAKE,
+                    "Pop! Off come the strawberry tops!", "🍓", kitchen = KitchenFlow.COUNT, kitchenGoal = 3, still = Prop.FRUIT_BOWL, caption = "Tap the tops!", fruitTag = Fruit.STRAWBERRY,
+                ),
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's add the strawberries! Say off!", listOf("off", "tops off", "Take the tops off!"), null, Prop.FRUIT_BOWL, Move.SHAKE,
+                    "Off! Good talking! The strawberries go into the bowl!", "🍓", caption = "Say off!", fruitTag = Fruit.STRAWBERRY,
+                ),
+            )
+            Fruit.GRAPE -> listOf(
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's pick five grapes off the stem! Tap each one!", listOf("pick", "pick it", "Pick the grapes!"), "p", Prop.GRAPE, Move.SHAKE,
+                    "Pick! All five grapes come off the stem!", "🍇", kitchen = KitchenFlow.COUNT, kitchenGoal = 5, still = Prop.FRUIT_BOWL, caption = "Tap the grapes!", fruitTag = Fruit.GRAPE,
+                ),
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Say five!", listOf("five", "five grapes", "Five juicy grapes!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
+                    "Five! Good talking! Five grapes, ready for the bowl!", "🍇", caption = "Say five!", fruitTag = Fruit.GRAPE,
+                ),
+            )
+            Fruit.BLUEBERRY -> listOf(
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's pour the blueberries in! Tap the box!", listOf("pour", "pour it", "Pour the box!"), "p", Prop.BLUEBERRY_BOX, Move.SHAKE,
+                    "Pour! The blueberries tumble into the bowl!", "🫐", kitchen = KitchenFlow.FLIP, still = Prop.FRUIT_BOWL, caption = "Tap to pour!", fruitTag = Fruit.BLUEBERRY,
+                ),
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
+                    "Fill! Good talking! The berries pour into the bowl!", "🫐", caption = "Say fill!", fruitTag = Fruit.BLUEBERRY,
+                ),
+            )
+        }
+
+        /** Every beat that can ever appear in a play-through (any 3 of the 4 fruits), for tests
+         * that check the whole pattern at once -- never a real play order (that's always exactly 3
+         * of these 4 fruits, picked by him, not all 4). */
+        fun allBeats(): List<VoiceBeat> = listOf(picker) + Fruit.entries.flatMap { task(it) } + listOf(fork)
+    }
+
+    /**
      * Rory's Fruit Salad: a sibling of [kitchen], sharing its counter, bowl, Rory and Bear, and
      * the same single-try talk rule (every talk beat here carries no [KitchenFlow] of its own,
      * same as kitchen's own milk/pour/mmm: one model, one listen, then the fix plays -- heard or
-     * not). Five steps, each tap-only or talk-only, never both (the same K3a rule [kitchen]
-     * follows):
-     *  1. [SWIPE] a banana on its plate to slice it (a tap also works).
-     *  2. A talk turn: "Four!" -- the slices are already there to count, Rory counting them aloud
-     *     in the fix line.
-     *  3. [DRAG] the slices into the bowl (a tap on them also works).
-     *  4. A talk turn: "Fill!" -- the berries pour in.
-     *  5. A talk turn: "Fork!" -- Rory stirs with a big fork, then he and Bear cheer "Fruit
-     *     salad!", with a bonus "Yum!" line bundled into the same fix (never its own voice check),
-     *     then the usual kitchen-style ending (sticker into the backpack, no tap needed).
+     * not). [FruitPicker.picker] starts it; `VoiceStoryScreen` splices in [FruitPicker.task] for
+     * each fruit he picks (3 of the 4), then [FruitPicker.fork] once the 3rd is done -- Rory and
+     * Bear cheer "Fruit salad!", with a bonus "Yum!" line bundled into the same fix (never its own
+     * voice check), then the usual kitchen-style ending (sticker into the backpack, no tap needed).
      * Placed by Puzzle Peaks (clear of Market Town's own Rory's Kitchen stop) even though the
      * scene itself is the same kitchen counter ([Backdrop.KITCHEN]'s own land is independent of
      * where a story's map stop sits, same as [kitchen]'s own choice of Market over the busier
@@ -330,34 +421,9 @@ object VoiceStories {
         // K-fruit: 🥗 (green salad) showed as a box glyph in the top-bar title on a real screenshot
         // -- 🍌 is already used (and confirmed drawing correctly) by the recipe card right beside
         // it, so the title reuses it rather than risk another emoji missing from the same build.
-        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🍌", land = Land.PEAKS, sounds = listOf("f", "s"),
+        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🍌", land = Land.PEAKS, sounds = listOf("f", "s", "p"),
         setup = "Bruno's hungry for something fresh! Let's make a fruit salad!",
-        beats = listOf(
-            VoiceBeat(
-                Backdrop.KITCHEN, "Let's slice the banana! Swipe across it to cut it up!", listOf("slice", "slice it", "Slice the banana!"), "s", Prop.BANANA, Move.SHAKE,
-                "Slice! The banana splits into slices!", "🍌", kitchen = KitchenFlow.SWIPE, still = Prop.FRUIT_BOWL, caption = "Swipe to slice!",
-            ),
-            VoiceBeat(
-                Backdrop.KITCHEN, "How many banana slices are there? Count with me and say four!", listOf("four", "four slices", "Four banana slices!"), "f", Prop.BANANA, Move.SHAKE,
-                "Four! Good talking! One, two, three, four banana slices!", "🍌", still = Prop.FRUIT_BOWL, caption = "Say four!",
-            ),
-            // K-fruit9: drag-first (a small nudge toward the bowl sends a slice hopping in at
-            // once; a tap is only the fallback once nothing's been dragged for a moment), so the
-            // step's own word is "drag", not "tap" -- its success line (like every beat's) must
-            // start with that word.
-            VoiceBeat(
-                Backdrop.KITCHEN, "Drag the banana slices into the bowl!", listOf("drag", "drag it", "Drag it in!"), null, Prop.BANANA, Move.SHAKE,
-                "Drag! Hop, hop, hop, hop! All the banana slices are in the bowl!", "🍌", kitchen = KitchenFlow.DRAG, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Drag the bananas!",
-            ),
-            VoiceBeat(
-                Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
-                "Fill! Good talking! The berries pour into the bowl!", "🫐", caption = "Say fill!",
-            ),
-            VoiceBeat(
-                Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
-                "Fork! Good talking! Let's stir it all up!", "🥗", goodbye = true, caption = "Say fork!",
-            ),
-        ),
+        beats = listOf(FruitPicker.picker),
         swap = null, sticker = "fruit salad" to "🥗",
         ending = "What a treat! You got a fruit salad sticker. See you next time!",
     )

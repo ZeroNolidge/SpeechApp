@@ -77,6 +77,7 @@ import com.zeronolidge.speechapp.logic.Prop
 import com.zeronolidge.speechapp.logic.Slot
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.VoiceBeat
+import com.zeronolidge.speechapp.logic.VoiceStories.FruitPicker
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -162,6 +163,11 @@ private fun propSize(p: Prop) = when (p) {
     // bowl itself (same bowl station as Prop.BOWL/Prop.BATTER).
     Prop.BANANA -> 0.16f
     Prop.FRUIT_BOWL -> 0.22f
+    // Rory's Fruit Salad's own picker: the strawberries/grapes draw as a row of small tappable
+    // items instead (see FruitCountRow), never through this generic single-prop size; the
+    // blueberry box is the only one of the three drawn this way (KitchenFlow.FLIP, one plain tap).
+    Prop.STRAWBERRY, Prop.GRAPE -> 0.16f
+    Prop.BLUEBERRY_BOX -> 0.18f
 }
 
 /** [Prop.BUBBLE]'s own [propSize] (0.3) is shared with the River story's bubble-pop beat, where
@@ -211,6 +217,9 @@ private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
     Prop.PAN -> if (landscape) 0.22f else 0.19f
     Prop.PANCAKE -> if (landscape) 0.22f else 0.19f
     Prop.STEAM -> if (landscape) 0.18f else 0.17f
+    // The blueberry box sits in the same wide work station the banana uses ([KitchenLayout.bananaBox]),
+    // so it reads about the bowl's own size, the same as the banana did there.
+    Prop.BLUEBERRY_BOX -> if (landscape) 0.2f else 0.18f
     else -> propSize(p)
 }
 
@@ -348,8 +357,11 @@ fun VoiceBeatScene(
     /** Rory's Fruit Salad only: the banana slices have been dragged into [Prop.FRUIT_BOWL] (the
      * banana's own plate empties out as this turns true). */
     fruitInBowl: Boolean = false,
-    /** Rory's Fruit Salad only: the berries have been poured into [Prop.FRUIT_BOWL]. */
+    /** Rory's Fruit Salad only: the blueberries have been poured into [Prop.FRUIT_BOWL]. */
     fruitBerriesIn: Boolean = false,
+    /** Rory's Fruit Salad's own picker only: the strawberries/grapes have gone into [Prop.FRUIT_BOWL]. */
+    strawberryIn: Boolean = false,
+    grapeIn: Boolean = false,
     /** Rory's Fruit Salad only: a big fork stirs [Prop.FRUIT_BOWL]. */
     fruitStirring: Boolean = false,
     /** Rory's Fruit Salad only: the swipe-to-slice step is live (a swipe hint over the banana). */
@@ -413,7 +425,7 @@ fun VoiceBeatScene(
                 Item(
                     if (isKitchen) kitchenUnit * kitchenPropSize(sp, landscape) else unit * propSize(sp) * 0.8f, { sx }, { sy },
                     onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(sp, c) },
-                ) { PropArt(sp, { 1f }, null, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, fruitStirring) }
+                ) { PropArt(sp, { 1f }, null, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, strawberryIn, grapeIn, fruitStirring) }
             }
             fun now() = pose(beat.move, beat.prop, f(), strength, push(), if (still) 0f else wobble)
             val kitchenPropCenter = if (isKitchen) kitchenCenter(beat.prop) else null
@@ -432,8 +444,12 @@ fun VoiceBeatScene(
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(beat.prop, c) },
-            ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, fruitStirring) }
-            if (isKitchen && beat.kitchen == KitchenFlow.COUNT) KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
+            ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, strawberryIn, grapeIn, fruitStirring) }
+            if (isKitchen && beat.kitchen == KitchenFlow.COUNT) when (beat.prop) {
+                Prop.STRAWBERRY -> FruitCountRow(landscape, 3, countHopped, onBerryTap, onKitchenTarget) { m -> BigStrawberry(m) }
+                Prop.GRAPE -> FruitCountRow(landscape, 5, countHopped, onBerryTap, onKitchenTarget) { m -> BigGrape(m) }
+                else -> KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
+            }
             if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
             if (isKitchen && beat.prop == Prop.BANANA && fruitSliced && !fruitInBowl) FruitDragOverlay(landscape, onDragToBowl, onKitchenTarget)
             // the "how many berries?" ask keeps the three berries in the bowl, with no numeral
@@ -486,9 +502,11 @@ fun KitchenEndingScene(
      * actually print it. */
     onBiteRects: ((String) -> Unit)? = null,
     /** Rory's Fruit Salad's own ending (a sibling of Rory's Kitchen's): the finished bowl beside
-     * Rory, banana slices and berries both in, instead of the pancake stack. */
-    fruitSalad: Boolean = false,
+     * Rory, the 3 fruits he actually picked all in, instead of the pancake stack. Empty for every
+     * other kitchen-style story. */
+    fruitSaladFruits: Set<FruitPicker.Fruit> = emptySet(),
 ) {
+    val fruitSalad = fruitSaladFruits.isNotEmpty()
     val bitten = stage != KitchenEndStage.STACK
     Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -514,7 +532,17 @@ fun KitchenEndingScene(
                 // bye) -- it used to vanish the instant the fork beat's own ACT phase ended, so by
                 // the time the cheer and sticker played, the bowl showed berries with no fork at
                 // all (`fruitStirring = false` here, unconditionally, however the beat itself left it).
-            ) { if (fruitSalad) FruitBowlArt(fruitInBowl = true, fruitBerriesIn = true, fruitStirring = true) else PancakeStackArt(bitten) }
+            ) {
+                if (fruitSalad) {
+                    FruitBowlArt(
+                        bananaIn = FruitPicker.Fruit.BANANA in fruitSaladFruits,
+                        strawberryIn = FruitPicker.Fruit.STRAWBERRY in fruitSaladFruits,
+                        grapeIn = FruitPicker.Fruit.GRAPE in fruitSaladFruits,
+                        blueberryIn = FruitPicker.Fruit.BLUEBERRY in fruitSaladFruits,
+                        fruitStirring = true,
+                    )
+                } else PancakeStackArt(bitten)
+            }
             KitchenBear(landscape, leanAmount, onBiteRects)
         }
     }
@@ -1066,7 +1094,8 @@ private fun BoxWithConstraintsScope.KitchenRory(
 @Composable
 private fun PropArt(
     prop: Prop, f: () -> Float, emoji: String?, beat: VoiceBeat, butterCut: Boolean = false,
-    fruitSliced: Boolean = false, fruitInBowl: Boolean = false, fruitBerriesIn: Boolean = false, fruitStirring: Boolean = false,
+    fruitSliced: Boolean = false, fruitInBowl: Boolean = false, fruitBerriesIn: Boolean = false,
+    strawberryIn: Boolean = false, grapeIn: Boolean = false, fruitStirring: Boolean = false,
 ) {
     val berriesInBatter = beat.backdrop == Backdrop.KITCHEN && com.zeronolidge.speechapp.logic.VoiceStories.kitchen.beats.let { b ->
         val berryBeat = b.indexOfFirst { it.prop == Prop.BERRIES }
@@ -1556,20 +1585,41 @@ private fun PropArt(
             }
         }
         // Rory's Fruit Salad: the mixing bowl, same shared art as the ending scene's own.
-        Prop.FRUIT_BOWL -> FruitBowlArt(fruitInBowl, fruitBerriesIn, fruitStirring)
+        Prop.FRUIT_BOWL -> FruitBowlArt(fruitInBowl, strawberryIn, grapeIn, fruitBerriesIn, fruitStirring)
+        // Rory's Fruit Salad's own picker: strawberries/grapes draw as a row of tappable items
+        // instead (see FruitCountRow, wired above beat.kitchen == KitchenFlow.COUNT), never here.
+        Prop.STRAWBERRY, Prop.GRAPE -> Unit
+        // The blueberry box: a small punnet, tapped once (KitchenFlow.FLIP) to pour it into the bowl.
+        Prop.BLUEBERRY_BOX -> Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val boxTop = h * KitchenLayout.BANANA_PLATE_TOP
+            val boxH = h * KitchenLayout.BANANA_PLATE_HEIGHT
+            val boxLeft = w * 0.14f
+            val boxW = w * 0.72f
+            paperRect(Color(0xFFE8D4A0), Offset(boxLeft, boxTop - boxH * 0.55f), Size(boxW, boxH * 1.5f))
+            drawRect(Color(0xFFB08D57), Offset(boxLeft, boxTop - boxH * 0.55f), Size(boxW, boxH * 1.5f), style = Stroke(1.5.dp.toPx()))
+            // ribs across the punnet, like a berry box
+            for (t in 1..3) {
+                val x = boxLeft + boxW * (t / 4f)
+                drawLine(Color(0xFFB08D57).copy(alpha = 0.6f), Offset(x, boxTop - boxH * 0.55f), Offset(x, boxTop + boxH * 0.95f), 1.2.dp.toPx())
+            }
+            val dots = listOf(0.22f to 0.0f, 0.38f to 0.18f, 0.55f to -0.08f, 0.68f to 0.12f, 0.8f to -0.02f)
+            dots.forEach { (x, dy) -> paperBlueberry(Offset(boxLeft + boxW * x, boxTop - boxH * (0.15f - dy)), w * 0.045f) }
+        }
     }
 }
 
 /**
  * Rory's Fruit Salad's own mixing bowl (the same grounded bowl shape as Prop.BOWL/Prop.BATTER),
- * with the banana slices once dragged in, berries once poured, and a big fork stirring once he
- * says "Fork!" -- three independent flags, never guessed from the beat/story elsewhere, so a
- * screenshot of any step always matches what's actually happened. Shared by [PropArt]'s own
- * [Prop.FRUIT_BOWL] and [KitchenEndingScene] (the finished bowl, beside Rory, in place of the
- * pancake stack Rory's Kitchen's own ending shows).
+ * with each picked fruit's own pile added the moment its own tap step finishes (K-fruit picker:
+ * never all 4 at once -- he only ever picks 3 of the 4 -- so each of the 4 is its own independent
+ * flag, never guessed from a fixed beat index), and a big fork stirring once he says "Fork!".
+ * Shared by [PropArt]'s own [Prop.FRUIT_BOWL] and [KitchenEndingScene] (the finished bowl, beside
+ * Rory, in place of the pancake stack Rory's Kitchen's own ending shows).
  */
 @Composable
-private fun FruitBowlArt(fruitInBowl: Boolean, fruitBerriesIn: Boolean, fruitStirring: Boolean) {
+private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Boolean, blueberryIn: Boolean, fruitStirring: Boolean) {
     // K-fruit10: a small wiggle around a 45-degree base, not side to side around upright -- a
     // fork standing nearly straight up and swinging like a windshield wiper didn't read as
     // stirring into the bowl at all.
@@ -1613,16 +1663,40 @@ private fun FruitBowlArt(fruitInBowl: Boolean, fruitBerriesIn: Boolean, fruitSti
             val base = rimMid + rimH * 0.12f
             // Mound height at x (0..1): highest in the middle, sinking toward the sides.
             fun mound(x: Float) = base - rimH * 0.55f * (1f - ((x - 0.5f) / 0.36f).let { it * it }).coerceAtLeast(0f)
-            if (fruitInBowl) {
+            if (bananaIn) {
                 val sliceR = w * 0.075f
-                listOf(0.27f to 0.15f, 0.44f to 0.0f, 0.60f to 0.25f, 0.72f to 0.05f).forEach { (x, dy) ->
+                listOf(0.22f to 0.15f, 0.36f to 0.0f, 0.5f to 0.25f, 0.64f to 0.05f).forEach { (x, dy) ->
                     val c = Offset(w * x, mound(x) + rimH * dy)
                     paperCircle(Color(0xFFFFF3C4), sliceR, c)
                     drawCircle(Color(0xFFE8B74B), sliceR, c, style = Stroke(1.2.dp.toPx()))
                     drawCircle(Color(0xFFF3E2A0), sliceR * 0.35f, c)
                 }
             }
-            if (fruitBerriesIn) {
+            if (strawberryIn) {
+                val r = w * 0.065f
+                listOf(0.30f to 0.1f, 0.48f to -0.05f, 0.68f to 0.15f).forEach { (x, dy) ->
+                    val c = Offset(w * x, mound(x) + rimH * dy)
+                    val wedge = Path().apply {
+                        moveTo(c.x, c.y - r * 1.1f)
+                        quadraticTo(c.x + r * 1.05f, c.y - r * 0.3f, c.x, c.y + r * 1.0f)
+                        quadraticTo(c.x - r * 1.05f, c.y - r * 0.3f, c.x, c.y - r * 1.1f)
+                        close()
+                    }
+                    paperPath(wedge, Color(0xFFE94B5A))
+                    drawPath(wedge, Color(0xFFB3273A), style = Stroke(1.dp.toPx()))
+                    for (k in -1..1) drawCircle(Color(0xFFFFE9B0), r * 0.08f, c + Offset(k * r * 0.3f, -r * 0.1f + (k % 2) * r * 0.3f))
+                }
+            }
+            if (grapeIn) {
+                val r = w * 0.042f
+                listOf(0.26f, 0.36f, 0.46f, 0.56f, 0.66f).forEachIndexed { i, x ->
+                    val c = Offset(w * x, mound(x) + rimH * (0.1f + 0.06f * (i % 2)))
+                    drawCircle(Color(0xFF6A3D9A), r, c)
+                    drawCircle(Color(0xFF8E5BC4), r * 0.75f, c + Offset(-r * 0.12f, -r * 0.12f))
+                    drawCircle(Color.White.copy(alpha = 0.6f), r * 0.2f, c + Offset(-r * 0.35f, -r * 0.35f))
+                }
+            }
+            if (blueberryIn) {
                 // (x, depth below the mound line as a fraction of the rim height, radius scale)
                 listOf(
                     Triple(0.34f, 0.18f, 1.0f), Triple(0.52f, 0.10f, 1.12f), Triple(0.66f, 0.30f, 0.9f),
@@ -1956,6 +2030,92 @@ private fun BigBerry(modifier: Modifier) = Canvas(modifier) {
     drawCircle(Color.White.copy(alpha = 0.55f), r * 0.2f, Offset(c.x - r * 0.38f, c.y - r * 0.38f))
     // the little crown on top
     for (k in -1..1) drawLine(Color(0xFF283593), Offset(c.x, c.y - r * 0.72f), Offset(c.x + k * r * 0.28f, c.y - r * 0.98f), r * 0.12f, cap = StrokeCap.Round)
+}
+
+/** A small paper strawberry: a red wedge with a tiny green leafy top, the "top" [FruitPicker.Fruit.STRAWBERRY]'s own tap step pops off one at a time. */
+@Composable
+private fun BigStrawberry(modifier: Modifier) = Canvas(modifier) {
+    val r = size.minDimension * 0.4f
+    val c = Offset(size.width / 2f, size.height * 0.58f)
+    val wedge = Path().apply {
+        moveTo(c.x, c.y - r * 1.1f)
+        quadraticTo(c.x + r * 1.05f, c.y - r * 0.3f, c.x, c.y + r * 1.0f)
+        quadraticTo(c.x - r * 1.05f, c.y - r * 0.3f, c.x, c.y - r * 1.1f)
+        close()
+    }
+    drawPath(wedge, Color(0xFFE94B5A))
+    drawPath(wedge, Color(0xFFB3273A), style = Stroke(1.5.dp.toPx()))
+    for (k in -1..1) drawLine(Color(0xFFFFE9B0), c + Offset(k * r * 0.35f, -r * 0.4f), c + Offset(k * r * 0.35f, r * 0.4f), r * 0.07f, cap = StrokeCap.Round)
+    // the green top
+    for (a in -2..2) {
+        val ang = a * 0.4f
+        val tip = Offset(c.x + sin(ang) * r * 0.65f, c.y - r * 1.1f - cos(ang) * r * 0.5f)
+        drawLine(Color(0xFF4CAF50), Offset(c.x, c.y - r * 1.05f), tip, r * 0.22f, cap = StrokeCap.Round)
+    }
+}
+
+/** A small paper grape: a round purple body, [FruitPicker.Fruit.GRAPE]'s own tap step pops one off the stem at a time. */
+@Composable
+private fun BigGrape(modifier: Modifier) = Canvas(modifier) {
+    val r = size.minDimension * 0.4f
+    val c = Offset(size.width / 2f, size.height * 0.55f)
+    drawCircle(Color(0xFF6A3D9A), r, c)
+    drawCircle(Color(0xFF8E5BC4), r * 0.8f, c.copy(y = c.y - r * 0.08f))
+    drawCircle(Color.White.copy(alpha = 0.55f), r * 0.2f, Offset(c.x - r * 0.35f, c.y - r * 0.35f))
+}
+
+/**
+ * Rory's Fruit Salad's own picker (K-fruit picker): the active fruit's own [total] items (3
+ * strawberries, 5 grapes), waiting in its own work area ([KitchenLayout.fruitWorkSlot]), hopping
+ * into the bowl one at a time as he taps each -- the same shape as [KitchenCountRow]'s own 3
+ * berries, generalised to any count and any item art so strawberries and grapes can share it.
+ */
+@Composable
+private fun BoxWithConstraintsScope.FruitCountRow(
+    landscape: Boolean,
+    total: Int,
+    hopped: Set<Int>,
+    onTap: ((Int) -> Unit)?,
+    onTarget: ((Int, Offset) -> Unit)?,
+    art: @Composable (Modifier) -> Unit,
+) {
+    val bowl = KitchenLayout.bowlBox(landscape)
+    val counter = KitchenLayout.counterTop(landscape) + KitchenLayout.PROPS_MARGIN
+    val size = minOf(maxWidth * 0.085f, maxHeight * 0.11f, 84.dp)
+    val sizeFracY = size / maxHeight
+    val sizeFracX = size / maxWidth
+    val bowlCx = (bowl.l + bowl.r) / 2f
+    val bowlH = (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BATTER, landscape)) / maxHeight
+    val batterCenterY = KitchenLayout.BOWL_INNER_RIM_TOP + KitchenLayout.BOWL_INNER_RIM_HEIGHT * 0.45f
+    val bowlTop = bowl.t - bowlH * (1f - batterCenterY)
+    val pulse = rememberInfiniteTransition(label = "fruitPulse").animateFloat(
+        1f, 1.12f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "p",
+    )
+    val next = (0 until total).firstOrNull { it !in hopped }
+    for (i in 0 until total) {
+        val slot = KitchenLayout.fruitWorkSlot(i, total, landscape)
+        val restX = (slot.l + slot.r) / 2f
+        val restY = counter - sizeFracY * 0.5f
+        val inX = bowlCx + (i - total / 2f) * sizeFracX * 0.4f
+        val inY = bowlTop
+        val t by animateFloatAsState(if (i in hopped) 1f else 0f, tween(550), label = "fruitHop$i")
+        val x = restX + (inX - restX) * t
+        val y = restY + (inY - restY) * t - 0.18f * kotlin.math.sin(kotlin.math.PI.toFloat() * t)
+        val s = if (i in hopped) 0.8f + 0.2f * (1f - t) else if (i == next) pulse.value else 1f
+        Item(size, { x }, { y }, scale = { s }) {
+            Box(
+                Modifier.fillMaxSize().onGloballyPositioned { c ->
+                    val pos = c.positionInWindow()
+                    onTarget?.invoke(i, Offset(pos.x + c.size.width / 2f, pos.y + c.size.height / 2f))
+                }.let { m ->
+                    if (onTap == null || i in hopped) m
+                    else m.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onTap(i) }
+                },
+            ) { art(Modifier.fillMaxSize()) }
+        }
+    }
+    val count = hopped.size
+    if (count > 0) KitchenNumeral(count.toString(), bowl, landscape, key = count)
 }
 
 /** K6: a big numeral that pops up above [box] (scene fractions), counting as it changes. */

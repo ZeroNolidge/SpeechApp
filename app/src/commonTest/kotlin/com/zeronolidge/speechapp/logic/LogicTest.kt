@@ -3,6 +3,7 @@ package com.zeronolidge.speechapp.logic
 import com.zeronolidge.speechapp.data.LetterContent
 import com.zeronolidge.speechapp.data.ReadingContent
 import com.zeronolidge.speechapp.data.SpeechContent
+import com.zeronolidge.speechapp.logic.VoiceStories.FruitPicker
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -1263,37 +1264,41 @@ class PlaySessionTest {
     }
 }
 
+/** Every beat's own line/sound/success shape, shared by [VoiceStoriesTest] (the usual fixed story
+ * beat lists) and [FruitSaladStoryTest] (whose beats are a pool of fixed pieces, assembled at
+ * runtime, not a fixed list of its own -- see [FruitPicker]). */
+private fun assertBeatShape(storyId: String, sounds: List<String>, b: VoiceBeat) {
+    b.sound?.let { snd ->
+        assertTrue(snd in sounds, "$storyId ${b.word}: $snd isn't one of $sounds")
+        assertTrue(VoiceStories.startsWith(b.word, snd) || VoiceStories.endsWith(b.word, snd), "$storyId: '${b.word}' has no $snd")
+    }
+    // Three versions: one word, two words, a short sentence.
+    assertEquals(3, b.lines.size, "$storyId ${b.word}")
+    assertEquals(1, b.lines[0].trim().split(' ').size, "$storyId: '${b.lines[0]}' is one word")
+    assertTrue(ClipText.normalize(b.lines[1]).split(' ').size == 2, "$storyId: '${b.lines[1]}' is two words")
+    assertTrue(ClipText.normalize(b.lines[2]).split(' ').size >= 2, "$storyId: '${b.lines[2]}' is a sentence")
+    // Rory says the word back first, and nothing has a blank to fill. The game beat's close
+    // and the fruit picker's own silent fix (never spoken) are the exceptions.
+    if (!b.game && b.kitchen != KitchenFlow.PICK) {
+        assertTrue(ClipText.normalize(b.success).startsWith(ClipText.normalize(b.word)), "$storyId: success '${b.success}'")
+    }
+    if (b.game) assertFalse(b.success.contains("pop", ignoreCase = true), "$storyId: success '${b.success}'")
+    (listOf(b.problem, b.success) + b.lines).forEach { assertTrue('{' !in it, "$storyId: blank in '$it'") }
+}
+
 /** The voice stories follow the pattern: short, their sounds up front, a calm goodbye. */
 class VoiceStoriesTest {
     @Test
     fun everyStoryFollowsThePattern() {
-        for (s in VoiceStories.all) {
+        // Rory's Fruit Salad is a picker, not a fixed list of beats (see FruitSaladStoryTest):
+        // its own pattern is checked separately, against the pool every play-through draws from.
+        for (s in VoiceStories.all.filter { it.id != "fruitsalad" }) {
             val maxBeats = if (s.id == "kitchen") VoiceStories.KITCHEN_MAX_BEATS else VoiceStories.MAX_BEATS
-            // Rory's Fruit Salad (a kitchen-style sibling, like "kitchen" itself) is deliberately
-            // shorter: 5 steps, not the usual 6 to 8.
-            val minBeats = if (s.id == "fruitsalad") 5 else 6
-            assertTrue(s.beats.size in minBeats..maxBeats, "${s.id}: ${s.beats.size} beats")
+            assertTrue(s.beats.size in 6..maxBeats, "${s.id}: ${s.beats.size} beats")
             // His sounds start the words of at least 4 beats; each beat's sound is really in its word.
             val starting = s.beats.count { b -> b.sound != null && VoiceStories.startsWith(b.word, b.sound!!) }
             assertTrue(starting >= 4, "${s.id}: only $starting beats start with their sound")
-            for (b in s.beats) {
-                b.sound?.let { snd ->
-                    assertTrue(snd in s.sounds, "${s.id} ${b.word}: $snd isn't one of ${s.sounds}")
-                    assertTrue(VoiceStories.startsWith(b.word, snd) || VoiceStories.endsWith(b.word, snd), "${s.id}: '${b.word}' has no $snd")
-                }
-                // Three versions: one word, two words, a short sentence.
-                assertEquals(3, b.lines.size, "${s.id} ${b.word}")
-                assertEquals(1, b.lines[0].trim().split(' ').size, "${s.id}: '${b.lines[0]}' is one word")
-                assertTrue(ClipText.normalize(b.lines[1]).split(' ').size == 2, "${s.id}: '${b.lines[1]}' is two words")
-                assertTrue(ClipText.normalize(b.lines[2]).split(' ').size >= 2, "${s.id}: '${b.lines[2]}' is a sentence")
-                // Rory says the word back first, and nothing has a blank to fill. The game beat's
-                // close is the exception: whatever colour he said, the balloon settles into the
-                // gap the same way (see BalloonGame.success), so its success line doesn't start
-                // with the colour; it also never says "pop" for him (he's just said it himself).
-                if (!b.game) assertTrue(ClipText.normalize(b.success).startsWith(ClipText.normalize(b.word)), "${s.id}: success '${b.success}'")
-                if (b.game) assertFalse(b.success.contains("pop", ignoreCase = true), "${s.id}: success '${b.success}'")
-                (listOf(b.problem, b.success) + b.lines).forEach { assertTrue('{' !in it, "${s.id}: blank in '$it'") }
-            }
+            for (b in s.beats) assertBeatShape(s.id, s.sounds, b)
             // It ends calmly, with the goodbye beat last (and only last).
             assertTrue(s.beats.last().goodbye && s.beats.dropLast(1).none { it.goodbye }, s.id)
             assertTrue(s.ending.contains("sticker"), s.id)
@@ -2028,43 +2033,78 @@ class KitchenStoryTest {
     }
 }
 
-/** Rory's Fruit Salad (a sibling of Rory's Kitchen, same counter/bowl/Rory/Bear): 5 steps, each
- * either touch-only ([KitchenFlow.SWIPE]/[KitchenFlow.DRAG]) or talk-only, never both. */
+/**
+ * Rory's Fruit Salad's own picker (K-fruit picker): a fixed picker beat and fork beat, plus 4
+ * fruits' own short tasks (he picks 3 of the 4); every task beat is touch-only or talk-only, never
+ * both. [VoiceStories.fruitSalad.beats] itself is just `[picker]` (the rest is spliced in at
+ * runtime as he picks, see `VoiceStoryScreen`), so these tests check the whole pool
+ * ([FruitPicker.allBeats]) and the picker/fork's own fixed shape.
+ */
 class FruitSaladStoryTest {
     @Test
-    fun hasExactlyFiveStepsEachTouchOnlyOrTalkOnlyNeverBoth() {
-        val beats = VoiceStories.fruitSalad.beats
-        assertEquals(5, beats.size)
-        for (b in beats) {
-            if (b.kitchen != null) {
-                assertTrue(b.kitchen!!.tapGoal(b.kitchenGoal) > 0, "${b.word} should be touch-only")
-                assertEquals(0, b.kitchen!!.talkGoal(b.kitchenGoal), "${b.word} should be touch-only")
-                assertFalse(b.kitchen!!.hasWrongTaps(), "${b.word} should never have a wrong answer")
-            }
+    fun startsWithJustThePicker() {
+        assertEquals(listOf(FruitPicker.picker), VoiceStories.fruitSalad.beats)
+    }
+
+    @Test
+    fun thePickerIsOneTapNoWrongAnswerNoTalkTurn() {
+        val flow = FruitPicker.picker.kitchen
+        assertEquals(KitchenFlow.PICK, flow)
+        assertEquals(1, flow!!.tapGoal(FruitPicker.picker.kitchenGoal))
+        assertEquals(0, flow.talkGoal(FruitPicker.picker.kitchenGoal))
+        assertFalse(flow.hasWrongTaps())
+        assertTrue(flow.usesStrip())
+        assertEquals("", FruitPicker.picker.success, "the picker's own fix is silent")
+    }
+
+    @Test
+    fun allFourFruitsHaveATaskAndTheBananaKeepsItsThreeStepShape() {
+        assertEquals(4, FruitPicker.Fruit.entries.size)
+        assertEquals(3, FruitPicker.task(FruitPicker.Fruit.BANANA).size)
+        for (f in listOf(FruitPicker.Fruit.STRAWBERRY, FruitPicker.Fruit.GRAPE, FruitPicker.Fruit.BLUEBERRY)) {
+            assertEquals(2, FruitPicker.task(f).size, "$f should be a tap step then a talk step")
         }
-        assertEquals(2, beats.count { it.kitchen != null })
-        assertEquals(3, beats.count { it.kitchen == null })
     }
 
     @Test
-    fun theStepsFollowSliceFourDragFillFork() {
-        val beats = VoiceStories.fruitSalad.beats
-        assertEquals(listOf(KitchenFlow.SWIPE, null, KitchenFlow.DRAG, null, null), beats.map { it.kitchen })
-        assertEquals(listOf("slice", "four", "drag", "fill", "fork"), beats.map { it.word })
+    fun everyTaskBeatIsTouchOnlyOrTalkOnlyNeverBothAndCarriesItsOwnFruitTag() {
+        for (f in FruitPicker.Fruit.entries) {
+            for (b in FruitPicker.task(f)) {
+                assertEquals(f, b.fruitTag, "every ${f.name} beat should carry its own tag")
+                if (b.kitchen != null) {
+                    assertTrue(b.kitchen!!.tapGoal(b.kitchenGoal) > 0, "${b.word} should be touch-only")
+                    assertEquals(0, b.kitchen!!.talkGoal(b.kitchenGoal), "${b.word} should be touch-only")
+                    assertFalse(b.kitchen!!.hasWrongTaps(), "${b.word} should never have a wrong answer")
+                }
+            }
+            // Each task is exactly one tap step then one talk step (banana's extra drag step is
+            // still a tap step): only the LAST beat of each task is ever a plain talk turn.
+            val task = FruitPicker.task(f)
+            assertTrue(task.last().kitchen == null, "${f.name}'s last beat should be its talk turn")
+            assertTrue(task.dropLast(1).all { it.kitchen != null }, "${f.name}'s earlier beats should all be tap steps")
+        }
     }
 
-    /** The three talk words ("Four!", "Fill!", "Fork!") all start with the "f" sound, so Rory's
-     * f-pose (round cyan eyes, no cheek blush, the cyan-blue antenna) shows while he models them. */
     @Test
-    fun theThreeTalkWordsAllTriggerTheFPose() {
-        val talkWords = VoiceStories.fruitSalad.beats.filter { it.kitchen == null }.map { it.word }
-        assertEquals(listOf("four", "fill", "fork"), talkWords)
-        talkWords.forEach { assertTrue(VoiceStories.isFWord(it), "'$it' should trigger the f-pose") }
+    fun bananaKeepsSliceDragThenFour() {
+        val beats = FruitPicker.task(FruitPicker.Fruit.BANANA)
+        assertEquals(listOf(KitchenFlow.SWIPE, KitchenFlow.DRAG, null), beats.map { it.kitchen })
+        assertEquals(listOf("slice", "drag", "four"), beats.map { it.word })
+    }
+
+    /** Every talk word ("Four!", "Off!", "Five!", "Fill!", "Fork!") but "off" starts with the "f"
+     * sound, so Rory's f-pose (round cyan eyes, no cheek blush, the cyan-blue antenna) shows while
+     * he models them. */
+    @Test
+    fun mostTalkWordsTriggerTheFPose() {
+        val talkWords = FruitPicker.allBeats().filter { it.kitchen == null }.map { it.word }
+        assertEquals(listOf("four", "off", "five", "fill", "fork"), talkWords)
+        talkWords.filter { it != "off" }.forEach { assertTrue(VoiceStories.isFWord(it), "'$it' should trigger the f-pose") }
     }
 
     @Test
     fun everyFruitSaladBeatHasAShortCaption() {
-        for (b in VoiceStories.fruitSalad.beats) {
+        for (b in FruitPicker.allBeats()) {
             val caption = b.caption
             assertTrue(!caption.isNullOrBlank(), "fruit salad beat '${b.word}' has no caption")
             val words = caption!!.trim().split(" ")
@@ -2073,10 +2113,16 @@ class FruitSaladStoryTest {
     }
 
     @Test
-    fun onlyTheLastBeatIsTheCalmGoodbye() {
-        val beats = VoiceStories.fruitSalad.beats
-        assertTrue(beats.last().goodbye)
-        assertTrue(beats.dropLast(1).none { it.goodbye })
+    fun onlyTheForkBeatIsTheCalmGoodbye() {
+        val all = FruitPicker.allBeats()
+        assertTrue(FruitPicker.fork.goodbye)
+        assertTrue(all.filter { it != FruitPicker.fork }.none { it.goodbye })
+    }
+
+    @Test
+    fun everyFruitSaladBeatFollowsTheLinesSoundAndSuccessPattern() {
+        val story = VoiceStories.fruitSalad
+        for (b in FruitPicker.allBeats()) assertBeatShape(story.id, story.sounds, b)
     }
 
     /** Growth without numbers: no word here ever praises being clever or smart, only the trying. */
@@ -2086,7 +2132,7 @@ class FruitSaladStoryTest {
         val story = VoiceStories.fruitSalad
         val allText = (
             listOf(story.setup, story.ending) +
-                story.beats.flatMap { listOf(it.problem, it.success) + it.lines + listOfNotNull(it.caption) }
+                FruitPicker.allBeats().flatMap { listOf(it.problem, it.success) + it.lines + listOfNotNull(it.caption) }
             ).joinToString(" ").lowercase()
         banned.forEach { assertTrue(it !in allText, "found banned praise word '$it' in fruit salad's lines") }
     }
@@ -2142,6 +2188,19 @@ class KitchenBeatStateTest {
         var s = KitchenBeatState(KitchenFlow.FLIP).named()
         assertEquals(KitchenPhase.TAP, s.phase)
         // A stray "wrong" tap is impossible for this flow: it's simply ignored, never fails.
+        assertEquals(s, s.tap(false))
+        s = s.tap(true)
+        assertEquals(KitchenPhase.CLOSE, s.phase)
+        assertEquals(KitchenPhase.DONE, s.closed().phase)
+    }
+
+    /** The fruit picker (K-fruit picker): the same one-tap, no-wrong-answer shape as [FLIP], just
+     * with 4 possible tiles instead of 1 -- which fruit he actually tapped is read off the tap
+     * itself (`VoiceStoryScreen`), never this state machine, so this is exactly [FLIP]'s test. */
+    @Test
+    fun pickIsOneTapWithNoWrongAnswerAndNoTalkTurn() {
+        var s = KitchenBeatState(KitchenFlow.PICK).named()
+        assertEquals(KitchenPhase.TAP, s.phase)
         assertEquals(s, s.tap(false))
         s = s.tap(true)
         assertEquals(KitchenPhase.CLOSE, s.phase)
@@ -2355,7 +2414,7 @@ class FruitSaladFlowTest {
 
         // The real fruit salad beat's own goal (4 slices): tapping fewer than all of them never
         // closes the step, so a single slice (or three) can no longer finish the whole drag.
-        val goal = VoiceStories.fruitSalad.beats.first { it.kitchen == KitchenFlow.DRAG }.kitchenGoal
+        val goal = FruitPicker.task(FruitPicker.Fruit.BANANA).first { it.kitchen == KitchenFlow.DRAG }.kitchenGoal
         assertEquals(4, goal)
         assertEquals(4, KitchenFlow.DRAG.tapGoal(goal))
         s = KitchenBeatState(KitchenFlow.DRAG, goal = goal).named()
@@ -2391,6 +2450,41 @@ class FruitSaladFlowTest {
                 "banana station overlaps the bowl station in ${if (landscape) "landscape" else "portrait"}",
             )
         }
+    }
+
+    /** The picker's own 4 fruit tiles ([KitchenLayout.pickerSlot]): side by side, left to right,
+     * never overlapping each other. */
+    @Test
+    fun theFourPickerSlotsAreSideBySideAndNeverOverlap() {
+        for (landscape in listOf(false, true)) {
+            val slots = (0..3).map { KitchenLayout.pickerSlot(it, landscape) }
+            for (i in 0..2) assertTrue(slots[i].r <= slots[i + 1].l + 0.001f, "picker slots $i and ${i + 1} overlap")
+            assertTrue(slots.first().l >= 0f && slots.last().r <= 1f)
+        }
+    }
+
+    /** The active fruit's own work area ([KitchenLayout.fruitWorkSlot]) splits evenly, never
+     * spilling past [KitchenLayout.bananaBox]'s own station it shares. */
+    @Test
+    fun fruitWorkSlotsSplitEvenlyInsideTheBananaStation() {
+        for (landscape in listOf(false, true)) {
+            val whole = KitchenLayout.bananaBox(landscape)
+            val slots = (0..4).map { KitchenLayout.fruitWorkSlot(it, 5, landscape) }
+            assertTrue(slots.first().l >= whole.l - 0.001f && slots.last().r <= whole.r + 0.001f)
+            for (i in 0..3) assertTrue(slots[i].r <= slots[i + 1].l + 0.001f, "work slots $i and ${i + 1} overlap")
+        }
+    }
+
+    /** K-fruit picker: on a short scene the choice strip's own floor shrinks well under its usual
+     * 128dp (clear of where Rory's own chef hat/antenna sit, ~20% down the scene -- see
+     * [KitchenLayout.kitchenStripFloorDp]'s own doc), but never grows past the shared floor on a
+     * tall one. */
+    @Test
+    fun kitchenStripFloorShrinksOnAShortSceneButNeverGrowsPastTheSharedFloor() {
+        assertEquals(128f, KitchenLayout.kitchenStripFloorDp(2000f, 128f))
+        val short = KitchenLayout.kitchenStripFloorDp(280f, 128f)
+        assertTrue(short < 128f && short > 0f, "expected a shrunk floor, got $short")
+        assertTrue(short <= 280f * 0.2f, "floor $short still clips Rory's own hat on a 280dp scene")
     }
 }
 
