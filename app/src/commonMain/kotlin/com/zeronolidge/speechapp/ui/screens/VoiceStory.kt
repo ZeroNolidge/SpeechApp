@@ -1240,7 +1240,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // enough, so the strip (and so the recipe card/top bar riding above it) gives
                     // up room before Rory does, never the other way round.
                     val stripFloor = if (isKitchen) KitchenLayout.kitchenStripFloorDp(h.value, BalloonStripMinHeight.value).dp else BalloonStripMinHeight
-                    val gameStrip = if (isKitchen || stripShown) (h * stripFraction).coerceAtLeast(stripFloor) else 0.dp
+                    // test38: Rory's Fruit Salad in landscape has no bottom strip at all (its picker
+                    // cards sit on the counter instead, see KitchenTapRow), and on a short phone
+                    // the camera moves in 1.5x: the scene is drawn 1.5x taller than the stage and
+                    // raised so Rory's antenna tip sits just under the top, cropping only the
+                    // lower counter front and the stool's legs (still standing on the floor,
+                    // just out of frame).
+                    val fruitWide = isFruitSaladStory && isKitchen && landscape
+                    val fruitCharZoom = if (fruitWide && (h < 420.dp || w > h * 2.2f)) 1.5f else 1f
+                    val fruitZoom = fruitCharZoom
+                    val gameStrip = if (fruitWide) 0.dp else if (isKitchen || stripShown) (h * stripFraction).coerceAtLeast(stripFloor) else 0.dp
+                    val fruitLift = if (fruitZoom > 1f) (h * fruitZoom * KitchenLayout.roryBox(true).t - 10.dp).coerceAtLeast(0.dp) else 0.dp
+                    val fruitCounterY = h * fruitZoom * KitchenLayout.counterTop(true) - fruitLift
                     // Rory's Kitchen: his mouth talks whenever Rory is the one speaking (naming
                     // the step, modelling the word, or echoing after it), and he hides while the
                     // big listening Rory takes over, same as the small bottom-left Rory he replaces.
@@ -1308,7 +1319,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             // Rory's Kitchen uses no extra gap (its counter, not sky, sits at the
                             // top once lifted, and KitchenLayout already draws it tall there; see
                             // KitchenLayoutTest): the balloon puzzle's bigger gap would clip into it.
-                            val lift = gameStrip + (if (isKitchen) KitchenLandscapeGap else BalloonLandscapeGap)
+                            val lift = if (fruitWide) fruitLift else gameStrip + (if (isKitchen) KitchenLandscapeGap else BalloonLandscapeGap)
                             Box(
                                 // K9: Rory's Kitchen only uses requiredHeight, not height, here --
                                 // the outer Box just above is only (h - gameStrip) tall (clipped to
@@ -1327,7 +1338,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                 // exactly at the strip's own top, as KitchenLayout.onStage already
                                 // modelled. Scoped to Kitchen alone: the balloon puzzle's own
                                 // landscape sizing is unchanged.
-                                Modifier.fillMaxWidth().let { m -> if (isKitchen) m.wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(h) else m.height(h) }.offset(y = -lift).let { m ->
+                                Modifier.fillMaxWidth().let { m -> if (isKitchen) m.wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(h * fruitZoom) else m.height(h) }.offset(y = -lift).let { m ->
                                     if (!isKitchen) return@let m
                                     m.onGloballyPositioned { c ->
                                         if (kitchenLayoutLoggedStep == index to phase) return@onGloballyPositioned
@@ -1340,7 +1351,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         println("KITCHEN layout counterTop=${counterTop.roundToInt()} counterBottom=${counterBottom.roundToInt()} screenH=${screenHPx.roundToInt()}")
                                     }
                                 },
-                            ) {
+                            ) { androidx.compose.runtime.CompositionLocalProvider(com.zeronolidge.speechapp.ui.art.LocalKitchenCharZoom provides fruitCharZoom) {
                                 val end = kitchenEnd
                                 if (end != null) {
                                     KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSaladFruits = if (isFruitSaladStory) pickedFruits.toSet() else emptySet())
@@ -1364,7 +1375,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         onKitchenPropRect = if (beat.backdrop == Backdrop.KITCHEN) { p, c -> kitchenPropRects[p] = c.boundsInWindow() } else null,
                                     )
                                 }
-                            }
+                            } }
                         } else {
                             val end = kitchenEnd
                             if (end != null) {
@@ -1460,6 +1471,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         // per-beat `kitchenHopped` (reset fresh every `startBeat`).
                         if (beat.kitchen == KitchenFlow.PICK) pickedFruits.map { it.ordinal }.toSet() else kitchenHopped,
                         kitchenWrong, kitchenWiggleBump, gameStrip,
+                        pickCounterY = if (fruitWide) fruitCounterY else null,
                         onTap = ::tapKitchen,
                         onCenter = { i, c -> kitchenCenters[i] = c },
                         modifier = Modifier.fillMaxSize(),
@@ -1510,9 +1522,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             if (k >= 0 && beats[k].backdrop == Backdrop.KITCHEN && phase != VPhase.END && phase != VPhase.ACT) {
                 beats[k].caption?.let { cap ->
                     Text(
-                        cap, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
+                        cap, fontSize = if (isFruitSaladStory) 30.sp else 19.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).zIndex(4f)
-                            .paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            .paperCard(PaperStyle.chip, 20.dp).padding(horizontal = if (isFruitSaladStory) 22.dp else 14.dp, vertical = if (isFruitSaladStory) 8.dp else 4.dp),
                     )
                 }
             }
@@ -1524,7 +1536,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory's Kitchen's own ending (Ruby's K2c) has no continue button at all: it carries
             // on by itself, no tap needed (🏠, drawn by ScreenFrame outside this whole sequence,
             // still works throughout).
-            if (phase != VPhase.GAME && phase != VPhase.KITCHEN && !(isKitchenStory && phase == VPhase.END)) ContinueAction(
+            // test38: in Rory's Fruit Salad the green button only shows when it IS the step
+            // (the start, and "I said it!" on his talk turn) -- never while Rory is still
+            // naming, modelling or showing the fix, which it can't do anything for anyway.
+            if (phase != VPhase.GAME && phase != VPhase.KITCHEN && !(isKitchenStory && phase == VPhase.END) &&
+                !(isFruitSaladStory && (phase == VPhase.ACT || phase == VPhase.MODEL))) ContinueAction(
                 hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),
                 label = if (phase == VPhase.END || phase == VPhase.INTRO) null else "I said it!",
             ) {
@@ -1777,6 +1793,7 @@ private val KitchenChoiceGap = 32.dp
  * (its own reserved slot above it, see [KitchenTapRow]), never covering it. */
 private val KitchenHintHandSize = 24.dp
 private val PickerTileSize = 120.dp
+private val PickOnCounterGap = 12.dp
 
 /**
  * Which tile Rory's pointing hand should hover over, once his line's finished (see
@@ -1811,6 +1828,7 @@ private fun KitchenTapRow(
     wrongChoice: Int,
     wiggleBump: Int,
     stripHeight: Dp,
+    pickCounterY: Dp? = null,
     onTap: (Int) -> Unit,
     onCenter: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier,
@@ -1833,15 +1851,25 @@ private fun KitchenTapRow(
         // counter front, never over Rory), sized by width and by the scene's own height, and the
         // hint hand floats over the tile instead of taking layout room.
         val tileSize = when {
+            isPick && pickCounterY != null -> minOf(PickerTileSize, (maxWidth - PickOnCounterGap * (tiles.size - 1) - 24.dp) / tiles.size)
             isPick -> minOf(PickerTileSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size, maxHeight * 0.26f)
             tiles.size > 3 -> minOf(BalloonChoiceSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size)
             else -> BalloonChoiceSize
         }
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
+        // test38: in landscape the fruit cards stand ON the counter (right of Rory, centred on
+        // the counter front where it's tall enough, otherwise resting just above the screen's
+        // bottom edge), never in a strip under it.
+        val onCounter = isPick && pickCounterY != null
+        val pickBottom = if (pickCounterY != null) {
+            val frontH = (maxHeight - pickCounterY).coerceAtLeast(0.dp)
+            minOf(maxHeight - 8.dp, pickCounterY + maxOf((frontH + tileSize) / 2f, tileSize * 0.6f))
+        } else maxHeight
+        if (stripHeight > 0.dp) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
         Row(
-            if (isPick) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 6.dp)
+            if (onCounter) Modifier.align(Alignment.TopEnd).offset(y = pickBottom - tileSize).padding(end = 12.dp)
+            else if (isPick) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 6.dp)
             else Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight),
-            horizontalArrangement = Arrangement.spacedBy(KitchenChoiceGap, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(if (onCounter) PickOnCounterGap else KitchenChoiceGap, Alignment.CenterHorizontally),
             verticalAlignment = if (isPick) Alignment.Bottom else Alignment.CenterVertically,
         ) {
             tiles.forEachIndexed { i, emoji ->

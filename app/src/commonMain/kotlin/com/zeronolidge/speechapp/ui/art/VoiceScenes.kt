@@ -908,7 +908,9 @@ private fun BoxWithConstraintsScope.KitchenBear(
                 .let { m -> if (!wantRects) m else m.onGloballyPositioned { c -> stoolRect = c.windowRect() } },
         ) { paperStool() }
     }
-    Box(Modifier.offset(x = laneLeft.dp, y = (seatY - bearHeight).dp).size(bearWidth.dp, bearHeight.dp)) {
+    val charZoom = LocalKitchenCharZoom.current
+    Box(Modifier.offset(x = laneLeft.dp, y = (seatY - bearHeight).dp).size(bearWidth.dp, bearHeight.dp)
+        .graphicsLayer { scaleX = charZoom; scaleY = charZoom; transformOrigin = TransformOrigin(0.5f, 1f) }) {
         Critter(
             Species.BEAR,
             Modifier.fillMaxSize()
@@ -992,6 +994,10 @@ private fun androidx.compose.ui.layout.LayoutCoordinates.windowRect(): Rect {
  * his turn to talk. K3d: [pointing] now poses his own arm (`Critter(pointMouth = true)`, a paper
  * hand raised to his mouth) instead of a separate floating hand icon beside him.
  */
+/** test38: phone-landscape fruit salad draws Rory and Bear bigger, scaled about their own
+ * grounded line (counter top / seat), so nothing floats. 1f everywhere else. */
+val LocalKitchenCharZoom = androidx.compose.runtime.staticCompositionLocalOf { 1f }
+
 @Composable
 private fun BoxWithConstraintsScope.KitchenRory(
     landscape: Boolean,
@@ -1024,12 +1030,16 @@ private fun BoxWithConstraintsScope.KitchenRory(
     val zf = ((zoom - 1f) / (FPoseZoom - 1f)).coerceIn(0f, 1f)
     val liftPx = if (landscape) 0f else (h * 0.40f - faceY) * zf
     val shiftPx = (w * (if (landscape) 0.30f else 0.36f) - faceX).coerceAtLeast(0f) * zf
+    val charZoom = LocalKitchenCharZoom.current
     Box(
         Modifier.offset(x = laneLeft.dp, y = laneTop.dp).size(laneWidth.dp, laneHeight.dp)
             .graphicsLayer {
-                scaleX = zoom
-                scaleY = zoom
-                transformOrigin = TransformOrigin(
+                scaleX = zoom * charZoom
+                scaleY = zoom * charZoom
+                transformOrigin = if (charZoom > 1f) TransformOrigin(
+                    ((faceX - laneLeft) / laneWidth).coerceIn(0f, 1f),
+                    ((h * KitchenLayout.counterTop(landscape) - laneTop) / laneHeight).coerceIn(0f, 1f),
+                ) else TransformOrigin(
                     ((faceX - laneLeft) / laneWidth).coerceIn(0f, 1f),
                     ((faceY - laneTop) / laneHeight).coerceIn(0f, 1f),
                 )
@@ -2467,7 +2477,7 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: 
     val onTapNow = androidx.compose.runtime.rememberUpdatedState(onTap)
     val sentNow = androidx.compose.runtime.rememberUpdatedState(sent)
     fun send(at: Offset) {
-        val cb = onTapNow.value ?: run { println("KITCHEN dragsend none"); return }
+        val cb = onTapNow.value ?: return
         val pick = centers.indices.filter { it !in sentNow.value }.minByOrNull { (centers[it] - at).getDistance() } ?: return
         cb(pick)
     }
@@ -2481,7 +2491,6 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: 
                 // LATEST `sent` set via sendNow so the gesture never picks a stale slice.
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    println("KITCHEN dragdown x=${down.position.x.roundToInt()} y=${down.position.y.roundToInt()}")
                     send(Offset(down.position.x + gx - pad, down.position.y + gy - pad))
                     down.consume()
                     while (true) {
