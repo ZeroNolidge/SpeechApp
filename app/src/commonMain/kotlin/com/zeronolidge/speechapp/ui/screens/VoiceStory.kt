@@ -1472,6 +1472,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         if (beat.kitchen == KitchenFlow.PICK) pickedFruits.map { it.ordinal }.toSet() else kitchenHopped,
                         kitchenWrong, kitchenWiggleBump, gameStrip,
                         pickCounterY = if (fruitWide) fruitCounterY else null,
+                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom).dp } else 0.dp,
                         onTap = ::tapKitchen,
                         onCenter = { i, c -> kitchenCenters[i] = c },
                         modifier = Modifier.fillMaxSize(),
@@ -1829,6 +1830,8 @@ private fun KitchenTapRow(
     wiggleBump: Int,
     stripHeight: Dp,
     pickCounterY: Dp? = null,
+    /** test39: tiles start right of this x (Rory's drawn right edge on a zoomed phone). */
+    pickLeft: Dp = 0.dp,
     onTap: (Int) -> Unit,
     onCenter: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier,
@@ -1851,7 +1854,7 @@ private fun KitchenTapRow(
         // counter front, never over Rory), sized by width and by the scene's own height, and the
         // hint hand floats over the tile instead of taking layout room.
         val tileSize = when {
-            isPick && pickCounterY != null -> minOf(PickerTileSize, (maxWidth - PickOnCounterGap * (tiles.size - 1) - 24.dp) / tiles.size)
+            isPick && pickCounterY != null -> minOf(PickerTileSize, (maxWidth - pickLeft - 6.dp * (tiles.size - 1) - 10.dp) / tiles.size)
             isPick -> minOf(PickerTileSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size, maxHeight * 0.26f)
             tiles.size > 3 -> minOf(BalloonChoiceSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size)
             else -> BalloonChoiceSize
@@ -1866,10 +1869,11 @@ private fun KitchenTapRow(
         } else maxHeight
         if (stripHeight > 0.dp) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
         Row(
-            if (onCounter) Modifier.align(Alignment.TopEnd).offset(y = pickBottom - tileSize).padding(end = 12.dp)
+            if (onCounter && pickLeft > 0.dp) Modifier.align(Alignment.TopStart).fillMaxWidth().offset(y = pickBottom - tileSize).padding(start = pickLeft, end = 4.dp)
+            else if (onCounter) Modifier.align(Alignment.TopEnd).offset(y = pickBottom - tileSize).padding(end = 12.dp)
             else if (isPick) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 6.dp)
             else Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight),
-            horizontalArrangement = Arrangement.spacedBy(if (onCounter) PickOnCounterGap else KitchenChoiceGap, Alignment.CenterHorizontally),
+            horizontalArrangement = if (onCounter && pickLeft > 0.dp) Arrangement.SpaceEvenly else Arrangement.spacedBy(if (onCounter) PickOnCounterGap else KitchenChoiceGap, Alignment.CenterHorizontally),
             verticalAlignment = if (isPick) Alignment.Bottom else Alignment.CenterVertically,
         ) {
             tiles.forEachIndexed { i, emoji ->

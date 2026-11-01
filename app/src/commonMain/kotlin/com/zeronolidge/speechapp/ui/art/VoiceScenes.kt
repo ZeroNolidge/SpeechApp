@@ -893,8 +893,10 @@ private fun BoxWithConstraintsScope.KitchenBear(
     // overlaps the stool's own drawn seat by that much instead of merely touching it (a real
     // screenshot showed a hairline gap between the two that read as him floating).
     val stoolTopY = h * KitchenLayout.stoolTop(landscape)
+    val LocalKitchenCharZoomValue = LocalKitchenCharZoom.current
     Box(
-        Modifier.offset(x = laneLeft.dp, y = stoolTopY.dp).size(bearWidth.dp, (floorY - stoolTopY).dp),
+        Modifier.offset(x = laneLeft.dp, y = stoolTopY.dp).size(bearWidth.dp, (floorY - stoolTopY).dp)
+            .graphicsLayer { val z = LocalKitchenCharZoomValue; scaleX = z; transformOrigin = TransformOrigin(0.5f, 1f) },
         // K6: Timothy's screenshot showed the stool's own seat sitting well left of Bear's own
         // body -- this canvas used to default to `Alignment.TopStart` (a plain `Box`'s own
         // default), pinning it to this box's LEFT edge instead of centring it the way Bear's own
