@@ -369,6 +369,9 @@ fun VoiceBeatScene(
     /** Rory's Fruit Salad only: the drag-to-bowl step is live (a drag hint over the slices); fires
      * once per slice sent, with that slice's own index (K-fruit: four slices, not one). */
     onDragToBowl: ((Int) -> Unit)? = null,
+    /** test37: which slices the story has actually counted into the bowl (the source of truth,
+     * so the art can never fly a slice away that the step didn't count). */
+    dragSent: Set<Int>? = null,
     /** Rory's Kitchen only (K6): a big numeral popped up beside the bowl/butter ("2"). */
     bigNumeral: String? = null,
     /** Rory's Kitchen only (K6): each on-counter tap target's window centre, for the KITCHEN log. */
@@ -447,11 +450,11 @@ fun VoiceBeatScene(
             ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, strawberryIn, grapeIn, fruitStirring) }
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) when (beat.prop) {
                 Prop.STRAWBERRY -> FruitCountRow(landscape, 3, countHopped, onBerryTap, onKitchenTarget) { m -> BigStrawberry(m) }
-                Prop.GRAPE -> FruitCountRow(landscape, 5, countHopped, onBerryTap, onKitchenTarget) { m -> BigGrape(m) }
+                Prop.GRAPE -> GrapeBunch(landscape, countHopped, onBerryTap, onKitchenTarget)
                 else -> KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
             }
             if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
-            if (isKitchen && beat.prop == Prop.BANANA && fruitSliced && !fruitInBowl) FruitDragOverlay(landscape, onDragToBowl, onKitchenTarget)
+            if (isKitchen && beat.prop == Prop.BANANA && fruitSliced && !fruitInBowl) FruitDragOverlay(landscape, onDragToBowl, dragSent ?: emptySet(), onKitchenTarget)
             // the "how many berries?" ask keeps the three berries in the bowl, with no numeral
             // (it would give the answer away)
             if (isKitchen && beat.kitchen == KitchenFlow.ASK && beat.prop == Prop.BATTER) KitchenCountRow(landscape, setOf(0, 1, 2), null, null, showCount = false)
@@ -1620,6 +1623,7 @@ private fun PropArt(
  */
 @Composable
 private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Boolean, blueberryIn: Boolean, fruitStirring: Boolean) {
+    val grapesShown = if (grapeIn) 5 else GrapesInBowl.intValue
     // K-fruit10: a small wiggle around a 45-degree base, not side to side around upright -- a
     // fork standing nearly straight up and swinging like a windshield wiper didn't read as
     // stirring into the bowl at all.
@@ -1687,10 +1691,12 @@ private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Bool
                     for (k in -1..1) drawCircle(Color(0xFFFFE9B0), r * 0.08f, c + Offset(k * r * 0.3f, -r * 0.1f + (k % 2) * r * 0.3f))
                 }
             }
-            if (grapeIn) {
-                val r = w * 0.042f
-                listOf(0.26f, 0.36f, 0.46f, 0.56f, 0.66f).forEachIndexed { i, x ->
-                    val c = Offset(w * x, mound(x) + rimH * (0.1f + 0.06f * (i % 2)))
+            if (grapesShown > 0) {
+                // test37: nestled down INSIDE the bowl (the inner rim's own oval clips their
+                // lower halves), one more each time he pops one off the bunch.
+                val r = w * 0.05f
+                listOf(0.30f, 0.62f, 0.46f, 0.38f, 0.54f).take(grapesShown).forEachIndexed { i, x ->
+                    val c = Offset(w * x, rimMid + rimH * (0.22f - 0.12f * (i / 2)))
                     drawCircle(Color(0xFF6A3D9A), r, c)
                     drawCircle(Color(0xFF8E5BC4), r * 0.75f, c + Offset(-r * 0.12f, -r * 0.12f))
                     drawCircle(Color.White.copy(alpha = 0.6f), r * 0.2f, c + Offset(-r * 0.35f, -r * 0.35f))
@@ -1718,6 +1724,18 @@ private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Bool
                 }
             }
         }
+        // test37: the bowl's own front inner wall, drawn OVER the fruit, so everything in it reads
+        // as sitting down inside the bowl, never perched on the rim.
+        val ovL = w * 0.06f
+        val ovR = w * 0.94f
+        val lipPath = Path().apply {
+            moveTo(ovL, rimMid)
+            quadraticTo(w * 0.5f, rimTop + rimH * 1.0f + rimH * 0.5f, ovR, rimMid)
+            quadraticTo(w * 0.5f, rimMid + rimH * 0.75f, ovL, rimMid)
+            close()
+        }
+        paperPath(lipPath, Color(0xFFFFF3E0))
+        drawArc(Color(0xFFD7CCC8), 0f, 180f, false, Offset(ovL, rimTop), Size(ovR - ovL, rimH), style = Stroke(1.5.dp.toPx()))
         if (fruitStirring) {
             // K-fruit10: angled about 45 degrees into the bowl (a fork standing nearly straight
             // up read as planted, not stirring), its own length about the bowl's own width (`w`),
@@ -2118,6 +2136,82 @@ private fun BoxWithConstraintsScope.FruitCountRow(
     if (count > 0) KitchenNumeral(count.toString(), bowl, landscape, key = count)
 }
 
+/**
+ * test37: the grapes as a real bunch lying on its side ON the counter (3 resting on the counter
+ * surface, 2 nestled on top, a brown stem), never a row balanced on anything. Any tap on the
+ * bunch pops the top-most grape left (top row first, so what's left is always resting on
+ * something), which drops in an arc INTO the bowl's opening and stays there, small, inside the
+ * rim. Big targets: each grape is its own >= 64dp-ish touch box; tapping anywhere on any of them
+ * counts as "the next one".
+ */
+private val GrapesInBowl = androidx.compose.runtime.mutableIntStateOf(0)
+
+@Composable
+private fun BoxWithConstraintsScope.GrapeBunch(
+    landscape: Boolean,
+    hopped: Set<Int>,
+    onTap: ((Int) -> Unit)?,
+    onTarget: ((Int, Offset) -> Unit)?,
+) {
+    val total = 5
+    val bowl = KitchenLayout.bowlBox(landscape)
+    val counter = KitchenLayout.counterTop(landscape) + KitchenLayout.PROPS_MARGIN
+    val size = minOf(maxWidth * 0.085f, maxHeight * 0.11f, 84.dp)
+    val fy = size / maxHeight
+    val fx = size / maxWidth
+    val mid = KitchenLayout.fruitWorkSlot(2, total, landscape)
+    val cx = (mid.l + mid.r) / 2f
+    // index -> (dx, dy) in grape units from the bunch's bottom-middle grape; top row first.
+    val spots = listOf(-0.42f to -0.72f, 0.42f to -0.72f, -0.84f to 0f, 0f to 0f, 0.84f to 0f)
+    val bowlCx = (bowl.l + bowl.r) / 2f
+    val bowlW = bowl.r - bowl.l
+    val bowlH = (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BATTER, landscape)) / maxHeight
+    val rimMidFrac = KitchenLayout.BOWL_INNER_RIM_TOP + KitchenLayout.BOWL_INNER_RIM_HEIGHT * 0.62f
+    val inY = bowl.t - bowlH * (1f - rimMidFrac)
+    val next = (0 until total).firstOrNull { it !in hopped }
+    val landed = hopped.size
+    androidx.compose.runtime.LaunchedEffect(landed) { if (landed > 0) kotlinx.coroutines.delay(560); GrapesInBowl.intValue = landed }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { GrapesInBowl.intValue = 0 } }
+    val pulse = rememberInfiniteTransition(label = "grapePulse").animateFloat(1f, 1.1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "p")
+    // the stem: a short brown twig off the top-left grape, lying on the bunch (drawn behind it)
+    val stemSize = size * 0.9f
+    Item(stemSize, { cx - fx * 1.55f }, { counter - stemSize / maxHeight * 0.5f }) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = this.size.width
+            val h = this.size.height
+            // lying flat on the counter: twig along the counter into the bunch, one leaf on it
+            drawLine(Color(0xFF6D4C41), Offset(w * 1.05f, h * 0.8f), Offset(w * 0.15f, h * 0.88f), w * 0.1f, cap = StrokeCap.Round)
+            drawLine(Color(0xFF6D4C41), Offset(w * 0.15f, h * 0.88f), Offset(w * 0.02f, h * 0.7f), w * 0.08f, cap = StrokeCap.Round)
+            drawOval(Color(0xFF7CB342), Offset(w * 0.3f, h * 0.62f), Size(w * 0.42f, h * 0.22f))
+        }
+    }
+    for (i in 0 until total) {
+        val (dx, dy) = spots[i]
+        val restX = cx + dx * fx * 0.95f
+        val restY = counter - fy * 0.5f + dy * fy
+        val slot = i - 2
+        val inX = bowlCx + slot * bowlW * 0.09f
+        val inYi = inY + (if (i % 2 == 0) 0f else fy * 0.08f)
+        val t by animateFloatAsState(if (i in hopped) 1f else 0f, tween(600), label = "grapeHop$i")
+        val x = restX + (inX - restX) * t
+        val y = restY + (inYi - restY) * t - 0.2f * kotlin.math.sin(kotlin.math.PI.toFloat() * t)
+        val sc = if (i in hopped) 1f - 0.45f * t else if (i == next && onTap != null) pulse.value else 1f
+        Item(size, { x }, { y }, alpha = { if (t > 0.85f) ((1f - t) / 0.15f).coerceIn(0f, 1f) else 1f }, scale = { sc }) {
+            Box(
+                Modifier.fillMaxSize().onGloballyPositioned { c ->
+                    val pos = c.positionInWindow()
+                    onTarget?.invoke(i, Offset(pos.x + c.size.width / 2f, pos.y + c.size.height / 2f))
+                }.let { m ->
+                    if (onTap == null || i in hopped) m
+                    else m.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { next?.let(onTap) }
+                },
+            ) { BigGrape(Modifier.fillMaxSize()) }
+        }
+    }
+    val count = hopped.size
+    if (count > 0) KitchenNumeral(count.toString(), bowl, landscape, key = count)
+}
+
 /** K6: a big numeral that pops up above [box] (scene fractions), counting as it changes. */
 @Composable
 private fun BoxWithConstraintsScope.KitchenNumeral(text: String, box: KitchenLayout.Rect, landscape: Boolean, key: Any = text) {
@@ -2343,7 +2437,7 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
  * the very same big slices.
  */
 @Composable
-private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: ((Int) -> Unit)?, onTarget: ((Int, Offset) -> Unit)?) {
+private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: ((Int) -> Unit)?, sent: Set<Int>, onTarget: ((Int, Offset) -> Unit)?) {
     val density = LocalDensity.current
     val wPx = constraints.maxWidth.toFloat()
     val hPx = constraints.maxHeight.toFloat()
@@ -2361,49 +2455,40 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: 
     val gy = (plateCy - gridH + zone / 2f).coerceIn(0f, hPx - gridH)
     val centers = (0 until 4).map { i -> Offset(gx + zone * (i % cols + 0.5f), gy + zone * (i / cols + 0.5f)) }
     val target = Offset((bowl.l + bowl.r) / 2f * wPx, (bowl.t + (bowl.b - bowl.t) * 0.55f) * hPx)
-    val sent = remember { mutableStateListOf<Int>() }
     val hops = remember { List(4) { Animatable(0f) } }
-    // K-fruit9: a tap only counts once this fallback window has opened (reset every time a slice
-    // is sent, so the NEXT slice always gets its own fresh 2 s of "try dragging it" first); the
-    // next un-sent slice pulses the moment it opens, same hint feel as KitchenFlow.COUNT's berries.
-    var fallbackReady by remember { mutableStateOf(false) }
-    LaunchedEffect(sent.size, onTap != null) {
-        fallbackReady = false
-        if (onTap != null) { kotlinx.coroutines.delay(FruitDrag.FALLBACK_DELAY_MS); fallbackReady = true }
+    // test37: slices fly only once the story has counted them (see `sent`); any touch counts --
+    // a ~40dp nudge in any direction, or a plain tap, no waiting.
+    for (i in 0 until 4) {
+        val isSent = i in sent
+        LaunchedEffect(isSent) { if (isSent) hops[i].animateTo(1f, tween(520)) else hops[i].snapTo(0f) }
     }
+    val fallbackReady = onTap != null
     val pulse = rememberInfiniteTransition(label = "slicePulse").animateFloat(1f, 1.18f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "p")
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val onTapNow = androidx.compose.runtime.rememberUpdatedState(onTap)
+    val sentNow = androidx.compose.runtime.rememberUpdatedState(sent)
     fun send(at: Offset) {
-        val cb = onTap ?: return
-        val pick = centers.indices.filter { it !in sent }.minByOrNull { (centers[it] - at).getDistance() } ?: return
-        sent.add(pick)
-        scope.launch { hops[pick].animateTo(1f, tween(520)) }
+        val cb = onTapNow.value ?: run { println("KITCHEN dragsend none"); return }
+        val pick = centers.indices.filter { it !in sentNow.value }.minByOrNull { (centers[it] - at).getDistance() } ?: return
         cb(pick)
     }
     val pad = zone * 0.6f
-    val dragThresholdPx = with(density) { FruitDrag.THRESHOLD_DP.dp.toPx() }
     Box(
         Modifier.offset { IntOffset((gx - pad).roundToInt(), (gy - pad).roundToInt()) }
             .size(with(density) { (gridW + pad * 2f).toDp() }, with(density) { (gridH + pad * 2f).toDp() })
-            .pointerInput(onTap != null) {
-                if (onTap != null) awaitEachGesture {
-                    val down = awaitFirstDown()
-                    val start = Offset(down.position.x + gx - pad, down.position.y + gy - pad)
-                    var fired = false
-                    var pointer = down.id
+            .pointerInput(Unit) {
+                // test37: real iPad touch -- fire on the finger's very first contact (a tap, a
+                // nudge, a drag, even a gesture the browser later cancels all count), using the
+                // LATEST `sent` set via sendNow so the gesture never picks a stale slice.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    println("KITCHEN dragdown x=${down.position.x.roundToInt()} y=${down.position.y.roundToInt()}")
+                    send(Offset(down.position.x + gx - pad, down.position.y + gy - pad))
+                    down.consume()
                     while (true) {
                         val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == pointer } ?: break
-                        if (!fired) {
-                            val cur = Offset(change.position.x + gx - pad, change.position.y + gy - pad)
-                            if ((cur - start).getDistance() >= dragThresholdPx) {
-                                fired = true
-                                send(start)
-                            }
-                        }
-                        if (!change.pressed) break
+                        event.changes.forEach { it.consume() }
+                        if (event.changes.none { it.pressed }) break
                     }
-                    if (!fired && fallbackReady) send(start)
                 }
             },
     )

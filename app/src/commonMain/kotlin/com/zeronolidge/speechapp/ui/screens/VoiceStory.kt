@@ -56,6 +56,7 @@ import com.zeronolidge.speechapp.logic.KitchenBeatState
 import com.zeronolidge.speechapp.logic.KitchenEndStage
 import com.zeronolidge.speechapp.logic.KitchenEnding
 import com.zeronolidge.speechapp.logic.KitchenFlow
+import com.zeronolidge.speechapp.logic.hasWrongTaps
 import com.zeronolidge.speechapp.logic.KitchenGame
 import com.zeronolidge.speechapp.logic.KitchenLayout
 import com.zeronolidge.speechapp.logic.KitchenPhase
@@ -91,6 +92,7 @@ import com.zeronolidge.speechapp.ui.art.paperBalloon
 import com.zeronolidge.speechapp.ui.art.voiceTarget
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.boundsInWindow
@@ -651,7 +653,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             b.caption?.let { println("KITCHEN cue step=$k text=$it") }
             logKitchen(kitchenPhase)
             app.speaker.say(b.problem) {
-                if (s == session) {
+                if (s == session && kitchenPhase.phase == KitchenPhase.NAME) {
                     kitchenPhase = kitchenPhase.named()
                     logKitchen(kitchenPhase)
                     if (b.kitchen == KitchenFlow.PICK) println("KITCHEN picker")
@@ -864,6 +866,14 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
 
     /** A tap on one of the kitchen flow's tiles (ignored outside its TAP phase; see KitchenBeatState). */
     fun tapKitchen(i: Int) {
+        // test37 freeze fix: a child who drags/taps the banana slices (or the grapes, the box)
+        // while Rory is still saying the step's line (NAME) used to be silently ignored here while
+        // the art had already flown the slice away -- empty plate, step never completes. An
+        // early touch on a tap-only flow (no wrong answers) now just ends Rory's intro and counts.
+        val f = beats.getOrNull(index)?.kitchen
+        if (kitchenPhase.phase == KitchenPhase.NAME && f != null && !f.hasWrongTaps() && f != KitchenFlow.PICK) {
+            kitchenPhase = kitchenPhase.named()
+        }
         if (kitchenPhase.phase != KitchenPhase.TAP) return
         when (beats[index].kitchen) {
             KitchenFlow.TAP_CHOICE -> {
@@ -929,6 +939,21 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // its talk turn (one model line, then listen) starts once its taps are done, or at once for
     // the stir/bubbles flows (no taps at all); the count flow has no talk turn, so its fix plays
     // here too, straight from its last tap.
+    // test37 no-deadlock safety: if a tap-only kitchen step (banana slice/drag, grapes,
+    // strawberries, the berry box) sits idle, Rory gently does the next bit himself -- 6 s for
+    // the banana drag, 10 s for the rest -- so a step can never strand him with nothing to do.
+    LaunchedEffect(index, kitchenPhase.phase, kitchenPhase.tapsDone) {
+        val s = session
+        val b = beats.getOrNull(index) ?: return@LaunchedEffect
+        val f = b.kitchen ?: return@LaunchedEffect
+        if (!isFruitSaladStory || kitchenPhase.phase != KitchenPhase.TAP || f.hasWrongTaps() || f == KitchenFlow.PICK) return@LaunchedEffect
+        delay(if (f == KitchenFlow.DRAG) 6000L else 10000L)
+        if (s != session || kitchenPhase.phase != KitchenPhase.TAP) return@LaunchedEffect
+        val next = (0 until maxOf(1, f.tapGoal(kitchenPhase.goal))).firstOrNull { it !in kitchenHopped } ?: 0
+        println("KITCHEN autohelp step=$index item=$next")
+        tapKitchen(next)
+    }
+
     LaunchedEffect(kitchenPhase.phase) {
         val s = session
         val b = beats.getOrNull(index) ?: return@LaunchedEffect
@@ -1332,7 +1357,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
                                         onSlice = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.SWIPE) { { tapKitchen(0) } } else null,
-                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { i -> tapKitchen(i) } } else null,
+                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { i -> tapKitchen(i) } } else null, dragSent = if (beat.kitchen == KitchenFlow.DRAG && phase == VPhase.KITCHEN) kitchenHopped else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                         onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
@@ -1357,7 +1382,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
                                         onSlice = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.SWIPE) { { tapKitchen(0) } } else null,
-                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { i -> tapKitchen(i) } } else null,
+                                        onDragToBowl = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.DRAG) { { i -> tapKitchen(i) } } else null, dragSent = if (beat.kitchen == KitchenFlow.DRAG && phase == VPhase.KITCHEN) kitchenHopped else null,
                                         bigNumeral = kitchenNumeral,
                                         onKitchenTarget = { i, c -> kitchenCenters[i] = c },
                                     onSceneRect = if (beat.backdrop == Backdrop.KITCHEN) { c -> logKitchenRects(c, landscape) } else null,
@@ -1822,18 +1847,35 @@ private fun KitchenTapRow(
             tiles.forEachIndexed { i, emoji ->
                 val isAnswer = state.flow == KitchenFlow.TAP_CHOICE && round != null && round.options.getOrNull(i) == round.answer
                 val hint = state.glow && i == targetIndex
-                val card: @Composable () -> Unit = {
+                // test37: a fruit he's already used reads as DONE, never "go": gray, dimmed,
+                // the same drawn check badge as the top recipe card, and no longer tappable.
+                val used = isPick && i in hopped
+                val card: @Composable () -> Unit = { Box {
                     AnswerCard(
-                        modifier = Modifier.size(tileSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) },
-                        correct = (answerShown && isAnswer) || i in hopped,
-                        glow = hint,
+                        modifier = Modifier.size(tileSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) }
+                            .let { m -> if (used) m.graphicsLayer { alpha = 0.45f; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                                .drawWithContent { drawContent(); drawRect(Color.Gray, blendMode = androidx.compose.ui.graphics.BlendMode.Saturation) } else m },
+                        correct = !isPick && ((answerShown && isAnswer) || i in hopped),
+                        glow = hint && !used,
                         wiggle = if (i == wrongChoice) wiggleBump else 0,
-                        onClick = { onTap(i) },
+                        onClick = { if (!used) onTap(i) },
                     ) {
                         if (state.flow == KitchenFlow.COUNT) BlueberryArt(KitchenBerryTileSize)
                         else Text(emoji, fontSize = if (isPick) (tileSize.value * 0.5f).sp else if (tileSize < BalloonChoiceSize) 30.sp else 40.sp)
                     }
-                }
+                    if (used) {
+                        val badge = tileSize * 0.3f
+                        Canvas(Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.15f, y = badge * 0.15f).size(badge)) {
+                            val d = size.minDimension
+                            drawCircle(Color.White, d / 2f)
+                            drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                            val pth = androidx.compose.ui.graphics.Path().apply {
+                                moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f)
+                            }
+                            drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                        }
+                    }
+                } }
                 if (isPick) Box(contentAlignment = Alignment.TopCenter) {
                     card()
                     if (hint) PointingHand(size = KitchenHintHandSize, pointDown = true, modifier = Modifier.offset(y = -KitchenHintHandSize))
