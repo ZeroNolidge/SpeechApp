@@ -337,6 +337,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // keeps stirring through the cheer and the rest of the ending.
     val hasForkBeat = isFruitSaladStory && beats.isNotEmpty() && beats.last() == FruitPicker.fork
     val fruitStirring = hasForkBeat && index == beats.lastIndex && phase == VPhase.ACT
+    // test40: the fork finale's own finger stir (between the fork beat's fix and the ending)
+    var forkStirLive by remember(id) { mutableStateOf(false) }
+    var forkStirDone by remember(id) { mutableStateOf(false) }
 
     lateinit var startBeat: (Int) -> Unit
     lateinit var startKitchenTalk: () -> Unit
@@ -431,6 +434,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             if (b.kitchen != null) { kitchenPhase = kitchenPhase.closed(); logKitchen(kitchenPhase) }
             if (b.backdrop == Backdrop.KITCHEN && b.kitchen == null) println("KITCHEN step=$k phase=DONE")
             when {
+                k + 1 >= beats.size && isFruitSaladStory && b == FruitPicker.fork -> {
+                    forkStirDone = false
+                    forkStirLive = true
+                    println("KITCHEN stir start")
+                }
                 k + 1 >= beats.size -> finish()
                 // After about 12 minutes of play: straight to the calm goodbye beat.
                 !beats[k + 1].goodbye && app.sessionLong() -> startBeat(beats.lastIndex)
@@ -1125,7 +1133,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // always fits whole on a narrow phone in portrait.
             // K-fruit11: recipe card pinned top-left (first in the row, right after 🏠).
             if (isFruitSaladStory) {
-                FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, forkDone = fruitStirring || kitchenEnd != null)
+                FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, forkDone = forkStirDone || kitchenEnd != null)
                 Spacer(Modifier.width(8.dp))
             }
             if (isFruitSaladStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
@@ -1363,7 +1371,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
-                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; forkStirDone = true; finish() } else null,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
@@ -1388,7 +1396,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
-                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; forkStirDone = true; finish() } else null,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
@@ -1472,7 +1480,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         if (beat.kitchen == KitchenFlow.PICK) pickedFruits.map { it.ordinal }.toSet() else kitchenHopped,
                         kitchenWrong, kitchenWiggleBump, gameStrip,
                         pickCounterY = if (fruitWide) fruitCounterY else null,
-                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom).dp } else 0.dp,
+                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom + 10f).dp } else 0.dp,
                         onTap = ::tapKitchen,
                         onCenter = { i, c -> kitchenCenters[i] = c },
                         modifier = Modifier.fillMaxSize(),
@@ -1854,7 +1862,7 @@ private fun KitchenTapRow(
         // counter front, never over Rory), sized by width and by the scene's own height, and the
         // hint hand floats over the tile instead of taking layout room.
         val tileSize = when {
-            isPick && pickCounterY != null -> minOf(PickerTileSize, (maxWidth - pickLeft - 6.dp * (tiles.size - 1) - 10.dp) / tiles.size)
+            isPick && pickCounterY != null -> minOf(PickerTileSize, (maxWidth - pickLeft - 4.dp * (tiles.size - 1) - 6.dp) / tiles.size)
             isPick -> minOf(PickerTileSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size, maxHeight * 0.26f)
             tiles.size > 3 -> minOf(BalloonChoiceSize, (maxWidth - KitchenChoiceGap * (tiles.size - 1)) / tiles.size)
             else -> BalloonChoiceSize
@@ -1869,7 +1877,7 @@ private fun KitchenTapRow(
         } else maxHeight
         if (stripHeight > 0.dp) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
         Row(
-            if (onCounter && pickLeft > 0.dp) Modifier.align(Alignment.TopStart).fillMaxWidth().offset(y = pickBottom - tileSize).padding(start = pickLeft, end = 4.dp)
+            if (onCounter && pickLeft > 0.dp) Modifier.align(Alignment.TopStart).fillMaxWidth().offset(y = pickBottom - tileSize).padding(start = pickLeft, end = 2.dp)
             else if (onCounter) Modifier.align(Alignment.TopEnd).offset(y = pickBottom - tileSize).padding(end = 12.dp)
             else if (isPick) Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 6.dp)
             else Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight),
