@@ -1,5 +1,7 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -369,12 +371,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             com.zeronolidge.speechapp.ui.art.CakeScene.nosePuff.value = cakeNose
         }
     }
-    // test41: the blow step's big-tap fallback (the whole cake) shows its hand after a few seconds.
+    // test42: the blow turn -- ~10 s of listening in two halves; between them (if nothing's been
+    // heard yet) Rory demos a big puff ("Watch me, whoosh!"). The big picture tap button (and the
+    // hand on the cake) comes up 4 s into his turn and stays for the rest of it.
+    var blowListenStarted by remember(id) { mutableStateOf(false) }
+    var blowDemoDone by remember(id) { mutableStateOf(false) }
     var blowHint by remember(id) { mutableStateOf(false) }
-    LaunchedEffect(cakeI, phase) {
-        blowHint = false
-        if (cakeI == 5 && (phase == VPhase.LISTEN || phase == VPhase.WAIT_TAP)) { delay(3000); blowHint = true }
+    var blowBtnLogged by remember(id) { mutableStateOf(false) }
+    LaunchedEffect(cakeI) {
+        if (cakeI != 5) { blowListenStarted = false; blowDemoDone = false; blowHint = false }
     }
+    LaunchedEffect(blowListenStarted) {
+        if (blowListenStarted) { delay(4000); if (cakeI == 5 && (phase == VPhase.LISTEN || phase == VPhase.WAIT_TAP || phase == VPhase.MODEL)) { blowHint = true; println("KITCHEN blow backup shown") } }
+    }
+    val blowTurn = cakeI == 5 && blowListenStarted && (phase == VPhase.LISTEN || phase == VPhase.WAIT_TAP || phase == VPhase.MODEL)
 
     lateinit var startBeat: (Int) -> Unit
     lateinit var startKitchenTalk: () -> Unit
@@ -522,8 +532,27 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         // takes over as soon as a kitchen talk turn starts listening, mic or no mic (both branches
         // below set `app.listening = true`).
         if (beats.getOrNull(k)?.backdrop == Backdrop.KITCHEN) println("KITCHEN pose=CUP_EAR step=$k")
+        val isBlow = isCakeStory && beats.getOrNull(k) == com.zeronolidge.speechapp.logic.VoiceStories.CakeSteps.blow
+        if (isBlow) blowListenStarted = true
+        val blowFirstHalf = isBlow && !blowDemoDone
+        val win = when { blowFirstHalf -> 4500L; isBlow -> 5500L; else -> 3500L }
         fun warmAutoAdvance() {
             if (s != session || phase != VPhase.LISTEN) return
+            if (blowFirstHalf) {
+                // test42: nothing heard yet -- Rory shows him how (a big puff that makes the
+                // flames lean right over), then listens again for the rest of the ~10 s.
+                blowDemoDone = true
+                app.listening = false
+                app.listenLevel = 0f
+                phase = VPhase.MODEL
+                println("KITCHEN blow demo")
+                com.zeronolidge.speechapp.ui.art.CakeScene.gust.value = true
+                app.speaker.say("Watch me, whoosh!") {
+                    com.zeronolidge.speechapp.ui.art.CakeScene.gust.value = false
+                    if (s == session && phase == VPhase.MODEL) listen(k)
+                }
+                return
+            }
             leaning = false
             app.listening = false
             app.listenLevel = 0f
@@ -547,7 +576,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             phase = VPhase.LISTEN
             app.listening = true
             scope.launch {
-                delay(3500)
+                delay(win)
                 warmAutoAdvance()
             }
         } else {
@@ -557,8 +586,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             val listenStartedAt = kotlin.time.TimeSource.Monotonic.markNow()
             val check = app.wordCheck(line(k), beats[k].sound, modeled = !model[0].waiting)
             lateinit var handle: (VoiceTry) -> Unit
+            // test42: the blow turn keeps its own clock (the mic's own window runs long while it
+            // settles on the room), so the demo lands at ~4.5 s and the turn ends by ~10 s.
+            var cut = false
+            if (isBlow) scope.launch {
+                delay(win)
+                if (s == session && phase == VPhase.LISTEN) {
+                    cut = true
+                    app.voice.cancel()
+                    println("VOICETURN story=${story.id} beat=$k counted=true why=warm-advance blowclock=$win")
+                    warmAutoAdvance()
+                }
+            }
             app.voice.listenTry(
-                3500,
+                win.toInt(),
                 onLevel = { app.listenLevel = it },
                 onVoice = {
                     // As soon as any vocal sound above ambient noise is heard, nudge the prop live
@@ -590,7 +631,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 mode = model[0].mode,
             ) { t -> handle(t) }
             handle = handle@{ t ->
-                if (s != session || phase != VPhase.LISTEN) return@handle
+                if (s != session || phase != VPhase.LISTEN || cut) return@handle
                 app.listenLevel = 0f
                 pushNow = 0f
                 val countedAsHeard = t == VoiceTry.HEARD || t == VoiceTry.SOFT
@@ -614,7 +655,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // If the mic failed immediately (NO_MIC), still give the child the full ~3.5 s
                     // window to speak before warmly celebrating and advancing.
                     val elapsedMs = listenStartedAt.elapsedNow().inWholeMilliseconds
-                    val remainingMs = (3500L - elapsedMs).coerceAtLeast(0L)
+                    val remainingMs = (win - elapsedMs).coerceAtLeast(0L)
                     if (remainingMs > 100L) {
                         scope.launch {
                             delay(remainingMs)
@@ -1169,12 +1210,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    fun blowTapped() {
+        if (!blowTurn) return
+        println("KITCHEN blow tap")
+        app.voice.cancel()
+        app.speaker.stop()
+        com.zeronolidge.speechapp.ui.art.CakeScene.gust.value = false
+        finishGently(index, heard = false, micUsed = false)
+    }
     // test41: the cake's prop taps -- the flour bag and the oven (each one big tap), and the
     // whole cake as the blow step's tap fallback (any voice try counts too, the usual way).
     val cakePropTap: (() -> Unit)? = when {
         !isCakeStory || index < 0 -> null
         phase == VPhase.KITCHEN && beats[index].kitchen == KitchenFlow.FLIP -> { { tapKitchen(0) } }
-        index == 5 && (phase == VPhase.LISTEN || phase == VPhase.WAIT_TAP) -> { { println("KITCHEN blow tap"); app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } }
+        blowTurn && blowHint -> { { blowTapped() } }
         else -> null
     }
 
@@ -1231,6 +1280,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             ListeningStage(
                 Modifier.fillMaxSize(),
                 lean = leaning,
+                badgeOnly = isKitchenStory,
                 // K-fruit: a real screenshot showed the listening bubble's left edge reaching well
                 // into Bear's own stool lane (and most of Rory's own counter lane too) at 0.26 --
                 // its own width is capped at 0.75 of the stage width by `listenSpot`'s own
@@ -1324,7 +1374,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // the step, modelling the word, or echoing after it), and he hides while the
                     // big listening Rory takes over, same as the small bottom-left Rory he replaces.
                     val kitchenTalking = phase == VPhase.MODEL || phase == VPhase.ACT || phase == VPhase.KITCHEN
-                    val kitchenRoryVisible = listenLookGone()
+                    val kitchenRoryVisible = isKitchenStory || listenLookGone()
                     // K3a: a talk-type kitchen beat (never a tap step: those never reach MODEL or
                     // LISTEN, see KitchenFlow.talkGoal) shows a paper speech-bubble beside Rory the
                     // whole time he's talking or listening, so a child who can't read still sees
@@ -1432,7 +1482,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
-                                        onPropTap = cakePropTap, propTapHint = cakeI != 5 || blowHint, cakeLean = cakeLean,
+                                        onPropTap = cakePropTap, propTapHint = cakeI != 5, cakeLean = cakeLean,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
@@ -1458,7 +1508,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
-                                        onPropTap = cakePropTap, propTapHint = cakeI != 5 || blowHint, cakeLean = cakeLean,
+                                        onPropTap = cakePropTap, propTapHint = cakeI != 5, cakeLean = cakeLean,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
@@ -1542,7 +1592,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         if (beat.kitchen == KitchenFlow.PICK) pickedFruits.map { it.ordinal }.toSet() else kitchenHopped,
                         kitchenWrong, kitchenWiggleBump, gameStrip,
                         pickCounterY = if (fruitWide) fruitCounterY else null,
-                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom + 10f).dp + w * 0.12f } else 0.dp,
+                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom + 10f).dp } else 0.dp,
                         onTap = ::tapKitchen,
                         onCenter = { i, c -> kitchenCenters[i] = c },
                         modifier = Modifier.fillMaxSize(),
@@ -1611,7 +1661,28 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // test38: in Rory's Fruit Salad the green button only shows when it IS the step
             // (the start, and "I said it!" on his talk turn) -- never while Rory is still
             // naming, modelling or showing the fix, which it can't do anything for anyway.
-            if (phase != VPhase.GAME && phase != VPhase.KITCHEN && !(isKitchenStory && phase == VPhase.END) &&
+            // test42: the blow turn's own child button -- a big picture (flames + a puff), no
+            // reading needed -- and the grown-up's "I said it!" shrunk to a small corner chip.
+            if (blowTurn) {
+                if (blowHint) BlowPictureButton(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 68.dp, bottom = 4.dp).zIndex(5f).popIn("blowBtn")
+                        .onGloballyPositioned { c -> val b = c.boundsInWindow(); if (!blowBtnLogged) { blowBtnLogged = true; println("KITCHEN blow button=${b.center.x.roundToInt()},${b.center.y.roundToInt()} size=${(b.width).roundToInt()}") } },
+                    onClick = ::blowTapped,
+                )
+                Box(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp).zIndex(5f).size(52.dp)
+                        .paperCard(PaperColorsUi.go, circle = true).clickable { blowTapped() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // a drawn tick (no text) -- the grown-up's "I said it!"
+                    Canvas(Modifier.size(26.dp)) {
+                        val d = size.minDimension
+                        val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.15f, d * 0.52f); lineTo(d * 0.4f, d * 0.78f); lineTo(d * 0.88f, d * 0.22f) }
+                        drawPath(pth, Color.White, style = Stroke(d * 0.16f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                    }
+                }
+            }
+            if (phase != VPhase.GAME && phase != VPhase.KITCHEN && !(isKitchenStory && phase == VPhase.END) && !blowTurn &&
                 !(isFruitSaladStory && (phase == VPhase.ACT || phase == VPhase.MODEL))) ContinueAction(
                 hint = phase == VPhase.WAIT_TAP || phase == VPhase.END || (phase == VPhase.LISTEN && model[0].waiting),
                 label = if (phase == VPhase.END || phase == VPhase.INTRO) null else "I said it!",
@@ -1722,6 +1793,46 @@ private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Ma
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** test42: the blow turn's big picture button for the child: five little lit candles with a
+ * puff of breath blowing at them, no words. */
+@Composable
+private fun BlowPictureButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
+    val bob by rememberInfiniteTransition(label = "blowBtn").animateFloat(1f, 1.08f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(650), androidx.compose.animation.core.RepeatMode.Reverse), label = "bb")
+    Box(
+        modifier.size(120.dp).graphicsLayer { val k = if (still) 1f else bob; scaleX = k; scaleY = k }
+            .paperCard(Color(0xFFFFF3E0), circle = true).clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize().padding(14.dp)) {
+            val w = size.width
+            val h = size.height
+            val cols = listOf(Color(0xFFEF5350), Color(0xFF42A5F5), Color(0xFFFFCA28))
+            for (i in 0 until 3) {
+                val x = w * (0.52f + 0.17f * i)
+                drawRect(cols[i], Offset(x - w * 0.045f, h * 0.5f), Size(w * 0.09f, h * 0.4f))
+                // flames leaning away from the puff
+                val fc = Offset(x + w * 0.04f, h * 0.38f)
+                val flame = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(fc.x + w * 0.07f, fc.y - h * 0.1f)
+                    quadraticTo(fc.x + w * 0.04f, fc.y + h * 0.08f, fc.x - w * 0.03f, fc.y + h * 0.1f)
+                    quadraticTo(fc.x - w * 0.06f, fc.y, fc.x + w * 0.07f, fc.y - h * 0.1f)
+                    close()
+                }
+                drawPath(flame, Color(0xFFFF9800))
+            }
+            // the puff: three soft cloud circles and wind lines coming from the left
+            drawCircle(Color(0xFF90CAF9), w * 0.13f, Offset(w * 0.17f, h * 0.42f))
+            drawCircle(Color(0xFFBBDEFB), w * 0.1f, Offset(w * 0.08f, h * 0.3f))
+            drawCircle(Color(0xFFBBDEFB), w * 0.09f, Offset(w * 0.1f, h * 0.55f))
+            for (k in 0 until 3) {
+                val y = h * (0.3f + 0.12f * k)
+                drawLine(Color(0xFF42A5F5), Offset(w * 0.27f, y), Offset(w * 0.42f, y - h * 0.02f), w * 0.035f, cap = StrokeCap.Round)
             }
         }
     }
@@ -2003,6 +2114,40 @@ private fun KitchenTapRow(
             minOf(maxHeight - 8.dp, pickCounterY + maxOf((frontH + tileSize) / 2f, tileSize * 0.6f))
         } else maxHeight
         if (stripHeight > 0.dp) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
+        // test42 (Ruby): on a landscape phone one row of 4 shrank the fruit cards under 120dp and
+        // pushed them over the bowl -- there it's a 2x2 grid of full-size cards at the right
+        // end of the counter instead, clear of the bowl and both characters.
+        if (onCounter && pickLeft > 0.dp && tileSize < PickerTileSize && maxHeight >= PickerTileSize * 2 + 14.dp) {
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                for (row in 0 until 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (i in row * 2 until minOf(row * 2 + 2, tiles.size)) {
+                        val used = i in hopped
+                        val hint = state.glow && i == targetIndex
+                        Box(contentAlignment = Alignment.TopCenter) {
+                            AnswerCard(
+                                modifier = Modifier.size(PickerTileSize).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) }
+                                    .let { m -> if (used) m.graphicsLayer { alpha = 0.45f; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                                        .drawWithContent { drawContent(); drawRect(Color.Gray, blendMode = androidx.compose.ui.graphics.BlendMode.Saturation) } else m },
+                                correct = false, glow = hint && !used, wiggle = if (i == wrongChoice) wiggleBump else 0,
+                                onClick = { if (!used) onTap(i) },
+                            ) { Text(tiles[i], fontSize = (PickerTileSize.value * 0.5f).sp) }
+                            if (used) Canvas(Modifier.align(Alignment.BottomEnd).size(PickerTileSize * 0.3f)) {
+                                val d = size.minDimension
+                                drawCircle(Color.White, d / 2f)
+                                drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                                val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f) }
+                                drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                            }
+                            if (hint && !used) PointingHand(size = KitchenHintHandSize * 0.8f, pointDown = true, modifier = Modifier.offset(x = -PickerTileSize * 0.45f, y = PickerTileSize * 0.1f))
+                        }
+                    }
+                }
+            }
+            return@BoxWithConstraints
+        }
         Row(
             if (onCounter && pickLeft > 0.dp) Modifier.align(Alignment.TopStart).fillMaxWidth().offset(y = pickBottom - tileSize).padding(start = pickLeft, end = 2.dp)
             else if (onCounter) Modifier.align(Alignment.TopEnd).offset(y = pickBottom - tileSize).padding(end = 12.dp)

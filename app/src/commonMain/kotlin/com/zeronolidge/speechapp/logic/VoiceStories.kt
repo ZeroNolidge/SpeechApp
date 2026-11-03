@@ -462,17 +462,17 @@ object VoiceStories {
     }
 
     val birthdayCake = VoiceStory(
-        id = "birthdaycake", title = "Bruno's Birthday Cake", emoji = "🎂", land = Land.MEADOW, sounds = listOf("f", "p", "b"),
+        id = "birthdaycake", title = "Bruno's Birthday Cake", emoji = "🎂", land = Land.CAVES, sounds = listOf("f", "p", "b"),
         setup = "It's Bruno's birthday! Let's bake him a cake!",
         beats = CakeSteps.all,
         swap = null, sticker = "birthday cake" to "🎂",
         ending = "Happy birthday, Bruno! You got a cake sticker. See you next time!",
     )
 
-    val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen, fruitSalad)
+    val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen, fruitSalad, birthdayCake)
     /** test41: Bruno's Birthday Cake is test-site only for now (#test=story-birthdaycake), not on
      * the map yet (the meadow stop is the balloon's), so it's kept out of [all]. */
-    val testOnly: List<VoiceStory> = listOf(birthdayCake)
+    val testOnly: List<VoiceStory> = emptyList()
 
     fun byId(id: String): VoiceStory? = (all + testOnly).firstOrNull { it.id == id }
 

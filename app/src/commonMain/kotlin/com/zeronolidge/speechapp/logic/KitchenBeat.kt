@@ -817,6 +817,9 @@ object KitchenLayout {
         // station -- only one is ever active at a time (the picker sits in between).
         Prop.BANANA, Prop.STRAWBERRY, Prop.GRAPE, Prop.BLUEBERRY_BOX, Prop.FLOUR_BAG, Prop.OVEN -> bananaBox(landscape)
         Prop.BUTTER -> butterBox(landscape)
+        // test42: the 1.5x cake is centre stage -- its own station spans the bowl and banana
+        // stations together (right of Rory, inside the counter), centred between them.
+        Prop.CAKE -> bowlBox(landscape).let { b -> val n = bananaBox(landscape); Rect(b.l, minOf(b.t, n.t), maxOf(b.r, n.r), maxOf(b.b, n.b)) }
         // Bruno's Birthday Cake (test41): the cake sits centre-counter (Prop.CAKE, like the bowl),
         // clear of the big listening Rory that comes up bottom-right on his talk turns.
         // Prop.FRUIT_BOWL (Rory's Fruit Salad's own bowl) falls through to the bowl station below,

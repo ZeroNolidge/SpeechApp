@@ -231,7 +231,7 @@ private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
     Prop.CAKE_BOWL -> if (landscape) 0.2533f else 0.215f
     Prop.FLOUR_BAG -> if (landscape) 0.3f else 0.22f
     Prop.OVEN -> if (landscape) 0.4f else 0.3f
-    Prop.CAKE -> if (landscape) 0.36f else 0.28f
+    Prop.CAKE -> if (landscape) 0.54f else 0.42f
     else -> propSize(p)
 }
 
@@ -2942,7 +2942,10 @@ object CakeScene {
     val lit = mutableStateOf(false)
     val blown = mutableStateOf(false)
     val nosePuff = mutableStateOf(false)
+    /** test42: Rory's demo puff -- the flames lean hard over without going out. */
+    val gust = mutableStateOf(false)
     fun reset() {
+        gust.value = false
         pouring.value = false; flourIn.value = false; mixed.value = false; baking.value = false
         baked.value = false; lit.value = false; blown.value = false; nosePuff.value = false
     }
@@ -3177,7 +3180,7 @@ private val CandleXs = listOf(0.27f, 0.385f, 0.5f, 0.615f, 0.73f)
 /** The birthday cake on its stand: pink icing with drips, [candles] candles on top (dashed spots
  * where the rest go when [spots]), each lit with a flickering flame when [lit], or a little smoke
  * curl once [blown]. [nextPulse] (0..1) pulses the next empty spot. */
-private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean, flicker: Float, nextPulse: Float) {
+private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean, flicker: Float, nextPulse: Float, gust: Boolean = false) {
     val w = size.width
     val h = size.height
     // the stand: plate, pedestal, foot (its foot flush with the bottom, on the counter)
@@ -3212,9 +3215,10 @@ private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spot
             for (s in 1..2) drawLine(Color.White.copy(alpha = 0.8f), Offset(x - cw / 2f, baseY - ch * (0.3f * s)), Offset(x + cw / 2f, baseY - ch * (0.3f * s) - ch * 0.12f), 1.5.dp.toPx())
             drawLine(Color(0xFF3E2723), Offset(x, baseY - ch), Offset(x, baseY - ch - h * 0.02f), 1.5.dp.toPx())
             if (lit) {
-                val f = 0.85f + 0.3f * (((flicker * 7f + i * 0.37f) % 1f).let { if (it > 0.5f) 1f - it else it } * 2f)
-                val jx = sin(flicker * 2f * PI.toFloat() * 3f + i) * w * 0.006f
-                val fc = Offset(x + jx, baseY - ch - h * 0.055f * f)
+                // test42: bigger, clearer flames (x1.6); a gust leans them hard right
+                val f = 1.6f * (0.85f + 0.3f * (((flicker * 7f + i * 0.37f) % 1f).let { if (it > 0.5f) 1f - it else it } * 2f))
+                val jx = sin(flicker * 2f * PI.toFloat() * 3f + i) * w * 0.006f + if (gust) w * 0.03f else 0f
+                val fc = Offset(x + jx, baseY - ch - h * 0.045f * f)
                 drawOval(Color(0xFFFFE082).copy(alpha = 0.45f), fc - Offset(w * 0.035f * f, h * 0.05f * f), Size(w * 0.07f * f, h * 0.1f * f))
                 val flame = Path().apply {
                     moveTo(fc.x, fc.y - h * 0.045f * f)
@@ -3250,7 +3254,7 @@ private fun CakeArt(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean =
     val tr = rememberInfiniteTransition(label = "cakeFlicker")
     val flicker by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart), label = "fl")
     val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "np")
-    Canvas(Modifier.fillMaxSize()) { paperCake(candles, lit, blown, spots, if (still) 0f else flicker, pulse) }
+    Canvas(Modifier.fillMaxSize()) { paperCake(candles, lit, blown, spots, if (still) 0f else flicker, pulse, CakeScene.gust.value) }
 }
 
 /** The candles step (KitchenFlow.COUNT on [Prop.CAKE]): the whole cake is one big tap target --

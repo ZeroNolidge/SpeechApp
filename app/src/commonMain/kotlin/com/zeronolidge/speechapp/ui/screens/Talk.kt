@@ -776,6 +776,10 @@ internal fun ListeningStage(
     spotCx: Float? = null,
     /** Drawn over the dimmed scene, under Rory (a voice story's wind strips and confetti); gets Rory's centre. */
     aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.(roryAt: Offset) -> Unit)? = null,
+    /** test42: the scene stays fully lit (no dim) and the big listening Rory never comes on;
+     * just a small mic badge in the top-right corner shows it's his turn (the kitchen stories,
+     * where the scene's own Rory is already there to listen). */
+    badgeOnly: Boolean = false,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val app = LocalApp.current
@@ -790,9 +794,11 @@ internal fun ListeningStage(
         // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
         val rory = spot.size.dp
         val box = rory * 1.35f
-        if (k > 0.001f) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
+        if (k > 0.001f && !badgeOnly) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
         aboveDim?.invoke(this, Offset(spot.cx, spot.cy))
-        if (k > 0.001f) {
+        if (badgeOnly) {
+            if (k > 0.001f) MicBadge(app.listenLevel, Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).graphicsLayer { alpha = k })
+        } else if (k > 0.001f) {
             val startX = 0.dp
             val startY = h - box
             val endLeft = (w * spot.cx - box / 2).coerceIn(0.dp, (w - box).coerceAtLeast(0.dp))
@@ -947,6 +953,28 @@ internal fun ExpandChip(base: String, full: String, modifier: Modifier = Modifie
                     .paperCard(if (isNew) Color(0xFFFFF59D) else PaperStyle.chip, 10.dp)
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             )
+        }
+    }
+}
+
+
+/** test42: the small "your turn, I'm listening" badge -- a paper mic with rings that grow with
+ * his voice level, instead of the big listening Rory over a dimmed scene. */
+@Composable
+internal fun MicBadge(level: Float, modifier: Modifier = Modifier) {
+    val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
+    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "mic").animateFloat(
+        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "mp")
+    Box(modifier.size(64.dp).paperCard(Color(0xFFFFF3E0), circle = true), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val c = Offset(w / 2f, w * 0.44f)
+            val ring = (if (still) 0.3f else pulse * 0.5f) + level.coerceIn(0f, 1f)
+            drawCircle(Color(0xFF52DAE8).copy(alpha = 0.35f), w * (0.3f + 0.12f * ring), c)
+            drawRoundRect(Color(0xFFE65100), Offset(w * 0.4f, w * 0.2f), androidx.compose.ui.geometry.Size(w * 0.2f, w * 0.36f), androidx.compose.ui.geometry.CornerRadius(w * 0.1f))
+            drawArc(Color(0xFF5D4037), 0f, 180f, false, Offset(w * 0.32f, w * 0.3f), androidx.compose.ui.geometry.Size(w * 0.36f, w * 0.34f), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.04f))
+            drawLine(Color(0xFF5D4037), Offset(w * 0.5f, w * 0.64f), Offset(w * 0.5f, w * 0.76f), w * 0.04f)
+            drawLine(Color(0xFF5D4037), Offset(w * 0.4f, w * 0.77f), Offset(w * 0.6f, w * 0.77f), w * 0.04f)
         }
     }
 }

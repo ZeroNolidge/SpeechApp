@@ -1319,7 +1319,7 @@ class VoiceStoriesTest {
         assertEquals(KitchenFlow.COUNT, st.candles.kitchen)
         assertTrue(c.beats.all { it.backdrop == Backdrop.KITCHEN })
         assertTrue(c.beats.last().goodbye)
-        assertTrue(VoiceStories.all.none { it.id == "birthdaycake" }, "test-site only, not on the map yet")
+        assertTrue(VoiceStories.all.any { it.id == "birthdaycake" && it.land == com.zeronolidge.speechapp.logic.Land.CAVES }, "on the map at its own Word Caves stop")
     }
 
     @Test
