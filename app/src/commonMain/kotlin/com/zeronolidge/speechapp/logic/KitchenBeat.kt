@@ -815,7 +815,7 @@ object KitchenLayout {
         Prop.MILK -> ingredientBox(landscape)
         // K-fruit picker: whichever fruit is the active task shares the banana's own wide
         // station -- only one is ever active at a time (the picker sits in between).
-        Prop.BANANA, Prop.STRAWBERRY, Prop.GRAPE, Prop.BLUEBERRY_BOX, Prop.FLOUR_BAG, Prop.OVEN -> bananaBox(landscape)
+        Prop.BANANA, Prop.STRAWBERRY, Prop.GRAPE, Prop.BLUEBERRY_BOX, Prop.ORANGE, Prop.APPLE, Prop.FLOUR_BAG, Prop.OVEN -> bananaBox(landscape)
         Prop.BUTTER -> butterBox(landscape)
         // test42: the 1.5x cake is centre stage -- its own station spans the bowl and banana
         // stations together (right of Rory, inside the counter), centred between them.

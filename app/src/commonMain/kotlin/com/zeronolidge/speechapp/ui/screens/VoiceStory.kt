@@ -226,7 +226,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     var kitchenTalkReplayed by remember { mutableStateOf(false) }
     // The kitchen tap tiles' screen centres (CSS px), for the KITCHEN log below. Sized for the
     // most any one flow ever needs at once: the drag step's own four slices (K-fruit).
-    val kitchenCenters = remember { Array(6) { Offset.Zero } }
+    val kitchenCenters = remember { Array(8) { Offset.Zero } }
     fun logKitchen(k: KitchenBeatState) {
         val b = beats.getOrNull(index) ?: return
         val tiles = kitchenTiles(b, k.flow, kitchenRound)
@@ -237,6 +237,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             KitchenFlow.COUNT -> k.goal.coerceIn(1, 6)
             KitchenFlow.CUT, KitchenFlow.SWIPE -> 1
             KitchenFlow.DRAG -> 4
+            KitchenFlow.PICK -> tiles.size + 1
             else -> tiles.size
         }
         // K-fruit: the drag step's own four slice boxes stay put on screen (unlike a counted
@@ -333,7 +334,10 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val fruitDoneFlags = mapOf(
         FruitPicker.Fruit.BANANA to fruitInBowl, FruitPicker.Fruit.STRAWBERRY to strawberryIn,
         FruitPicker.Fruit.GRAPE to grapeIn, FruitPicker.Fruit.BLUEBERRY to blueberryIn,
+        FruitPicker.Fruit.ORANGE to fruitPrepped(FruitPicker.Fruit.ORANGE), FruitPicker.Fruit.APPLE to fruitPrepped(FruitPicker.Fruit.APPLE),
     )
+    // test44: how many of his own talk turns the picked fruits have used so far (max 2, + "Fork!")
+    var fruitTalks by remember(id) { mutableStateOf(0) }
     // The fork beat is always the last one spliced in (once the 3rd fruit is picked), so this is
     // true only while ITS fix is playing -- never confused with a fruit's own fix (those are
     // never beats.lastIndex while the fork hasn't been spliced in yet, and once it has, no later
@@ -345,6 +349,18 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // test40: the fork finale's own finger stir (between the fork beat's fix and the ending)
     var forkStirLive by remember(id) { mutableStateOf(false) }
     var forkStirDone by remember(id) { mutableStateOf(false) }
+    // read here (not only inside the effect) so this scope recomposes when the stir starts
+    val stirLiveNow = forkStirLive
+    androidx.compose.runtime.SideEffect {
+        if (isFruitSaladStory && !isCakeStory) {
+            val inSet = fruitDoneFlags.filterValues { it }.keys
+            if (com.zeronolidge.speechapp.ui.art.FruitScene.inBowl.value != inSet) com.zeronolidge.speechapp.ui.art.FruitScene.inBowl.value = inSet
+            if (com.zeronolidge.speechapp.ui.art.FruitScene.topDown.value != stirLiveNow) {
+                com.zeronolidge.speechapp.ui.art.FruitScene.topDown.value = stirLiveNow
+                println("KITCHEN topdown=$stirLiveNow")
+            }
+        }
+    }
     // test41: the cake's own props, derived from which step he's on (see CakeScene).
     var cakeStirDone by remember(id) { mutableStateOf(false) }
     val cakeI = if (isCakeStory) index else -99
@@ -946,6 +962,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         kitchenEnd = null
         sticker = null
         pickedFruits = emptyList()
+        fruitTalks = 0
         cakeStirDone = false
         forkStirDone = false
         if (isCakeStory) com.zeronolidge.speechapp.ui.art.CakeScene.reset()
@@ -1015,12 +1032,24 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // always a fine choice -- no wrong answer) splices that fruit's own task beats in
             // right after the picker, then the picker again (or the fork, once this is his 3rd).
             KitchenFlow.PICK -> {
-                val fruit = FruitPicker.Fruit.entries.getOrNull(i) ?: return
-                if (fruit in pickedFruits) return
-                println("KITCHEN pick fruit=${fruit.name.lowercase()}")
-                pickedFruits = pickedFruits + fruit
-                val tail = FruitPicker.task(fruit) + if (pickedFruits.size >= 3) listOf(FruitPicker.fork) else listOf(FruitPicker.picker)
-                beats = beats.take(index + 1) + tail
+                // test44: the "Done!" bowl picture (index past the fruits, shown once 2 are in)
+                // goes straight to the fork; otherwise the picker comes back after every fruit.
+                if (i == FruitPicker.Fruit.entries.size) {
+                    if (pickedFruits.size < FruitPicker.DONE_AFTER) return
+                    println("KITCHEN pick done fruits=${pickedFruits.size}")
+                    beats = beats.take(index + 1) + listOf(FruitPicker.fork)
+                } else {
+                    val fruit = FruitPicker.Fruit.entries.getOrNull(i) ?: return
+                    if (fruit in pickedFruits) return
+                    println("KITCHEN pick fruit=${fruit.name.lowercase()}")
+                    pickedFruits = pickedFruits + fruit
+                    var task = FruitPicker.task(fruit)
+                    if (task.any { it.kitchen == null }) {
+                        if (fruitTalks >= FruitPicker.MAX_FRUIT_TALKS) task = task.filter { it.kitchen != null } else fruitTalks++
+                    }
+                    val tail = task + if (pickedFruits.size >= FruitPicker.Fruit.entries.size) listOf(FruitPicker.fork) else listOf(FruitPicker.picker)
+                    beats = beats.take(index + 1) + tail
+                }
                 val next = kitchenPhase.tap(true)
                 kitchenPhase = next
                 logKitchen(next)
@@ -1242,7 +1271,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 )
                 Spacer(Modifier.width(8.dp))
             } else if (isFruitSaladStory) {
-                FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, forkDone = forkStirDone || kitchenEnd != null)
+                FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, forkDone = forkStirDone || kitchenEnd != null, closed = hasForkBeat)
                 Spacer(Modifier.width(8.dp))
             }
             if (isFruitSaladStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
@@ -1592,6 +1621,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         if (beat.kitchen == KitchenFlow.PICK) pickedFruits.map { it.ordinal }.toSet() else kitchenHopped,
                         kitchenWrong, kitchenWiggleBump, gameStrip,
                         pickCounterY = if (fruitWide) fruitCounterY else null,
+                        pickDone = if (beat.kitchen == KitchenFlow.PICK && pickedFruits.size >= FruitPicker.DONE_AFTER) pickedFruits.toSet() else null,
                         pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom + 10f).dp } else 0.dp,
                         onTap = ::tapKitchen,
                         onCenter = { i, c -> kitchenCenters[i] = c },
@@ -1758,7 +1788,7 @@ private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
  * antenna below -- shrink the chrome before shrinking Rory, not the other way round.
  */
 @Composable
-private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Map<FruitPicker.Fruit, Boolean>, forkDone: Boolean) {
+private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Map<FruitPicker.Fruit, Boolean>, forkDone: Boolean, closed: Boolean = false) {
     val screenHeight = LocalScreenHeight.current
     val circle = if (screenHeight < 420.dp) 32.dp else 44.dp
     val emojiSize = if (circle < 40.dp) 17.sp else 24.sp
@@ -1768,10 +1798,12 @@ private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Ma
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val slots = (0 until 3).map { i -> pickedFruits.getOrNull(i)?.let { it.emoji to (doneFlags[it] == true) } }
+        // test44: grows with each fruit he picks (one empty slot waiting while more can come)
+        val shown = if (closed || forkDone || pickedFruits.size >= FruitPicker.Fruit.entries.size) pickedFruits.size else pickedFruits.size + 1
+        val slots = (0 until maxOf(shown, 1)).map { i -> pickedFruits.getOrNull(i)?.let { it.emoji to (doneFlags[it] == true) } }
         (slots + ("🍴" to forkDone)).forEach { slot ->
             Box(
-                Modifier.size(circle).paperCard(if (slot?.second == true) Color(0xFF8BC34A) else PaperStyle.chip, circle = true),
+                Modifier.size(circle).paperCard(PaperStyle.chip, circle = true),
                 contentAlignment = Alignment.Center,
             ) {
                 if (slot == null) {
@@ -2082,6 +2114,8 @@ private fun KitchenTapRow(
     pickCounterY: Dp? = null,
     /** test39: tiles start right of this x (Rory's drawn right edge on a zoomed phone). */
     pickLeft: Dp = 0.dp,
+    /** test44: once 2 fruits are in, the fruits in the bowl (for the "Done!" bowl picture). */
+    pickDone: Set<FruitPicker.Fruit>? = null,
     onTap: (Int) -> Unit,
     onCenter: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier,
@@ -2117,7 +2151,59 @@ private fun KitchenTapRow(
             val frontH = (maxHeight - pickCounterY).coerceAtLeast(0.dp)
             minOf(maxHeight - 8.dp, pickCounterY + maxOf((frontH + tileSize) / 2f, tileSize * 0.6f))
         } else maxHeight
-        if (stripHeight > 0.dp) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
+        if (stripHeight > 0.dp && !isPick) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
+        // test44: all 6 fruits as a 3x2 grid of big cards (120dp on a tablet, a little smaller on
+        // a landscape phone so it stays clear of the bowl), bottom-right on the counter, never
+        // scrolling; the "Done!" bowl picture sits just left of the grid's top row.
+        if (isPick) {
+            val gap = 8.dp
+            val t = minOf(PickerTileSize, (maxWidth * 0.39f - gap * 2) / 3, (maxHeight * 0.62f - gap) / 2)
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                for (row in 0 until 2) Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (i in row * 3 until minOf(row * 3 + 3, tiles.size)) {
+                        val used = i in hopped
+                        val hint = state.glow && i == targetIndex
+                        Box(contentAlignment = Alignment.TopCenter) {
+                            AnswerCard(
+                                modifier = Modifier.size(t).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) }
+                                    .let { m -> if (used) m.graphicsLayer { alpha = 0.45f; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                                        .drawWithContent { drawContent(); drawRect(Color.Gray, blendMode = androidx.compose.ui.graphics.BlendMode.Saturation) } else m },
+                                correct = false, glow = hint && !used, wiggle = if (i == wrongChoice) wiggleBump else 0,
+                                onClick = { if (!used) onTap(i) },
+                            ) {
+                                if (FruitPicker.Fruit.entries.getOrNull(i) == FruitPicker.Fruit.APPLE) com.zeronolidge.speechapp.ui.art.AppleTileArt(Modifier.fillMaxSize())
+                                else Text(tiles[i], fontSize = (t.value * 0.5f).sp)
+                            }
+                            if (used) Canvas(Modifier.align(Alignment.BottomEnd).size(t * 0.3f)) {
+                                val d = size.minDimension
+                                drawCircle(Color.White, d / 2f)
+                                drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                                val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f) }
+                                drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                            }
+                            if (hint && !used) PointingHand(size = KitchenHintHandSize * 0.8f, pointDown = true, modifier = Modifier.offset(x = -t * 0.45f, y = t * 0.1f))
+                        }
+                    }
+                }
+            }
+            if (pickDone != null) {
+                val di = FruitPicker.Fruit.entries.size
+                AnswerCard(
+                    // tablet: on top of the grid's right end (clear of the bowl); phone: left of its top row
+                    modifier = Modifier.align(Alignment.BottomEnd).let { m ->
+                        if (maxHeight > t * 3 + gap * 2 + 200.dp) m.padding(end = 10.dp, bottom = 6.dp + (t + gap) * 2)
+                        else m.padding(end = 10.dp + (t + gap) * 3, bottom = 6.dp + t + gap)
+                    }.size(t)
+                        .onGloballyPositioned { c -> onCenter(di, choiceCenter(c)) },
+                    correct = false, glow = false, wiggle = 0,
+                    onClick = { onTap(di) },
+                ) { com.zeronolidge.speechapp.ui.art.DoneBowlTileArt(pickDone, Modifier.fillMaxSize()) }
+            }
+            return@BoxWithConstraints
+        }
         // test42 (Ruby): on a landscape phone one row of 4 shrank the fruit cards under 120dp and
         // pushed them over the bowl -- there it's a 2x2 grid of full-size cards at the right
         // end of the counter instead, clear of the bowl and both characters.

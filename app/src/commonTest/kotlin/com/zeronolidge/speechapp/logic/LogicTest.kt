@@ -2074,10 +2074,15 @@ class FruitSaladStoryTest {
 
     @Test
     fun allFourFruitsHaveATaskAndTheBananaKeepsItsThreeStepShape() {
-        assertEquals(4, FruitPicker.Fruit.entries.size)
+        assertEquals(6, FruitPicker.Fruit.entries.size)
         assertEquals(3, FruitPicker.task(FruitPicker.Fruit.BANANA).size)
         for (f in listOf(FruitPicker.Fruit.STRAWBERRY, FruitPicker.Fruit.GRAPE, FruitPicker.Fruit.BLUEBERRY)) {
             assertEquals(2, FruitPicker.task(f).size, "$f should be a tap step then a talk step")
+        }
+        // test44: the orange and apple are one tap-only step each (Rory says "Peel!"/"Wash!")
+        for (f in listOf(FruitPicker.Fruit.ORANGE, FruitPicker.Fruit.APPLE)) {
+            assertEquals(1, FruitPicker.task(f).size)
+            assertTrue(FruitPicker.task(f).single().kitchen != null)
         }
     }
 
@@ -2095,9 +2100,20 @@ class FruitSaladStoryTest {
             // Each task is exactly one tap step then one talk step (banana's extra drag step is
             // still a tap step): only the LAST beat of each task is ever a plain talk turn.
             val task = FruitPicker.task(f)
+            if (f == FruitPicker.Fruit.ORANGE || f == FruitPicker.Fruit.APPLE) continue
             assertTrue(task.last().kitchen == null, "${f.name}'s last beat should be its talk turn")
             assertTrue(task.dropLast(1).all { it.kitchen != null }, "${f.name}'s earlier beats should all be tap steps")
         }
+    }
+
+    /** test44: at most 2 fruit talk turns + "Fork!" -- never more than 3 child callouts. */
+    @Test
+    fun childCalloutsStayAtThreeMax() {
+        assertEquals(2, FruitPicker.MAX_FRUIT_TALKS)
+        assertEquals(2, FruitPicker.DONE_AFTER)
+        assertTrue(FruitPicker.fork.kitchen == null)
+        assertTrue(FruitPicker.task(FruitPicker.Fruit.ORANGE).first().success.startsWith("Peel!"))
+        assertTrue(FruitPicker.task(FruitPicker.Fruit.APPLE).first().success.startsWith("Wash!"))
     }
 
     @Test

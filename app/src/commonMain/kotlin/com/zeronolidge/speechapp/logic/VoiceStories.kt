@@ -123,6 +123,8 @@ enum class Prop {
     // pours it in). All 3 draw at the picker's own 4-tile tray (`FruitPickerOverlay`) and, once
     // picked, at the single shared work area ([KitchenLayout.fruitWorkSlot]/[KitchenLayout.bananaBox]).
     STRAWBERRY, GRAPE, BLUEBERRY_BOX,
+    // test44: the orange (tap or short-swipe the peel off) and the apple (tap or rub to wash it).
+    ORANGE, APPLE,
     // Bruno's Birthday Cake (test41): the flour bag (one tap pours it), the mixing bowl, the
     // one-tap oven, and the finished cake on its stand (candles go on, get lit, get blown out).
     FLOUR_BAG, CAKE_BOWL, OVEN, CAKE,
@@ -334,7 +336,14 @@ object VoiceStories {
      * tap, like [KitchenFlow.FLIP]).
      */
     object FruitPicker {
-        enum class Fruit(val emoji: String) { BANANA("🍌"), STRAWBERRY("🍓"), GRAPE("🍇"), BLUEBERRY("🫐") }
+        enum class Fruit(val emoji: String) { BANANA("🍌"), STRAWBERRY("🍓"), GRAPE("🍇"), BLUEBERRY("🫐"), ORANGE("🍊"), APPLE("🍎") }
+
+        /** test44: the child's own talk turns stay at 3 at most -- the first 2 fruits picked keep
+         * theirs, later ones (and the orange/apple, which have none) are tap-only, then "Fork!". */
+        const val MAX_FRUIT_TALKS = 2
+
+        /** test44: the "Done!" picture button shows once this many fruits are in. */
+        const val DONE_AFTER = 2
 
         val picker = VoiceBeat(
             Backdrop.KITCHEN, "Which fruit should we use? Tap one!", listOf("fruit", "which fruit", "Which fruit should we use?"), null,
@@ -397,6 +406,20 @@ object VoiceStories {
                 VoiceBeat(
                     Backdrop.KITCHEN, "Let's fill the bowl with berries! Say fill!", listOf("fill", "fill it", "Fill the bowl!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
                     "Fill! Good talking! The berries pour into the bowl!", "🫐", caption = "Say fill!", fruitTag = Fruit.BLUEBERRY,
+                ),
+            )
+            // test44: tap-only (taps or short loose swipes/circles anywhere on the fruit all count),
+            // no talk turn of their own -- Rory himself says "Peel!"/"Wash!".
+            Fruit.ORANGE -> listOf(
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's peel the orange! Peel! Tap the peel off!", listOf("peel", "peel it", "Peel the orange!"), "p", Prop.ORANGE, Move.SHAKE,
+                    "Peel! All peeled! The orange pieces go into the bowl!", "🍊", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Tap to peel!", fruitTag = Fruit.ORANGE,
+                ),
+            )
+            Fruit.APPLE -> listOf(
+                VoiceBeat(
+                    Backdrop.KITCHEN, "Let's wash the apple! Wash! Rub it clean!", listOf("wash", "wash it", "Wash the apple!"), null, Prop.APPLE, Move.SHAKE,
+                    "Wash! Nice and clean! The apple pieces go into the bowl!", "🍎", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Tap to wash!", fruitTag = Fruit.APPLE,
                 ),
             )
         }
