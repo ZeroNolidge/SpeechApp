@@ -284,8 +284,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // `top` row below), captured so the sticker can arc into exactly where it sits.
     // Rory's Fruit Salad is a sibling of Rory's Kitchen (same counter/bowl/Rory/Bear, same
     // ending), so both share every `isKitchenStory`-gated bit of this screen.
-    val isKitchenStory = story.id == "kitchen" || story.id == "fruitsalad"
-    val isFruitSaladStory = story.id == "fruitsalad"
+    // test41: Bruno's Birthday Cake is Rory's Fruit Salad's sibling (same kitchen, same finger
+    // stir, idle help, hidden next button, Play again), so it rides every fruit-salad gate too.
+    val isCakeStory = story.id == "birthdaycake"
+    val isKitchenStory = story.id == "kitchen" || story.id == "fruitsalad" || isCakeStory
+    val isFruitSaladStory = story.id == "fruitsalad" || isCakeStory
     var kitchenEnd by remember { mutableStateOf<KitchenEndStage?>(null) }
     // Rory's Fruit Salad's own ending (K-fruit): once the sticker's landed and the bowl's held
     // for a moment, this replaces the usual bye+auto-carry-on with one big "Play again" button
@@ -340,6 +343,38 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // test40: the fork finale's own finger stir (between the fork beat's fix and the ending)
     var forkStirLive by remember(id) { mutableStateOf(false) }
     var forkStirDone by remember(id) { mutableStateOf(false) }
+    // test41: the cake's own props, derived from which step he's on (see CakeScene).
+    var cakeStirDone by remember(id) { mutableStateOf(false) }
+    val cakeI = if (isCakeStory) index else -99
+    val cakeAct = phase == VPhase.ACT
+    val cakeEnded = isCakeStory && (phase == VPhase.END || kitchenEnd != null)
+    val cakePouring = cakeI == 0 && cakeAct
+    val cakeFlourIn = cakeI >= 1 || cakePouring
+    val cakeBaking = cakeI == 2 && cakeAct
+    val cakeBaked = cakeI > 2
+    val cakeLit = (cakeI == 4 && cakeAct) || (cakeI == 5 && !cakeAct && !cakeEnded)
+    val cakeBlown = (cakeI == 5 && cakeAct) || cakeEnded
+    val cakeNose = cakePouring || (cakeI == 1 && !forkStirLive && !cakeStirDone)
+    val cakeLeanTarget = if ((cakeI == 5 && phase != VPhase.INTRO) || cakeEnded) 1f else 0f
+    val cakeLean by androidx.compose.animation.core.animateFloatAsState(cakeLeanTarget, tween(if (still) 0 else 700), label = "cakeLean")
+    androidx.compose.runtime.SideEffect {
+        if (isCakeStory) {
+            com.zeronolidge.speechapp.ui.art.CakeScene.pouring.value = cakePouring
+            com.zeronolidge.speechapp.ui.art.CakeScene.flourIn.value = cakeFlourIn
+            com.zeronolidge.speechapp.ui.art.CakeScene.mixed.value = cakeStirDone
+            com.zeronolidge.speechapp.ui.art.CakeScene.baking.value = cakeBaking
+            com.zeronolidge.speechapp.ui.art.CakeScene.baked.value = cakeBaked
+            com.zeronolidge.speechapp.ui.art.CakeScene.lit.value = cakeLit
+            com.zeronolidge.speechapp.ui.art.CakeScene.blown.value = cakeBlown
+            com.zeronolidge.speechapp.ui.art.CakeScene.nosePuff.value = cakeNose
+        }
+    }
+    // test41: the blow step's big-tap fallback (the whole cake) shows its hand after a few seconds.
+    var blowHint by remember(id) { mutableStateOf(false) }
+    LaunchedEffect(cakeI, phase) {
+        blowHint = false
+        if (cakeI == 5 && (phase == VPhase.LISTEN || phase == VPhase.WAIT_TAP)) { delay(3000); blowHint = true }
+    }
 
     lateinit var startBeat: (Int) -> Unit
     lateinit var startKitchenTalk: () -> Unit
@@ -434,6 +469,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             if (b.kitchen != null) { kitchenPhase = kitchenPhase.closed(); logKitchen(kitchenPhase) }
             if (b.backdrop == Backdrop.KITCHEN && b.kitchen == null) println("KITCHEN step=$k phase=DONE")
             when {
+                isCakeStory && b == com.zeronolidge.speechapp.logic.VoiceStories.CakeSteps.flourTalk -> {
+                    // test41: Rory's own "Mix!" while the child circles the bowl.
+                    cakeStirDone = false
+                    forkStirLive = true
+                    println("KITCHEN stir start")
+                    app.speaker.say("Mix! Mix!")
+                }
                 k + 1 >= beats.size && isFruitSaladStory && b == FruitPicker.fork -> {
                     forkStirDone = false
                     forkStirLive = true
@@ -798,12 +840,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 // number chip that jumped to the map when tapped).
                 val cheer = kotlinx.coroutines.CompletableDeferred<Unit>()
                 println("KITCHEN end stage=CHEER")
-                app.speaker.say("Fruit salad!") { cheer.complete(Unit) }
+                app.speaker.say(if (isCakeStory) "Happy birthday, Bruno!" else "Fruit salad!") { cheer.complete(Unit) }
                 cheer.await()
                 if (s != session) return@launch
                 val yum = kotlinx.coroutines.CompletableDeferred<Unit>()
                 println("KITCHEN end stage=YUM")
-                app.speaker.say("Yum! Bruno loves it!") { yum.complete(Unit) }
+                app.speaker.say(if (isCakeStory) "You did it! Bruno loves his cake!" else "Yum! Bruno loves it!") { yum.complete(Unit) }
                 yum.await()
                 if (s != session) return@launch
                 println("KITCHEN end stage=HOLD")
@@ -863,6 +905,9 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         kitchenEnd = null
         sticker = null
         pickedFruits = emptyList()
+        cakeStirDone = false
+        forkStirDone = false
+        if (isCakeStory) com.zeronolidge.speechapp.ui.art.CakeScene.reset()
         beats = story.beats
         scope.launch {
             kitchenSticker.snapTo(0f)
@@ -1124,6 +1169,15 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         }
     }
 
+    // test41: the cake's prop taps -- the flour bag and the oven (each one big tap), and the
+    // whole cake as the blow step's tap fallback (any voice try counts too, the usual way).
+    val cakePropTap: (() -> Unit)? = when {
+        !isCakeStory || index < 0 -> null
+        phase == VPhase.KITCHEN && beats[index].kitchen == KitchenFlow.FLIP -> { { tapKitchen(0) } }
+        index == 5 && (phase == VPhase.LISTEN || phase == VPhase.WAIT_TAP) -> { { println("KITCHEN blow tap"); app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } }
+        else -> null
+    }
+
     ScreenFrame(
         onHome = nav.home,
         onHear = ::replayInstruction,
@@ -1132,7 +1186,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // K-fruit7: in Rory's Fruit Salad the title gives way (shrinks/clips) so the recipe card
             // always fits whole on a narrow phone in portrait.
             // K-fruit11: recipe card pinned top-left (first in the row, right after 🏠).
-            if (isFruitSaladStory) {
+            if (isCakeStory) {
+                CakeRecipeCard(
+                    listOf(cakeI > 0 || cakeEnded, cakeI > 1 || cakeEnded || forkStirLive || cakeStirDone, cakeStirDone || cakeI > 1 || cakeEnded,
+                        cakeI > 2 || cakeEnded, cakeI > 3 || cakeEnded, cakeEnded),
+                )
+                Spacer(Modifier.width(8.dp))
+            } else if (isFruitSaladStory) {
                 FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, forkDone = forkStirDone || kitchenEnd != null)
                 Spacer(Modifier.width(8.dp))
             }
@@ -1362,7 +1422,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                             ) { androidx.compose.runtime.CompositionLocalProvider(com.zeronolidge.speechapp.ui.art.LocalKitchenCharZoom provides fruitCharZoom) {
                                 val end = kitchenEnd
                                 if (end != null) {
-                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSaladFruits = if (isFruitSaladStory) pickedFruits.toSet() else emptySet())
+                                    KitchenEndingScene(end, leanAmount = bearLean.value, landscape = true, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSaladFruits = if (isFruitSaladStory && !isCakeStory) pickedFruits.toSet() else emptySet(), cake = isCakeStory, roryLean = cakeLean)
                                 } else {
                                     VoiceBeatScene(
                                         beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
@@ -1371,7 +1431,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
-                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; forkStirDone = true; finish() } else null,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
+                                        onPropTap = cakePropTap, propTapHint = cakeI != 5 || blowHint, cakeLean = cakeLean,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
@@ -1387,7 +1448,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         } else {
                             val end = kitchenEnd
                             if (end != null) {
-                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSaladFruits = if (isFruitSaladStory) pickedFruits.toSet() else emptySet())
+                                KitchenEndingScene(end, leanAmount = bearLean.value, landscape = false, modifier = Modifier.fillMaxSize(), onBiteRects = ::logBiteRects, fruitSaladFruits = if (isFruitSaladStory && !isCakeStory) pickedFruits.toSet() else emptySet(), cake = isCakeStory, roryLean = cakeLean)
                             } else {
                                 VoiceBeatScene(
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
@@ -1396,7 +1457,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
-                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; forkStirDone = true; finish() } else null,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
+                                        onPropTap = cakePropTap, propTapHint = cakeI != 5 || blowHint, cakeLean = cakeLean,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
                                         onBubbleTap = if (phase == VPhase.LISTEN && beat.kitchen == KitchenFlow.BUBBLES) { { app.voice.cancel(); finishGently(index, heard = false, micUsed = false) } } else null,
@@ -1472,7 +1534,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     }
                     // Rory's Kitchen's tap tiles (bowl choices, berries to count, the pancake to
                     // flip), right in the scene, same as the balloon puzzle above.
-                    if (phase == VPhase.KITCHEN) KitchenTapRow(
+                    if (phase == VPhase.KITCHEN && !isCakeStory) KitchenTapRow(
                         beat, kitchenPhase, kitchenRound,
                         // The picker remembers which fruits are already done ACROSS its own
                         // reappearances (it's the same beat, restarted 3 times), never the
@@ -1480,7 +1542,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                         if (beat.kitchen == KitchenFlow.PICK) pickedFruits.map { it.ordinal }.toSet() else kitchenHopped,
                         kitchenWrong, kitchenWiggleBump, gameStrip,
                         pickCounterY = if (fruitWide) fruitCounterY else null,
-                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom + 10f).dp } else 0.dp,
+                        pickLeft = if (fruitCharZoom > 1f) KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true).let { f -> ((f.l + f.r) / 2f + (f.r - f.l) / 2f * 0.55f * fruitCharZoom + 10f).dp + w * 0.12f } else 0.dp,
                         onTap = ::tapKitchen,
                         onCenter = { i, c -> kitchenCenters[i] = c },
                         modifier = Modifier.fillMaxSize(),
@@ -1493,7 +1555,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             val k = index
             // After the action: Rory's echo adds a word, and the new words slide in on paper
             // ("go" to "go, boat").
-            if (k >= 0 && phase == VPhase.ACT) {
+            // test41 (Ruby): no echo chip on the fork finale (its 🥗 drew as an empty box) or the cake.
+            if (k >= 0 && phase == VPhase.ACT && !isCakeStory && beats[k] != FruitPicker.fork) {
                 val more = beats[k].line(p.speechStep + 1)
                 Row(
                     Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
@@ -1660,6 +1723,70 @@ private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Ma
                     }
                 }
             }
+        }
+    }
+}
+
+/** test41: Bruno's Birthday Cake's recipe card -- six little drawn pictures (flour, egg, bowl,
+ * oven, candle, cake), no letters, each ticked green as that part is done. */
+@Composable
+private fun CakeRecipeCard(done: List<Boolean>) {
+    val screenHeight = LocalScreenHeight.current
+    val circle = if (screenHeight < 420.dp) 30.dp else 42.dp
+    val badge = if (circle < 40.dp) 16.dp else 22.dp
+    Row(
+        Modifier.paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 6.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        done.forEachIndexed { i, ok ->
+            Box(Modifier.size(circle).paperCard(if (ok) Color(0xFF8BC34A) else PaperStyle.chip, circle = true), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize().padding(5.dp)) { drawRecipeIcon(i) }
+                if (ok) Canvas(Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.3f, y = badge * 0.3f).size(badge)) {
+                    val d = size.minDimension
+                    drawCircle(Color.White, d / 2f)
+                    drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                    val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f) }
+                    drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                }
+            }
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRecipeIcon(i: Int) {
+    val w = size.width
+    val h = size.height
+    val ink = Color(0xFF5D4037)
+    val st = Stroke(1.2.dp.toPx())
+    when (i) {
+        0 -> { // flour sack
+            val bag = androidx.compose.ui.graphics.Path().apply { moveTo(w * 0.25f, h * 0.2f); lineTo(w * 0.75f, h * 0.2f); lineTo(w * 0.82f, h * 0.95f); lineTo(w * 0.18f, h * 0.95f); close() }
+            drawPath(bag, Color(0xFFF3E7CF)); drawPath(bag, ink, style = st)
+            drawLine(Color(0xFFD9A441), Offset(w * 0.5f, h * 0.85f), Offset(w * 0.5f, h * 0.4f), 1.5.dp.toPx())
+            for (k in 0 until 3) { drawCircle(Color(0xFFE0A93A), w * 0.06f, Offset(w * 0.42f, h * (0.45f + 0.12f * k))); drawCircle(Color(0xFFE0A93A), w * 0.06f, Offset(w * 0.58f, h * (0.45f + 0.12f * k))) }
+        }
+        1 -> { // egg
+            drawOval(Color.White, Offset(w * 0.24f, h * 0.1f), Size(w * 0.52f, h * 0.82f)); drawOval(ink, Offset(w * 0.24f, h * 0.1f), Size(w * 0.52f, h * 0.82f), style = st)
+        }
+        2 -> { // bowl and spoon
+            drawLine(Color(0xFF8D6E63), Offset(w * 0.55f, h * 0.5f), Offset(w * 0.85f, h * 0.05f), 2.5.dp.toPx(), cap = StrokeCap.Round)
+            drawArc(Color(0xFF90CAF9), 0f, 180f, true, Offset(w * 0.05f, h * 0.15f), Size(w * 0.9f, h * 0.75f)); drawArc(ink, 0f, 180f, true, Offset(w * 0.05f, h * 0.15f), Size(w * 0.9f, h * 0.75f), style = st)
+        }
+        3 -> { // oven
+            drawRoundRect(Color(0xFFD9534F), Offset(w * 0.1f, h * 0.1f), Size(w * 0.8f, h * 0.82f), androidx.compose.ui.geometry.CornerRadius(w * 0.1f))
+            drawRoundRect(Color(0xFFFFB74D), Offset(w * 0.22f, h * 0.38f), Size(w * 0.56f, h * 0.42f), androidx.compose.ui.geometry.CornerRadius(w * 0.06f))
+            drawCircle(Color.White, w * 0.06f, Offset(w * 0.3f, h * 0.24f)); drawCircle(Color.White, w * 0.06f, Offset(w * 0.5f, h * 0.24f))
+        }
+        4 -> { // candle
+            drawRect(Color(0xFF42A5F5), Offset(w * 0.4f, h * 0.4f), Size(w * 0.2f, h * 0.55f))
+            drawOval(Color(0xFFFF9800), Offset(w * 0.38f, h * 0.05f), Size(w * 0.24f, h * 0.32f)); drawOval(Color(0xFFFFF176), Offset(w * 0.45f, h * 0.17f), Size(w * 0.1f, h * 0.16f))
+        }
+        else -> { // cake
+            drawRect(Color(0xFFF2C27E), Offset(w * 0.12f, h * 0.45f), Size(w * 0.76f, h * 0.45f))
+            drawRoundRect(Color(0xFFF8A5C2), Offset(w * 0.1f, h * 0.36f), Size(w * 0.8f, h * 0.18f), androidx.compose.ui.geometry.CornerRadius(w * 0.06f))
+            drawRect(Color(0xFFEF5350), Offset(w * 0.46f, h * 0.12f), Size(w * 0.08f, h * 0.24f))
+            drawRect(ink, Offset(w * 0.12f, h * 0.45f), Size(w * 0.76f, h * 0.45f), style = st)
         }
     }
 }

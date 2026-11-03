@@ -1292,7 +1292,7 @@ class VoiceStoriesTest {
     fun everyStoryFollowsThePattern() {
         // Rory's Fruit Salad is a picker, not a fixed list of beats (see FruitSaladStoryTest):
         // its own pattern is checked separately, against the pool every play-through draws from.
-        for (s in VoiceStories.all.filter { it.id != "fruitsalad" }) {
+        for (s in (VoiceStories.all + VoiceStories.testOnly).filter { it.id != "fruitsalad" }) {
             val maxBeats = if (s.id == "kitchen") VoiceStories.KITCHEN_MAX_BEATS else VoiceStories.MAX_BEATS
             assertTrue(s.beats.size in 6..maxBeats, "${s.id}: ${s.beats.size} beats")
             // His sounds start the words of at least 4 beats; each beat's sound is really in its word.
@@ -1305,6 +1305,21 @@ class VoiceStoriesTest {
             // Later stories use sounds at the ends of words too ("up", "stop").
         }
         assertTrue(VoiceStories.boat.beats.any { b -> b.sound != null && VoiceStories.endsWith(b.word, b.sound!!) && !VoiceStories.startsWith(b.word, b.sound!!) })
+    }
+
+    @Test
+    fun birthdayCakeIsTapsAndThreeCallouts() {
+        val c = VoiceStories.byId("birthdaycake")!!
+        val st = VoiceStories.CakeSteps
+        assertEquals(listOf(st.flourTap, st.flourTalk, st.oven, st.candles, st.five, st.blow), c.beats)
+        // His own words: flour, five, blow -- the tap steps never ask him to talk.
+        assertEquals(listOf("flour", "five", "blow"), c.beats.filter { it.kitchen == null }.map { it.word })
+        for (b in c.beats.filter { it.kitchen != null }) assertEquals(0, b.kitchen!!.talkGoal(b.kitchenGoal), b.word)
+        assertEquals(5, st.candles.kitchenGoal)
+        assertEquals(KitchenFlow.COUNT, st.candles.kitchen)
+        assertTrue(c.beats.all { it.backdrop == Backdrop.KITCHEN })
+        assertTrue(c.beats.last().goodbye)
+        assertTrue(VoiceStories.all.none { it.id == "birthdaycake" }, "test-site only, not on the map yet")
     }
 
     @Test

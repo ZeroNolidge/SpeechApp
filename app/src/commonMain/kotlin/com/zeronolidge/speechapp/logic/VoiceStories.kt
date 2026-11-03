@@ -123,6 +123,9 @@ enum class Prop {
     // pours it in). All 3 draw at the picker's own 4-tile tray (`FruitPickerOverlay`) and, once
     // picked, at the single shared work area ([KitchenLayout.fruitWorkSlot]/[KitchenLayout.bananaBox]).
     STRAWBERRY, GRAPE, BLUEBERRY_BOX,
+    // Bruno's Birthday Cake (test41): the flour bag (one tap pours it), the mixing bowl, the
+    // one-tap oven, and the finished cake on its stand (candles go on, get lit, get blown out).
+    FLOUR_BAG, CAKE_BOWL, OVEN, CAKE,
 }
 
 /** The backdrops: a land's paper scenery plus a little extra (water, an island, a path, the sky,
@@ -428,9 +431,50 @@ object VoiceStories {
         ending = "What a treat! You got a fruit salad sticker. See you next time!",
     )
 
-    val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen, fruitSalad)
+    /** Bruno's Birthday Cake (test41): the fixed six steps, a sibling of [fruitSalad] (same
+     * counter, Rory, Bear, idle auto-help, finger stir and Play again). Taps only, no drags. */
+    object CakeSteps {
+        val flourTap = VoiceBeat(
+            Backdrop.KITCHEN, "It's Bruno's birthday! Let's make him a cake! Tap the flour to pour it in!", listOf("pour", "pour it", "Pour the flour!"), "p", Prop.FLOUR_BAG, Move.SHAKE,
+            "Pour! Whoosh! Oops, a little flour puff on Bruno's nose!", "🎂", kitchen = KitchenFlow.FLIP, still = Prop.CAKE_BOWL, caption = "Tap the flour!",
+        )
+        val flourTalk = VoiceBeat(
+            Backdrop.KITCHEN, "What did we pour in? Say flour!", listOf("flour", "more flour", "Flour in the bowl!"), "f", Prop.CAKE_BOWL, Move.SHAKE,
+            "Flour! Good talking! Now let's mix it. Stir it round and round!", "🎂", caption = "Say flour!",
+        )
+        val oven = VoiceBeat(
+            Backdrop.KITCHEN, "Into the oven! Tap the oven to bake the cake!", listOf("bake", "bake it", "Bake the cake!"), "b", Prop.OVEN, Move.SHAKE,
+            "Bake! Hot! Hot! Ding! Oh, the cake is a bit small. A little longer... Just right!", "🎂", kitchen = KitchenFlow.FLIP, caption = "Tap the oven!",
+        )
+        val candles = VoiceBeat(
+            Backdrop.KITCHEN, "Let's put the candles on! Tap the cake!", listOf("put", "put them", "Put the candles on!"), "p", Prop.CAKE, Move.SHAKE,
+            "Put! All the candles are on Bruno's cake!", "🎂", kitchen = KitchenFlow.COUNT, kitchenGoal = 5, caption = "Tap the candles!",
+        )
+        val five = VoiceBeat(
+            Backdrop.KITCHEN, "How many candles? Say five!", listOf("five", "five candles", "Five candles for Bruno!"), "f", Prop.CAKE, Move.SHAKE,
+            "Five! Good talking! Five candles! Let's light them up!", "🎂", caption = "Say five!",
+        )
+        val blow = VoiceBeat(
+            Backdrop.KITCHEN, "Make a wish! Now blow out the candles! Blow!", listOf("blow", "big blow", "Blow the candles out!"), "b", Prop.CAKE, Move.SHAKE,
+            "Blow! Whoosh! The candles are out!", "🎂", goodbye = true, caption = "Blow!",
+        )
+        val all = listOf(flourTap, flourTalk, oven, candles, five, blow)
+    }
 
-    fun byId(id: String): VoiceStory? = all.firstOrNull { it.id == id }
+    val birthdayCake = VoiceStory(
+        id = "birthdaycake", title = "Bruno's Birthday Cake", emoji = "🎂", land = Land.MEADOW, sounds = listOf("f", "p", "b"),
+        setup = "It's Bruno's birthday! Let's bake him a cake!",
+        beats = CakeSteps.all,
+        swap = null, sticker = "birthday cake" to "🎂",
+        ending = "Happy birthday, Bruno! You got a cake sticker. See you next time!",
+    )
+
+    val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen, fruitSalad)
+    /** test41: Bruno's Birthday Cake is test-site only for now (#test=story-birthdaycake), not on
+     * the map yet (the meadow stop is the balloon's), so it's kept out of [all]. */
+    val testOnly: List<VoiceStory> = listOf(birthdayCake)
+
+    fun byId(id: String): VoiceStory? = (all + testOnly).firstOrNull { it.id == id }
 
     /**
      * The story ready to play: where one fits, one of his own words stands in for the story's swap

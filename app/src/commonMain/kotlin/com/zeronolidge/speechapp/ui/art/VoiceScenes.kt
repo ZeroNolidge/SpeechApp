@@ -171,6 +171,9 @@ private fun propSize(p: Prop) = when (p) {
     // blueberry box is the only one of the three drawn this way (KitchenFlow.FLIP, one plain tap).
     Prop.STRAWBERRY, Prop.GRAPE -> 0.16f
     Prop.BLUEBERRY_BOX -> 0.18f
+    Prop.FLOUR_BAG -> 0.2f
+    Prop.CAKE_BOWL -> 0.22f
+    Prop.OVEN, Prop.CAKE -> 0.26f
 }
 
 /** [Prop.BUBBLE]'s own [propSize] (0.3) is shared with the River story's bubble-pop beat, where
@@ -223,6 +226,12 @@ private fun kitchenPropSize(p: Prop, landscape: Boolean) = when (p) {
     // The blueberry box sits in the same wide work station the banana uses ([KitchenLayout.bananaBox]),
     // so it reads about the bowl's own size, the same as the banana did there.
     Prop.BLUEBERRY_BOX -> if (landscape) 0.2f else 0.18f
+    // Bruno's Birthday Cake: the bowl matches the fruit salad's exactly (the shared finger stir
+    // is centred on that bowl), the oven and the cake on its stand are the big focal objects.
+    Prop.CAKE_BOWL -> if (landscape) 0.2533f else 0.215f
+    Prop.FLOUR_BAG -> if (landscape) 0.3f else 0.22f
+    Prop.OVEN -> if (landscape) 0.4f else 0.3f
+    Prop.CAKE -> if (landscape) 0.36f else 0.28f
     else -> propSize(p)
 }
 
@@ -386,6 +395,12 @@ fun VoiceBeatScene(
     /** Rory's Kitchen only (K3e): reports each kitchen prop's own real drawn box (window
      * coordinates), straight from the node `Item` actually places -- see [Item]'s own `onRect`. */
     onKitchenPropRect: ((Prop, androidx.compose.ui.layout.LayoutCoordinates) -> Unit)? = null,
+    /** Bruno's Birthday Cake: the main prop itself is the tap target (flour bag, oven, the cake to
+     * blow), with a bouncing hand over it when [propTapHint]. */
+    onPropTap: (() -> Unit)? = null,
+    propTapHint: Boolean = true,
+    /** Bruno's Birthday Cake: Rory and Bruno lean in toward the cake (0 to 1) for the blow. */
+    cakeLean: Float = 0f,
 ) {
     val still = LocalReduceMotion.current
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "beat")
@@ -413,7 +428,7 @@ fun VoiceBeatScene(
             // flat layer (BackdropExtras).
             if (isKitchen) {
                 KitchenWall(landscape)
-                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble, kitchenFPose)
+                KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble, kitchenFPose, lean = cakeLean)
                 KitchenCounterFront(landscape)
             } else {
                 BackdropExtras(beat.backdrop)
@@ -456,7 +471,11 @@ fun VoiceBeatScene(
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) when (beat.prop) {
                 Prop.STRAWBERRY -> StrawberryBoard(landscape, countHopped, onBerryTap, onKitchenTarget)
                 Prop.GRAPE -> GrapeBunch(landscape, countHopped, onBerryTap, onKitchenTarget)
+                Prop.CAKE -> kitchenPropCenter?.let { (cx, cy) -> CakeCandles(kitchenUnit * kitchenPropSize(Prop.CAKE, landscape), cx, cy, countHopped, onBerryTap, onKitchenTarget) }
                 else -> KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
+            }
+            if (isKitchen && onPropTap != null) kitchenPropCenter?.let { (cx, cy) ->
+                PropTapTarget(kitchenUnit * kitchenPropSize(beat.prop, landscape), cx, cy, propTapHint, onPropTap, onKitchenTarget)
             }
             if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
             if (isKitchen && onStirDone != null) FruitStirOverlay(landscape, onStirDone, onKitchenTarget)
@@ -486,7 +505,7 @@ fun VoiceBeatScene(
             }
             // Bear sits in front of the counter and its props (K2f), drawn last so his lean
             // never disappears behind anything on it.
-            if (beat.backdrop == Backdrop.KITCHEN) KitchenBear(landscape)
+            if (beat.backdrop == Backdrop.KITCHEN) KitchenBear(landscape, cakeLean, nosePuff = CakeScene.nosePuff.value && beat.prop in setOf(Prop.FLOUR_BAG, Prop.CAKE_BOWL))
         }
     }
 }
@@ -514,14 +533,26 @@ fun KitchenEndingScene(
      * Rory, the 3 fruits he actually picked all in, instead of the pancake stack. Empty for every
      * other kitchen-style story. */
     fruitSaladFruits: Set<FruitPicker.Fruit> = emptySet(),
+    /** Bruno's Birthday Cake's own ending: the cake (candles out) beside Rory, confetti, and
+     * Rory leaning in with Bruno ([roryLean]). */
+    cake: Boolean = false,
+    roryLean: Float = 0f,
 ) {
     val fruitSalad = fruitSaladFruits.isNotEmpty()
     val bitten = stage != KitchenEndStage.STACK
     Scenery(Land.MARKET, modifier.fillMaxSize(), seed = 30 + Backdrop.KITCHEN.ordinal * 7) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             KitchenWall(landscape)
-            KitchenRory(landscape, talking = false, roryVisible = true)
+            KitchenRory(landscape, talking = false, roryVisible = true, lean = roryLean)
             KitchenCounterFront(landscape)
+            if (cake) {
+                val sz = kitchenUnitOf(maxWidth, maxHeight) * kitchenPropSize(Prop.CAKE, landscape)
+                val box = KitchenLayout.propBox(Prop.CAKE, landscape, kitchenPropSize(Prop.CAKE, landscape), maxWidth.value, maxHeight.value)
+                Item(sz, { (box.l + box.r) / 2f }, { (box.t + box.b) / 2f }) { CakeArt(5, lit = false, blown = true) }
+                KitchenBear(landscape, leanAmount)
+                CakeConfetti()
+                return@BoxWithConstraints
+            }
             // K6: a real plate on the counter, next to Rory, about half his own height and as
             // wide as his body (Ruby's old version floated free, taller than Rory, no plate at
             // all) -- sized straight off his own real fitted box ([KitchenLayout.roryFittedBox]),
@@ -851,6 +882,8 @@ private fun BoxWithConstraintsScope.KitchenBear(
     landscape: Boolean,
     leanAmount: Float = 0f,
     onBiteRects: ((String) -> Unit)? = null,
+    /** Bruno's Birthday Cake: a silly little flour puff on his nose. */
+    nosePuff: Boolean = false,
 ) {
     val w = maxWidth.value
     val h = maxHeight.value
@@ -938,6 +971,15 @@ private fun BoxWithConstraintsScope.KitchenBear(
             leanForward = lean.forwardUnits * leanAmount * runtimeLeanScale,
             onHeadBounds = if (!wantRects) null else { r -> localHeadRect = r },
         )
+        if (nosePuff) Canvas(Modifier.fillMaxSize()) {
+            val nx = size.width * BearNosePuffX
+            val ny = size.height * BearNosePuffY
+            val r = size.width * 0.055f
+            listOf(Offset(0f, 0f) to 1f, Offset(-0.9f, -0.5f) to 0.7f, Offset(0.9f, -0.6f) to 0.75f, Offset(0.2f, -1.1f) to 0.6f, Offset(-0.4f, 0.7f) to 0.5f).forEach { (o, k) ->
+                drawCircle(Color.White, r * k, Offset(nx + o.x * r, ny + o.y * r))
+                drawCircle(Color(0xFFE0D8C8), r * k, Offset(nx + o.x * r, ny + o.y * r), style = Stroke(1.dp.toPx()))
+            }
+        }
     }
     if (wantRects) {
         LaunchedEffect(seatRect, stoolRect, localHeadRect, critterOrigin, counterLeftPx, runtimeLeanScale) {
@@ -1018,6 +1060,8 @@ private fun BoxWithConstraintsScope.KitchenRory(
      * own top so his head barely moves while the rest grows down into the counter (which already
      * hides his lower body), keeping his face fully on screen. */
     fPose: Boolean = false,
+    /** Bruno's Birthday Cake: leaning in toward the cake (0 to 1). */
+    lean: Float = 0f,
 ) {
     val w = maxWidth.value
     val h = maxHeight.value
@@ -1052,7 +1096,8 @@ private fun BoxWithConstraintsScope.KitchenRory(
                     ((faceY - laneTop) / laneHeight).coerceIn(0f, 1f),
                 )
                 translationY = liftPx * density
-                translationX = shiftPx * density
+                translationX = shiftPx * density + lean * laneWidth * 0.08f * density
+                rotationZ = lean * 7f
             },
     ) {
         if (roryVisible) {
@@ -1649,6 +1694,10 @@ private fun PropArt(
             val dots = listOf(0.22f to 0.0f, 0.38f to 0.18f, 0.55f to -0.08f, 0.68f to 0.12f, 0.8f to -0.02f)
             dots.forEach { (x, dy) -> paperBlueberry(Offset(boxLeft + boxW * x, boxTop - boxH * (0.15f - dy)), w * 0.045f) }
         }
+        Prop.FLOUR_BAG -> FlourBagArt()
+        Prop.CAKE_BOWL -> CakeBowlArt()
+        Prop.OVEN -> OvenArt()
+        Prop.CAKE -> CakeArt(5, lit = CakeScene.lit.value, blown = CakeScene.blown.value)
     }
 }
 
@@ -2879,3 +2928,419 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: 
         }
     }
 }
+
+// ------------------------------------------------------------------ Bruno's Birthday Cake (test41)
+
+/** Bruno's Birthday Cake (test41): what the cake story's own props show right now. Set by
+ * VoiceStory.kt from which step he's on (same idea as [FruitStir]), read only while drawing. */
+object CakeScene {
+    val pouring = mutableStateOf(false)
+    val flourIn = mutableStateOf(false)
+    val mixed = mutableStateOf(false)
+    val baking = mutableStateOf(false)
+    val baked = mutableStateOf(false)
+    val lit = mutableStateOf(false)
+    val blown = mutableStateOf(false)
+    val nosePuff = mutableStateOf(false)
+    fun reset() {
+        pouring.value = false; flourIn.value = false; mixed.value = false; baking.value = false
+        baked.value = false; lit.value = false; blown.value = false; nosePuff.value = false
+    }
+}
+
+/** The flour bag: a paper sack with a drawn wheat ear on its label (no letters), tipping over
+ * and pouring a white stream to its left (into the bowl) once tapped. */
+@Composable
+private fun FlourBagArt() {
+    val pouring = CakeScene.pouring.value
+    val poured = CakeScene.flourIn.value
+    val still = LocalReduceMotion.current
+    val tip by animateFloatAsState(if (pouring) 1f else 0f, tween(if (still) 0 else 450), label = "flourTip")
+    val fall = rememberInfiniteTransition(label = "flourFall").animateFloat(0f, 1f, infiniteRepeatable(tween(700, easing = LinearEasing), RepeatMode.Restart), label = "ff")
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        rotate(-38f * tip, pivot = Offset(w * 0.24f, h * 0.97f)) {
+            val bag = Path().apply {
+                moveTo(w * 0.26f, h * 0.30f)
+                lineTo(w * 0.74f, h * 0.30f)
+                lineTo(w * 0.78f, h * 0.97f)
+                lineTo(w * 0.22f, h * 0.97f)
+                close()
+            }
+            paperPath(bag, Color(0xFFF3E7CF))
+            drawPath(bag, Color(0xFFB79B6B), style = Stroke(1.6.dp.toPx()))
+            // the folded-over top
+            paperRect(Color(0xFFE2CFA6), Offset(w * 0.25f, h * 0.24f), Size(w * 0.50f, h * 0.09f))
+            drawRect(Color(0xFFB79B6B), Offset(w * 0.25f, h * 0.24f), Size(w * 0.50f, h * 0.09f), style = Stroke(1.4.dp.toPx()))
+            if (!poured) paperOval(Color.White, Offset(w * 0.32f, h * 0.18f), Size(w * 0.36f, h * 0.09f))
+            // the label: a whole wheat ear, well inside the bag (never cut off at an edge)
+            val lx = w * 0.33f
+            val ly = h * 0.46f
+            val lw = w * 0.34f
+            val lh = h * 0.36f
+            paperRoundRect(Color(0xFFFFFBF2), Offset(lx, ly), Size(lw, lh), CornerRadius(w * 0.04f))
+            drawRoundRect(Color(0xFFD9A441), Offset(lx, ly), Size(lw, lh), CornerRadius(w * 0.04f), style = Stroke(1.4.dp.toPx()))
+            val cx = lx + lw / 2f
+            drawLine(Color(0xFFB07D1E), Offset(cx, ly + lh * 0.92f), Offset(cx, ly + lh * 0.16f), 2.dp.toPx(), cap = StrokeCap.Round)
+            for (k in 0 until 4) {
+                val gy = ly + lh * (0.22f + 0.16f * k)
+                val gw = lw * 0.16f
+                val gh = lh * 0.11f
+                rotate(-30f, pivot = Offset(cx, gy)) { drawOval(Color(0xFFE0A93A), Offset(cx - gw, gy - gh / 2f), Size(gw, gh)) }
+                rotate(30f, pivot = Offset(cx, gy)) { drawOval(Color(0xFFE0A93A), Offset(cx, gy - gh / 2f), Size(gw, gh)) }
+            }
+            drawOval(Color(0xFFE0A93A), Offset(cx - lw * 0.05f, ly + lh * 0.08f), Size(lw * 0.1f, lh * 0.13f))
+        }
+        if (pouring && tip > 0.6f) {
+            // the white stream, from the tipped bag's mouth down-left into the bowl
+            val from = Offset(w * 0.02f, h * 0.36f)
+            val to = Offset(-w * 0.9f, h * 0.85f)
+            val ctl = Offset(-w * 0.45f, h * 0.15f)
+            for (k in 0 until 14) {
+                val t = ((k / 14f) + fall.value) % 1f
+                val u = 1f - t
+                val p = from * (u * u) + ctl * (2f * u * t) + to * (t * t)
+                val r = w * (0.05f + 0.02f * t)
+                drawCircle(Color.White, r, p)
+                drawCircle(Color(0xFFE6DDCB), r, p, style = Stroke(1.dp.toPx()))
+            }
+        }
+    }
+}
+
+/** The mixing bowl (the same grounded bowl shape as the fruit salad's): a cracked egg and milk in
+ * it, then a white flour mound once poured, then smooth batter while (and after) he stirs; a
+ * wooden spoon follows his finger during the stir (the shared [FruitStir] state). */
+@Composable
+private fun CakeBowlArt() {
+    val flourIn = CakeScene.flourIn.value
+    val mixed = CakeScene.mixed.value
+    val stirLive = FruitStir.live.value
+    val swirl = if (stirLive) FruitStir.swirl.floatValue else 0f
+    val finger = FruitStir.finger.value
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val body = Path().apply {
+            moveTo(w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
+            quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_OUTER_CONTROL_Y, w * 0.9f, h * KitchenLayout.BOWL_RIM_Y)
+            quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_INNER_CONTROL_Y, w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
+            close()
+        }
+        paperPath(body, Color(0xFFE3F2FD))
+        drawPath(body, Color(0xFF9EB8CC), style = Stroke(2.dp.toPx()))
+        val rimTop = h * KitchenLayout.BOWL_INNER_RIM_TOP
+        val rimH = h * KitchenLayout.BOWL_INNER_RIM_HEIGHT
+        val rimMid = rimTop + rimH / 2f
+        paperOval(Color(0xFFFFFDF7), Offset(w * 0.06f, rimTop), Size(w * 0.88f, rimH))
+        drawOval(Color(0xFFB0C4D4), Offset(w * 0.06f, rimTop), Size(w * 0.88f, rimH), style = Stroke(1.5.dp.toPx()))
+        val inside = Path().apply {
+            addOval(Rect(Offset(w * 0.08f, rimTop + rimH * 0.04f), Size(w * 0.84f, rimH * 0.92f)))
+            addRect(Rect(w * 0.13f, 0f, w * 0.87f, rimMid))
+        }
+        clipPath(inside) {
+            if (mixed || stirLive) {
+                drawOval(Color(0xFFF2D49B), Offset(w * 0.08f, rimTop + rimH * 0.12f), Size(w * 0.84f, rimH * 0.84f))
+                // the swirl in the batter turns as he stirs
+                val c = Offset(w * 0.5f, rimMid + rimH * 0.08f)
+                for (k in 0 until 3) {
+                    val a0 = swirl * 57.3f + k * 120f
+                    drawArc(Color(0xFFDDB46E), a0, 80f, false, c - Offset(w * (0.12f + 0.08f * k), rimH * (0.12f + 0.07f * k)),
+                        Size(w * (0.24f + 0.16f * k), rimH * (0.24f + 0.14f * k)), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+                }
+                if (stirLive && !mixed) {
+                    // a few white flour flecks still being mixed in
+                    for (k in 0 until 5) {
+                        val a = swirl + k * 1.3f
+                        drawCircle(Color.White, w * 0.022f, Offset(w * 0.5f + cos(a) * w * 0.22f, rimMid + sin(a) * rimH * 0.25f))
+                    }
+                }
+            } else {
+                drawOval(Color(0xFFFFFFF2), Offset(w * 0.1f, rimTop + rimH * 0.2f), Size(w * 0.8f, rimH * 0.7f))
+                // the cracked egg (yolk in its white)
+                drawOval(Color.White, Offset(w * 0.26f, rimMid - rimH * 0.12f), Size(w * 0.22f, rimH * 0.36f))
+                drawCircle(Color(0xFFFFB300), w * 0.055f, Offset(w * 0.37f, rimMid + rimH * 0.05f))
+                drawCircle(Color.White.copy(alpha = 0.7f), w * 0.015f, Offset(w * 0.355f, rimMid))
+                if (flourIn) {
+                    val mound = Path().apply {
+                        moveTo(w * 0.3f, rimMid + rimH * 0.25f)
+                        quadraticTo(w * 0.55f, rimTop - rimH * 0.55f, w * 0.82f, rimMid + rimH * 0.25f)
+                        close()
+                    }
+                    paperPath(mound, Color(0xFFFBF8F1))
+                }
+            }
+        }
+        val ovL = w * 0.06f
+        val ovR = w * 0.94f
+        val lipPath = Path().apply {
+            moveTo(ovL, rimMid)
+            quadraticTo(w * 0.5f, rimTop + rimH * 1.5f, ovR, rimMid)
+            quadraticTo(w * 0.5f, rimMid + rimH * 0.75f, ovL, rimMid)
+            close()
+        }
+        paperPath(lipPath, Color(0xFFE3F2FD))
+        drawArc(Color(0xFFB0C4D4), 0f, 180f, false, Offset(ovL, rimTop), Size(ovR - ovL, rimH), style = Stroke(1.5.dp.toPx()))
+        if (stirLive) {
+            val tip = if (finger != null) Offset(w * finger.x, h * finger.y)
+                else Offset(w * 0.5f + cos(swirl) * w * 0.2f, rimMid + sin(swirl) * rimH * 0.28f)
+            val top = tip + Offset(w * 0.34f, -h * 0.6f)
+            drawLine(Color(0xFF8D6E63), tip, top, w * 0.05f, cap = StrokeCap.Round)
+            drawLine(Color(0xFFBCAAA4), tip, top, w * 0.02f, cap = StrokeCap.Round)
+            drawOval(Color(0xFF8D6E63), tip - Offset(w * 0.06f, h * 0.035f), Size(w * 0.12f, h * 0.07f))
+        }
+    }
+}
+
+/** The one-tap oven: a red paper oven with a window and a timer dial. Once tapped ([CakeScene.baking])
+ * the window glows, the dial fills, "ding" (sparks by the dial), and a cake shows through the
+ * window -- a bit small at first, then (after a second little bake) just right. */
+@Composable
+private fun OvenArt() {
+    val baking = CakeScene.baking.value
+    val baked = CakeScene.baked.value
+    val still = LocalReduceMotion.current
+    val prog = remember { Animatable(0f) }
+    LaunchedEffect(baking, baked) {
+        when {
+            baked -> prog.snapTo(1f)
+            baking -> { prog.snapTo(0f); prog.animateTo(1f, tween(if (still) 0 else 6500, easing = LinearEasing)) }
+            else -> prog.snapTo(0f)
+        }
+    }
+    val pulse = rememberInfiniteTransition(label = "ovenGlow").animateFloat(0.6f, 1f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "og")
+    Canvas(Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        val p = prog.value
+        val on = baking || baked
+        val timer = when { !on -> 0f; p < 0.3f -> p / 0.3f; p < 0.62f -> 1f; p < 0.85f -> (p - 0.62f) / 0.23f; else -> 1f }
+        val heat = when { !on -> 0f; p < 0.3f -> p / 0.3f; p < 0.85f -> 0.8f; else -> 0.35f }
+        val cakeShown = on && p >= 0.3f
+        val cakeScale = when { p < 0.62f -> 0.55f; p < 0.85f -> 0.55f + 0.45f * ((p - 0.62f) / 0.23f); else -> 1f }
+        // feet, body, panel
+        drawRect(Color(0xFF5D4037), Offset(w * 0.12f, h * 0.94f), Size(w * 0.08f, h * 0.03f))
+        drawRect(Color(0xFF5D4037), Offset(w * 0.80f, h * 0.94f), Size(w * 0.08f, h * 0.03f))
+        paperRoundRect(Color(0xFFD9534F), Offset(w * 0.05f, h * 0.18f), Size(w * 0.90f, h * 0.77f), CornerRadius(w * 0.06f))
+        drawRoundRect(Color(0xFF8E2B28), Offset(w * 0.05f, h * 0.18f), Size(w * 0.90f, h * 0.77f), CornerRadius(w * 0.06f), style = Stroke(2.dp.toPx()))
+        paperRoundRect(Color(0xFFB83B37), Offset(w * 0.10f, h * 0.22f), Size(w * 0.80f, h * 0.13f), CornerRadius(w * 0.03f))
+        drawCircle(Color(0xFFFFE0B2), w * 0.035f, Offset(w * 0.2f, h * 0.285f))
+        drawCircle(Color(0xFFFFE0B2), w * 0.035f, Offset(w * 0.32f, h * 0.285f))
+        // the timer dial: fills like a little pie
+        val dc = Offset(w * 0.76f, h * 0.285f)
+        val dr = h * 0.075f
+        drawCircle(Color.White, dr, dc)
+        if (timer > 0f) drawArc(Color(0xFFFFA726), -90f, 360f * timer, true, dc - Offset(dr * 0.82f, dr * 0.82f), Size(dr * 1.64f, dr * 1.64f))
+        drawCircle(Color(0xFF8E2B28), dr, dc, style = Stroke(1.5.dp.toPx()))
+        if (on && p in 0.3f..0.45f) for (k in 0 until 8) {
+            val a = k * PI.toFloat() / 4f
+            drawLine(Color(0xFFFFD54F), dc + Offset(cos(a) * dr * 1.25f, sin(a) * dr * 1.25f), dc + Offset(cos(a) * dr * 1.7f, sin(a) * dr * 1.7f), 2.5.dp.toPx(), cap = StrokeCap.Round)
+        }
+        // the door handle and window
+        drawLine(Color(0xFFEEEEEE), Offset(w * 0.25f, h * 0.40f), Offset(w * 0.75f, h * 0.40f), h * 0.025f, cap = StrokeCap.Round)
+        val wl = w * 0.17f
+        val wt = h * 0.45f
+        val ww = w * 0.66f
+        val wh = h * 0.40f
+        paperRoundRect(Color(0xFF3B2A2A), Offset(wl, wt), Size(ww, wh), CornerRadius(w * 0.04f))
+        if (heat > 0f) drawRoundRect(Color(0xFFFF8A3D).copy(alpha = 0.6f * heat * pulse.value), Offset(wl, wt), Size(ww, wh), CornerRadius(w * 0.04f))
+        // the tin, and what's in it
+        val tinTop = wt + wh * 0.72f
+        drawRect(Color(0xFF9E9E9E), Offset(w * 0.30f, tinTop), Size(w * 0.40f, wh * 0.14f))
+        if (cakeShown) {
+            val cw = w * 0.38f * cakeScale
+            val ch = wh * 0.42f * cakeScale
+            val cx = w * 0.5f
+            paperRoundRect(Color(0xFFF0C27A), Offset(cx - cw / 2f, tinTop - ch), Size(cw, ch + wh * 0.02f), CornerRadius(cw * 0.3f, cw * 0.3f))
+            drawRoundRect(Color(0xFFB9853F), Offset(cx - cw / 2f, tinTop - ch), Size(cw, ch + wh * 0.02f), CornerRadius(cw * 0.3f, cw * 0.3f), style = Stroke(1.2.dp.toPx()))
+        } else {
+            drawRect(Color(0xFFF2D49B), Offset(w * 0.31f, tinTop - wh * 0.04f), Size(w * 0.38f, wh * 0.05f))
+        }
+        drawRoundRect(Color(0xFF8E2B28), Offset(wl, wt), Size(ww, wh), CornerRadius(w * 0.04f), style = Stroke(2.dp.toPx()))
+        // heat wiggles over the top while it's hot
+        if (heat > 0.2f) for (k in 0 until 3) {
+            val x = w * (0.35f + 0.15f * k)
+            val path = Path().apply {
+                moveTo(x, h * 0.16f)
+                quadraticTo(x - w * 0.04f, h * 0.11f, x, h * 0.07f)
+                quadraticTo(x + w * 0.04f, h * 0.03f, x, h * 0.0f)
+            }
+            drawPath(path, Color(0xFFFF7043).copy(alpha = 0.8f * pulse.value), style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
+        }
+    }
+}
+
+private val CandleColors = listOf(Color(0xFFEF5350), Color(0xFF42A5F5), Color(0xFFFFCA28), Color(0xFF66BB6A), Color(0xFFAB47BC))
+private val CandleXs = listOf(0.27f, 0.385f, 0.5f, 0.615f, 0.73f)
+
+/** The birthday cake on its stand: pink icing with drips, [candles] candles on top (dashed spots
+ * where the rest go when [spots]), each lit with a flickering flame when [lit], or a little smoke
+ * curl once [blown]. [nextPulse] (0..1) pulses the next empty spot. */
+private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean, flicker: Float, nextPulse: Float) {
+    val w = size.width
+    val h = size.height
+    // the stand: plate, pedestal, foot (its foot flush with the bottom, on the counter)
+    val ped = Path().apply {
+        moveTo(w * 0.43f, h * 0.64f); lineTo(w * 0.57f, h * 0.64f); lineTo(w * 0.66f, h * 0.95f); lineTo(w * 0.34f, h * 0.95f); close()
+    }
+    paperPath(ped, Color(0xFFEDE7F6))
+    drawPath(ped, Color(0xFFB39DDB), style = Stroke(1.4.dp.toPx()))
+    paperOval(Color(0xFFEDE7F6), Offset(w * 0.28f, h * 0.925f), Size(w * 0.44f, h * 0.05f))
+    paperOval(Color.White, Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f))
+    drawOval(Color(0xFFB39DDB), Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f), style = Stroke(1.4.dp.toPx()))
+    // the sponge, with a cream filling stripe
+    paperRect(Color(0xFFF2C27E), Offset(w * 0.16f, h * 0.36f), Size(w * 0.68f, h * 0.25f))
+    drawRect(Color(0xFFB9853F), Offset(w * 0.16f, h * 0.36f), Size(w * 0.68f, h * 0.25f), style = Stroke(1.2.dp.toPx()))
+    drawLine(Color(0xFFFFF3E0), Offset(w * 0.17f, h * 0.49f), Offset(w * 0.83f, h * 0.49f), h * 0.025f)
+    // pink icing with drips
+    paperRoundRect(Color(0xFFF8A5C2), Offset(w * 0.145f, h * 0.30f), Size(w * 0.71f, h * 0.09f), CornerRadius(w * 0.04f))
+    for (k in 0 until 6) drawCircle(Color(0xFFF8A5C2), w * 0.03f, Offset(w * (0.2f + 0.12f * k), h * 0.39f))
+    val sprinkles = listOf(Color(0xFF42A5F5), Color(0xFFFFEB3B), Color(0xFF66BB6A), Color.White)
+    for (k in 0 until 7) {
+        val x = w * (0.2f + 0.1f * k)
+        val y = h * (0.325f + 0.025f * (k % 2))
+        drawLine(sprinkles[k % 4], Offset(x, y), Offset(x + w * 0.02f, y + h * 0.008f), 2.dp.toPx(), cap = StrokeCap.Round)
+    }
+    val baseY = h * 0.315f
+    val ch = h * 0.13f
+    val cw = w * 0.034f
+    for (i in 0 until 5) {
+        val x = w * CandleXs[i]
+        if (i < candles) {
+            paperRect(CandleColors[i], Offset(x - cw / 2f, baseY - ch), Size(cw, ch))
+            for (s in 1..2) drawLine(Color.White.copy(alpha = 0.8f), Offset(x - cw / 2f, baseY - ch * (0.3f * s)), Offset(x + cw / 2f, baseY - ch * (0.3f * s) - ch * 0.12f), 1.5.dp.toPx())
+            drawLine(Color(0xFF3E2723), Offset(x, baseY - ch), Offset(x, baseY - ch - h * 0.02f), 1.5.dp.toPx())
+            if (lit) {
+                val f = 0.85f + 0.3f * (((flicker * 7f + i * 0.37f) % 1f).let { if (it > 0.5f) 1f - it else it } * 2f)
+                val jx = sin(flicker * 2f * PI.toFloat() * 3f + i) * w * 0.006f
+                val fc = Offset(x + jx, baseY - ch - h * 0.055f * f)
+                drawOval(Color(0xFFFFE082).copy(alpha = 0.45f), fc - Offset(w * 0.035f * f, h * 0.05f * f), Size(w * 0.07f * f, h * 0.1f * f))
+                val flame = Path().apply {
+                    moveTo(fc.x, fc.y - h * 0.045f * f)
+                    quadraticTo(fc.x + w * 0.028f * f, fc.y + h * 0.01f, fc.x, fc.y + h * 0.035f * f)
+                    quadraticTo(fc.x - w * 0.028f * f, fc.y + h * 0.01f, fc.x, fc.y - h * 0.045f * f)
+                    close()
+                }
+                drawPath(flame, Color(0xFFFF9800))
+                drawOval(Color(0xFFFFF176), Offset(fc.x - w * 0.009f, fc.y - h * 0.005f), Size(w * 0.018f, h * 0.03f * f))
+            } else if (blown) {
+                val sy = baseY - ch - h * 0.02f
+                val smoke = Path().apply {
+                    moveTo(x, sy)
+                    quadraticTo(x - w * 0.025f, sy - h * 0.04f, x, sy - h * 0.07f)
+                    quadraticTo(x + w * 0.025f, sy - h * 0.1f, x, sy - h * 0.13f)
+                }
+                drawPath(smoke, Color(0xFF9E9E9E).copy(alpha = 0.7f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            }
+        } else if (spots) {
+            val next = i == candles
+            val r = w * 0.032f * (if (next) 1f + 0.25f * nextPulse else 1f)
+            drawCircle(if (next) Color(0xFFFFE0B2) else Color.White.copy(alpha = 0.7f), r, Offset(x, baseY - h * 0.01f))
+            drawCircle(if (next) Color(0xFFE65100) else Color(0xFFBCAAA4), r, Offset(x, baseY - h * 0.01f),
+                style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+        }
+    }
+}
+
+/** [paperCake] as a composable, with its own flame flicker. */
+@Composable
+private fun CakeArt(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean = false) {
+    val still = LocalReduceMotion.current
+    val tr = rememberInfiniteTransition(label = "cakeFlicker")
+    val flicker by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart), label = "fl")
+    val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "np")
+    Canvas(Modifier.fillMaxSize()) { paperCake(candles, lit, blown, spots, if (still) 0f else flicker, pulse) }
+}
+
+/** The candles step (KitchenFlow.COUNT on [Prop.CAKE]): the whole cake is one big tap target --
+ * each tap puts the next candle on (no aiming at small spots), counted aloud with a number bubble
+ * off to the cake's right, well away from Rory's antenna. */
+@Composable
+private fun BoxWithConstraintsScope.CakeCandles(
+    cakeSize: Dp, cx: Float, cy: Float, hopped: Set<Int>, onTap: ((Int) -> Unit)?, onTarget: ((Int, Offset) -> Unit)?,
+) {
+    val next = (0 until 5).firstOrNull { it !in hopped }
+    val bob = rememberInfiniteTransition(label = "candleHand").animateFloat(0f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "ch")
+    Item(cakeSize, { cx }, { cy }) {
+        Box(
+            Modifier.fillMaxSize().onGloballyPositioned { c ->
+                val p = c.positionInWindow()
+                val ctr = Offset(p.x + c.size.width / 2f, p.y + c.size.height * 0.45f)
+                for (i in 0 until 5) onTarget?.invoke(i, ctr)
+            }.let { m ->
+                if (onTap == null || next == null) m
+                else m.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onTap(next) }
+            },
+        ) {
+            CakeArt(hopped.size, lit = false, blown = false, spots = true)
+            if (onTap != null && next != null) Canvas(Modifier.fillMaxSize()) {
+                val x = this.size.width * CandleXs[next]
+                paperPointingHandDown(Offset(x, this.size.height * (0.12f + 0.04f * bob.value)), this.size.width * 0.09f, 1f)
+            }
+        }
+    }
+    val count = hopped.size
+    if (count > 0) {
+        val pop = remember(count) { Animatable(0.3f) }
+        LaunchedEffect(count) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 300f)) }
+        val ns = minOf(maxWidth * 0.1f, maxHeight * 0.14f, 96.dp)
+        val nx = (cx + cakeSize.value * 0.42f / maxWidth.value).coerceAtMost(1f - ns.value / 2f / maxWidth.value)
+        val ny = cy - cakeSize.value * 0.36f / maxHeight.value
+        Item(ns, { nx }, { ny }, scale = { pop.value }) {
+            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.92f), CircleShape), contentAlignment = Alignment.Center) {
+                Text(count.toString(), fontSize = (ns.value * 0.6f).sp, fontWeight = FontWeight.Black, color = Color(0xFFE65100))
+            }
+        }
+    }
+}
+
+/** A gentle bouncing hand over a prop the child can tap (the flour bag, the oven, the cake to
+ * blow), plus the tap target itself: bigger than the prop, so a near miss still counts. */
+@Composable
+private fun BoxWithConstraintsScope.PropTapTarget(size: Dp, cx: Float, cy: Float, showHand: Boolean, onTap: () -> Unit, onTarget: ((Int, Offset) -> Unit)?) {
+    val bob = rememberInfiniteTransition(label = "propHand").animateFloat(0f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "ph")
+    val big = size * 1.25f
+    var logged by remember { mutableStateOf("") }
+    Item(big, { cx }, { cy }) {
+        Box(
+            Modifier.fillMaxSize().onGloballyPositioned { c ->
+                val p = c.positionInWindow()
+                val ctr = Offset(p.x + c.size.width / 2f, p.y + c.size.height / 2f)
+                onTarget?.invoke(0, ctr)
+                val key = "${ctr.x.roundToInt()},${ctr.y.roundToInt()}"
+                if (key != logged) { logged = key; println("KITCHEN proptap target=$key") }
+            }.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onTap() },
+        ) {
+            if (showHand) Canvas(Modifier.fillMaxSize()) {
+                paperPointingHandDown(Offset(this.size.width * 0.5f, this.size.height * (0.14f + 0.05f * bob.value)), this.size.width * 0.12f, 1f)
+            }
+        }
+    }
+}
+
+/** Falling paper confetti over the whole scene (the cake ending). */
+@Composable
+private fun CakeConfetti() {
+    val still = LocalReduceMotion.current
+    val t by rememberInfiniteTransition(label = "confetti").animateFloat(0f, 1f, infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Restart), label = "cf")
+    val cols = listOf(Color(0xFFEF5350), Color(0xFF42A5F5), Color(0xFFFFCA28), Color(0xFF66BB6A), Color(0xFFAB47BC), Color(0xFFFF8A65))
+    Canvas(Modifier.fillMaxSize()) {
+        for (k in 0 until 36) {
+            val sx = ((k * 0.618f) % 1f)
+            val ph = ((k * 0.377f) % 1f)
+            val yy = ((if (still) ph else (t + ph)) % 1f)
+            val x = size.width * sx + sin((yy * 6f + k).toDouble()).toFloat() * size.width * 0.02f
+            val y = size.height * (yy * 1.05f - 0.05f)
+            rotate(yy * 360f + k * 40f, pivot = Offset(x, y)) {
+                drawRect(cols[k % cols.size], Offset(x - 5f, y - 3f), Size(10f, 6f))
+            }
+        }
+    }
+}
+
+private fun kitchenUnitOf(w: Dp, h: Dp): Dp = minOf(w, h)
+
+/** Where Bruno's nose sits in his own puppet box (fractions), for the cake story's flour puff. */
+private const val BearNosePuffX = 0.56f
+private const val BearNosePuffY = 0.63f
