@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import com.zeronolidge.speechapp.ui.components.drawRoryHand
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -500,14 +501,13 @@ fun IslandMap(
                     )
                 }
                 val left = sx < from.mapX
-                Text(
-                    if (left) "👈" else "👉",
-                    fontSize = (rh.value * 0.42f).sp,
-                    modifier = Modifier
+                androidx.compose.foundation.Canvas(
+                    Modifier
                         .offset(x = w * rx + 52.dp + if (left) -rh * 0.45f else rh * 0.7f, y = h * ry)
                         .zIndex(4f)
-                        .graphicsLayer { alpha = fade },
-                )
+                        .size(rh * 0.5f)
+                        .graphicsLayer { alpha = fade; rotationZ = if (left) -90f else 90f },
+                ) { drawRoryHand() }
             }
         }
 

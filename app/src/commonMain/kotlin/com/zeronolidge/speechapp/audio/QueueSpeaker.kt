@@ -36,7 +36,17 @@ class QueueSpeaker(private val engine: VoiceEngine) : Speaker {
     override fun say(text: String, slow: Boolean, onDone: (() -> Unit)?) {
         // Interrupted speech still reports "done" (later, not in the middle of this call),
         // so flows waiting on it carry on.
-        val interrupted = listOfNotNull(current?.onDone) + queue.mapNotNull { it.onDone }
+        // test43: a new line no longer cuts off the one he's in the middle of (that clipped the
+        // ends of Rory's lines on iPad); it waits for that line's own end, and only lines still
+        // waiting their turn are dropped. [stop] still cuts straight away when a flow needs it.
+        if (current != null) {
+            val dropped = queue.mapNotNull { it.onDone }
+            queue.clear()
+            queue.addLast(Item(++nextId, text, slow, onDone))
+            scope.launch { dropped.forEach { it() } }
+            return
+        }
+        val interrupted = queue.mapNotNull { it.onDone }
         clear()
         engine.cancel()
         queue.addLast(Item(++nextId, text, slow, onDone))

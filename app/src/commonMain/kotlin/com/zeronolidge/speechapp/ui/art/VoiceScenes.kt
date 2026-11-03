@@ -2332,8 +2332,11 @@ private fun BoxWithConstraintsScope.GrapeBunch(
     val plateH = g * 0.34f
     val plateSurface = counter - plateH.value * 0.55f * fy
     // grape centres in dp from (cx, plateSurface): top row first (0,1,2), then the bottom two
-    val spots = listOf(-0.92f to -1.62f, 0f to -1.68f, 0.92f to -1.62f, -0.48f to -0.55f, 0.48f to -0.55f)
-    val stemDy = -2.45f
+    // test43 (Timothy): the stem runs down the MIDDLE -- a woody main stem with a short stub and
+    // a leaf at the top, small twigs branching left/right to each grape, grapes 2-2-1 tapering
+    // symmetrically around it (top pair first).
+    val spots = listOf(-0.55f to -2.45f, 0.55f to -2.45f, -0.55f to -1.5f, 0.55f to -1.5f, 0f to -0.58f)
+    val stemDy = -3.2f
     val bowlCx = (bowl.l + bowl.r) / 2f
     val bowlW = bowl.r - bowl.l
     val bowlH = (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BATTER, landscape)) / maxHeight
@@ -2357,18 +2360,18 @@ private fun BoxWithConstraintsScope.GrapeBunch(
             paperOval(Color(0xFFFAFAFA), Offset(ox - u * 1.9f, L - plateH.toPx()), Size(u * 3.8f, plateH.toPx()))
             drawOval(Color(0xFFD7CCC8), Offset(ox - u * 1.9f, L - plateH.toPx()), Size(u * 3.8f, plateH.toPx()), style = Stroke(1.5.dp.toPx()))
             val brown = Color(0xFF4E342E)
-            // twigs to every grape (they stay when a grape pops off)
+            // central woody main stem down the middle of the bunch (stub above the top pair)
+            drawLine(brown, at(0f, stemDy - 0.3f), at(0f, -0.95f), u * 0.2f, cap = StrokeCap.Round)
+            // twigs from the main stem out to every grape (they stay when a grape pops off)
             spots.forEach { (dx, dy) ->
-                drawLine(Color(0xFF6D4C41), at(dx * 0.6f, stemDy), at(dx, dy - 0.5f), u * 0.09f, cap = StrokeCap.Round)
+                drawLine(Color(0xFF6D4C41), at(0f, dy - 0.35f), at(dx * 0.75f, dy - 0.3f), u * 0.09f, cap = StrokeCap.Round)
             }
-            // thick woody stem across the top, a little curl on the left, one leaf on the right
-            drawLine(brown, at(-1.35f, stemDy - 0.05f), at(1.2f, stemDy + 0.08f), u * 0.2f, cap = StrokeCap.Round)
-            drawArc(brown, 180f, 270f, false, at(-1.75f, stemDy - 0.4f), Size(u * 0.42f, u * 0.42f), style = Stroke(u * 0.11f, cap = StrokeCap.Round))
+            // one leaf off the stub at the top
             val leaf = Path().apply {
-                val a = at(1.1f, stemDy); moveTo(a.x, a.y)
-                val c1 = at(1.4f, stemDy - 0.85f); val e = at(1.95f, stemDy - 0.45f)
+                val a = at(0.05f, stemDy - 0.05f); moveTo(a.x, a.y)
+                val c1 = at(0.4f, stemDy - 0.85f); val e = at(1.0f, stemDy - 0.5f)
                 quadraticTo(c1.x, c1.y, e.x, e.y)
-                val c2 = at(1.6f, stemDy + 0.15f)
+                val c2 = at(0.65f, stemDy + 0.1f)
                 quadraticTo(c2.x, c2.y, a.x, a.y)
                 close()
             }
@@ -2636,28 +2639,17 @@ private fun BoxWithConstraintsScope.KitchenNumeral(text: String, box: KitchenLay
  * read the caption beside the line reads "a hand, dragging down" far more clearly than a dot. */
 private fun DrawScope.paperPointingHandDown(center: Offset, unit: Float, alpha: Float) {
     if (alpha <= 0f) return
-    val skin = Color(0xFFE3A76F).copy(alpha = alpha)
-    val outline = Color(0xFF8D5A3B).copy(alpha = alpha)
-    val palmW = unit * 1f
-    val palmH = unit * 0.8f
-    val palmTop = center.y - palmH * 0.7f
-    val palmTopLeft = Offset(center.x - palmW / 2f, palmTop)
-    drawOval(skin, palmTopLeft, Size(palmW, palmH))
-    drawOval(outline, palmTopLeft, Size(palmW, palmH), style = Stroke(unit * 0.07f))
-    // a small thumb to the side, so it reads as a hand, not a thumb-less mitt
-    val thumbTopLeft = Offset(center.x - palmW * 0.62f, palmTop + palmH * 0.15f)
-    val thumbSize = Size(unit * 0.38f, unit * 0.3f)
-    drawOval(skin, thumbTopLeft, thumbSize)
-    drawOval(outline, thumbTopLeft, thumbSize, style = Stroke(unit * 0.05f))
-    // the extended index finger, pointing down -- the swipe's own direction
-    val fingerW = unit * 0.3f
-    val fingerH = unit * 0.9f
-    val fingerTopLeft = Offset(center.x - fingerW / 2f, palmTop + palmH * 0.55f)
-    val fingerSize = Size(fingerW, fingerH)
-    val corner = CornerRadius(fingerW / 2f)
-    drawRoundRect(skin, fingerTopLeft, fingerSize, corner)
-    drawRoundRect(outline, fingerTopLeft, fingerSize, corner, style = Stroke(unit * 0.06f))
+    // test43 (Timothy): the old tan hand read as wood -- now Rory's own paper-robot hand
+    // (orange paper, cyan cuff, white cut-out edge), finger pointing down at [center].
+    val w = unit * 1.5f
+    val h = unit * 2f
+    rotate(180f, pivot = center) {
+        drawRoryHandAt(Offset(center.x - w / 2f, center.y - h * 0.1f), w, h, alpha)
+    }
 }
+
+private fun DrawScope.drawRoryHandAt(o: Offset, w: Float, h: Float, alpha: Float) =
+    com.zeronolidge.speechapp.ui.components.drawRoryHandOn(this, o, w, h, alpha)
 
 /** K6: the swipe-to-cut step: a glowing dotted line over the butter, a one-time hand-swipe hint,
  * and a rounded wooden toy knife that follows the finger only while cutting. Any drag of at least

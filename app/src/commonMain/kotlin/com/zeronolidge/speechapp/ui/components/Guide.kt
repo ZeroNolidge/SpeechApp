@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,21 +89,44 @@ fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boo
     val t = rememberInfiniteTransition(label = "hand")
     val bob by t.loop(0f, 1f, 450, label = "bob")
     val shift = size * 0.25f * bob
-    Text(
+    // test43 (Timothy): the old emoji hand read as wood -- now Rory's own paper-robot hand:
+    // his orange paper, a cyan cuff, a white paper-cutout edge and round friendly fingers.
+    val turn = when { pointRight -> 90f; pointLeft -> -90f; pointDown -> 180f; else -> 0f }
+    androidx.compose.foundation.Canvas(
         when {
-            pointRight -> "👉"
-            pointLeft -> "👈"
-            pointDown -> "👇"
-            else -> "👆"
-        },
-        fontSize = size.value.sp,
-        modifier = when {
             pointRight -> modifier.offset(x = shift)
             pointLeft -> modifier.offset(x = -shift)
             pointDown -> modifier.offset(y = shift)
             else -> modifier.offset(y = -shift)
-        },
-    )
+        }.size(size).graphicsLayer { rotationZ = turn },
+    ) { drawRoryHand() }
+}
+
+/** Rory's pointing hand, finger up, filling this canvas (see [PointingHand]). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoryHand() = drawRoryHand(androidx.compose.ui.geometry.Offset.Zero, size.width, size.height, 1f)
+
+/** Rory's hand, finger up, in the [w] x [h] box at [o], at [alpha]. */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoryHand(o: androidx.compose.ui.geometry.Offset, w: Float, h: Float, alpha: Float) = translate(o.x, o.y) {
+    val body = androidx.compose.ui.graphics.Color(0xFFFFB74D).copy(alpha = alpha)
+    val shade = androidx.compose.ui.graphics.Color(0xFFF57C00).copy(alpha = alpha)
+    val cyan = androidx.compose.ui.graphics.Color(82, 218, 232).copy(alpha = alpha)
+    val white = androidx.compose.ui.graphics.Color.White.copy(alpha = alpha)
+    fun shapes(grow: Float, fill: androidx.compose.ui.graphics.Color, cuff: androidx.compose.ui.graphics.Color) {
+        val cr = androidx.compose.ui.geometry.CornerRadius(w * 0.12f + grow)
+        // pointing finger
+        drawRoundRect(fill, androidx.compose.ui.geometry.Offset(w * 0.4f - grow, h * 0.04f - grow), androidx.compose.ui.geometry.Size(w * 0.2f + 2 * grow, h * 0.5f + 2 * grow), androidx.compose.ui.geometry.CornerRadius(w * 0.1f + grow))
+        // palm with the three curled fingers
+        drawRoundRect(fill, androidx.compose.ui.geometry.Offset(w * 0.22f - grow, h * 0.4f - grow), androidx.compose.ui.geometry.Size(w * 0.56f + 2 * grow, h * 0.36f + 2 * grow), cr)
+        // thumb
+        drawCircle(fill, w * 0.11f + grow, androidx.compose.ui.geometry.Offset(w * 0.22f, h * 0.52f))
+        // cuff
+        drawRoundRect(cuff, androidx.compose.ui.geometry.Offset(w * 0.26f - grow, h * 0.74f - grow), androidx.compose.ui.geometry.Size(w * 0.48f + 2 * grow, h * 0.2f + 2 * grow), androidx.compose.ui.geometry.CornerRadius(w * 0.06f + grow))
+    }
+    shapes(w * 0.06f, white, white)
+    shapes(0f, body, cyan)
+    // knuckle lines for the curled fingers, and a little bolt on the cuff
+    for (k in 1..2) drawLine(shade, androidx.compose.ui.geometry.Offset(w * (0.4f + 0.13f * k), h * 0.46f), androidx.compose.ui.geometry.Offset(w * (0.4f + 0.13f * k), h * 0.62f), w * 0.035f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+    drawCircle(white, w * 0.04f, androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.84f))
 }
 
 /**
@@ -278,3 +303,6 @@ fun ContinueAction(
         }
     }
 }
+
+/** For other files' DrawScope extensions: [drawRoryHand] on [scope]. */
+fun drawRoryHandOn(scope: androidx.compose.ui.graphics.drawscope.DrawScope, o: androidx.compose.ui.geometry.Offset, w: Float, h: Float, alpha: Float) = scope.drawRoryHand(o, w, h, alpha)

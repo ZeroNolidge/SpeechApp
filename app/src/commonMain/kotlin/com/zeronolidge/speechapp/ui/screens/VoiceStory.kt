@@ -1214,7 +1214,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         if (!blowTurn) return
         println("KITCHEN blow tap")
         app.voice.cancel()
-        app.speaker.stop()
+        // test43: let Rory's demo line finish (the next line queues behind it) -- no cut-off.
         com.zeronolidge.speechapp.ui.art.CakeScene.gust.value = false
         finishGently(index, heard = false, micUsed = false)
     }
@@ -1645,7 +1645,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 beats[k].caption?.let { cap ->
                     Text(
                         cap, fontSize = if (isFruitSaladStory) 30.sp else 19.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).zIndex(4f)
+                        // test43 (Ruby): on a phone the cake's caption sits up and left of Rory
+                        // (top-left corner), clear of his hat and the cake top.
+                        modifier = (if (isCakeStory && LocalScreenHeight.current < 480.dp) Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 2.dp)
+                            else Modifier.align(Alignment.TopCenter).padding(top = 8.dp)).zIndex(4f)
+                            .onGloballyPositioned { c -> val b = c.boundsInWindow(); println("KITCHEN caption=${cap} at=${b.left.roundToInt()},${b.top.roundToInt()},${b.right.roundToInt()},${b.bottom.roundToInt()}") }
                             .paperCard(PaperStyle.chip, 20.dp).padding(horizontal = if (isFruitSaladStory) 22.dp else 14.dp, vertical = if (isFruitSaladStory) 8.dp else 4.dp),
                     )
                 }

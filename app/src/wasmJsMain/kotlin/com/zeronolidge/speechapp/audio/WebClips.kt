@@ -11,6 +11,18 @@ private fun jsClipsLoad(): Unit = js(
     """(() => {
         if (window.__tlClips) return;
         window.__tlClips = { map: null, cache: new Map(), playing: [], gen: 0 };
+        // test43: one shared AudioContext, unlocked and warmed on the very first touch (iPadOS
+        // WebKit starts it suspended and only lets a user gesture start it), then kept alive.
+        const C = window.AudioContext || window.webkitAudioContext;
+        const unlock = () => {
+            if (!C) return;
+            window.__tlAudio = window.__tlAudio || new C();
+            const ctx = window.__tlAudio;
+            try { ctx.resume(); } catch (e) {}
+            try { const b = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * 0.05)), ctx.sampleRate); const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {}
+        };
+        ['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, unlock, { capture: true, passive: true }));
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && window.__tlAudio) { try { window.__tlAudio.resume(); } catch (e) {} } });
         window.__tlClips.loaded = fetch('audio/manifest.json', { cache: 'no-cache' })
             .then(r => r.ok ? r.json() : null)
             .then(m => { if (m && m.clips) window.__tlClips.map = m.clips; })
@@ -44,7 +56,9 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
         // '_' (ClipText.PAUSE) is a short breath between two sentences.
         const PAUSE = '_', breath = 0.25, slowRate = 0.72;
         let finished = false;
-        const fin = (ok) => { if (finished) return; finished = true; if (gen === st.gen) onEnd(ok); };
+        // test43: the caller (next line, step change, mic open) only hears "done" ~150 ms after the
+        // last sample has actually played, so nothing cuts his final syllable.
+        const fin = (ok) => { if (finished) return; finished = true; setTimeout(() => { if (gen === st.gen) onEnd(ok); }, ok ? 150 : 0); };
         window.__tlAudio = window.__tlAudio || new C();
         const ctx = window.__tlAudio;
         try { ctx.resume(); } catch (e) {}
@@ -57,7 +71,10 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
             const p = fetch(url(k)).then(r => { if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
                 .then(b => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej))).then(buf => {
                 const d = buf.getChannelData(0);
-                const th = 0.01;
+                // test43: a soft onset ("f", "s", "h") or trailing decay sits well under 0.01 -- the
+                // old threshold trimmed the first and last sounds off on its own. Lower it and
+                // keep a generous margin (120 ms before, 200 ms after) of the clip's own audio.
+                const th = 0.003;
                 let s = 0, e = d.length - 1;
                 while (s < e && Math.abs(d[s]) < th) s++;
                 while (e > s && Math.abs(d[e]) < th) e--;
@@ -67,8 +84,8 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
                 for (let i = s; i <= e; i += 8) { const v = Math.abs(d[i]); peak = Math.max(peak, v); sum += v * v; n++; }
                 const rms = Math.sqrt(sum / Math.max(1, n));
                 if ((e - s) / buf.sampleRate < 0.12 || peak < 0.05 || rms < 0.03) throw new Error('silent');
-                const pad = Math.floor(buf.sampleRate * 0.015);
-                return { buf, start: Math.max(0, s - pad) / buf.sampleRate, end: Math.min(d.length, e + pad) / buf.sampleRate };
+                const pre = Math.floor(buf.sampleRate * 0.12), post = Math.floor(buf.sampleRate * 0.2);
+                return { buf, start: Math.max(0, s - pre) / buf.sampleRate, end: Math.min(d.length, e + post) / buf.sampleRate };
             });
             st.cache.set(k, p);
             p.catch(() => { st.bad = st.bad || new Set(); st.bad.add(k); });
@@ -111,7 +128,11 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
                 next();
                 return;
             }
-            let t = ctx.currentTime + 0.03;
+            // test43: never schedule on a suspended (cold) context -- its clock jumps when it wakes
+            // and the wall-clock safety net used to fire before the line had finished.
+            const go = () => {
+            if (gen !== st.gen) return;
+            let t = ctx.currentTime + 0.06;
             let last = null;
             const segs = [];
             st.track = { gen, segs };
@@ -122,6 +143,10 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
                 src.connect(ctx.destination);
                 const dur = Math.max(0.01, c.end - c.start);
                 src.start(t, c.start, dur);
+                src.__t0 = t; src.__dur = dur; src.__key = keys[i];
+                const t0 = t;
+                src.onended = () => { src.__done = true; console.log('CLIPLOG end key=' + keys[i].slice(0, 40) + ' dur=' + dur.toFixed(3) + ' played=' + (ctx.currentTime - t0).toFixed(3)); };
+                console.log('CLIPLOG start key=' + keys[i].slice(0, 40) + ' dur=' + dur.toFixed(3) + ' ctx=' + ctx.state);
                 segs.push({ t0: t, off: c.start, dur, buf: c.buf, key: keys[i] });
                 t += dur;
                 st.playing.push(src);
@@ -129,8 +154,11 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
             });
             // A little safety net in case 'ended' never comes.
             const ms = (t - ctx.currentTime) * 1000 + 600;
-            if (last) last.onended = () => fin(true);
-            setTimeout(() => fin(true), ms);
+            if (last) { const prev = last.onended; last.onended = () => { prev && prev(); fin(true); }; }
+            setTimeout(() => fin(true), ms + 1500);
+            };
+            if (ctx.state === 'running') go();
+            else { let started = false; const g1 = () => { if (!started) { started = true; go(); } }; ctx.resume().then(g1, g1); setTimeout(g1, 800); }
         }).catch(() => fin(false));
     })()"""
 )
@@ -165,7 +193,13 @@ private fun jsClipsStop(): Unit = js(
         const st = window.__tlClips;
         if (!st) return;
         st.gen++;
-        st.playing.forEach(p => { try { if (p.stop) p.stop(); else { p.pause(); p.src = ''; } } catch (e) {} });
+        const now = window.__tlAudio ? window.__tlAudio.currentTime : 0;
+        st.playing.forEach(p => {
+            // test43: a clip cut off mid-sound is logged (the walks assert there are none).
+            if (p.stop && !p.__done && p.__t0 !== undefined && now > p.__t0 && now < p.__t0 + p.__dur - 0.05)
+                console.log('CLIPLOG cut key=' + p.__key.slice(0, 40) + ' at=' + (now - p.__t0).toFixed(3) + ' dur=' + p.__dur.toFixed(3));
+            try { if (p.stop) p.stop(); else { p.pause(); p.src = ''; } } catch (e) {}
+        });
         st.playing = [];
         st.track = null;
     })()"""
