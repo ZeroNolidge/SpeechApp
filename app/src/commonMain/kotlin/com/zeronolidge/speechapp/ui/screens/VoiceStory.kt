@@ -100,6 +100,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.mutableFloatStateOf
 import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.ui.components.popIn
@@ -393,7 +394,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     var blowListenStarted by remember(id) { mutableStateOf(false) }
     var blowDemoDone by remember(id) { mutableStateOf(false) }
     var blowHint by remember(id) { mutableStateOf(false) }
-    var blowBtnLogged by remember(id) { mutableStateOf(false) }
+    var blowBtnKey by remember(id) { mutableStateOf("") }
     LaunchedEffect(cakeI) {
         if (cakeI != 5) { blowListenStarted = false; blowDemoDone = false; blowHint = false }
     }
@@ -1379,6 +1380,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // untouched: it still only lifts/reserves while its own GAME phase is up.
                     val isKitchen = beat.backdrop == Backdrop.KITCHEN
                     val landscape = if (isKitchen) w > h else stripShown && w > h
+                    KitchenLayout.bowlShiftX = 0f
                     val stripFraction = if (landscape) BalloonLandscapeStripFraction else BalloonStripFraction
                     // K-fruit picker: on a short landscape phone (844x390) the shared 128dp floor
                     // alone can be so much of a small `h` that the landscape lift clips Rory's own
@@ -1398,6 +1400,19 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     val fruitZoom = fruitCharZoom
                     val gameStrip = if (fruitWide) 0.dp else if (isKitchen || stripShown) (h * stripFraction).coerceAtLeast(stripFloor) else 0.dp
                     val fruitLift = if (fruitZoom > 1f) (h * fruitZoom * KitchenLayout.roryBox(true).t - 10.dp).coerceAtLeast(0.dp) else 0.dp
+                    // test45: on a short phone the fruit bowl slides left, snug beside Rory's drawn
+                    // right edge, so the 120dp 3x2 fruit grid fits on the counter to its right.
+                    if (fruitCharZoom > 1f && !isCakeStory) {
+                        val rf = KitchenLayout.roryFittedBox(w.value, (h * fruitZoom).value, true)
+                        val roryRight = (rf.l + rf.r) / 2f + (rf.r - rf.l) / 2f * 0.55f * fruitCharZoom
+                        val box = KitchenLayout.bowlBox(true)
+                        // the bowl art is ~2.5% of the width inside its station's left edge
+                        val artLeft = (box.l + 0.025f) * w.value
+                        KitchenLayout.bowlShiftX = ((roryRight + 4f - artLeft) / w.value).coerceIn(-0.2f, 0f)
+                    }
+                    // test45: on a tablet the cake's counter station sits a little further right, so the
+                    // bowl and its stir ring stay well clear of Rory's side.
+                    if (isCakeStory && isKitchen && landscape && h >= 600.dp) KitchenLayout.bowlShiftX = 0.035f
                     val fruitCounterY = h * fruitZoom * KitchenLayout.counterTop(true) - fruitLift
                     // Rory's Kitchen: his mouth talks whenever Rory is the one speaking (naming
                     // the step, modelling the word, or echoing after it), and he hides while the
@@ -1507,7 +1522,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
                                         puzzleSafe = stripShown, landscape = true,
                                         kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
-                                        kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
+                                        kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep && !blowTurn,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
@@ -1533,7 +1548,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     beat, { if (index < 0) 0f else act.value }, strength(index), { pushNow }, Modifier.fillMaxSize(),
                                     puzzleSafe = stripShown,
                                     kitchenTalking = kitchenTalking, kitchenRoryVisible = kitchenRoryVisible,
-                                    kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep,
+                                    kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep && !blowTurn,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
                                         fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
@@ -1673,11 +1688,24 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // the counter and the tap tiles below.
             if (k >= 0 && beats[k].backdrop == Backdrop.KITCHEN && phase != VPhase.END && phase != VPhase.ACT) {
                 beats[k].caption?.let { cap ->
+                    val shortScreen = LocalScreenHeight.current < 480.dp
+                    // test45: on a phone the fruit picker's caption is smaller and top-left (the 120dp
+                    // grid fills the right), and the cake's "Blow!" sits over the cake's side, just
+                    // left of the candles -- never over Bruno.
+                    val phonePick = shortScreen && !isCakeStory && isFruitSaladStory && beats[k].kitchen == KitchenFlow.PICK
+                    val phoneBlow = shortScreen && isCakeStory && blowTurn
+                    var capOrigin by remember { mutableStateOf(Offset.Zero) }
+                    var capW by remember { mutableStateOf(0) }
+                    val cakeAt = com.zeronolidge.speechapp.ui.art.CakeScene.cakeAt.value
+                    val cakeHalf = with(LocalDensity.current) { 95.dp.toPx() }
+                    if (phoneBlow) Box(Modifier.align(Alignment.TopStart).size(1.dp).onGloballyPositioned { c -> capOrigin = c.positionInWindow() })
                     Text(
-                        cap, fontSize = if (isFruitSaladStory) 30.sp else 19.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
+                        cap, fontSize = if (phonePick) 20.sp else if (isFruitSaladStory) 30.sp else 19.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1,
                         // test43 (Ruby): on a phone the cake's caption sits up and left of Rory
                         // (top-left corner), clear of his hat and the cake top.
-                        modifier = (if (isCakeStory && LocalScreenHeight.current < 480.dp) Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 2.dp)
+                        modifier = (if (phoneBlow && cakeAt.x > 0f) Modifier.align(Alignment.TopStart).onSizeChanged { capW = it.width }
+                            .offset { IntOffset((cakeAt.x - capOrigin.x - cakeHalf - capW).roundToInt().coerceAtLeast(0), 0) }.padding(top = 30.dp)
+                            else if (phonePick || (isCakeStory && shortScreen)) Modifier.align(Alignment.TopStart).padding(start = 6.dp, top = 2.dp)
                             else Modifier.align(Alignment.TopCenter).padding(top = 8.dp)).zIndex(4f)
                             .onGloballyPositioned { c -> val b = c.boundsInWindow(); println("KITCHEN caption=${cap} at=${b.left.roundToInt()},${b.top.roundToInt()},${b.right.roundToInt()},${b.bottom.roundToInt()}") }
                             .paperCard(PaperStyle.chip, 20.dp).padding(horizontal = if (isFruitSaladStory) 22.dp else 14.dp, vertical = if (isFruitSaladStory) 8.dp else 4.dp),
@@ -1698,22 +1726,20 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // test42: the blow turn's own child button -- a big picture (flames + a puff), no
             // reading needed -- and the grown-up's "I said it!" shrunk to a small corner chip.
             if (blowTurn) {
-                if (blowHint) BlowPictureButton(
-                    Modifier.align(Alignment.BottomEnd).padding(end = 68.dp, bottom = 4.dp).zIndex(5f).popIn("blowBtn")
-                        .onGloballyPositioned { c -> val b = c.boundsInWindow(); if (!blowBtnLogged) { blowBtnLogged = true; println("KITCHEN blow button=${b.center.x.roundToInt()},${b.center.y.roundToInt()} size=${(b.width).roundToInt()}") } },
-                    onClick = ::blowTapped,
-                )
-                Box(
-                    Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp).zIndex(5f).size(52.dp)
-                        .paperCard(PaperColorsUi.go, circle = true).clickable { blowTapped() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // a drawn tick (no text) -- the grown-up's "I said it!"
-                    Canvas(Modifier.size(26.dp)) {
-                        val d = size.minDimension
-                        val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.15f, d * 0.52f); lineTo(d * 0.4f, d * 0.78f); lineTo(d * 0.88f, d * 0.22f) }
-                        drawPath(pth, Color.White, style = Stroke(d * 0.16f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-                    }
+                // test45: the child's big picture button sits centred under the cake (>=120dp), and
+                // the grown-up's small green tick chip is gone (voice or this button both count).
+                var frameOrigin by remember { mutableStateOf(Offset.Zero) }
+                Box(Modifier.align(Alignment.TopStart).size(1.dp).onGloballyPositioned { c -> frameOrigin = c.positionInWindow() })
+                val cakeAt = com.zeronolidge.speechapp.ui.art.CakeScene.cakeAt.value
+                if (blowHint) {
+                    val half = with(LocalDensity.current) { 70.dp.toPx() }
+                    BlowPictureButton(
+                        Modifier.align(Alignment.BottomStart)
+                            .offset { IntOffset(((if (cakeAt.x > 0f) cakeAt.x else frameOrigin.x + half * 4f) - frameOrigin.x - half).roundToInt().coerceAtLeast(0), 0) }
+                            .padding(bottom = 6.dp).zIndex(5f).popIn("blowBtn")
+                            .onGloballyPositioned { c -> val b = c.boundsInWindow(); val key = "${b.center.x.roundToInt()},${b.center.y.roundToInt()} size=${(b.width).roundToInt()}"; if (blowBtnKey != key) { blowBtnKey = key; println("KITCHEN blow button=$key") } },
+                        onClick = ::blowTapped,
+                    )
                 }
             }
             if (phase != VPhase.GAME && phase != VPhase.KITCHEN && !(isKitchenStory && phase == VPhase.END) && !blowTurn &&
@@ -1821,7 +1847,7 @@ private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Ma
                         Canvas(Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.3f, y = badge * 0.3f).size(badge)) {
                             val d = size.minDimension
                             drawCircle(Color.White, d / 2f)
-                            drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                            drawCircle(Color(0xFF9E9E9E), d * 0.42f)
                             val pth = androidx.compose.ui.graphics.Path().apply {
                                 moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f)
                             }
@@ -1841,7 +1867,7 @@ private fun BlowPictureButton(modifier: Modifier = Modifier, onClick: () -> Unit
     val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
     val bob by rememberInfiniteTransition(label = "blowBtn").animateFloat(1f, 1.08f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(650), androidx.compose.animation.core.RepeatMode.Reverse), label = "bb")
     Box(
-        modifier.size(120.dp).graphicsLayer { val k = if (still) 1f else bob; scaleX = k; scaleY = k }
+        modifier.size(140.dp).graphicsLayer { val k = if (still) 1f else bob; scaleX = k; scaleY = k }
             .paperCard(Color(0xFFFFF3E0), circle = true).clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
@@ -1887,12 +1913,12 @@ private fun CakeRecipeCard(done: List<Boolean>) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         done.forEachIndexed { i, ok ->
-            Box(Modifier.size(circle).paperCard(if (ok) Color(0xFF8BC34A) else PaperStyle.chip, circle = true), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(circle).paperCard(if (ok) Color(0xFFE0E0E0) else PaperStyle.chip, circle = true), contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxSize().padding(5.dp)) { drawRecipeIcon(i) }
                 if (ok) Canvas(Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.3f, y = badge * 0.3f).size(badge)) {
                     val d = size.minDimension
                     drawCircle(Color.White, d / 2f)
-                    drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                    drawCircle(Color(0xFF9E9E9E), d * 0.42f)
                     val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f) }
                     drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
                 }
@@ -2156,31 +2182,40 @@ private fun KitchenTapRow(
         // a landscape phone so it stays clear of the bowl), bottom-right on the counter, never
         // scrolling; the "Done!" bowl picture sits just left of the grid's top row.
         if (isPick) {
-            val gap = 8.dp
-            val t = minOf(PickerTileSize, (maxWidth * 0.39f - gap * 2) / 3, (maxHeight * 0.62f - gap) / 2)
+            // test45: every card is a full 120dp. Tablet: a 2-wide x 3-high grid on the right with
+            // the "Done!" bowl to its RIGHT (bottom row, on the counter). Short phone: a 3x2 grid
+            // bottom-right (the bowl slid left beside Rory to make room) with "Done!" just left of
+            // the grid's top row, above the bowl, never on it. Used cards stay put in the grid,
+            // faded, with a grey check.
+            val gap = 4.dp
+            val t = PickerTileSize
+            val pad = 6.dp
+            val phone = maxHeight < t * 3 + gap * 2 + pad * 2 + 40.dp
+            val cols = if (phone) 3 else 2
+            val doneW = if (!phone) t + gap else 0.dp
             Column(
-                Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp),
+                Modifier.align(Alignment.BottomEnd).padding(end = pad + doneW, bottom = pad),
                 verticalArrangement = Arrangement.spacedBy(gap),
             ) {
-                for (row in 0 until 2) Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    for (i in row * 3 until minOf(row * 3 + 3, tiles.size)) {
+                val rows = (tiles.size + cols - 1) / cols
+                for (row in 0 until rows) Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (i in row * cols until minOf(row * cols + cols, tiles.size)) {
                         val used = i in hopped
                         val hint = state.glow && i == targetIndex
                         Box(contentAlignment = Alignment.TopCenter) {
                             AnswerCard(
                                 modifier = Modifier.size(t).onGloballyPositioned { c -> onCenter(i, choiceCenter(c)) }
-                                    .let { m -> if (used) m.graphicsLayer { alpha = 0.45f; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                                        .drawWithContent { drawContent(); drawRect(Color.Gray, blendMode = androidx.compose.ui.graphics.BlendMode.Saturation) } else m },
+                                    .let { m -> if (used) m.graphicsLayer { alpha = 0.4f } else m },
                                 correct = false, glow = hint && !used, wiggle = if (i == wrongChoice) wiggleBump else 0,
                                 onClick = { if (!used) onTap(i) },
                             ) {
                                 if (FruitPicker.Fruit.entries.getOrNull(i) == FruitPicker.Fruit.APPLE) com.zeronolidge.speechapp.ui.art.AppleTileArt(Modifier.fillMaxSize())
                                 else Text(tiles[i], fontSize = (t.value * 0.5f).sp)
                             }
-                            if (used) Canvas(Modifier.align(Alignment.BottomEnd).size(t * 0.3f)) {
+                            if (used) Canvas(Modifier.align(Alignment.BottomEnd).size(t * 0.32f)) {
                                 val d = size.minDimension
                                 drawCircle(Color.White, d / 2f)
-                                drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                                drawCircle(Color(0xFF9E9E9E), d * 0.42f)
                                 val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f) }
                                 drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
                             }
@@ -2192,10 +2227,9 @@ private fun KitchenTapRow(
             if (pickDone != null) {
                 val di = FruitPicker.Fruit.entries.size
                 AnswerCard(
-                    // tablet: on top of the grid's right end (clear of the bowl); phone: left of its top row
                     modifier = Modifier.align(Alignment.BottomEnd).let { m ->
-                        if (maxHeight > t * 3 + gap * 2 + 200.dp) m.padding(end = 10.dp, bottom = 6.dp + (t + gap) * 2)
-                        else m.padding(end = 10.dp + (t + gap) * 3, bottom = 6.dp + t + gap)
+                        if (!phone) m.padding(end = pad, bottom = pad)
+                        else m.padding(end = pad + (t + gap) * 3, bottom = pad + t + gap)
                     }.size(t)
                         .onGloballyPositioned { c -> onCenter(di, choiceCenter(c)) },
                     correct = false, glow = false, wiggle = 0,
@@ -2227,7 +2261,7 @@ private fun KitchenTapRow(
                             if (used) Canvas(Modifier.align(Alignment.BottomEnd).size(PickerTileSize * 0.3f)) {
                                 val d = size.minDimension
                                 drawCircle(Color.White, d / 2f)
-                                drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                                drawCircle(Color(0xFF9E9E9E), d * 0.42f)
                                 val pth = androidx.compose.ui.graphics.Path().apply { moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f) }
                                 drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
                             }
@@ -2270,7 +2304,7 @@ private fun KitchenTapRow(
                         Canvas(Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.15f, y = badge * 0.15f).size(badge)) {
                             val d = size.minDimension
                             drawCircle(Color.White, d / 2f)
-                            drawCircle(Color(0xFF2E9E3E), d * 0.42f)
+                            drawCircle(Color(0xFF9E9E9E), d * 0.42f)
                             val pth = androidx.compose.ui.graphics.Path().apply {
                                 moveTo(d * 0.28f, d * 0.52f); lineTo(d * 0.44f, d * 0.68f); lineTo(d * 0.74f, d * 0.34f)
                             }

@@ -696,9 +696,14 @@ object KitchenLayout {
     const val COUNT_BERRY_SIZE = 0.038f
 
     /** The "tap the bowl" choice's own slot. */
+    /** test45: Rory's Fruit Salad on a short landscape phone only -- the bowl station slides left
+     * (a fraction of the scene's width, <= 0), snug beside Rory, so the 120dp fruit grid fits on the
+     * counter to its right. 0 everywhere else (set by VoiceStory each composition). */
+    var bowlShiftX: Float = 0f
+
     fun bowlBox(landscape: Boolean): Rect {
         val top = counterTop(landscape) + PROPS_MARGIN
-        return Rect(bowlLeft(landscape), top, bowlRight(landscape), BEAR_FLOOR)
+        return Rect(bowlLeft(landscape) + bowlShiftX, top, bowlRight(landscape) + bowlShiftX, BEAR_FLOOR)
     }
 
     /** K6: the ingredient station, beside the bowl -- milk on its own (beat 2), sized to the

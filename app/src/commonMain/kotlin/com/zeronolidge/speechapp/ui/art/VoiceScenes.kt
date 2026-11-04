@@ -1,5 +1,7 @@
 package com.zeronolidge.speechapp.ui.art
 
+import androidx.compose.ui.layout.boundsInWindow
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -469,7 +471,10 @@ fun VoiceBeatScene(
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
                 alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
-                onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(beat.prop, c) },
+                onRect = if (!isKitchen) null else { c ->
+                    if (beat.prop == Prop.CAKE) CakeScene.cakeAt.value = c.boundsInWindow().center
+                    onKitchenPropRect?.invoke(beat.prop, c)
+                },
             ) { PropArt(beat.prop, f, beat.propEmoji, beat, butterCut, fruitSliced, fruitInBowl, fruitBerriesIn, strawberryIn, grapeIn, fruitStirring) }
             if (isKitchen && beat.kitchen == KitchenFlow.COUNT) when (beat.prop) {
                 Prop.STRAWBERRY -> StrawberryBoard(landscape, countHopped, onBerryTap, onKitchenTarget)
@@ -479,7 +484,10 @@ fun VoiceBeatScene(
                 else -> KitchenCountRow(landscape, countHopped, onBerryTap, onKitchenTarget)
             }
             if (isKitchen && onPropTap != null) kitchenPropCenter?.let { (cx, cy) ->
-                PropTapTarget(kitchenUnit * kitchenPropSize(beat.prop, landscape), cx, cy, propTapHint, onPropTap, onKitchenTarget)
+                PropTapTarget(kitchenUnit * kitchenPropSize(beat.prop, landscape), cx, cy, propTapHint, onPropTap) { i, o ->
+                    if (beat.prop == Prop.CAKE) CakeScene.cakeAt.value = o
+                    onKitchenTarget?.invoke(i, o)
+                }
             }
             if (isKitchen && onSlice != null) FruitSliceOverlay(landscape, onSlice, onKitchenTarget)
             if (isKitchen && onStirDone != null) FruitStirOverlay(landscape, onStirDone, onKitchenTarget)
@@ -2582,7 +2590,7 @@ private fun BoxWithConstraintsScope.FruitStirOverlay(landscape: Boolean, onDone:
             .onGloballyPositioned { cc ->
                 val p = cc.positionInWindow()
                 onTarget?.invoke(0, Offset(p.x + cc.size.width / 2f, p.y + cc.size.height / 2f))
-                if (logged == 0 && !touched) println("KITCHEN stir zone=${(p.x + cc.size.width / 2f).roundToInt()},${(p.y + cc.size.height / 2f).roundToInt()} r=${(bwp * 0.3f).roundToInt()}")
+                if (logged == 0 && !touched) println("KITCHEN stir zone=${(p.x + cc.size.width / 2f).roundToInt()},${(p.y + cc.size.height / 2f).roundToInt()} r=${with(density) { (zone * 0.3f).toDp().value.roundToInt() }} hit=${with(density) { (zone / 2f).toDp().value.roundToInt() }}")
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -2800,7 +2808,7 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
     // the first touch, so a child who doesn't notice the dashed line right away still gets a
     // steady hint, not just a brief flash.
     val handPulse = rememberInfiniteTransition(label = "sliceHandPulse").animateFloat(0.4f, 1f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "hp")
-    androidx.compose.runtime.LaunchedEffect(Unit) { BananaCuts.intValue = 0 }
+    androidx.compose.runtime.LaunchedEffect(Unit) { BananaCuts.intValue = 0; println("KITCHEN slicezone size=${with(density) { zone.toDp().value.roundToInt() }}") }
     var cutThisDrag by remember { mutableStateOf(false) }
     fun fire() {
         if (done) return
@@ -2900,7 +2908,10 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: 
         val pick = centers.indices.filter { it !in sentNow.value }.minByOrNull { (centers[it] - at).getDistance() } ?: return
         cb(pick)
     }
-    val pad = zone * 0.6f
+    // test45: one big swipe/tap zone over all the slices (>= 120dp each way), snapping to the
+    // nearest slice still on the plate.
+    val pad = maxOf(zone * 0.6f, (with(density) { 124.dp.toPx() } - gridH) / 2f)
+    LaunchedEffect(Unit) { with(density) { println("KITCHEN dragzone w=${(gridW + pad * 2f).toDp().value.roundToInt()} h=${(gridH + pad * 2f).toDp().value.roundToInt()} snap=nearest") } }
     Box(
         Modifier.offset { IntOffset((gx - pad).roundToInt(), (gy - pad).roundToInt()) }
             .size(with(density) { (gridW + pad * 2f).toDp() }, with(density) { (gridH + pad * 2f).toDp() })
@@ -2964,6 +2975,8 @@ object CakeScene {
     val nosePuff = mutableStateOf(false)
     /** test42: Rory's demo puff -- the flames lean hard over without going out. */
     val gust = mutableStateOf(false)
+    /** test45: the cake's own centre (window px), for the blow button centred under it. */
+    val cakeAt = mutableStateOf(Offset(-1f, -1f))
     fun reset() {
         gust.value = false
         pouring.value = false; flourIn.value = false; mixed.value = false; baking.value = false
@@ -3286,6 +3299,15 @@ private fun BoxWithConstraintsScope.CakeCandles(
 ) {
     val next = (0 until 5).firstOrNull { it !in hopped }
     val bob = rememberInfiniteTransition(label = "candleHand").animateFloat(0f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "ch")
+    // test45: one candle tap target the size of the whole cake, never under 120dp (any tap on or
+    // near the cake counts the next candle).
+    val hit = maxOf(cakeSize * 1.2f, 120.dp)
+    LaunchedEffect(Unit) { println("KITCHEN candles target=${hit.value.roundToInt()}") }
+    if (onTap != null && next != null) Item(hit, { cx }, { cy }) {
+        Box(Modifier.fillMaxSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
+            (0 until 5).firstOrNull { it !in hopped }?.let { onTap(it) }
+        })
+    }
     Item(cakeSize, { cx }, { cy }) {
         Box(
             Modifier.fillMaxSize().onGloballyPositioned { c ->
@@ -3474,7 +3496,11 @@ private fun BoxWithConstraintsScope.FruitPrepTarget(
     LaunchedEffect(n) { if (n > 0) wiggle.animateTo(0f, tween(380)) }
     val tapCb by androidx.compose.runtime.rememberUpdatedState(onTap)
     val nextNow by androidx.compose.runtime.rememberUpdatedState(next)
-    val big = propSize * 1.25f
+    val big = maxOf(propSize * 1.25f, 120.dp)
+    // test45: the demo hand shows the motion -- a swipe across the orange (peel), a circle round
+    // the apple (wash); a plain tap still counts.
+    val demo = rememberInfiniteTransition(label = "prepDemo").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart), label = "pd")
+    LaunchedEffect(prop) { println("KITCHEN prep target=${prop.name} size=${big.value.roundToInt()} demo=${if (prop == Prop.ORANGE) "swipe" else "circle"}") }
     Item(big, { cx }, { cy }) {
         Box(
             Modifier.fillMaxSize().onGloballyPositioned { c ->
@@ -3527,7 +3553,21 @@ private fun BoxWithConstraintsScope.FruitPrepTarget(
                         drawArc(Color(0xFFF57C00), 200f, 140f, false, Offset(px, size.height * 0.8f), Size(r * 0.55f, r * 0.3f), style = Stroke(r * 0.12f, cap = StrokeCap.Round))
                     }
                 }
-                if (tapCb != null && next != null) paperPointingHandDown(Offset(c.x + r * 0.5f, c.y - r * (1.05f + 0.1f * bob.value)), size.width * 0.2f, 1f)
+                if (tapCb != null && next != null) {
+                    val t = demo.value
+                    val hp = if (prop == Prop.ORANGE) {
+                        // left-to-right stroke over the top of the orange, then a beat's rest
+                        val k = (t / 0.75f).coerceAtMost(1f)
+                        val e = k * k * (3f - 2f * k)
+                        Offset(c.x - r * 0.9f + r * 1.8f * e, c.y - r * 0.55f - sin(e * PI.toFloat()) * r * 0.25f)
+                    } else {
+                        val a = t * 2f * PI.toFloat() - PI.toFloat() / 2f
+                        Offset(c.x + cos(a) * r * 0.7f, c.y + sin(a) * r * 0.6f)
+                    }
+                    if (prop == Prop.ORANGE && t < 0.75f) drawLine(Color(0xFFE65100).copy(alpha = 0.45f), Offset(c.x - r * 0.9f, c.y - r * 0.55f), hp, r * 0.08f, cap = StrokeCap.Round)
+                    if (prop == Prop.APPLE) drawArc(Color(0xFF29B6F6).copy(alpha = 0.45f), -90f, t * 360f, false, c - Offset(r * 0.7f, r * 0.6f), Size(r * 1.4f, r * 1.2f), style = Stroke(r * 0.08f, cap = StrokeCap.Round))
+                    paperPointingHandDown(hp - Offset(0f, size.width * 0.06f), size.width * 0.2f, 0.7f + 0.3f * bob.value)
+                }
             }
         }
     }

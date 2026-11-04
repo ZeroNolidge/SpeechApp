@@ -155,7 +155,23 @@ private fun jsClipsPlay(keysJoined: String, slow: Boolean, onEnd: (Boolean) -> U
             // A little safety net in case 'ended' never comes.
             const ms = (t - ctx.currentTime) * 1000 + 600;
             if (last) { const prev = last.onended; last.onended = () => { prev && prev(); fin(true); }; }
-            setTimeout(() => fin(true), ms + 1500);
+            // test45: the safety net follows the audio clock, not the wall clock -- if the page
+            // stalls (ctx frozen) it waits, nudging the context awake, instead of cutting the line.
+            const tEnd = t;
+            let lastCt = ctx.currentTime, stuck = 0;
+            const watch = () => {
+                if (gen !== st.gen) return;
+                if (ctx.currentTime >= tEnd + 0.4) { fin(true); return; }
+                if (ctx.currentTime <= lastCt + 0.001) {
+                    stuck++;
+                    if (ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
+                    if (stuck === 1) console.log('CLIPLOG stall ctx=' + ctx.state);
+                    if (stuck > 40) { fin(true); return; }
+                } else stuck = 0;
+                lastCt = ctx.currentTime;
+                setTimeout(watch, 250);
+            };
+            setTimeout(watch, ms + 400);
             };
             if (ctx.state === 'running') go();
             else { let started = false; const g1 = () => { if (!started) { started = true; go(); } }; ctx.resume().then(g1, g1); setTimeout(g1, 800); }

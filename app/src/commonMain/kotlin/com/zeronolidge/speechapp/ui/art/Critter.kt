@@ -313,7 +313,9 @@ private class PuppetNode(
         val bob = if (still) 0f else m.bob.value
         val lift = if (s.mood == Mood.CHEER) -10f * bob else -2.5f * bob
         val wig = if (still) 0f else m.wiggle.value * m.talk.value
-        val blinking = !still && s.mood != Mood.SLEEP && m.blink.value > 0.5f
+        // test45: Rory's (boxy robot) round cyan eyes never blink shut -- a blink frame read as a
+        // squint/blank screen while he waits.
+        val blinking = !still && !s.species.boxy && s.mood != Mood.SLEEP && m.blink.value > 0.5f
         fun o(x: Float, y: Float) = Offset(x * u, (y + OY) * u)
         val boxy = s.species.boxy
         val headCenterY = if (boxy) 61f else 63f
@@ -647,8 +649,8 @@ private fun DrawScope.drawPuppetPart(
                 if (blink > 0.5f) {
                     drawLine(glow, o(34f, 56f), o(44f, 56f), 3f * u); drawLine(glow, o(56f, 56f), o(66f, 56f), 3f * u)
                 } else {
-                    circle(39f, 56f, 6f, glow); circle(61f, 56f, 6f, glow)
-                    circle(41f, 54f, 2f, Color.White); circle(63f, 54f, 2f, Color.White)
+                    circle(39f, 56f, 7f, glow); circle(61f, 56f, 7f, glow)
+                    circle(41.5f, 53.5f, 2.3f, Color.White); circle(63.5f, 53.5f, 2.3f, Color.White)
                 }
                 if (!noMouth) mouth(o(50f, 65f), 8f * u, glow, mood)
             } else {
