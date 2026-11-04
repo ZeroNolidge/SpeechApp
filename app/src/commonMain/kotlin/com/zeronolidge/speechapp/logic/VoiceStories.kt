@@ -412,14 +412,14 @@ object VoiceStories {
             // no talk turn of their own -- Rory himself says "Peel!"/"Wash!".
             Fruit.ORANGE -> listOf(
                 VoiceBeat(
-                    Backdrop.KITCHEN, "Let's peel the orange! Peel! Tap the peel off!", listOf("peel", "peel it", "Peel the orange!"), "p", Prop.ORANGE, Move.SHAKE,
-                    "Peel! All peeled! The orange pieces go into the bowl!", "🍊", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Tap to peel!", fruitTag = Fruit.ORANGE,
+                    Backdrop.KITCHEN, "Let's peel the orange! Peel! Swipe to peel!", listOf("peel", "peel it", "Peel the orange!"), "p", Prop.ORANGE, Move.SHAKE,
+                    "Peel! All peeled! The orange pieces go into the bowl!", "🍊", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Swipe to peel!", fruitTag = Fruit.ORANGE,
                 ),
             )
             Fruit.APPLE -> listOf(
                 VoiceBeat(
-                    Backdrop.KITCHEN, "Let's wash the apple! Wash! Rub it clean!", listOf("wash", "wash it", "Wash the apple!"), null, Prop.APPLE, Move.SHAKE,
-                    "Wash! Nice and clean! The apple pieces go into the bowl!", "🍎", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Tap to wash!", fruitTag = Fruit.APPLE,
+                    Backdrop.KITCHEN, "Let's wash the apple! Wash! Rub to wash!", listOf("wash", "wash it", "Wash the apple!"), null, Prop.APPLE, Move.SHAKE,
+                    "Wash! Nice and clean! The apple pieces go into the bowl!", "🍎", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Rub to wash!", fruitTag = Fruit.APPLE,
                 ),
             )
         }

@@ -2548,7 +2548,8 @@ private fun BoxWithConstraintsScope.FruitStirOverlay(landscape: Boolean, onDone:
     // inside it, swirling round with the fork); the cake keeps the side view.
     val topDown = FruitScene.topDown.value
     val tdD = minOf(hPx * 0.66f, wPx * 0.44f)
-    val c = if (topDown) Offset((wPx * 0.64f).coerceIn(tdD * 0.6f, wPx - tdD * 0.6f), hPx * 0.54f) else Offset(bl + bwp / 2f, bt + bhp * (rimTopF + rimHF * 0.5f))
+    // test46: on a short phone the popup sits further right, clear of Rory's body and face
+    val c = if (topDown) Offset((wPx * (if (maxHeight < 480.dp) 0.73f else 0.64f)).coerceIn(tdD * 0.6f, wPx - tdD * 0.6f), hPx * 0.54f) else Offset(bl + bwp / 2f, bt + bhp * (rimTopF + rimHF * 0.5f))
     val zone = if (topDown) tdD * 1.15f else maxOf(bwp * 1.8f, with(density) { 220.dp.toPx() })
     var fingerPx by remember { mutableStateOf<Offset?>(null) }
     if (topDown) Box(Modifier.offset { IntOffset((c.x - zone / 2f).roundToInt(), (c.y - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })) {
@@ -3213,69 +3214,73 @@ private val CandleXs = listOf(0.27f, 0.385f, 0.5f, 0.615f, 0.73f)
 /** The birthday cake on its stand: pink icing with drips, [candles] candles on top (dashed spots
  * where the rest go when [spots]), each lit with a flickering flame when [lit], or a little smoke
  * curl once [blown]. [nextPulse] (0..1) pulses the next empty spot. */
-private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean, flicker: Float, nextPulse: Float, gust: Boolean = false) {
+private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean, flicker: Float, nextPulse: Float, gust: Boolean = false, low: Boolean = false) {
     val w = size.width
     val h = size.height
+    // test46: on a phone the cake sits low on a short stand, right down on the counter
+    val dy = if (low) h * 0.22f else 0f
     // the stand: plate, pedestal, foot (its foot flush with the bottom, on the counter)
     val ped = Path().apply {
-        moveTo(w * 0.43f, h * 0.64f); lineTo(w * 0.57f, h * 0.64f); lineTo(w * 0.66f, h * 0.95f); lineTo(w * 0.34f, h * 0.95f); close()
+        moveTo(w * 0.43f, h * (if (low) 0.86f else 0.64f)); lineTo(w * 0.57f, h * (if (low) 0.86f else 0.64f)); lineTo(w * 0.66f, h * 0.95f); lineTo(w * 0.34f, h * 0.95f); close()
     }
     paperPath(ped, Color(0xFFEDE7F6))
     drawPath(ped, Color(0xFFB39DDB), style = Stroke(1.4.dp.toPx()))
     paperOval(Color(0xFFEDE7F6), Offset(w * 0.28f, h * 0.925f), Size(w * 0.44f, h * 0.05f))
-    paperOval(Color.White, Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f))
-    drawOval(Color(0xFFB39DDB), Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f), style = Stroke(1.4.dp.toPx()))
-    // the sponge, with a cream filling stripe
-    paperRect(Color(0xFFF2C27E), Offset(w * 0.16f, h * 0.36f), Size(w * 0.68f, h * 0.25f))
-    drawRect(Color(0xFFB9853F), Offset(w * 0.16f, h * 0.36f), Size(w * 0.68f, h * 0.25f), style = Stroke(1.2.dp.toPx()))
-    drawLine(Color(0xFFFFF3E0), Offset(w * 0.17f, h * 0.49f), Offset(w * 0.83f, h * 0.49f), h * 0.025f)
-    // pink icing with drips
-    paperRoundRect(Color(0xFFF8A5C2), Offset(w * 0.145f, h * 0.30f), Size(w * 0.71f, h * 0.09f), CornerRadius(w * 0.04f))
-    for (k in 0 until 6) drawCircle(Color(0xFFF8A5C2), w * 0.03f, Offset(w * (0.2f + 0.12f * k), h * 0.39f))
-    val sprinkles = listOf(Color(0xFF42A5F5), Color(0xFFFFEB3B), Color(0xFF66BB6A), Color.White)
-    for (k in 0 until 7) {
-        val x = w * (0.2f + 0.1f * k)
-        val y = h * (0.325f + 0.025f * (k % 2))
-        drawLine(sprinkles[k % 4], Offset(x, y), Offset(x + w * 0.02f, y + h * 0.008f), 2.dp.toPx(), cap = StrokeCap.Round)
-    }
-    val baseY = h * 0.315f
-    val ch = h * 0.13f
-    val cw = w * 0.034f
-    for (i in 0 until 5) {
-        val x = w * CandleXs[i]
-        if (i < candles) {
-            paperRect(CandleColors[i], Offset(x - cw / 2f, baseY - ch), Size(cw, ch))
-            for (s in 1..2) drawLine(Color.White.copy(alpha = 0.8f), Offset(x - cw / 2f, baseY - ch * (0.3f * s)), Offset(x + cw / 2f, baseY - ch * (0.3f * s) - ch * 0.12f), 1.5.dp.toPx())
-            drawLine(Color(0xFF3E2723), Offset(x, baseY - ch), Offset(x, baseY - ch - h * 0.02f), 1.5.dp.toPx())
-            if (lit) {
-                // test42: bigger, clearer flames (x1.6); a gust leans them hard right
-                val f = 1.6f * (0.85f + 0.3f * (((flicker * 7f + i * 0.37f) % 1f).let { if (it > 0.5f) 1f - it else it } * 2f))
-                val jx = sin(flicker * 2f * PI.toFloat() * 3f + i) * w * 0.006f + if (gust) w * 0.03f else 0f
-                val fc = Offset(x + jx, baseY - ch - h * 0.045f * f)
-                drawOval(Color(0xFFFFE082).copy(alpha = 0.45f), fc - Offset(w * 0.035f * f, h * 0.05f * f), Size(w * 0.07f * f, h * 0.1f * f))
-                val flame = Path().apply {
-                    moveTo(fc.x, fc.y - h * 0.045f * f)
-                    quadraticTo(fc.x + w * 0.028f * f, fc.y + h * 0.01f, fc.x, fc.y + h * 0.035f * f)
-                    quadraticTo(fc.x - w * 0.028f * f, fc.y + h * 0.01f, fc.x, fc.y - h * 0.045f * f)
-                    close()
+    translate(0f, dy) {
+        paperOval(Color.White, Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f))
+        drawOval(Color(0xFFB39DDB), Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f), style = Stroke(1.4.dp.toPx()))
+        // the sponge, with a cream filling stripe
+        paperRect(Color(0xFFF2C27E), Offset(w * 0.16f, h * 0.36f), Size(w * 0.68f, h * 0.25f))
+        drawRect(Color(0xFFB9853F), Offset(w * 0.16f, h * 0.36f), Size(w * 0.68f, h * 0.25f), style = Stroke(1.2.dp.toPx()))
+        drawLine(Color(0xFFFFF3E0), Offset(w * 0.17f, h * 0.49f), Offset(w * 0.83f, h * 0.49f), h * 0.025f)
+        // pink icing with drips
+        paperRoundRect(Color(0xFFF8A5C2), Offset(w * 0.145f, h * 0.30f), Size(w * 0.71f, h * 0.09f), CornerRadius(w * 0.04f))
+        for (k in 0 until 6) drawCircle(Color(0xFFF8A5C2), w * 0.03f, Offset(w * (0.2f + 0.12f * k), h * 0.39f))
+        val sprinkles = listOf(Color(0xFF42A5F5), Color(0xFFFFEB3B), Color(0xFF66BB6A), Color.White)
+        for (k in 0 until 7) {
+            val x = w * (0.2f + 0.1f * k)
+            val y = h * (0.325f + 0.025f * (k % 2))
+            drawLine(sprinkles[k % 4], Offset(x, y), Offset(x + w * 0.02f, y + h * 0.008f), 2.dp.toPx(), cap = StrokeCap.Round)
+        }
+        val baseY = h * 0.315f
+        val ch = h * 0.13f
+        val cw = w * 0.034f
+        for (i in 0 until 5) {
+            val x = w * CandleXs[i]
+            if (i < candles) {
+                paperRect(CandleColors[i], Offset(x - cw / 2f, baseY - ch), Size(cw, ch))
+                for (s in 1..2) drawLine(Color.White.copy(alpha = 0.8f), Offset(x - cw / 2f, baseY - ch * (0.3f * s)), Offset(x + cw / 2f, baseY - ch * (0.3f * s) - ch * 0.12f), 1.5.dp.toPx())
+                drawLine(Color(0xFF3E2723), Offset(x, baseY - ch), Offset(x, baseY - ch - h * 0.02f), 1.5.dp.toPx())
+                if (lit) {
+                    // test42: bigger, clearer flames (x1.6); a gust leans them hard right
+                    val f = 1.6f * (0.85f + 0.3f * (((flicker * 7f + i * 0.37f) % 1f).let { if (it > 0.5f) 1f - it else it } * 2f))
+                    val jx = sin(flicker * 2f * PI.toFloat() * 3f + i) * w * 0.006f + if (gust) w * 0.03f else 0f
+                    val fc = Offset(x + jx, baseY - ch - h * 0.045f * f)
+                    drawOval(Color(0xFFFFE082).copy(alpha = 0.45f), fc - Offset(w * 0.035f * f, h * 0.05f * f), Size(w * 0.07f * f, h * 0.1f * f))
+                    val flame = Path().apply {
+                        moveTo(fc.x, fc.y - h * 0.045f * f)
+                        quadraticTo(fc.x + w * 0.028f * f, fc.y + h * 0.01f, fc.x, fc.y + h * 0.035f * f)
+                        quadraticTo(fc.x - w * 0.028f * f, fc.y + h * 0.01f, fc.x, fc.y - h * 0.045f * f)
+                        close()
+                    }
+                    drawPath(flame, Color(0xFFFF9800))
+                    drawOval(Color(0xFFFFF176), Offset(fc.x - w * 0.009f, fc.y - h * 0.005f), Size(w * 0.018f, h * 0.03f * f))
+                } else if (blown) {
+                    val sy = baseY - ch - h * 0.02f
+                    val smoke = Path().apply {
+                        moveTo(x, sy)
+                        quadraticTo(x - w * 0.025f, sy - h * 0.04f, x, sy - h * 0.07f)
+                        quadraticTo(x + w * 0.025f, sy - h * 0.1f, x, sy - h * 0.13f)
+                    }
+                    drawPath(smoke, Color(0xFF9E9E9E).copy(alpha = 0.7f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
                 }
-                drawPath(flame, Color(0xFFFF9800))
-                drawOval(Color(0xFFFFF176), Offset(fc.x - w * 0.009f, fc.y - h * 0.005f), Size(w * 0.018f, h * 0.03f * f))
-            } else if (blown) {
-                val sy = baseY - ch - h * 0.02f
-                val smoke = Path().apply {
-                    moveTo(x, sy)
-                    quadraticTo(x - w * 0.025f, sy - h * 0.04f, x, sy - h * 0.07f)
-                    quadraticTo(x + w * 0.025f, sy - h * 0.1f, x, sy - h * 0.13f)
-                }
-                drawPath(smoke, Color(0xFF9E9E9E).copy(alpha = 0.7f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            } else if (spots) {
+                val next = i == candles
+                val r = w * 0.032f * (if (next) 1f + 0.25f * nextPulse else 1f)
+                drawCircle(if (next) Color(0xFFFFE0B2) else Color.White.copy(alpha = 0.7f), r, Offset(x, baseY - h * 0.01f))
+                drawCircle(if (next) Color(0xFFE65100) else Color(0xFFBCAAA4), r, Offset(x, baseY - h * 0.01f),
+                    style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
             }
-        } else if (spots) {
-            val next = i == candles
-            val r = w * 0.032f * (if (next) 1f + 0.25f * nextPulse else 1f)
-            drawCircle(if (next) Color(0xFFFFE0B2) else Color.White.copy(alpha = 0.7f), r, Offset(x, baseY - h * 0.01f))
-            drawCircle(if (next) Color(0xFFE65100) else Color(0xFFBCAAA4), r, Offset(x, baseY - h * 0.01f),
-                style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
         }
     }
 }
@@ -3287,7 +3292,8 @@ private fun CakeArt(candles: Int, lit: Boolean, blown: Boolean, spots: Boolean =
     val tr = rememberInfiniteTransition(label = "cakeFlicker")
     val flicker by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart), label = "fl")
     val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "np")
-    Canvas(Modifier.fillMaxSize()) { paperCake(candles, lit, blown, spots, if (still) 0f else flicker, pulse, CakeScene.gust.value) }
+    val low = com.zeronolidge.speechapp.ui.components.LocalScreenHeight.current.let { it > 0.dp && it < 480.dp }
+    Canvas(Modifier.fillMaxSize()) { paperCake(candles, lit, blown, spots, if (still) 0f else flicker, pulse, CakeScene.gust.value, low) }
 }
 
 /** The candles step (KitchenFlow.COUNT on [Prop.CAKE]): the whole cake is one big tap target --
@@ -3302,6 +3308,7 @@ private fun BoxWithConstraintsScope.CakeCandles(
     // test45: one candle tap target the size of the whole cake, never under 120dp (any tap on or
     // near the cake counts the next candle).
     val hit = maxOf(cakeSize * 1.2f, 120.dp)
+    val lowDy = if (com.zeronolidge.speechapp.ui.components.LocalScreenHeight.current.let { it > 0.dp && it < 480.dp }) 0.22f else 0f
     LaunchedEffect(Unit) { println("KITCHEN candles target=${hit.value.roundToInt()}") }
     if (onTap != null && next != null) Item(hit, { cx }, { cy }) {
         Box(Modifier.fillMaxSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {
@@ -3322,7 +3329,7 @@ private fun BoxWithConstraintsScope.CakeCandles(
             CakeArt(hopped.size, lit = false, blown = false, spots = true)
             if (onTap != null && next != null) Canvas(Modifier.fillMaxSize()) {
                 val x = this.size.width * CandleXs[next]
-                paperPointingHandDown(Offset(x, this.size.height * (0.12f + 0.04f * bob.value)), this.size.width * 0.09f, 1f)
+                paperPointingHandDown(Offset(x, this.size.height * (0.12f + lowDy + 0.04f * bob.value)), this.size.width * 0.09f, 1f)
             }
         }
     }

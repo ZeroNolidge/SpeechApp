@@ -1066,16 +1066,27 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // test37 no-deadlock safety: if a tap-only kitchen step (banana slice/drag, grapes,
     // strawberries, the berry box) sits idle, Rory gently does the next bit himself -- 6 s for
     // the banana drag, 10 s for the rest -- so a step can never strand him with nothing to do.
+    // test46: after that first nudge, if he still hasn't touched (~2 s more), Rory finishes the
+    // whole rest of the step himself, one quick item after another; any touch of his own
+    // (tapsDone moving past what Rory did) resets it to the full wait.
+    var idleHelpAt by remember(id) { mutableStateOf(-1 to -1) }
+    var idleAutoN by remember(id) { mutableStateOf(0) }
     LaunchedEffect(index, kitchenPhase.phase, kitchenPhase.tapsDone) {
         val s = session
         val b = beats.getOrNull(index) ?: return@LaunchedEffect
         val f = b.kitchen ?: return@LaunchedEffect
         if (!isFruitSaladStory || kitchenPhase.phase != KitchenPhase.TAP || f.hasWrongTaps() || f == KitchenFlow.PICK) return@LaunchedEffect
-        delay(if (f == KitchenFlow.DRAG) 6000L else 10000L)
+        val running = idleHelpAt.first == index && idleHelpAt.second == kitchenPhase.tapsDone
+        if (!running) { idleHelpAt = -1 to -1; idleAutoN = 0 }
+        val nudged = running
+        delay(if (running) (if (idleAutoN <= 1) 2000L else 450L) else if (f == KitchenFlow.DRAG) 6000L else 10000L)
         if (s != session || kitchenPhase.phase != KitchenPhase.TAP) return@LaunchedEffect
         val next = (0 until maxOf(1, f.tapGoal(kitchenPhase.goal))).firstOrNull { it !in kitchenHopped } ?: 0
-        println("KITCHEN autohelp step=$index item=$next")
+        println("KITCHEN autohelp step=$index item=$next${if (nudged) " finish" else " nudge"}")
+        val before = kitchenPhase.tapsDone
         tapKitchen(next)
+        idleAutoN++
+        idleHelpAt = index to (if (kitchenPhase.tapsDone != before) kitchenPhase.tapsDone else before + 1)
     }
 
     LaunchedEffect(kitchenPhase.phase) {
@@ -1733,9 +1744,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 val cakeAt = com.zeronolidge.speechapp.ui.art.CakeScene.cakeAt.value
                 if (blowHint) {
                     val half = with(LocalDensity.current) { 70.dp.toPx() }
+                    // test46: on a phone the cake now sits low, so the button goes beside it (bottom
+                    // right, past the cake's edge) instead of covering the sponge.
+                    val phoneBlowBtn = LocalScreenHeight.current < 480.dp
                     BlowPictureButton(
-                        Modifier.align(Alignment.BottomStart)
-                            .offset { IntOffset(((if (cakeAt.x > 0f) cakeAt.x else frameOrigin.x + half * 4f) - frameOrigin.x - half).roundToInt().coerceAtLeast(0), 0) }
+                        (if (phoneBlowBtn) Modifier.align(Alignment.BottomEnd).padding(end = 6.dp) else Modifier.align(Alignment.BottomStart)
+                            .offset { IntOffset(((if (cakeAt.x > 0f) cakeAt.x else frameOrigin.x + half * 4f) - frameOrigin.x - half).roundToInt().coerceAtLeast(0), 0) })
                             .padding(bottom = 6.dp).zIndex(5f).popIn("blowBtn")
                             .onGloballyPositioned { c -> val b = c.boundsInWindow(); val key = "${b.center.x.roundToInt()},${b.center.y.roundToInt()} size=${(b.width).roundToInt()}"; if (blowBtnKey != key) { blowBtnKey = key; println("KITCHEN blow button=$key") } },
                         onClick = ::blowTapped,
