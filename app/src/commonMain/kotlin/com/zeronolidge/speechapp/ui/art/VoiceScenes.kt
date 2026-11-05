@@ -1736,6 +1736,8 @@ private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Bool
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
+        // test47: soft grounded shadow so the empty bowl never reads as floating/see-through on phone
+        drawOval(Color.Black.copy(alpha = 0.14f), Offset(w * 0.14f, h * 0.88f), Size(w * 0.72f, h * 0.1f))
         val body = Path().apply {
             moveTo(w * 0.1f, h * KitchenLayout.BOWL_RIM_Y)
             quadraticTo(w * 0.5f, h * KitchenLayout.BOWL_OUTER_CONTROL_Y, w * 0.9f, h * KitchenLayout.BOWL_RIM_Y)
@@ -2362,7 +2364,6 @@ private fun BoxWithConstraintsScope.GrapeBunch(
     // a leaf at the top, small twigs branching left/right to each grape, grapes 2-2-1 tapering
     // symmetrically around it (top pair first).
     val spots = listOf(-0.55f to -2.45f, 0.55f to -2.45f, -0.55f to -1.5f, 0.55f to -1.5f, 0f to -0.58f)
-    val stemDy = -3.2f
     val bowlCx = (bowl.l + bowl.r) / 2f
     val bowlW = bowl.r - bowl.l
     val bowlH = (minOf(maxWidth, maxHeight) * kitchenPropSize(Prop.BATTER, landscape)) / maxHeight
@@ -2380,29 +2381,41 @@ private fun BoxWithConstraintsScope.GrapeBunch(
             val u = g.toPx()
             val L = size.width
             val ox = L / 2f
-            val surf = L - plateH.toPx() * 0.55f
-            fun at(dx: Float, dy: Float) = Offset(ox + dx * u, surf + dy * u)
             // the plate
             paperOval(Color(0xFFFAFAFA), Offset(ox - u * 1.9f, L - plateH.toPx()), Size(u * 3.8f, plateH.toPx()))
             drawOval(Color(0xFFD7CCC8), Offset(ox - u * 1.9f, L - plateH.toPx()), Size(u * 3.8f, plateH.toPx()), style = Stroke(1.5.dp.toPx()))
+        }
+    }
+    // test47: woody stem + twigs + leaf track the grapes still on the bunch (never a tall bare
+    // stem with one oversized grape). Twigs only to grapes that have not hopped yet.
+    Item(layer, { cx }, { counter - layer.value * fy * 0.5f }) {
+        Canvas(Modifier.fillMaxSize()) {
+            val u = g.toPx()
+            val L = size.width
+            val ox = L / 2f
+            val surf = L - plateH.toPx() * 0.55f
+            fun at(dx: Float, dy: Float) = Offset(ox + dx * u, surf + dy * u)
+            val remain = spots.filterIndexed { i, _ -> i !in hopped }
             val brown = Color(0xFF4E342E)
-            // central woody main stem down the middle of the bunch (stub above the top pair)
-            drawLine(brown, at(0f, stemDy - 0.3f), at(0f, -0.95f), u * 0.2f, cap = StrokeCap.Round)
-            // twigs from the main stem out to every grape (they stay when a grape pops off)
-            spots.forEach { (dx, dy) ->
-                drawLine(Color(0xFF6D4C41), at(0f, dy - 0.35f), at(dx * 0.75f, dy - 0.3f), u * 0.09f, cap = StrokeCap.Round)
+            if (remain.isNotEmpty()) {
+                val topDy = remain.minOf { it.second } - 0.55f
+                val botDy = remain.maxOf { it.second } - 0.15f
+                // main stem from a short stub above the top remaining grape down toward the lowest
+                drawLine(brown, at(0f, topDy), at(0f, botDy), u * 0.2f, cap = StrokeCap.Round)
+                remain.forEach { (dx, dy) ->
+                    drawLine(Color(0xFF6D4C41), at(0f, dy - 0.35f), at(dx * 0.75f, dy - 0.3f), u * 0.09f, cap = StrokeCap.Round)
+                }
+                val leaf = Path().apply {
+                    val a = at(0.05f, topDy + 0.25f); moveTo(a.x, a.y)
+                    val c1 = at(0.4f, topDy - 0.55f); val e = at(1.0f, topDy - 0.2f)
+                    quadraticTo(c1.x, c1.y, e.x, e.y)
+                    val c2 = at(0.65f, topDy + 0.4f)
+                    quadraticTo(c2.x, c2.y, a.x, a.y)
+                    close()
+                }
+                paperPath(leaf, Color(0xFF7CB342))
+                drawPath(leaf, Color(0xFF558B2F), style = Stroke(1.2.dp.toPx()))
             }
-            // one leaf off the stub at the top
-            val leaf = Path().apply {
-                val a = at(0.05f, stemDy - 0.05f); moveTo(a.x, a.y)
-                val c1 = at(0.4f, stemDy - 0.85f); val e = at(1.0f, stemDy - 0.5f)
-                quadraticTo(c1.x, c1.y, e.x, e.y)
-                val c2 = at(0.65f, stemDy + 0.1f)
-                quadraticTo(c2.x, c2.y, a.x, a.y)
-                close()
-            }
-            paperPath(leaf, Color(0xFF7CB342))
-            drawPath(leaf, Color(0xFF558B2F), style = Stroke(1.2.dp.toPx()))
         }
     }
     for (i in 0 until total) {
@@ -2846,8 +2859,9 @@ private fun BoxWithConstraintsScope.FruitSliceOverlay(landscape: Boolean, onSlic
                 val dash = PathEffect.dashPathEffect(floatArrayOf(size.width * 0.05f, size.width * 0.04f))
                 val left = Offset(size.width * 0.18f, size.height * 0.62f)
                 val right = Offset(size.width * 0.82f, size.height * 0.62f)
-                drawLine(Color(0xFFFFF59D).copy(alpha = 0.65f * glow.value), left, right, size.width * 0.06f, cap = StrokeCap.Round)
-                drawLine(Color(0xFFE65100).copy(alpha = glow.value), left, right, size.width * 0.025f, cap = StrokeCap.Round, pathEffect = dash)
+                // test47: softer cut guide so the demo hand isn't washed out
+                drawLine(Color(0xFFFFF59D).copy(alpha = 0.35f * glow.value), left, right, size.width * 0.04f, cap = StrokeCap.Round)
+                drawLine(Color(0xFFE65100).copy(alpha = 0.75f * glow.value), left, right, size.width * 0.02f, cap = StrokeCap.Round, pathEffect = dash)
             }
             // The chunky cutter is always visible above the dashed line, following the finger
             // only while a drag is in progress.
@@ -2950,13 +2964,10 @@ private fun BoxWithConstraintsScope.FruitDragOverlay(landscape: Boolean, onTap: 
             val sc = (1f - 0.45f * t) * (if (fallbackReady && i == nextHint && t == 0f) pulse.value else 1f)
             val r = zone * 0.40f * sc
             if (fallbackReady && i == nextHint && t == 0f) drawCircle(Color(0xFFFFF59D).copy(alpha = 0.7f), r * 1.35f, p)
+            // test47: solid banana coins (no apple-like seed ring)
             paperCircle(Color(0xFFFFF3C4), r, p)
             drawCircle(Color(0xFFE8B74B), r, p, style = Stroke(2.dp.toPx()))
-            drawCircle(Color(0xFFF3E2A0), r * 0.38f, p)
-            for (k in 0 until 6) {
-                val ang = k * 60f * PI.toFloat() / 180f
-                drawCircle(Color(0xFF8D6E63).copy(alpha = 0.55f), r * 0.05f, p + Offset(cos(ang) * r * 0.2f, sin(ang) * r * 0.2f))
-            }
+            drawOval(Color(0xFFFFF8E1), p - Offset(r * 0.35f, r * 0.2f), Size(r * 0.55f, r * 0.35f))
         }
     }
 }
@@ -3046,9 +3057,9 @@ private fun FlourBagArt() {
     }
 }
 
-/** The mixing bowl (the same grounded bowl shape as the fruit salad's): a cracked egg and milk in
- * it, then a white flour mound once poured, then smooth batter while (and after) he stirs; a
- * wooden spoon follows his finger during the stir (the shared [FruitStir] state). */
+/** The mixing bowl (the same grounded bowl shape as the fruit salad's): empty at the start, a
+ * white flour mound once poured (flour only — no egg yolk), then smooth batter while (and after)
+ * he stirs; a wooden spoon follows his finger during the stir (the shared [FruitStir] state). */
 @Composable
 private fun CakeBowlArt() {
     val flourIn = CakeScene.flourIn.value
@@ -3094,18 +3105,17 @@ private fun CakeBowlArt() {
                     }
                 }
             } else {
+                // test47: empty bowl at the flour step; flour is the only thing in it until mix.
+                // Never a premature egg yolk (that taught the wrong recipe order).
                 drawOval(Color(0xFFFFFFF2), Offset(w * 0.1f, rimTop + rimH * 0.2f), Size(w * 0.8f, rimH * 0.7f))
-                // the cracked egg (yolk in its white)
-                drawOval(Color.White, Offset(w * 0.26f, rimMid - rimH * 0.12f), Size(w * 0.22f, rimH * 0.36f))
-                drawCircle(Color(0xFFFFB300), w * 0.055f, Offset(w * 0.37f, rimMid + rimH * 0.05f))
-                drawCircle(Color.White.copy(alpha = 0.7f), w * 0.015f, Offset(w * 0.355f, rimMid))
                 if (flourIn) {
                     val mound = Path().apply {
-                        moveTo(w * 0.3f, rimMid + rimH * 0.25f)
-                        quadraticTo(w * 0.55f, rimTop - rimH * 0.55f, w * 0.82f, rimMid + rimH * 0.25f)
+                        moveTo(w * 0.22f, rimMid + rimH * 0.28f)
+                        quadraticTo(w * 0.5f, rimTop - rimH * 0.45f, w * 0.78f, rimMid + rimH * 0.28f)
                         close()
                     }
                     paperPath(mound, Color(0xFFFBF8F1))
+                    drawPath(mound, Color(0xFFE6DDCB), style = Stroke(1.2.dp.toPx()))
                 }
             }
         }
@@ -3220,12 +3230,13 @@ private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spot
     // test46: on a phone the cake sits low on a short stand, right down on the counter
     val dy = if (low) h * 0.22f else 0f
     // the stand: plate, pedestal, foot (its foot flush with the bottom, on the counter)
+    // test47: pedestal foot flush with the box bottom (no float above the counter)
     val ped = Path().apply {
-        moveTo(w * 0.43f, h * (if (low) 0.86f else 0.64f)); lineTo(w * 0.57f, h * (if (low) 0.86f else 0.64f)); lineTo(w * 0.66f, h * 0.95f); lineTo(w * 0.34f, h * 0.95f); close()
+        moveTo(w * 0.43f, h * (if (low) 0.86f else 0.64f)); lineTo(w * 0.57f, h * (if (low) 0.86f else 0.64f)); lineTo(w * 0.66f, h); lineTo(w * 0.34f, h); close()
     }
     paperPath(ped, Color(0xFFEDE7F6))
     drawPath(ped, Color(0xFFB39DDB), style = Stroke(1.4.dp.toPx()))
-    paperOval(Color(0xFFEDE7F6), Offset(w * 0.28f, h * 0.925f), Size(w * 0.44f, h * 0.05f))
+    paperOval(Color(0xFFEDE7F6), Offset(w * 0.28f, h * 0.955f), Size(w * 0.44f, h * 0.045f))
     translate(0f, dy) {
         paperOval(Color.White, Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f))
         drawOval(Color(0xFFB39DDB), Offset(w * 0.06f, h * 0.585f), Size(w * 0.88f, h * 0.07f), style = Stroke(1.4.dp.toPx()))
@@ -3274,11 +3285,11 @@ private fun DrawScope.paperCake(candles: Int, lit: Boolean, blown: Boolean, spot
                     }
                     drawPath(smoke, Color(0xFF9E9E9E).copy(alpha = 0.7f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
                 }
-            } else if (spots) {
-                val next = i == candles
-                val r = w * 0.032f * (if (next) 1f + 0.25f * nextPulse else 1f)
-                drawCircle(if (next) Color(0xFFFFE0B2) else Color.White.copy(alpha = 0.7f), r, Offset(x, baseY - h * 0.01f))
-                drawCircle(if (next) Color(0xFFE65100) else Color(0xFFBCAAA4), r, Offset(x, baseY - h * 0.01f),
+            } else if (spots && i == candles) {
+                // test47: only the next candle slot (no ghost circles for the rest)
+                val r = w * 0.032f * (1f + 0.25f * nextPulse)
+                drawCircle(Color(0xFFFFE0B2).copy(alpha = 0.85f), r, Offset(x, baseY - h * 0.01f))
+                drawCircle(Color(0xFFE65100), r, Offset(x, baseY - h * 0.01f),
                     style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
             }
         }
@@ -3466,13 +3477,18 @@ fun DrawScope.paperApple(c: Offset, r: Float, shine: Float = 0f) {
 
 /** test44: an orange, peel quarters still on = 4 - [peeled]; underneath, pale segments. */
 private fun DrawScope.paperOrange(c: Offset, r: Float, peeled: Int) {
-    paperCircle(Color(0xFFFFB74D), r * 0.96f, c)
+    // test47: peeled = a round peeled orange with clear segment lines (never a flat cross-section)
+    paperCircle(Color(0xFFFFCC80), r * 0.96f, c)
+    // soft sphere shading so it reads round, not a flat disc
+    drawCircle(Color(0xFFFFA726).copy(alpha = 0.35f), r * 0.96f, c + Offset(r * 0.12f, r * 0.18f))
+    drawCircle(Color(0xFFFFF3E0).copy(alpha = 0.55f), r * 0.28f, c + Offset(-r * 0.28f, -r * 0.3f))
     for (k in 0 until 8) {
         val a = k * 45f * PI.toFloat() / 180f
-        drawLine(Color(0xFFFFE0B2), c, c + Offset(cos(a) * r * 0.9f, sin(a) * r * 0.9f), r * 0.05f)
+        drawLine(Color(0xFFE65100).copy(alpha = 0.55f), c, c + Offset(cos(a) * r * 0.88f, sin(a) * r * 0.88f), r * 0.045f)
     }
-    drawCircle(Color(0xFFFFF3E0), r * 0.1f, c)
-    // peel quarters (top-right first), each a thick dimpled arc of skin
+    drawCircle(Color(0xFFFFF8E1), r * 0.12f, c)
+    drawCircle(Color(0xFFFFB74D), r * 0.96f, c, style = Stroke(r * 0.035f))
+    // peel quarters still on (top-right first)
     for (q in 0 until 4) {
         if (q < peeled) continue
         val start = -90f + q * 90f
@@ -3554,10 +3570,12 @@ private fun BoxWithConstraintsScope.FruitPrepTarget(
                         drawCircle(Color.White.copy(alpha = 0.8f), r * 0.025f, c + Offset(cos(a) * rr - r * 0.02f, sin(a) * rr * 0.9f - r * 0.02f))
                     }
                 } else {
-                    // peeled-off pieces lying on the plate
+                    // peeled-off peel strips on the plate (readable as peel, not scribbles)
                     for (k in 0 until n) {
-                        val px = size.width * (0.18f + 0.2f * k)
-                        drawArc(Color(0xFFF57C00), 200f, 140f, false, Offset(px, size.height * 0.8f), Size(r * 0.55f, r * 0.3f), style = Stroke(r * 0.12f, cap = StrokeCap.Round))
+                        val px = size.width * (0.16f + 0.18f * k)
+                        val py = size.height * 0.82f
+                        drawArc(Color(0xFFF57C00), 200f, 140f, false, Offset(px, py), Size(r * 0.5f, r * 0.28f), style = Stroke(r * 0.14f, cap = StrokeCap.Round))
+                        drawArc(Color(0xFFFFB74D), 210f, 120f, false, Offset(px + r * 0.04f, py + r * 0.02f), Size(r * 0.42f, r * 0.22f), style = Stroke(r * 0.06f, cap = StrokeCap.Round))
                     }
                 }
                 if (tapCb != null && next != null) {
@@ -3629,41 +3647,31 @@ fun AppleTileArt(modifier: Modifier = Modifier) {
     Canvas(modifier) { paperApple(Offset(size.width / 2f, size.height * 0.56f), size.minDimension * 0.36f) }
 }
 
-/** test44 (Ruby): the "Done!" button -- a full fruit bowl with a fork in it (never a check). */
+/** test47 (Ruby): the "Done!" button -- a fork-and-check picture with a green ring, never a
+ * second salad bowl (kids confused Done with the real counter bowl). */
 @Composable
 fun DoneBowlTileArt(fruits: Set<FruitPicker.Fruit>, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val c = Offset(w / 2f, h * 0.5f)
-        // the fruit mound above the rim
-        val heap = listOf(FruitPicker.Fruit.STRAWBERRY, FruitPicker.Fruit.ORANGE, FruitPicker.Fruit.GRAPE, FruitPicker.Fruit.BANANA, FruitPicker.Fruit.BLUEBERRY, FruitPicker.Fruit.APPLE)
-        val use = heap.filter { it in fruits }.ifEmpty { heap }
-        val spots = listOf(-0.26f to 0.0f, 0.0f to -0.1f, 0.26f to 0.0f, -0.13f to -0.05f, 0.13f to -0.06f, 0.0f to 0.04f)
-        spots.forEachIndexed { i, (x, y) ->
-            val p = c + Offset(x * w, y * h)
-            val s = w * 0.09f
-            when (use[i % use.size]) {
-                FruitPicker.Fruit.BANANA -> { paperCircle(Color(0xFFFFF3C4), s, p); drawCircle(Color(0xFFE8B74B), s, p, style = Stroke(s * 0.15f)) }
-                FruitPicker.Fruit.STRAWBERRY -> drawOval(Color(0xFFE53935), p - Offset(s, s * 0.8f), Size(s * 2f, s * 1.6f))
-                FruitPicker.Fruit.GRAPE -> drawCircle(Color(0xFF7B4BB0), s * 0.85f, p)
-                FruitPicker.Fruit.BLUEBERRY -> drawCircle(Color(0xFF2E3A8C), s * 0.75f, p)
-                FruitPicker.Fruit.ORANGE -> drawOrangeSegment(p, s * 1.2f, 0f)
-                FruitPicker.Fruit.APPLE -> drawAppleChunk(p, s, 10f)
-            }
+        val c = Offset(w / 2f, h / 2f)
+        val r = minOf(w, h) * 0.42f
+        // green ring (the Done cue — distinct from every fruit tile)
+        drawCircle(Color(0xFFC8E6C9), r * 1.08f, c)
+        drawCircle(Color(0xFF2E7D32), r * 1.08f, c, style = Stroke(r * 0.12f))
+        drawCircle(Color(0xFFFFF8E1), r * 0.92f, c)
+        // fork (handle up-right, tines down-left)
+        paperFork(c + Offset(-w * 0.06f, h * 0.08f), c + Offset(w * 0.28f, -h * 0.32f), w * 0.55f)
+        // grey check badge (same language as used fruit tiles)
+        val badge = Offset(c.x + r * 0.55f, c.y + r * 0.5f)
+        val d = r * 0.55f
+        drawCircle(Color.White, d / 2f, badge)
+        drawCircle(Color(0xFF9E9E9E), d * 0.42f, badge)
+        val pth = Path().apply {
+            moveTo(badge.x - d * 0.22f, badge.y)
+            lineTo(badge.x - d * 0.06f, badge.y + d * 0.16f)
+            lineTo(badge.x + d * 0.24f, badge.y - d * 0.18f)
         }
-        // the bowl body in front
-        val body = Path().apply {
-            moveTo(w * 0.1f, h * 0.52f)
-            lineTo(w * 0.9f, h * 0.52f)
-            quadraticTo(w * 0.86f, h * 0.88f, w * 0.5f, h * 0.88f)
-            quadraticTo(w * 0.14f, h * 0.88f, w * 0.1f, h * 0.52f)
-            close()
-        }
-        paperPath(body, Color(0xFFFFF3E0))
-        drawPath(body, Color(0xFFC8B6A6), style = Stroke(w * 0.02f))
-        drawLine(Color(0xFFD7CCC8), Offset(w * 0.1f, h * 0.52f), Offset(w * 0.9f, h * 0.52f), w * 0.03f, cap = StrokeCap.Round)
-        // the fork, tines in the fruit, handle up to the right
-        paperFork(c + Offset(w * 0.05f, -h * 0.02f), c + Offset(w * 0.36f, -h * 0.4f), w * 0.5f)
+        drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
     }
 }

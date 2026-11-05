@@ -1747,10 +1747,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     // test46: on a phone the cake now sits low, so the button goes beside it (bottom
                     // right, past the cake's edge) instead of covering the sponge.
                     val phoneBlowBtn = LocalScreenHeight.current < 480.dp
+                    // test47: on iPad the 140dp button was clipped at the bottom (only nubs showed);
+                    // raise it with a real bottom inset and a small up-offset so the full circle sits
+                    // on screen under the cake. Phone still goes beside the low cake (bottom-end).
                     BlowPictureButton(
-                        (if (phoneBlowBtn) Modifier.align(Alignment.BottomEnd).padding(end = 6.dp) else Modifier.align(Alignment.BottomStart)
-                            .offset { IntOffset(((if (cakeAt.x > 0f) cakeAt.x else frameOrigin.x + half * 4f) - frameOrigin.x - half).roundToInt().coerceAtLeast(0), 0) })
-                            .padding(bottom = 6.dp).zIndex(5f).popIn("blowBtn")
+                        (if (phoneBlowBtn) Modifier.align(Alignment.BottomEnd).padding(end = 6.dp, bottom = 8.dp) else Modifier.align(Alignment.BottomStart)
+                            .offset { IntOffset(((if (cakeAt.x > 0f) cakeAt.x else frameOrigin.x + half * 4f) - frameOrigin.x - half).roundToInt().coerceAtLeast(0), (-22).dp.roundToPx()) })
+                            .padding(bottom = 22.dp).zIndex(5f).popIn("blowBtn")
                             .onGloballyPositioned { c -> val b = c.boundsInWindow(); val key = "${b.center.x.roundToInt()},${b.center.y.roundToInt()} size=${(b.width).roundToInt()}"; if (blowBtnKey != key) { blowBtnKey = key; println("KITCHEN blow button=$key") } },
                         onClick = ::blowTapped,
                     )
@@ -2194,12 +2197,12 @@ private fun KitchenTapRow(
         if (stripHeight > 0.dp && !isPick) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(stripHeight).paperCard(BalloonStripWash, 28.dp))
         // test44: all 6 fruits as a 3x2 grid of big cards (120dp on a tablet, a little smaller on
         // a landscape phone so it stays clear of the bowl), bottom-right on the counter, never
-        // scrolling; the "Done!" bowl picture sits just left of the grid's top row.
+        // scrolling; the "Done!" fork-and-check (green ring) sits just left of the grid's top row.
         if (isPick) {
             // test45: every card is a full 120dp. Tablet: a 2-wide x 3-high grid on the right with
-            // the "Done!" bowl to its RIGHT (bottom row, on the counter). Short phone: a 3x2 grid
-            // bottom-right (the bowl slid left beside Rory to make room) with "Done!" just left of
-            // the grid's top row, above the bowl, never on it. Used cards stay put in the grid,
+            // the "Done!" fork-and-check to its RIGHT (bottom row, on the counter). Short phone: a 3x2 grid
+            // bottom-right (the salad bowl slid left beside Rory to make room) with "Done!" just left of
+            // the grid's top row, above the salad bowl, never looking like a second bowl. Used cards stay put in the grid,
             // faded, with a grey check.
             val gap = 4.dp
             val t = PickerTileSize

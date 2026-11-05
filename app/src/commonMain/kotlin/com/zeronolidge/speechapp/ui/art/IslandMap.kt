@@ -379,11 +379,15 @@ fun IslandMap(
             }
 
             // Mist over lands the trail hasn't reached, each patch baked once and drifting.
+            // test47: if a land still has an open/playable story stop, thin the mist so that stop
+            // stays visible; locked lands with no playable stop keep full cloud cover.
             Land.entries.forEach { land ->
+                val playableStory = stories.any { it.land == land }
                 val strength = when {
                     land == newLand -> 1f - clearing.value
                     // The land the trail reaches next starts to peek through its mist.
                     land == peekLand -> 0.5f
+                    !reached(land) && playableStory -> 0.22f
                     !reached(land) -> 1f
                     else -> 0f
                 }
