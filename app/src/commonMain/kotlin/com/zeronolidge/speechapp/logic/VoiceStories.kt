@@ -493,8 +493,8 @@ object VoiceStories {
     )
 
     val all: List<VoiceStory> = listOf(boat, owl, balloon, kitchen, fruitSalad, birthdayCake)
-    /** test41: Bruno's Birthday Cake is test-site only for now (#test=story-birthdaycake), not on
-     * the map yet (the meadow stop is the balloon's), so it's kept out of [all]. */
+    /** Kept for byId; both cooking games are live map stops in [all] (Fruit Salad at Puzzle Peaks,
+     * Birthday Cake at Word Caves). */
     val testOnly: List<VoiceStory> = emptyList()
 
     fun byId(id: String): VoiceStory? = (all + testOnly).firstOrNull { it.id == id }
