@@ -48,7 +48,7 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
         // smoke test can list any line that still mixes voices.
         if (clips.ready) parts.filterIsInstance<ClipText.Part.Speak>().forEach { println("VOICEGAP [${it.text}] in: $text") }
         // No clips for this line at all: the device voice says it whole, so it sounds natural.
-        if (parts.none { it is ClipText.Part.Clips }) return voice.speakOne(text, rate, onEnd)
+        if (parts.none { it is ClipText.Part.Clips }) return voice.speakOne(ClipText.deviceFallbackPhrase(text), rate, onEnd)
         val my = ++token
         val slow = rate < 0.65f
         var anySpoken = false
@@ -63,11 +63,11 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
                     } else if (my == token) {
                         // A clip was missing, wouldn't load or was silent: the device voice says
                         // this part instead of leaving a gap.
-                        val words = part.keys.filter { it != ClipText.PAUSE }.joinToString(" ")
+                        val words = part.keys.filter { it != ClipText.PAUSE }.joinToString(" ") { ClipText.deviceFallback(it) }
                         voice.speakOne(words, rate) { spoken -> anySpoken = anySpoken || spoken; run(i + 1) }
                     }
                 }
-                is ClipText.Part.Speak -> voice.speakOne(part.text, rate) { ok -> anySpoken = anySpoken || ok; run(i + 1) }
+                is ClipText.Part.Speak -> voice.speakOne(ClipText.deviceFallbackPhrase(part.text), rate) { ok -> anySpoken = anySpoken || ok; run(i + 1) }
             }
         }
         run(0)

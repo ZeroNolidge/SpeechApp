@@ -2371,7 +2371,12 @@ private fun BoxWithConstraintsScope.GrapeBunch(
     val inY = bowl.t - bowlH * (1f - rimMidFrac)
     val next = (0 until total).firstOrNull { it !in hopped }
     val landed = hopped.size
-    androidx.compose.runtime.LaunchedEffect(landed) { if (landed > 0) kotlinx.coroutines.delay(560); GrapesInBowl.intValue = landed }
+    val visit = com.zeronolidge.speechapp.logic.FruitVisits.id
+    androidx.compose.runtime.LaunchedEffect(landed, visit) {
+        if (landed > 0) kotlinx.coroutines.delay(560)
+        com.zeronolidge.speechapp.logic.BowlLanding.countIfCurrent(visit, com.zeronolidge.speechapp.logic.FruitVisits.id, landed)
+            ?.let { GrapesInBowl.intValue = it }
+    }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { GrapesInBowl.intValue = 0 } }
     val pulse = rememberInfiniteTransition(label = "grapePulse").animateFloat(1f, 1.1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "p")
     // plate + stem + twigs + leaf: one static layer, bottom flush with the counter
@@ -2484,7 +2489,12 @@ private fun BoxWithConstraintsScope.StrawberryBoard(
     val bowlH = bowlDp / maxHeight
     val inY = bowl.t - bowlH * (1f - (KitchenLayout.BOWL_INNER_RIM_TOP + KitchenLayout.BOWL_INNER_RIM_HEIGHT * 0.5f))
     val landed = hopped.size
-    androidx.compose.runtime.LaunchedEffect(landed) { if (landed > 0) kotlinx.coroutines.delay(900); StrawberriesInBowl.intValue = landed }
+    val visit = com.zeronolidge.speechapp.logic.FruitVisits.id
+    androidx.compose.runtime.LaunchedEffect(landed, visit) {
+        if (landed > 0) kotlinx.coroutines.delay(900)
+        com.zeronolidge.speechapp.logic.BowlLanding.countIfCurrent(visit, com.zeronolidge.speechapp.logic.FruitVisits.id, landed)
+            ?.let { StrawberriesInBowl.intValue = it }
+    }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { StrawberriesInBowl.intValue = 0 } }
     val next = (0 until total).firstOrNull { it !in hopped }
     val pulse = rememberInfiniteTransition(label = "berryPulse").animateFloat(1f, 1.08f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "p")
@@ -3414,6 +3424,29 @@ private const val BearNosePuffY = 0.63f
 object FruitScene {
     val inBowl = mutableStateOf<Set<FruitPicker.Fruit>>(emptySet())
     val topDown = mutableStateOf(false)
+}
+
+/** Starts a new visit, then drops leftover fruit-salad art so a late hop from the old visit cannot land. */
+fun beginFruitVisit(): Int {
+    val id = com.zeronolidge.speechapp.logic.FruitVisits.bump()
+    resetFruitPlayArt()
+    return id
+}
+
+/** The slice step starts from zero cuts, even if the last play had already finished the banana. */
+fun clearBananaCuts() {
+    BananaCuts.intValue = 0
+}
+
+private fun resetFruitPlayArt() {
+    GrapesInBowl.intValue = 0
+    StrawberriesInBowl.intValue = 0
+    BananaCuts.intValue = 0
+    FruitScene.inBowl.value = emptySet()
+    FruitScene.topDown.value = false
+    FruitStir.swirl.floatValue = 0f
+    FruitStir.finger.value = null
+    FruitStir.live.value = false
 }
 
 /** test44: one orange segment (a plump crescent with a pale pith edge), [r] long, at [angle]. */

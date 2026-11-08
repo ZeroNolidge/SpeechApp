@@ -223,8 +223,8 @@ fun SpeakMoment(
         val praise = when {
             // Rory says the target word back and adds one word ("Dog! A big dog!").
             heard -> "${Echo.expansion(word.text, stat.tries)} I heard you! You got a shiny sticker!"
-            micUsed -> "Great job saying it together!"
-            else -> listOf("Great talking!", "Good saying!", "I love your talking!").random()
+            micUsed -> com.zeronolidge.speechapp.logic.TurnPraise.lineFor(heard = false, micUsed = true)
+            else -> com.zeronolidge.speechapp.logic.TurnPraise.linesFor(heard = false, micUsed = false).random()
         }
         val gemLine = if (piece != null) "Your backpack is full! Your buddy got a new ${piece.name}!" else "A gem for your backpack!"
         // Then find the sound's letter, the same way as every quiz (letters from the answer key).

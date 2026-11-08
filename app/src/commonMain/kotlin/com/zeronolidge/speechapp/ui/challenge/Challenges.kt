@@ -751,7 +751,7 @@ private fun RobotView(c: Challenge.Robot, area: String, mapTick: Int, miss: () -
                 if (shownWay) {
                     app.speaker.say("The robot made it. Good trying! Let's keep going.", onDone = { done(true) })
                 } else {
-                    app.reward(area, "Hooray! The robot made it! You did it!", onDone = { done(false) })
+                    app.reward(area, "Good trying! The robot made it!", onDone = { done(false) })
                 }
             } else {
                 miss()
