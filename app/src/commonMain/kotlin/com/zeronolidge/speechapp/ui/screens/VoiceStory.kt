@@ -312,6 +312,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // place that order is actually remembered (the spliced beats themselves carry no ordering of
     // their own once a later fruit's beats sit after them).
     var pickedFruits by remember(id) { mutableStateOf(listOf<FruitPicker.Fruit>()) }
+    // A new visit (opening the story) drops any pieces a previous play left in the shared bowl.
+    remember(id) { com.zeronolidge.speechapp.ui.art.beginFruitVisit() }
 
     // Rory's Fruit Salad's own recipe card (the 3 picked fruits, plus the fork), ticked off as
     // each step finishes: derived straight from which beat he's on and how far its own fix has
@@ -324,11 +326,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val fruitDragIndex = if (isFruitSaladStory) beats.indexOfFirst { it.kitchen == KitchenFlow.DRAG } else -1
     val fruitSliced = isFruitSaladStory && fruitSliceIndex >= 0 && (index > fruitSliceIndex || (index == fruitSliceIndex && phase == VPhase.ACT))
     val fruitInBowl = isFruitSaladStory && fruitDragIndex >= 0 && (index > fruitDragIndex || (index == fruitDragIndex && phase == VPhase.ACT))
-    fun fruitPrepped(fruit: FruitPicker.Fruit): Boolean {
-        if (!isFruitSaladStory) return false
-        val i = beats.indexOfFirst { it.fruitTag == fruit && it.kitchen != null }
-        return i >= 0 && (index > i || (index == i && phase == VPhase.ACT))
-    }
+    fun fruitPrepped(fruit: FruitPicker.Fruit): Boolean =
+        isFruitSaladStory && com.zeronolidge.speechapp.logic.FruitPick.inBowl(beats, index, phase == VPhase.ACT, fruit)
     val strawberryIn = fruitPrepped(FruitPicker.Fruit.STRAWBERRY)
     val grapeIn = fruitPrepped(FruitPicker.Fruit.GRAPE)
     val blueberryIn = fruitPrepped(FruitPicker.Fruit.BLUEBERRY)
@@ -490,7 +489,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
         if (micUsed) p.speechResult(heard)
         p.addGem()?.let { app.showGift(it) }
-        app.speaker.say(b.success) {
+        app.speaker.say(com.zeronolidge.speechapp.logic.StoryPraise.line(b.success, voice = heard)) {
             if (s != session) return@say
             if (b.game) { gamePhase = gamePhase.closed(); logGame(gamePhase) }
             if (b.kitchen != null) { kitchenPhase = kitchenPhase.closed(); logKitchen(kitchenPhase) }
@@ -752,6 +751,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // Rory names the problem, then its tap or talk flow plays out (see KitchenBeatState);
             // the kitchen effect below drives it on from there.
             kitchenPhase = KitchenBeatState(flow = b.kitchen, goal = b.kitchenGoal)
+            if (b.kitchen == com.zeronolidge.speechapp.logic.KitchenFlow.SWIPE) com.zeronolidge.speechapp.ui.art.clearBananaCuts()
             kitchenRound = if (b.kitchen == KitchenFlow.TAP_CHOICE) KitchenGame.tapRound(b.word, b.kitchenChoices.size + 1, gameRnd) else null
             kitchenHopped = emptySet()
             kitchenWrong = -1
@@ -959,6 +959,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     /** Rory's Fruit Salad's own "Play again" (K-fruit): back to the first beat, with the ending
      * sequence's own animations reset so the next finish plays it fresh. */
     fun restartFruitSalad() {
+        com.zeronolidge.speechapp.ui.art.beginFruitVisit()
         fruitEndReady = false
         kitchenEnd = null
         sticker = null
@@ -1041,15 +1042,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                     beats = beats.take(index + 1) + listOf(FruitPicker.fork)
                 } else {
                     val fruit = FruitPicker.Fruit.entries.getOrNull(i) ?: return
-                    if (fruit in pickedFruits) return
+                    val picked = com.zeronolidge.speechapp.logic.FruitPick.pick(beats, index, pickedFruits, fruitTalks, fruit) ?: return
                     println("KITCHEN pick fruit=${fruit.name.lowercase()}")
-                    pickedFruits = pickedFruits + fruit
-                    var task = FruitPicker.task(fruit)
-                    if (task.any { it.kitchen == null }) {
-                        if (fruitTalks >= FruitPicker.MAX_FRUIT_TALKS) task = task.filter { it.kitchen != null } else fruitTalks++
-                    }
-                    val tail = task + if (pickedFruits.size >= FruitPicker.Fruit.entries.size) listOf(FruitPicker.fork) else listOf(FruitPicker.picker)
-                    beats = beats.take(index + 1) + tail
+                    pickedFruits = picked.picked
+                    fruitTalks = picked.talks
+                    beats = picked.beats
                 }
                 val next = kitchenPhase.tap(true)
                 kitchenPhase = next
@@ -1224,6 +1221,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // called from each model's own onDone), and fully closes the moment each listening turn ends.
     DisposableEffect(Unit) {
         onDispose {
+            // Bump the visit first so a hop already waiting out its delay cannot land afterwards.
+            com.zeronolidge.speechapp.ui.art.beginFruitVisit()
             session++
             app.voice.cancel()
             app.voice.release()

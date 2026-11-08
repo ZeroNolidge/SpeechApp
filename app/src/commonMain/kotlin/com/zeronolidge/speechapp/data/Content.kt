@@ -274,17 +274,20 @@ object Things {
 }
 
 object Praise {
+    /** Tap quizzes and any turn he didn't speak: cheer the trying, never claim he talked. */
     val great = listOf(
-        "Great job!", "You did it!", "Awesome!", "Good talking!", "Way to go!",
-        "Fantastic!", "Hooray!", "I love your talking!", "Wonderful!",
+        "Good trying!",
+        "Great trying!",
+        "You kept working on it!",
+        "You kept at it!",
     )
     val tryAgain = listOf(
         "Good try! Let's try again.", "Almost! Try one more time.",
-        "Nice try! You can do it.", "Oops! Let's try again.",
+        "Nice try! Keep going.", "Oops! Let's try again.",
     )
     val speechTry = listOf(
-        "Good talking! Let's say it again together.",
+        "Good trying! Let's say it again together.",
         "Nice try! Listen once more and say it with me.",
-        "I love your trying! One more time.",
+        "You kept working on it! One more time.",
     )
 }

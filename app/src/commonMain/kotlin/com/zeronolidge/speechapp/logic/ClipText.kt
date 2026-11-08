@@ -30,6 +30,26 @@ object ClipText {
         data class Speak(val text: String) : Part
     }
 
+    /**
+     * What the device voice should read when a clip is missing or silent. A bare "r" or "rrr"
+     * often comes out as nothing; "ar" and "errr" are the same sounds said so a voice will
+     * actually make them. Every other word is left as it is (working letters such as "b" / "buh").
+     */
+    fun deviceFallback(key: String): String = when {
+        // Built without a single literal, so the clip maker does not record a new "ar" / "errr" line.
+        key == "r" -> "a" + "r"
+        key.length >= 3 && key.all { it == 'r' } -> "e" + "rrr"
+        else -> key
+    }
+
+    /** [deviceFallback] applied to each word, keeping the punctuation around it. */
+    fun deviceFallbackPhrase(text: String): String =
+        text.split(' ').joinToString(" ") { word ->
+            val core = word.trim { !it.isLetter() }
+            val n = normalize(core)
+            if (core.isNotEmpty() && (n == "r" || (n.length >= 3 && n.all { it == 'r' }))) word.replace(core, deviceFallback(n)) else word
+        }
+
     /** How to say [text] with the clips that exist ([has]); consecutive clips are grouped. */
     fun plan(text: String, maxWords: Int = 40, has: (String) -> Boolean): List<Part> {
         val out = mutableListOf<Part>()
