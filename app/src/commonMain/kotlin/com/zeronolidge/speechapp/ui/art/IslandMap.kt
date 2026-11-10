@@ -119,6 +119,8 @@ fun IslandMap(
      */
     /** The pointing hand at the next stop: where, its size, and which way it points. */
     pointer: @Composable (Modifier, Dp, MapAreas.HandDir) -> Unit = { _, _, _ -> },
+    /** Where the next stop sits on the map (dp from the map's top left) and its pulsing ring's radius. */
+    onStopAt: (Float, Float, Float) -> Unit = { _, _, _ -> },
     /** The crystal cave is open (Pip was found): a glowing paper cave stop just past the Forest. */
     cave: Boolean = false,
     /** The cave has new tries waiting (just unlocked by finding Pip): it glows. */
@@ -263,6 +265,7 @@ fun IslandMap(
         }
         val stopPx = Offset(layout.stop.x, layout.stop.y)
         val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
+        LaunchedEffect(stopDp, node) { onStopAt(stopDp.x.value, stopDp.y.value, node.value / 2f * MapAreas.STOP_PULSE) }
         val cavePx = layout.cave?.let { Offset(it.x, it.y) }
         val storySpots = layout.stories
         val starSpots = layout.done

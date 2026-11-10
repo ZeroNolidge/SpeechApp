@@ -54,8 +54,10 @@ class ReplayPickerTest {
     }
 
     @Test
-    fun theCardFitsBesideEveryPlaceWithBigTilesAndAClearClose() {
+    fun theCardFitsClearOfTheAdventureBarAndTheNextStop() {
         val screens = listOf(390f to 844f, 360f to 740f, 430f to 932f, 1366f to 1024f, 1024f to 768f, 820f to 1180f, 768f to 1024f)
+        val stories = VoiceStories.all.map { it.id to it.land }
+        val problems = mutableListOf<String>()
         for ((sw, sh) in screens) {
             val narrow = sw < 600f
             val top = 96f + (if (narrow) 26f else 32f) + 22f
@@ -63,25 +65,52 @@ class ReplayPickerTest {
             val (mw, mh) = MapAreas.mapSize(sw, sh - top - bottom, narrow)
             val mapLeft = (sw - mw) / 2
             val mapTop = (sh - mh) / 2 + (top - bottom) / 2
-            for (a in MapAreas.all) for (n in 1..Trail.STOPS_PER_LAND) {
-                val c = ReplayPicker.card(n, mapLeft + a.markX * mw, mapTop + a.markY * mh, min(mw, mh) * MapAreas.LANDMARK_RADIUS, sw, sh, narrow)
-                val where = "${a.land} n=$n on ${sw.toInt()}x${sh.toInt()}"
-                assertTrue(c.box[0] >= 0f && c.box[1] >= 0f && c.box[2] <= sw && c.box[3] <= sh, "card off screen: $where")
-                assertEquals(n, c.tiles.size)
-                c.tiles.forEach { t ->
-                    assertTrue(t[3] - t[1] >= (if (narrow) 100f else 64f) && t[2] - t[0] >= 64f, "small tile: $where")
-                    assertTrue(t[0] >= c.box[0] && t[2] <= c.box[2] && t[1] >= c.box[1] && t[3] <= c.box[3], "tile outside the card: $where")
-                    assertTrue(t[2] <= c.close[0] || t[0] >= c.close[2] || t[1] >= c.close[3] || t[3] <= c.close[1], "tile under the ✕: $where")
+            val label = MapAreas.labelSp(min(mw, mh))
+            val halfW = MapAreas.labelHalfW(label)
+            val labelH = MapAreas.labelH(label)
+            val bar = ReplayPicker.adventureBar(sw, sh, narrow)
+            val pictureR = min(mw, mh) * MapAreas.LANDMARK_RADIUS
+            for (chapter in 0..Trail.size * 2) for (cave in listOf(false, true)) {
+                // The next stop exactly as the map places it (the same call and sizes as MapLayoutTest).
+                val st = MapAreas.layout(
+                    Trail.stopOf(chapter), chapter / Trail.size, mw, mh, 48f, if (cave) 38.4f else null, MapAreas.storyNode(mw) / 2f,
+                    stories, MapAreas.starTap(min(mw, mh)) / 2f, halfW, labelH, stopEdge = MapAreas.stopEdge(96f),
+                ).stop
+                val ring = floatArrayOf(mapLeft + st.x, mapTop + st.y, st.r * MapAreas.STOP_PULSE)
+                for (a in MapAreas.all) for (n in 1..Trail.STOPS_PER_LAND) {
+                    val px = mapLeft + a.markX * mw
+                    val py = mapTop + a.markY * mh
+                    val c = ReplayPicker.card(n, px, py, pictureR, sw, sh, narrow, ring)
+                    val b = c.box
+                    val where = "${a.land} n=$n chapter $chapter on ${sw.toInt()}x${sh.toInt()}"
+                    if (b[0] < 0f || b[1] < 0f || b[2] > sw || b[3] > sh) problems += "card off screen: $where"
+                    // Ruby (test53b): never on the Adventure bar, 16 dp clear of it all round...
+                    if (b[0] < bar[2] + 16f && b[2] > bar[0] - 16f && b[1] < bar[3] + 16f && b[3] > bar[1] - 16f) problems += "card within 16 dp of the Adventure bar: $where"
+                    // ...and never on the next stop's ▶ or its pulsing ring.
+                    val dx = maxOf(b[0] - ring[0], 0f, ring[0] - b[2])
+                    val dy = maxOf(b[1] - ring[1], 0f, ring[1] - b[3])
+                    if (dx * dx + dy * dy < ring[2] * ring[2]) problems += "card on the ▶ ring: $where"
+                    if (narrow) {
+                        // Phone: centred, just above the bar (higher only to clear the ▶).
+                        if (kotlin.math.abs((b[0] + b[2]) / 2 - sw / 2) > 0.5f) problems += "card not centred: $where"
+                        if (b[3] > bar[1] - 16f + 0.01f) problems += "card not above the bar: $where"
+                    } else {
+                        // Tablet: beside the tapped place.
+                        val ex = maxOf(b[0] - px, 0f, px - b[2])
+                        val ey = maxOf(b[1] - py, 0f, py - b[3])
+                        if (kotlin.math.sqrt(ex * ex + ey * ey) > pictureR * 2.5f) problems += "card far from the place: $where"
+                    }
+                    assertEquals(n, c.tiles.size)
+                    c.tiles.forEach { t ->
+                        if (t[3] - t[1] < (if (narrow) 100f else 64f) || t[2] - t[0] < 64f) problems += "small tile: $where"
+                        if (!(t[0] >= b[0] && t[2] <= b[2] && t[1] >= b[1] && t[3] <= b[3])) problems += "tile outside the card: $where"
+                        if (!(t[2] <= c.close[0] || t[0] >= c.close[2] || t[1] >= c.close[3] || t[3] <= c.close[1])) problems += "tile under the ✕: $where"
+                    }
+                    for (i in c.tiles.indices) for (j in i + 1 until c.tiles.size) if (c.tiles[i][2] > c.tiles[j][0]) problems += "tiles overlap: $where"
+                    if (c.close[2] - c.close[0] < 48f || c.close[3] - c.close[1] < 48f) problems += "small ✕: $where"
                 }
-                for (i in c.tiles.indices) for (j in i + 1 until c.tiles.size) assertTrue(c.tiles[i][2] <= c.tiles[j][0], "tiles overlap: $where")
-                assertTrue(c.close[2] - c.close[0] >= 48f && c.close[3] - c.close[1] >= 48f, "small ✕: $where")
-                // Right beside the place: the card's nearest edge within a picture's width of it.
-                val px = mapLeft + a.markX * mw
-                val py = mapTop + a.markY * mh
-                val dx = maxOf(c.box[0] - px, 0f, px - c.box[2])
-                val dy = maxOf(c.box[1] - py, 0f, py - c.box[3])
-                assertTrue(kotlin.math.sqrt(dx * dx + dy * dy) <= min(mw, mh) * MapAreas.LANDMARK_RADIUS * 1.2f, "card far from the place: $where")
             }
         }
+        assertTrue(problems.isEmpty(), "Replay card problems (${problems.size}):\n" + problems.distinct().take(30).joinToString("\n"))
     }
 }

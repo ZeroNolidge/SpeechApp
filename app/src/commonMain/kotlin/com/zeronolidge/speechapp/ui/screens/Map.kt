@@ -134,6 +134,8 @@ fun MapScreen(nav: Nav) {
     var handReady by remember { mutableStateOf(pendingFix == null) }
     // The replay card: the place whose ⭐ was tapped (with two or more finished stops there).
     var replayAt by remember { mutableStateOf<Land?>(null) }
+    // The next stop on the map (dp in the map, and its ring), so the replay card keeps clear of it.
+    var stopAt by remember { mutableStateOf<FloatArray?>(null) }
     val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
     val sweepDone = fixT < 0f || fixT * com.zeronolidge.speechapp.logic.IslandStory.FIX_MS >= com.zeronolidge.speechapp.logic.IslandStory.SWEEP_MS
     // Until the sweep has reached it, the new place's flag stays empty.
@@ -269,6 +271,7 @@ fun MapScreen(nav: Nav) {
         }
         IslandMap(
             chapter = mapChapter,
+            onStopAt = { x, y, r -> stopAt = floatArrayOf(x, y, r) },
             reached = isReached,
             fixed = if (pendingFix != null && fixT >= 0f) fixedLands - pendingFix else fixedLands,
             fixLand = pendingFix?.takeIf { fixT >= 0f },
@@ -385,6 +388,8 @@ fun MapScreen(nav: Nav) {
                 stops.size, (mapLeft + mapW * area.markX).value, (mapTop + mapH * area.markY).value,
                 minOf(mapW, mapH).value * com.zeronolidge.speechapp.logic.MapAreas.LANDMARK_RADIUS,
                 maxWidth.value, maxHeight.value, mapNarrow(maxWidth),
+                // ...clear of the next stop's ▶ and its pulsing ring (Ruby, test53b).
+                ring = stopAt?.let { floatArrayOf(mapLeft.value + it[0], mapTop.value + it[1], it[2]) },
             )
             LaunchedEffect(at) {
                 println("REPLAYCARD ${at.name} stops=${stops.joinToString(",")} plots=${plots.joinToString(",") { it.id }} card=${card.box.joinToString(",") { it.toInt().toString() }} tiles=${card.tiles.joinToString(" ") { t -> "${((t[0] + t[2]) / 2).toInt()},${((t[1] + t[3]) / 2).toInt()}" }}")
