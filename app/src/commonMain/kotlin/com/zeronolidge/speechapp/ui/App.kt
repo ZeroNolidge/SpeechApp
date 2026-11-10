@@ -277,7 +277,7 @@ private fun Screens(start: Screen? = null) {
 private fun ShowScreen(s: Screen, nav: Nav) {
     when (s) {
         Screen.Map -> MapScreen(nav)
-        is Screen.Chapter -> ChapterScreen(nav, s.visit, s.replay)
+        is Screen.Chapter -> ChapterScreen(nav, s.visit, s.replay, s.stop)
         is Screen.LandGames -> LandGamesScreen(s.land, nav)
         Screen.Closet -> ClosetScreen(nav)
         Screen.Stickers -> StickerBookScreen(nav)

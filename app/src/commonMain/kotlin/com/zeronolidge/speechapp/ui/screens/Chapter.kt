@@ -52,6 +52,7 @@ import com.zeronolidge.speechapp.logic.Quest
 import com.zeronolidge.speechapp.logic.Scene
 import com.zeronolidge.speechapp.logic.Species
 import com.zeronolidge.speechapp.logic.StoryGen
+import com.zeronolidge.speechapp.logic.ReplayPicker
 import com.zeronolidge.speechapp.logic.Trail
 import com.zeronolidge.speechapp.logic.WordStat
 import com.zeronolidge.speechapp.logic.emoji
@@ -118,7 +119,7 @@ private sealed interface Phase {
  * paper piece for the buddy and the stickers earned on the way.
  */
 @Composable
-fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
+fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false, replayStop: Int? = null) {
     val app = LocalApp.current
     val p = app.progress
     val chapter = remember { p.chapter }
@@ -132,7 +133,12 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
         if (land !in p.fixedLands && app.islandBeforeSaid.add(land)) com.zeronolidge.speechapp.logic.IslandStory.place(land).before else null
     }
     val quest = remember {
-        StoryGen.make(land, p.storyParams(), Random(Random.nextLong()), mixed = false).let { q ->
+        // A ⭐ replay of a trail stop plays the story that stop played (its tile on the replay
+        // card shows that story); a new trail stop never repeats the other stop at its place.
+        val trailStop = if (!bonus) Trail.stopOf(chapter) else null
+        val plot = replayStop?.let { ReplayPicker.plotFor(it, p.stopPlot(it)) }
+        val avoid = trailStop?.let { setOf(ReplayPicker.plotFor(ReplayPicker.sibling(it), p.stopPlot(ReplayPicker.sibling(it))).id) } ?: emptySet()
+        StoryGen.make(land, p.storyParams(), Random(Random.nextLong()), mixed = false, plot = plot, avoid = avoid).let { q ->
             if (beforeLine == null) q else q.copy(intro = q.intro.copy(text = beforeLine + " " + q.intro.text))
         }
     }
@@ -199,7 +205,10 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
             }
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
-                    if (!bonus && p.chapter == chapter) p.finishChapter()
+                    if (!bonus && p.chapter == chapter) {
+                        p.setStopPlot(Trail.stopOf(chapter), quest.plot.id)
+                        p.finishChapter()
+                    }
                     // Island story: the first finished story at a place fixes it; the after line
                     // and the fix moment play back on the map.
                     if (p.fixLand(land)) {

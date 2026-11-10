@@ -1,11 +1,13 @@
 package com.zeronolidge.speechapp.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
 import com.zeronolidge.speechapp.ui.components.popIn
+import com.zeronolidge.speechapp.ui.art.paperCard
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -127,6 +129,11 @@ fun MapScreen(nav: Nav) {
     val pendingFix = remember { com.zeronolidge.speechapp.logic.IslandTest.fix ?: p.pendingFix }
     var fixT by remember { mutableStateOf(if (pendingFix != null) 0f else -1f) }
     var partyT by remember { mutableStateOf(-1f) }
+    // The pointing hand waits until the fix moment (and any party) is over and the stops have
+    // faded back in (Ruby, test53).
+    var handReady by remember { mutableStateOf(pendingFix == null) }
+    // The replay card: the place whose ⭐ was tapped (with two or more finished stops there).
+    var replayAt by remember { mutableStateOf<Land?>(null) }
     val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
     val sweepDone = fixT < 0f || fixT * com.zeronolidge.speechapp.logic.IslandStory.FIX_MS >= com.zeronolidge.speechapp.logic.IslandStory.SWEEP_MS
     // Until the sweep has reached it, the new place's flag stays empty.
@@ -170,6 +177,9 @@ fun MapScreen(nav: Nav) {
                 println("ISLAND party end")
             }
             println("ISLAND moment done")
+            kotlinx.coroutines.delay(600)
+            handReady = true
+            println("ISLAND hand back")
             // After about 12 minutes of play, Rory's "let's rest" comes after the moment.
             if (testFixed == null && app.sessionLong()) { nav.go(Screen.Rest); return@LaunchedEffect }
         }
@@ -282,10 +292,16 @@ fun MapScreen(nav: Nav) {
             stories = com.zeronolidge.speechapp.logic.VoiceStories.all.filter { it.id != "owl" || owlOpen(p) }.map {
                 com.zeronolidge.speechapp.ui.art.MapStoryStop(it.id, it.emoji, it.land, it.id in p.voiceStoriesDone)
             },
-            // A finished stop's ⭐: play a story there again (a fresh one; the trail stays put).
+            // A place's ⭐ (one per place): with one finished stop there, play it again straight
+            // away; with more, the replay card beside the place, one picture per stop (test53).
+            // The trail stays put either way.
             onDone = { stop ->
-                app.speaker.say("Let's play it again!")
-                nav.go(Screen.Chapter(Trail.landAt(stop), replay = true))
+                val at = Trail.landAt(stop)
+                val done = com.zeronolidge.speechapp.logic.ReplayPicker.finishedAt(at, mapChapter)
+                if (done.size <= 1) {
+                    app.speaker.say("Let's play it again!")
+                    nav.go(Screen.Chapter(at, replay = true, stop = done.firstOrNull() ?: stop))
+                } else replayAt = at
             },
             onStory = { id ->
                 com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
@@ -313,7 +329,14 @@ fun MapScreen(nav: Nav) {
             hintKey = hintKey,
             modifier = Modifier.size(mapW, mapH).align(Alignment.Center).offset(y = (top - bottom) / 2),
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
-            pointer = { m, size, fromLeft -> if (showHand) PointingHand(m, size = size, pointRight = fromLeft, pointLeft = !fromLeft) },
+            pointer = { m, size, dir ->
+                if (showHand && handReady && replayAt == null) PointingHand(
+                    m, size = size,
+                    pointRight = dir == com.zeronolidge.speechapp.logic.MapAreas.HandDir.RIGHT,
+                    pointLeft = dir == com.zeronolidge.speechapp.logic.MapAreas.HandDir.LEFT,
+                    pointDown = dir == com.zeronolidge.speechapp.logic.MapAreas.HandDir.DOWN,
+                )
+            },
         )
         // The party bunting. At the island party it swings down to hang just above the castle's
         // towers (both show: Ruby, test52), sways there, and goes back up. About twice the
@@ -351,6 +374,27 @@ fun MapScreen(nav: Nav) {
         )
         MapCorners(nav, startChapter)
         MapWave(roryOutfit)
+        replayAt?.let { at ->
+            val picker = com.zeronolidge.speechapp.logic.ReplayPicker
+            val stops = picker.finishedAt(at, mapChapter)
+            val plots = stops.map { picker.plotFor(it, p.stopPlot(it)) }
+            val area = com.zeronolidge.speechapp.logic.MapAreas.of(at)
+            val mapLeft = (maxWidth - mapW) / 2
+            val mapTop = (maxHeight - mapH) / 2 + (top - bottom) / 2
+            val card = picker.card(
+                stops.size, (mapLeft + mapW * area.markX).value, (mapTop + mapH * area.markY).value,
+                minOf(mapW, mapH).value * com.zeronolidge.speechapp.logic.MapAreas.LANDMARK_RADIUS,
+                maxWidth.value, maxHeight.value, mapNarrow(maxWidth),
+            )
+            LaunchedEffect(at) {
+                println("REPLAYCARD ${at.name} stops=${stops.joinToString(",")} plots=${plots.joinToString(",") { it.id }} card=${card.box.joinToString(",") { it.toInt().toString() }} tiles=${card.tiles.joinToString(" ") { t -> "${((t[0] + t[2]) / 2).toInt()},${((t[1] + t[3]) / 2).toInt()}" }}")
+                app.speaker.say(picker.line(plots))
+            }
+            ReplayCard(card, plots.map { it.goal }, onPick = { i ->
+                replayAt = null
+                nav.go(Screen.Chapter(at, replay = true, stop = stops[i]))
+            }, onClose = { replayAt = null })
+        }
     }
 }
 
@@ -452,3 +496,34 @@ private fun MapWave(roryOutfit: com.zeronolidge.speechapp.ui.art.Outfit = com.ze
 
 /** Sleepy Owl's Morning opens once the first Forest chapter is done. */
 private fun owlOpen(p: com.zeronolidge.speechapp.state.Progress) = p.chaptersDone >= 1
+
+/**
+ * The replay card (test53): the map dimmed to about 60% behind it, a small paper card beside the
+ * place with one big picture tile per finished stop (the story each one played; no words, never
+ * green), and a big ✕. A tap outside the card closes it too. Taps only.
+ */
+@Composable
+private fun ReplayCard(card: com.zeronolidge.speechapp.logic.ReplayPicker.Card, pictures: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit) {
+    fun FloatArray.at() = Modifier.offset(x = this[0].dp, y = this[1].dp).size((this[2] - this[0]).dp, (this[3] - this[1]).dp)
+    Box(
+        Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.4f))
+            .pointerInput(Unit) { detectTapGestures { onClose() } },
+    ) {
+        Box(
+            card.box.at().paperCard(Color(0xFFFFF8E1), 28.dp)
+                .pointerInput(Unit) { detectTapGestures { } },
+        )
+        card.tiles.forEachIndexed { i, t ->
+            com.zeronolidge.speechapp.ui.components.PaperButton(Color(0xFFFFFDF7), t.at(), corner = 22.dp, onClick = { onPick(i) }) {
+                Text(pictures[i], fontSize = ((t[3] - t[1]) * 0.5f).sp, modifier = Modifier.align(Alignment.Center))
+            }
+        }
+        com.zeronolidge.speechapp.ui.components.PaperButton(com.zeronolidge.speechapp.ui.art.PaperColors.tomato, card.close.at(), circle = true, onClick = onClose) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize(0.42f).align(Alignment.Center)) {
+                val st = size.minDimension * 0.2f
+                drawLine(Color.White, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, size.height), st, androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(Color.White, androidx.compose.ui.geometry.Offset(size.width, 0f), androidx.compose.ui.geometry.Offset(0f, size.height), st, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+    }
+}

@@ -147,9 +147,15 @@ object StoryGen {
         Land.CLOUDS to listOf("☁️", "⭐", "🎈", "🧁", "🍩"),
     )
 
-    fun make(land: Land, p: StoryParams, rnd: Random, mixed: Boolean = false): Quest {
+    fun make(
+        land: Land, p: StoryParams, rnd: Random, mixed: Boolean = false,
+        /** This plot (a ⭐ replay of a stop: the same story it played); else a random one. */
+        plot: Plot? = null,
+        /** Plots not to pick at random (the other stop at the same place: test53). */
+        avoid: Set<String> = emptySet(),
+    ): Quest {
         val friend = Friends.all.random(rnd)
-        val plot = Plots.all.random(rnd)
+        val plot = plot ?: Plots.all.filter { it.id !in avoid }.ifEmpty { Plots.all }.random(rnd)
         val visitor = plot.visitor?.let { sp -> Friends.all.firstOrNull { it.species == sp } }
             ?: Friends.all.filter { it.species != friend.species }.random(rnd)
         val subjects = when {

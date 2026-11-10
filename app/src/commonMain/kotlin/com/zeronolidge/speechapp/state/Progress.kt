@@ -150,6 +150,13 @@ class Progress(private val prefs: Prefs) {
         return true
     }
 
+    /** The plot id trail stop [stop] last played (its replay tile and its replay), if saved. */
+    fun stopPlot(stop: Int): String? = prefs.getString("stopPlot.$stop", null)?.takeIf { it.isNotEmpty() }
+
+    fun setStopPlot(stop: Int, plotId: String) {
+        prefs.edit().putString("stopPlot.$stop", plotId).apply()
+    }
+
     /** A place just fixed whose fix moment hasn't been shown on the map yet (kept across a reload). */
     var pendingFix by mutableStateOf(
         prefs.getString("pendingFix", null)?.let { n -> com.zeronolidge.speechapp.logic.Land.entries.firstOrNull { it.name == n } }

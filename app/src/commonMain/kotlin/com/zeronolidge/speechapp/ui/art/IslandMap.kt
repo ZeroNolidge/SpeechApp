@@ -117,7 +117,8 @@ fun IslandMap(
      * Drawn beside the current stop, e.g. a pointing hand; `fromLeft` says which side it sits on
      * (the side away from the buddy), so it never covers a label above the stop.
      */
-    pointer: @Composable (Modifier, Dp, Boolean) -> Unit = { _, _, _ -> },
+    /** The pointing hand at the next stop: where, its size, and which way it points. */
+    pointer: @Composable (Modifier, Dp, MapAreas.HandDir) -> Unit = { _, _, _ -> },
     /** The crystal cave is open (Pip was found): a glowing paper cave stop just past the Forest. */
     cave: Boolean = false,
     /** The cave has new tries waiting (just unlocked by finding Pip): it glows. */
@@ -640,28 +641,35 @@ fun IslandMap(
                 )
             }
             val heroOnRight = cx < 0.5f
+            val hand = node * 0.55f
+            val dn = LocalDensity.current
+            // The hand: beside the stop on its outer side, else above, below or at a corner of it:
+            // wherever it covers no label and stays on the map (MapAreas.handSpot, checked by
+            // MapLayoutTest). The buddy steps aside when it has to go on his side.
+            val spot = with(dn) {
+                val heroL = (if (heroOnRight) w * cx + node * 0.55f else w * cx - node * 1.2f).toPx()
+                val heroT = (h * cy - node * 0.6f).toPx()
+                MapAreas.handSpot(
+                    stopPx.x, stopPx.y, (node / 2).toPx() * MapAreas.STOP_PULSE, hand.toPx(), heroOnRight,
+                    w.toPx(), h.toPx(), labelHalfWPx, labelHPx,
+                    hero = floatArrayOf(heroL, heroT, heroL + (node * 0.7f).toPx(), heroT + (node * 0.85f).toPx()),
+                )
+            }
+            val heroB = with(dn) { MapAreas.heroBox(stopPx.x, stopPx.y, node.toPx(), heroOnRight, spot, hand.toPx()) }
             hero(
                 Modifier
-                    .offset(x = if (heroOnRight) w * cx + node * 0.55f else w * cx - node * 1.2f, y = h * cy - node * 0.6f)
+                    .offset(x = with(dn) { heroB[0].toDp() }, y = with(dn) { heroB[1].toDp() })
                     .size(width = node * 0.7f, height = node * 0.85f)
                     .zIndex(3f),
             )
-            val hand = node * 0.55f
-            // Beside the stop, on its outer side; by a screen edge, where that would be cut off,
-            // above it pointing down instead (turned a quarter).
-            val sideX = if (heroOnRight) w * cx - node / 2 - hand * 1.35f else w * cx + node / 2 + hand * 0.1f
-            val fits = sideX >= 2.dp && sideX + hand * 1.3f <= w - 2.dp
-            pointer(
-                Modifier
-                    .offset(
-                        x = if (fits) sideX else w * cx - hand * 0.62f,
-                        y = if (fits) h * cy - hand * 0.65f else h * cy - node * MapAreas.STOP_PULSE / 2 - hand * 1.45f,
-                    )
-                    .graphicsLayer { if (!fits) rotationZ = if (heroOnRight) 90f else -90f }
-                    .zIndex(4f),
-                hand,
-                heroOnRight,
-            )
+            // Never during the fix moment or the party (Ruby, test53): only once all is still.
+            if (fixLand == null && party < 0f) {
+                pointer(
+                    Modifier.offset(x = with(dn) { spot.x.toDp() }, y = with(dn) { spot.y.toDp() }).zIndex(4f),
+                    hand,
+                    spot.dir,
+                )
+            }
         }
         Box(Modifier.fillMaxSize().drift(1f)) {
             // The fix moment: Rory beside the place, his new costume popping on as the colour
@@ -670,7 +678,9 @@ fun IslandMap(
                 // Right beside the place, clear of every label and picture (MapAreas.roryBeside).
                 val rh = MapAreas.roryH(unit.value).dp
                 val dn = LocalDensity.current
-                val (rx, ry) = with(dn) { MapAreas.roryBeside(fixLand, w.toPx(), h.toPx(), (rh * 0.72f).toPx(), rh.toPx(), labelHalfWPx, labelHPx) }
+                // ...and off the next stop's ring, which fades back in as he goes (test53).
+                val ring = layout.stop.copy(r = layout.stop.r * MapAreas.STOP_PULSE)
+                val (rx, ry) = with(dn) { MapAreas.roryBeside(fixLand, w.toPx(), h.toPx(), (rh * 0.72f).toPx(), rh.toPx(), labelHalfWPx, labelHPx, avoid = listOf(ring)) }
                 val x = with(dn) { rx.toDp() }
                 val y = with(dn) { ry.toDp() }
                 val onLeft = x + rh * 0.36f < w * fixLand.mapX

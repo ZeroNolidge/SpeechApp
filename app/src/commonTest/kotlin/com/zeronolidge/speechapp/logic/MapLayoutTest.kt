@@ -54,6 +54,32 @@ class MapLayoutTest {
                 lay.all.forEach { if (it.r * 2f < 44f) problems += "${sc.name}: ${it.target} only ${(it.r * 2).toInt()} dp" }
                 val perLand = lay.done.groupBy { Trail.landAt((it.target as MapTarget.Done).stop) }
                 perLand.forEach { (l, ss) -> if (ss.size > 1) problems += "${sc.name} chapter $chapter: ${ss.size} stars at $l" }
+                // test53 (Ruby): the pointing hand is on screen and on no label (and off the buddy).
+                run {
+                    val heroOnRight = st.x / mw < 0.5f
+                    val heroL = if (heroOnRight) st.x + 96f * 0.55f else st.x - 96f * 1.2f
+                    val heroT = st.y - 96f * 0.6f
+                    val hand = 96f * 0.55f
+                    val hs = MapAreas.handSpot(st.x, st.y, st.r * MapAreas.STOP_PULSE, hand, heroOnRight, mw, mh, halfW, labelH,
+                        hero = floatArrayOf(heroL, heroT, heroL + 96f * 0.7f, heroT + 96f * 0.85f))
+                    val hb = hs.box(hand)
+                    val hero = MapAreas.heroBox(st.x, st.y, 96f, heroOnRight, hs, hand)
+                    val onHero = maxOf(0f, minOf(hb[2], hero[2]) - maxOf(hb[0], hero[0])) * maxOf(0f, minOf(hb[3], hero[3]) - maxOf(hb[1], hero[1]))
+                    if (onHero > 0f) problems += "${sc.name} chapter $chapter: the hand on the buddy"
+                    if (hero[0] < 0f || hero[2] > mw) problems += "${sc.name} chapter $chapter: the buddy off the map"
+                    if (hb[0] < 0f || hb[1] < 0f || hb[2] > mw || hb[3] > mh) problems += "${sc.name} chapter $chapter: the hand off the map"
+                    MapAreas.all.forEach { a ->
+                        val lb = MapAreas.labelBox(a, mw, mh, halfW, labelH)
+                        if (hb[0] < lb[2] && hb[2] > lb[0] && hb[1] < lb[3] && hb[3] > lb[1]) problems += "${sc.name} chapter $chapter: the hand on the ${a.land} label"
+                    }
+                }
+                // ...and Rory, in any place's fix moment, never stands on the next stop's ring.
+                val rh = MapAreas.roryH(min(mw, mh))
+                val stopRing = st.copy(r = st.r * MapAreas.STOP_PULSE)
+                Land.entries.forEach { l ->
+                    val (x, y) = MapAreas.roryBeside(l, mw, mh, rh * 0.72f, rh, halfW, labelH, avoid = listOf(stopRing))
+                    if (MapAreas.boxTouchesCircle(x, y, x + rh * 0.72f, y + rh, stopRing.x, stopRing.y, stopRing.r)) problems += "${sc.name} chapter $chapter: Rory on the ▶ for $l"
+                }
                 val spots = lay.stories + lay.done
                 val c = lay.cave
                 lay.all.forEach { sp ->

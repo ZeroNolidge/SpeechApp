@@ -91,7 +91,11 @@ object MapAreas {
      * that, out in the open sea at the bottom-left corner. (Ruby: not in the Lagoon pond for the
      * Meadow.)
      */
-    fun roryBeside(land: Land, w: Float, h: Float, rw: Float, rh: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
+    fun roryBeside(
+        land: Land, w: Float, h: Float, rw: Float, rh: Float, labelHalfW: Float, labelH: Float,
+        /** Round things he must not stand on (the next stop's ring, as it fades back in: test53). */
+        avoid: List<MapSpot> = emptyList(),
+    ): Pair<Float, Float> {
         val a = of(land)
         val mx = a.markX * w
         val my = a.markY * h
@@ -100,6 +104,7 @@ object MapAreas {
         fun clear(l: Float, t: Float): Boolean {
             if (l < 0f || t < 0f || l + rw > w || t + rh > h) return false
             if (labels.any { b -> l < b[2] && l + rw > b[0] && t < b[3] && t + rh > b[1] }) return false
+            if (avoid.any { sp -> boxTouchesCircle(l, t, l + rw, t + rh, sp.x, sp.y, sp.r) }) return false
             // Off every picture's middle (his own too: he stands beside it, so it shows).
             return all.none { o ->
                 val cx = (o.markX * w).coerceIn(l, l + rw)
@@ -138,6 +143,85 @@ object MapAreas {
             t += step
         }
         return best ?: (w * 0.02f to h - rh)
+    }
+
+    /** True when the box ([l], [t])-([r], [b]) touches the circle at ([cx], [cy]) of radius [cr]. */
+    fun boxTouchesCircle(l: Float, t: Float, r: Float, b: Float, cx: Float, cy: Float, cr: Float): Boolean {
+        val nx = cx.coerceIn(l, r)
+        val ny = cy.coerceIn(t, b)
+        return sq(nx - cx) + sq(ny - cy) < sq(cr)
+    }
+
+    /** Which way the pointing hand points (at the next stop). */
+    enum class HandDir { RIGHT, LEFT, DOWN, UP }
+
+    /** Where the pointing hand goes: its box's top-left corner (px), its size [hand], and its way. */
+    data class HandSpot(val x: Float, val y: Float, val dir: HandDir) {
+        /** The box it may cover as it bobs (a quarter of its size towards the stop). */
+        fun box(hand: Float): FloatArray = when (dir) {
+            HandDir.RIGHT -> floatArrayOf(x, y, x + hand * 1.25f, y + hand)
+            HandDir.LEFT -> floatArrayOf(x - hand * 0.25f, y, x + hand, y + hand)
+            HandDir.DOWN -> floatArrayOf(x, y, x + hand, y + hand * 1.25f)
+            HandDir.UP -> floatArrayOf(x, y - hand * 0.25f, x + hand, y + hand)
+        }
+    }
+
+    /**
+     * Where the pointing hand goes beside the next stop at ([sx], [sy]) whose pulsing ring reaches
+     * [ringR]: on the stop's outer side ([outerLeft]: its left), else above it pointing down, else
+     * below pointing up, else on its inner side; the first spot wholly inside the map and on no
+     * place's label (Ruby, test53: never on "Market" by an edge). [hero] is the buddy's box beside
+     * the stop, which it keeps off too.
+     */
+    fun handSpot(
+        sx: Float, sy: Float, ringR: Float, hand: Float, outerLeft: Boolean, w: Float, h: Float,
+        labelHalfW: Float, labelH: Float, hero: FloatArray? = null,
+    ): HandSpot {
+        val labels = all.map { labelBox(it, w, h, labelHalfW, labelH) }
+        fun overlaps(a: FloatArray, b: FloatArray) = a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]
+        fun ok(sp: HandSpot): Boolean {
+            val b = sp.box(hand)
+            if (b[0] < 2f || b[1] < 2f || b[2] > w - 2f || b[3] > h - 2f) return false
+            if (labels.any { overlaps(b, it) }) return false
+            return hero == null || !overlaps(b, hero)
+        }
+        val left = HandSpot(sx - ringR - hand * 1.3f, sy - hand / 2, HandDir.RIGHT)
+        val right = HandSpot(sx + ringR + hand * 0.05f, sy - hand / 2, HandDir.LEFT)
+        val above = HandSpot(sx - hand / 2, sy - ringR - hand * 1.3f, HandDir.DOWN)
+        val below = HandSpot(sx - hand / 2, sy + ringR + hand * 0.3f, HandDir.UP)
+        // Corners, for a stop tucked by an edge with a label above or below it.
+        val d = ringR * 0.72f
+        val aboveL = HandSpot(sx - d - hand * 0.5f, sy - d - hand * 1.25f, HandDir.DOWN)
+        val aboveR = HandSpot(sx + d - hand * 0.5f, sy - d - hand * 1.25f, HandDir.DOWN)
+        val belowL = HandSpot(sx - d - hand * 0.5f, sy + d + hand * 0.25f, HandDir.UP)
+        val belowR = HandSpot(sx + d - hand * 0.5f, sy + d + hand * 0.25f, HandDir.UP)
+        val order = if (outerLeft) listOf(left, above, below, aboveL, belowL, aboveR, belowR, right)
+        else listOf(right, above, below, aboveR, belowR, aboveL, belowL, left)
+        fun inMapOffLabels(sp: HandSpot) = sp.box(hand).let { b -> b[0] >= 2f && b[1] >= 2f && b[2] <= w - 2f && b[3] <= h - 2f && labels.none { overlaps(b, it) } }
+        // No spot clear of the buddy too: the one that covers the least of him.
+        fun onHero(sp: HandSpot): Float {
+            if (hero == null) return 0f
+            val b = sp.box(hand)
+            return maxOf(0f, minOf(b[2], hero[2]) - maxOf(b[0], hero[0])) * maxOf(0f, minOf(b[3], hero[3]) - maxOf(b[1], hero[1]))
+        }
+        return order.firstOrNull(::ok) ?: order.filter(::inMapOffLabels).minByOrNull(::onHero)
+            ?: order.firstOrNull { sp -> sp.box(hand).let { b -> labels.none { overlaps(b, it) } } } ?: order.first()
+    }
+
+    /**
+     * Where the trail buddy stands beside the next stop (node = the stop's full size): on its
+     * inner side, and slid further out when the pointing hand had to go on that side too, so the
+     * hand never covers him (test53). The same box with the hand shown or hidden, so he never jumps.
+     */
+    fun heroBox(sx: Float, sy: Float, node: Float, heroOnRight: Boolean, spot: HandSpot?, hand: Float): FloatArray {
+        val hw = node * 0.7f
+        var l = if (heroOnRight) sx + node * 0.55f else sx - node * 1.2f
+        val t = sy - node * 0.6f
+        if (spot != null) {
+            val b = spot.box(hand)
+            if (b[0] < l + hw && b[2] > l && b[1] < t + node * 0.85f && b[3] > t) l = if (heroOnRight) b[2] + 2f else b[0] - 2f - hw
+        }
+        return floatArrayOf(l, t, l + hw, t + node * 0.85f)
     }
 
     /** Every round thing on the map besides the areas: where each one goes. */
