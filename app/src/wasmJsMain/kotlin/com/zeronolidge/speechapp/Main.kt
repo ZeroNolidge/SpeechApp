@@ -124,6 +124,19 @@ private fun testStart(hash: String): Screen? {
                 Screen.Map
             }
             v == "costumes" -> Screen.CostumeSheet
+            // Island story previews: one place's fix moment ("island-fix:MEADOW": the places before
+            // it on the trail already fixed), and the eighth fix with the party ("island-party").
+            v.startsWith("island-fix:") -> {
+                val land = Land.valueOf(v.removePrefix("island-fix:"))
+                com.zeronolidge.speechapp.logic.IslandTest.fixed = Trail.lands.takeWhile { it != land }.toSet() + land
+                com.zeronolidge.speechapp.logic.IslandTest.fix = land
+                Screen.Map
+            }
+            v == "island-party" -> {
+                com.zeronolidge.speechapp.logic.IslandTest.fixed = Trail.lands.toSet()
+                com.zeronolidge.speechapp.logic.IslandTest.fix = Land.CLOUDS
+                Screen.Map
+            }
             // The balloon story's own game beat, straight away: for the puzzle's screenshot check.
             v == "story-balloon-pattern" -> Screen.VoiceStory("balloon", com.zeronolidge.speechapp.logic.VoiceStories.balloon.beats.indexOfFirst { it.game })
             // "story-balloon@3": that story, starting at its 4th beat.

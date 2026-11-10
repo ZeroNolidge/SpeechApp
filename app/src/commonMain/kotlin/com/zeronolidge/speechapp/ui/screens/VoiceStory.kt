@@ -908,6 +908,14 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 app.speaker.say(if (isCakeStory) "You did it! Bruno loves his cake!" else "Yum! Bruno loves it!") { yum.complete(Unit) }
                 yum.await()
                 if (s != session) return@launch
+                // Island story: Rory's one link line, taking the dish to the island party.
+                com.zeronolidge.speechapp.logic.IslandStory.linkLines[story.id]?.let { line ->
+                    val link = kotlinx.coroutines.CompletableDeferred<Unit>()
+                    println("KITCHEN end stage=LINK")
+                    app.speaker.say(line) { link.complete(Unit) }
+                    link.await()
+                    if (s != session) return@launch
+                }
                 println("KITCHEN end stage=HOLD")
                 delay(KitchenEnding.FRUIT_HOLD_MS.toLong())
                 if (s != session) return@launch

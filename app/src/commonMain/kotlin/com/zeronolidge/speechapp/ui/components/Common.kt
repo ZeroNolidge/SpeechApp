@@ -294,6 +294,12 @@ class AppServices(
     }
 
     /** Confetti and a cheer, without earning a star. */
+    /** Island story: places whose "before" line Rory has said this session. */
+    val islandBeforeSaid = mutableSetOf<com.zeronolidge.speechapp.logic.Land>()
+
+    /** A burst of paper confetti with no words (the island party). */
+    fun confetti() { celebrations++ }
+
     fun celebrate(message: String, onDone: (() -> Unit)? = null) {
         celebrations++
         speaker.say(message, onDone = onDone)

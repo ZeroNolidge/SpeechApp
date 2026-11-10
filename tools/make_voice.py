@@ -148,7 +148,8 @@ def string_pieces(code):
             i += 1
 
 
-SKIP_LINE = re.compile(r"println|prefs\.|putInt|getInt|getString|putString|Regex\(|BakedLayer|^\s*(import|package)\b|label = \"|js\(")
+# NO_CLIP_YET marks a line still waiting for sign-off: it plays in the device voice until then.
+SKIP_LINE = re.compile(r"NO_CLIP_YET|println|prefs\.|putInt|getInt|getString|putString|Regex\(|BakedLayer|^\s*(import|package)\b|label = \"|js\(")
 STORY_BLANK = re.compile(r"\{[A-Za-z]+\}")
 NOT_SPEECH = re.compile(r"[_/@#%<>=\\{}|]|\.kt\b|^[a-z]+[A-Z]")
 

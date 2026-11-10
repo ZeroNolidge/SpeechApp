@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.graphics.graphicsLayer
+import com.zeronolidge.speechapp.ui.art.asOutfit
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
@@ -116,7 +119,58 @@ fun MapScreen(nav: Nav) {
     val land = p.currentLand
     val unfoldNew = p.unfoldedSeen < p.chapter
     val hintLine = "Tap the big yellow button by ${land.hint}, where the hand is pointing!"
+    // Island story. (Review and deep links, "#test=island&fixed=N" / "island-fix:LAND" /
+    // "island-party": the places fixed come from the test hook, every place open.)
+    var testFixed by remember { mutableStateOf(com.zeronolidge.speechapp.logic.IslandTest.fixed) }
+    val fixedLands = testFixed ?: p.fixedLands
+    // A place just fixed (its story finished): its fix moment plays as the map opens.
+    val pendingFix = remember { com.zeronolidge.speechapp.logic.IslandTest.fix ?: p.pendingFix }
+    var fixT by remember { mutableStateOf(if (pendingFix != null) 0f else -1f) }
+    var partyT by remember { mutableStateOf(-1f) }
+    val still = com.zeronolidge.speechapp.ui.art.LocalReduceMotion.current
+    val sweepDone = fixT < 0f || fixT * com.zeronolidge.speechapp.logic.IslandStory.FIX_MS >= com.zeronolidge.speechapp.logic.IslandStory.SWEEP_MS
+    // Until the sweep has reached it, the new place's flag stays empty.
+    val flagsFilled = if (pendingFix != null && !sweepDone) fixedLands - pendingFix else fixedLands
+    val roryOutfit = p.roryCostume?.let { com.zeronolidge.speechapp.logic.IslandStory.place(it).costume.asOutfit() } ?: com.zeronolidge.speechapp.ui.art.Outfit()
     LaunchedEffect(Unit) {
+        // The fix moment first: Rory's after line (device voice until it's approved), the colour
+        // sweep, a soft sparkle, his new costume, the flag; then, if that was the eighth flag,
+        // the island party. Nothing to tap, no text, and then the map carries on as always.
+        if (pendingFix != null) {
+            val story = com.zeronolidge.speechapp.logic.IslandStory
+            val before = fixedLands - pendingFix
+            println("ISLAND moment=${pendingFix.name} fixed=${fixedLands.size}")
+            val said = kotlinx.coroutines.CompletableDeferred<Unit>()
+            app.speaker.say(story.place(pendingFix).after) { said.complete(Unit) }
+            kotlinx.coroutines.delay(250)
+            if (still) fixT = 0.99f else {
+                val start = withFrameMillis { it }
+                while (true) {
+                    val now = withFrameMillis { it }
+                    fixT = ((now - start).toFloat() / story.FIX_MS).coerceAtMost(1f)
+                    if (fixT >= 1f) break
+                }
+            }
+            app.sfx.pop()
+            fixT = -1f
+            if (testFixed == null) { p.setPendingFix(null); p.wearCostume(pendingFix) } else p.wearCostume(pendingFix)
+            kotlinx.coroutines.withTimeoutOrNull(2500) { said.await() }
+            if (story.partyNow(before, fixedLands)) {
+                println("ISLAND party start")
+                app.confetti()
+                val start = withFrameMillis { it }
+                var lastBurst = 0L
+                while (true) {
+                    val now = withFrameMillis { it }
+                    partyT = ((now - start).toFloat() / story.PARTY_MS).coerceAtMost(1f)
+                    if (now - lastBurst > 1200) { lastBurst = now; app.confetti() }
+                    if (partyT >= 1f || still) break
+                }
+                partyT = -1f
+                println("ISLAND party end")
+            }
+            println("ISLAND moment done")
+        }
         val present = p.checkIn(today())
         // The present waits in the closet (a 🎁 on the buddy badge); nothing pops up by itself.
         present?.let { app.newPiece = it }
@@ -142,9 +196,8 @@ fun MapScreen(nav: Nav) {
     val species = p.hero ?: Species.KID
     // Island story: which places are fixed. (Review stills, "#test=island&fixed=N": the first N
     // trail places fixed, every place open, and the trail just past them.)
-    val testFixed = com.zeronolidge.speechapp.logic.IslandTest.fixed
-    val fixedLands = testFixed ?: p.fixedLands
-    val mapChapter = if (testFixed != null) testFixed.size * Trail.STOPS_PER_LAND else p.chapter
+    // (A fix-moment preview stands on the fixed place's second stop, as just after its first.)
+    val mapChapter = testFixed?.let { tf -> tf.size * Trail.STOPS_PER_LAND - if (pendingFix != null) 1 else 0 } ?: p.chapter
     val isReached: (Land) -> Boolean = { testFixed != null || it in Trail.reached(p.chapter) }
     var hintFrom by remember { mutableStateOf<Land?>(null) }
     var hintKey by remember { mutableStateOf(0) }
@@ -186,9 +239,9 @@ fun MapScreen(nav: Nav) {
         val availH = maxHeight - top - bottom
         // Wide screens keep the island's usual shape; upright screens let it grow taller
         // instead of leaving big empty bands of sea.
-        val aspect = (maxWidth / availH).coerceIn(1.15f, 1.75f)
-        val mapW = minOf(maxWidth, availH * aspect)
-        val mapH = mapW / aspect
+        val (mapWv, mapHv) = com.zeronolidge.speechapp.logic.MapAreas.mapSize(maxWidth.value, availH.value, mapNarrow(maxWidth))
+        val mapW = mapWv.dp
+        val mapH = mapHv.dp
         // For checking: every area and the scene a tap on it opens, from the same rule as onElsewhere.
         LaunchedEffect(p.chapter) {
             val peek = if (!Trail.opensLand(p.chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(land) + 1) else null
@@ -205,7 +258,11 @@ fun MapScreen(nav: Nav) {
         IslandMap(
             chapter = mapChapter,
             reached = isReached,
-            fixed = fixedLands,
+            fixed = if (pendingFix != null && fixT >= 0f) fixedLands - pendingFix else fixedLands,
+            fixLand = pendingFix?.takeIf { fixT >= 0f },
+            fixT = fixT.coerceAtLeast(0f),
+            party = partyT,
+            roryOutfit = roryOutfit,
             unfoldNew = unfoldNew,
             onUnfolded = { p.markUnfoldSeen() },
             onStop = startChapter,
@@ -256,13 +313,37 @@ fun MapScreen(nav: Nav) {
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size, fromLeft -> if (showHand) PointingHand(m, size = size, pointRight = fromLeft, pointLeft = !fromLeft) },
         )
+        // The party bunting. At the island party it swings down onto the castle, sways there,
+        // and goes back up.
+        val castleX = (maxWidth - mapW) / 2 + mapW * Land.CLOUDS.mapX
+        val castleY = (maxHeight - mapH) / 2 + (top - bottom) / 2 + mapH * Land.CLOUDS.mapY
+        val buntW = minOf(maxWidth, 640.dp)
+        val sweptIn = com.zeronolidge.speechapp.logic.IslandStory.SWEEP_MS.toFloat() / com.zeronolidge.speechapp.logic.IslandStory.FIX_MS
         com.zeronolidge.speechapp.ui.art.PartyBunting(
-            fixedLands,
-            Modifier.align(Alignment.TopCenter).offset(y = buntingY).widthIn(max = 640.dp).padding(horizontal = 18.dp),
+            flagsFilled,
+            Modifier.align(Alignment.TopCenter).offset(y = buntingY).widthIn(max = 640.dp).padding(horizontal = 18.dp)
+                .graphicsLayer {
+                    if (partyT < 0f) return@graphicsLayer
+                    val go = when {
+                        partyT < 0.15f -> partyT / 0.15f
+                        partyT > 0.85f -> (1f - partyT) / 0.15f
+                        else -> 1f
+                    }.let { 1f - (1f - it) * (1f - it) }
+                    val dx = (castleX - maxWidth / 2).toPx()
+                    val dy = (castleY - mapH * 0.08f - buntingY - buntingH / 2).toPx()
+                    translationX = dx * go
+                    translationY = dy * go
+                    val k = 1f - go * (1f - (mapH * 0.5f / buntW).coerceAtMost(1f))
+                    scaleX = k
+                    scaleY = k
+                    rotationZ = go * 7f * kotlin.math.sin(partyT * 2f * kotlin.math.PI.toFloat() * 4f)
+                },
             flagHeight = buntingH,
+            pop = pendingFix,
+            popT = if (fixT < 0f) 1f else ((fixT - sweptIn) / 0.2f).coerceIn(0f, 1f),
         )
         MapCorners(nav, startChapter)
-        MapWave()
+        MapWave(roryOutfit)
     }
 }
 
@@ -337,7 +418,7 @@ private fun mapNarrow(width: Dp) = width < 600.dp
  * moving to another screen). Any tap tucks him away and starts the wait again. At most 3 times.
  */
 @Composable
-private fun MapWave() {
+private fun MapWave(roryOutfit: com.zeronolidge.speechapp.ui.art.Outfit = com.zeronolidge.speechapp.ui.art.Outfit()) {
     val app = LocalApp.current
     var waving by remember { mutableStateOf(false) }
     var waves by remember { mutableStateOf(0) }
@@ -356,7 +437,7 @@ private fun MapWave() {
             Critter(
                 Species.ROBOT, Modifier.padding(start = 6.dp).size(width = 90.dp, height = 110.dp).popIn("wave$waves"),
                 // A real wave: hand up, side to side twice, then down.
-                Color(0xFFFFCC80), mood = Mood.HAPPY, waving = true,
+                Color(0xFFFFCC80), outfit = roryOutfit, mood = Mood.HAPPY, waving = true,
             )
         }
     }

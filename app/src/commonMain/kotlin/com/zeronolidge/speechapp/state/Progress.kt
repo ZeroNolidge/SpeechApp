@@ -150,6 +150,28 @@ class Progress(private val prefs: Prefs) {
         return true
     }
 
+    /** A place just fixed whose fix moment hasn't been shown on the map yet (kept across a reload). */
+    var pendingFix by mutableStateOf(
+        prefs.getString("pendingFix", null)?.let { n -> com.zeronolidge.speechapp.logic.Land.entries.firstOrNull { it.name == n } }
+    )
+        private set
+
+    fun setPendingFix(land: com.zeronolidge.speechapp.logic.Land?) {
+        pendingFix = land
+        prefs.edit().putString("pendingFix", land?.name ?: "").apply()
+    }
+
+    /** The island costume Rory wears on the map: the one he earned last. */
+    var roryCostume by mutableStateOf(
+        prefs.getString("roryCostume", null)?.let { n -> com.zeronolidge.speechapp.logic.Land.entries.firstOrNull { it.name == n } }
+    )
+        private set
+
+    fun wearCostume(land: com.zeronolidge.speechapp.logic.Land) {
+        roryCostume = land
+        prefs.edit().putString("roryCostume", land.name).apply()
+    }
+
     /** Voice stories he has played to the end (their map stops wear a star). */
     var voiceStoriesDone by mutableStateOf(prefs.getStringSet("voiceStoriesDone", emptySet()) ?: emptySet())
         private set

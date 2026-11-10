@@ -126,7 +126,16 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
     // Visiting an area already reached is a bonus story: it doesn't move the trail on.
     // A replayed ⭐ stop never moves it on either, even in the land he's in now.
     val bonus = remember { replay || land != Trail.landOf(chapter) }
-    val quest = remember { StoryGen.make(land, p.storyParams(), Random(Random.nextLong()), mixed = false) }
+    // Island story: at a place not fixed yet, Rory's one "before" line opens the story (the first
+    // time in this session; see logic/IslandStory.kt).
+    val beforeLine = remember {
+        if (land !in p.fixedLands && app.islandBeforeSaid.add(land)) com.zeronolidge.speechapp.logic.IslandStory.place(land).before else null
+    }
+    val quest = remember {
+        StoryGen.make(land, p.storyParams(), Random(Random.nextLong()), mixed = false).let { q ->
+            if (beforeLine == null) q else q.copy(intro = q.intro.copy(text = beforeLine + " " + q.intro.text))
+        }
+    }
     var phase by remember { mutableStateOf<Phase>(Phase.Intro) }
     var cheer by remember { mutableStateOf(false) }
     var patternWins by remember { mutableStateOf(0) }
@@ -190,6 +199,12 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
             Phase.Ending -> {
                 LaunchedEffect(Unit) {
                     if (!bonus && p.chapter == chapter) p.finishChapter()
+                    // Island story: the first finished story at a place fixes it; the after line
+                    // and the fix moment play back on the map.
+                    if (p.fixLand(land)) {
+                        p.setPendingFix(land)
+                        if (app.testMode) println("ISLAND fixed=${land.name} count=${p.fixedLands.size}")
+                    }
                 }
                 StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = { next(ph) })
             }

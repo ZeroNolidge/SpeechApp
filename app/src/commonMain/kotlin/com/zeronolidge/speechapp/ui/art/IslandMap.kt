@@ -60,6 +60,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -78,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Trail
+import com.zeronolidge.speechapp.logic.IslandStory
 import com.zeronolidge.speechapp.ui.components.ArrowIcon
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.PaperButton
@@ -130,6 +134,18 @@ fun IslandMap(
      * small sad detail (never red, cracks, gray or a cross; mist still means "not reached yet").
      */
     fixed: Set<Land> = Land.entries.toSet(),
+    /**
+     * The fix moment playing now: [fixLand] (shown broken in [fixed] until the sweep reaches it)
+     * and how far in it is, 0 to 1 over [IslandStory.FIX_MS]: a colour sweep out from the place's
+     * centre (the first [IslandStory.SWEEP_MS]), a soft sparkle, and Rory beside it with his new
+     * costume popping on. No text.
+     */
+    fixLand: Land? = null,
+    fixT: Float = 0f,
+    /** The island party, 0 to 1 over [IslandStory.PARTY_MS] (negative when there's none): the castle bounces. */
+    party: Float = -1f,
+    /** What Rory wears on the map (his latest island costume). */
+    roryOutfit: Outfit = Outfit(),
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -215,67 +231,37 @@ fun IslandMap(
         // Layer 2, the island and everything on it, moving together so the stops stay put on it.
         // One tap handler for every area: the tap point is matched against the shared list of
         // map areas (the same positions the labels are drawn at), and the result is logged.
-        val label = (unit.value * 0.055f).coerceIn(20f, 30f)
+        val label = MapAreas.labelSp(unit.value)
         val onArea by rememberUpdatedState(onElsewhere)
         val onStopTap by rememberUpdatedState(onStop)
         val onCaveTap by rememberUpdatedState(onCave)
         val onStoryTap by rememberUpdatedState(onStory)
         val onDoneTap by rememberUpdatedState(onDone)
         val dens = LocalDensity.current.density
-        // The next stop: same physical size on every screen, placed clear of every area's tap zone.
+        // The next stop: same physical size on every screen. Where it and every other round stop
+        // go comes from the one shared rule (MapAreas.layout, also checked by MapLayoutTest):
+        // clear of every place's label, by its own land.
         val node = 96.dp
-        val stopPx = with(LocalDensity.current) {
-            val (fx, fy) = Trail.position(current)
-            val wPx = w.toPx()
-            val hPx = h.toPx()
-            val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(current, wPx, hPx, labelH) {
-                val (x, y) = MapAreas.stopSpot(Trail.landAt(current), fx, fy, wPx, hPx, (node / 2).toPx(), 64.dp.toPx(), labelH)
-                Offset(x, y)
-            }
-        }
-        val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
         val storyNode = node * 0.7f
         val caveNode = node * 0.8f
-        val cavePx = with(LocalDensity.current) {
-            val wPx = w.toPx()
-            val hPx = h.toPx()
-            val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(cave, stopPx, wPx, hPx, labelH) {
-                if (!cave) null
-                else MapAreas.caveSpot(wPx, hPx, (caveNode / 2).toPx(), stopPx.x, stopPx.y, (node / 2).toPx(), 64.dp.toPx(), labelH).let { (x, y) -> Offset(x, y) }
-            }
-        }
-        val storySpots = with(LocalDensity.current) {
-            val wPx = w.toPx()
-            val hPx = h.toPx()
-            val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(stories.map { it.id }, stopPx, cavePx, wPx, hPx, labelH) {
-                val placed = mutableListOf(MapSpot(MapTarget.Stop, stopPx.x, stopPx.y, (node / 2).toPx()))
-                // The cave goes first (the Forest's corner is tight), so it's always right by the Forest.
-                cavePx?.let { placed += MapSpot(MapTarget.Cave, it.x, it.y, (caveNode / 2).toPx()) }
-                stories.forEach { st ->
-                    val r = (storyNode / 2).toPx()
-                    val (x, y) = MapAreas.spotBy(st.land, wPx, hPx, r, placed, 64.dp.toPx(), labelH)
-                    placed += MapSpot(MapTarget.Story(st.id), x, y, r)
-                }
-                placed.filter { it.target is MapTarget.Story }
-            }
-        }
-        // Finished stops: ⭐ stickers, each a tap target of its own (a replay), placed clear of
-        // every picture, label and other stop.
         val sticker = unit * 0.085f
-        val starSpots = with(LocalDensity.current) {
+        val labelHalfWPx = with(LocalDensity.current) { MapAreas.labelHalfW(label).dp.toPx() }
+        val labelHPx = with(LocalDensity.current) { MapAreas.labelH(label).dp.toPx() }
+        val layout = with(LocalDensity.current) {
             val wPx = w.toPx()
             val hPx = h.toPx()
-            val labelH = (label * 1.45f + 6f).dp.toPx()
-            remember(current, lap, storySpots, wPx, hPx, labelH) {
-                val done = (0 until Trail.size).filter { s -> (lap > 0 || s < current) && s != current }
-                val avoid = listOf(MapSpot(MapTarget.Stop, stopPx.x, stopPx.y, (node / 2).toPx())) +
-                    (cavePx?.let { listOf(MapSpot(MapTarget.Cave, it.x, it.y, (caveNode / 2).toPx())) } ?: emptyList()) + storySpots
-                MapAreas.doneSpots(done, wPx, hPx, (sticker / 2).toPx(), avoid, 64.dp.toPx(), labelH)
+            remember(current, lap, cave, stories.map { it.id }, wPx, hPx, labelHPx) {
+                MapAreas.layout(
+                    current, lap, wPx, hPx, (node / 2).toPx(), if (cave) (caveNode / 2).toPx() else null, (storyNode / 2).toPx(),
+                    stories.map { it.id to it.land }, (sticker / 2).toPx(), labelHalfWPx, labelHPx,
+                )
             }
         }
+        val stopPx = Offset(layout.stop.x, layout.stop.y)
+        val stopDp = with(LocalDensity.current) { DpOffset(stopPx.x.toDp(), stopPx.y.toDp()) }
+        val cavePx = layout.cave?.let { Offset(it.x, it.y) }
+        val storySpots = layout.stories
+        val starSpots = layout.done
         Box(
             Modifier
                 .fillMaxSize()
@@ -305,7 +291,7 @@ fun IslandMap(
                     // (picture, label and the gap between) and the next-stop button.
                     fun targetAt(p: Offset): MapTarget = MapAreas.target(
                         p.x, p.y, size.width.toFloat(), size.height.toFloat(),
-                        labelHalfW = 64.dp.toPx(), labelH = (label * 1.45f + 6f).dp.toPx(),
+                        labelHalfW = labelHalfWPx, labelH = labelHPx,
                         stopX = stopPx.x, stopY = stopPx.y, stopR = (node / 2).toPx(),
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
                         spots = storySpots + starSpots,
@@ -356,31 +342,34 @@ fun IslandMap(
                     )
                 },
         ) {
-            val fixedKey = Land.entries.filter { it in fixed }.joinToString(",") { it.name }
-            BakedLayer(listOf("map-island", current, lap, fixedKey), depth = 4.dp) {
-                island()
-                riverBase()
-                trail(current, lap)
-                fun place(land: Land, art: DrawScope.(Boolean) -> Unit) = sleepy(land !in fixed) { art(land in fixed) }
-                place(Land.FOREST) { forest(Land.FOREST); forestStory(Land.FOREST, it) }
-                place(Land.MEADOW) { meadow(Land.MEADOW); meadowStory(Land.MEADOW, it) }
-                place(Land.LAGOON) { lagoon(Land.LAGOON); lagoonDock(Land.LAGOON) }
-                place(Land.MARKET) { market(Land.MARKET, open = it) }
-                place(Land.FACTORY) { factory(Land.FACTORY); if (!it) factoryGears(Land.FACTORY, 0f) }
-                place(Land.PEAKS) { peaks(Land.PEAKS); peaksStory(Land.PEAKS, it) }
-                place(Land.CAVES) { caves(Land.CAVES, lit = it) }
+            // The island, baked with its broken and fixed places. During a fix moment the same
+            // island with that place fixed is baked too, and shown inside a circle that grows from
+            // the place's centre: the colour sweep.
+            BakedLayer(listOf("map-island", current, lap, fixedKey(fixed)), depth = 4.dp) { islandArt(current, lap, fixed) }
+            val sweepLand = fixLand?.takeIf { it != Land.CLOUDS }
+            if (sweepLand != null) {
+                val sweep = sweepOf(fixT)
+                Box(Modifier.fillMaxSize().drawWithContent {
+                    val r = size.minDimension * 0.2f * sweep
+                    clipPath(Path().apply { addOval(androidx.compose.ui.geometry.Rect(at(sweepLand), r)) }) { this@drawWithContent.drawContent() }
+                }) {
+                    BakedLayer(listOf("map-island", current, lap, fixedKey(fixed + sweepLand)), depth = 4.dp) { islandArt(current, lap, fixed + sweepLand) }
+                }
             }
+            val shown = if (sweepLand != null && sweepOf(fixT) >= 1f) fixed + sweepLand else fixed
             // Each fixed place's one small looping motion, drawn live over the baked art.
             Canvas(Modifier.fillMaxSize()) {
                 riverFlow(fast)
                 val m = if (still) 0f else 1f
-                if (Land.FOREST in fixed) forestNotes(Land.FOREST, slow * m)
-                if (Land.MEADOW in fixed) meadowBalloons(Land.MEADOW, mid * m)
-                if (Land.LAGOON in fixed) { lagoonGlint(Land.LAGOON, fast); pipBoat(Land.LAGOON, mid * m) }
-                if (Land.MARKET in fixed) marketGlint(Land.MARKET, fast * m)
-                if (Land.PEAKS in fixed) peaksFlag(Land.PEAKS, fast * m)
-                if (Land.FACTORY in fixed) { factoryGears(Land.FACTORY, slow * m); factorySmoke(Land.FACTORY, fast) }
-                if (Land.CAVES in fixed) { caveGlow(Land.CAVES, fast * m); caveSparkles(Land.CAVES, fast) }
+                if (Land.FOREST in shown) forestNotes(Land.FOREST, slow * m)
+                if (Land.MEADOW in shown) meadowBalloons(Land.MEADOW, mid * m)
+                if (Land.LAGOON in shown) { lagoonGlint(Land.LAGOON, fast); pipBoat(Land.LAGOON, mid * m) }
+                if (Land.MARKET in shown) marketGlint(Land.MARKET, fast * m)
+                if (Land.PEAKS in shown) peaksFlag(Land.PEAKS, fast * m)
+                if (Land.FACTORY in shown) { factoryGears(Land.FACTORY, slow * m); factorySmoke(Land.FACTORY, fast) }
+                if (Land.CAVES in shown) { caveGlow(Land.CAVES, fast * m); caveSparkles(Land.CAVES, fast) }
+                // The fix moment's soft sparkle, round the place as its colour comes back.
+                if (fixLand != null && fixLand != Land.CLOUDS) fixSparkle(at(fixLand), size.minDimension * 0.16f, fixT)
             }
             // The castle floats on its cloud, baked in its own small box.
             val castleBox = unit * 0.3f
@@ -388,12 +377,31 @@ fun IslandMap(
                 Modifier
                     .offset(x = w * Land.CLOUDS.mapX - castleBox / 2, y = h * Land.CLOUDS.mapY - castleBox / 2)
                     .size(castleBox)
-                    .graphicsLayer { translationY = sin(mid * 2 * PI).toFloat() * size.height * 0.03f },
+                    .graphicsLayer {
+                        translationY = sin(mid * 2 * PI).toFloat() * size.height * 0.03f
+                        // The island party: the castle hops for joy.
+                        if (party in 0f..1f) {
+                            val hop = kotlin.math.abs(sin(party * 2 * PI * 5)).toFloat() * (1f - party) * 0.12f
+                            translationY -= hop * size.height
+                            scaleX = 1f + hop * 0.5f
+                            scaleY = 1f + hop * 0.5f
+                        }
+                    },
             ) {
                 val castleFixed = Land.CLOUDS in fixed
                 BakedLayer(listOf("map-castle", castleFixed), depth = 4.dp) {
-                    sleepy(!castleFixed) { castleArt(center, size.minDimension / 4.4f, flags = castleFixed) }
+                    sleepy(!castleFixed) { castleArt(center, size.minDimension / 4.4f, flags = false) }
                 }
+                if (fixLand == Land.CLOUDS) {
+                    Box(Modifier.fillMaxSize().drawWithContent {
+                        val r = size.minDimension * 0.75f * sweepOf(fixT)
+                        clipPath(Path().apply { addOval(androidx.compose.ui.geometry.Rect(center, r)) }) { this@drawWithContent.drawContent() }
+                    }) { BakedLayer(listOf("map-castle", true), depth = 4.dp) { castleArt(center, size.minDimension / 4.4f, flags = false) } }
+                }
+                // Fixed: the flags go up and wave (drawn live).
+                val flagsUp = castleFixed || (fixLand == Land.CLOUDS && sweepOf(fixT) >= 1f)
+                if (flagsUp) Canvas(Modifier.fillMaxSize()) { castleFlags(center, size.minDimension / 4.4f, if (still) 0f else fast) }
+                if (fixLand == Land.CLOUDS) Canvas(Modifier.fillMaxSize()) { fixSparkle(center, size.minDimension * 0.45f, fixT) }
             }
 
             // Mist over lands the trail hasn't reached, each patch baked once and drifting.
@@ -432,7 +440,7 @@ fun IslandMap(
                 birds(slow, flap)
                 // Where to go: a soft golden ring that breathes around the next stop's land, with
                 // three sparkles going round it, until he taps it.
-                if (guide) {
+                if (guide && fixLand == null) {
                     val a = MapAreas.of(Trail.landAt(current))
                     val c = Offset(a.markX * size.width, a.markY * size.height)
                     val r = size.minDimension * MapAreas.LANDMARK_RADIUS * (if (still) 1f else 0.95f + (pulse - 1f))
@@ -468,11 +476,15 @@ fun IslandMap(
                             scaleX = k
                             scaleY = k
                         }
+                        .then(if (!app.testMode) Modifier else Modifier.onSizeChanged { sz ->
+                            // For checking: each label's real width against the room every stop leaves it.
+                            println("MAPLABEL ${land.name} w=${sz.width} h=${sz.height} room=${(2 * labelHalfWPx).toInt()}x${labelHPx.toInt()}")
+                        })
                         .paperCard(PaperStyle.chip, 999.dp)
                         .padding(horizontal = 10.dp, vertical = 1.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(land.emoji, fontSize = label.sp)
+                        PlaceIcon(land, label)
                         Spacer(Modifier.width(4.dp))
                         Text(
                             land.shortName, fontSize = (label * 0.6f).sp, maxLines = 1, softWrap = false,
@@ -505,7 +517,7 @@ fun IslandMap(
                             translationY = -kotlin.math.abs(step) * size.height * 0.06f
                         },
                 ) {
-                    Critter(Species.ROBOT, Modifier.fillMaxSize(), Color(0xFFFFCC80), mood = Mood.CHEER, talking = true, mirrored = sx < from.mapX)
+                    Critter(Species.ROBOT, Modifier.fillMaxSize(), Color(0xFFFFCC80), outfit = roryOutfit, mood = Mood.CHEER, talking = true, mirrored = sx < from.mapX)
                 }
                 // Seen as well as heard (a muted iPad): a "Not yet!" chip with a stop hand by the
                 // misty place, and Rory pointing the way along the sparkly trail.
@@ -543,8 +555,10 @@ fun IslandMap(
             }
         }
 
-        // The stops, the buddy and the pointer ride on the island layer.
-        Box(Modifier.fillMaxSize().drift(1f)) {
+        // The stops, the buddy and the pointer ride on the island layer. During a fix moment they
+        // fade right back, so the place itself is what he sees change.
+        val stopsAlpha = if (fixLand == null) 1f else 1f - 0.85f * (fixT / 0.08f).coerceAtMost(1f) * ((1f - fixT) / 0.12f).coerceIn(0f, 1f)
+        Box(Modifier.fillMaxSize().drift(1f).graphicsLayer { alpha = stopsAlpha }) {
             // Finished stops: flat star stickers by the trail, each one tappable (a replay).
             starSpots.forEach { sp ->
                 val stop = (sp.target as MapTarget.Done).stop
@@ -633,6 +647,34 @@ fun IslandMap(
                 hand,
                 heroOnRight,
             )
+        }
+        Box(Modifier.fillMaxSize().drift(1f)) {
+            // The fix moment: Rory beside the place, his new costume popping on as the colour
+            // sweep reaches the edge. No text.
+            if (fixLand != null) {
+                val rh = unit * 0.26f
+                val onLeft = fixLand.mapX > 0.5f
+                val x = w * fixLand.mapX + if (onLeft) -unit * 0.17f - rh * 0.72f else unit * 0.17f
+                val y = (h * fixLand.mapY - rh * 0.3f).coerceIn(0.dp, h - rh)
+                val dressed = fixT * IslandStory.FIX_MS >= IslandStory.SWEEP_MS
+                Box(
+                    Modifier.offset(x = x.coerceIn(0.dp, w - rh * 0.72f), y = y).size(rh * 0.72f, rh).zIndex(5f)
+                        .graphicsLayer {
+                            alpha = (fixT / 0.06f).coerceAtMost(1f) * ((1f - fixT) / 0.1f).coerceAtMost(1f)
+                            val k = popOf(fixT)
+                            scaleX = k
+                            scaleY = k
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                        },
+                ) {
+                    Critter(
+                        Species.ROBOT, Modifier.fillMaxSize(), Color(0xFFFFCC80),
+                        outfit = if (dressed) IslandStory.place(fixLand).costume.asOutfit() else roryOutfit,
+                        mood = Mood.CHEER, mirrored = !onLeft,
+                    )
+                    if (dressed) Canvas(Modifier.fillMaxSize()) { fixSparkle(Offset(size.width / 2, size.height * 0.2f), size.width * 0.45f, ((fixT * IslandStory.FIX_MS - IslandStory.SWEEP_MS) / 700f).coerceIn(0f, 1f)) }
+                }
+            }
         }
     }
 }
@@ -775,6 +817,64 @@ private fun CaveStop(modifier: Modifier, pressed: Boolean, glow: () -> Float) {
 }
 
 /** Places this thing with its top centred on ([x], [y]), kept inside [maxX] (the map's width). */
+private fun fixedKey(fixed: Set<Land>) = Land.entries.filter { it in fixed }.joinToString(",") { it.name }
+
+/** The whole island with its places, each broken (sleepy) or fixed. */
+private fun DrawScope.islandArt(current: Int, lap: Int, fixed: Set<Land>) {
+    island()
+    riverBase()
+    trail(current, lap)
+    fun place(land: Land, art: DrawScope.(Boolean) -> Unit) = sleepy(land !in fixed) { art(land in fixed) }
+    place(Land.FOREST) { forest(Land.FOREST); forestStory(Land.FOREST, it) }
+    place(Land.MEADOW) { meadow(Land.MEADOW); meadowStory(Land.MEADOW, it) }
+    place(Land.LAGOON) { lagoon(Land.LAGOON); lagoonDock(Land.LAGOON) }
+    place(Land.MARKET) { market(Land.MARKET, open = it) }
+    place(Land.FACTORY) { factory(Land.FACTORY); if (!it) factoryGears(Land.FACTORY, 0f) }
+    place(Land.PEAKS) { peaks(Land.PEAKS); peaksStory(Land.PEAKS, it) }
+    place(Land.CAVES) { caves(Land.CAVES, lit = it) }
+}
+
+/** The fix moment's colour sweep, 0 to 1 over its first [IslandStory.SWEEP_MS] (eased). */
+private fun sweepOf(fixT: Float): Float {
+    val t = (fixT * IslandStory.FIX_MS / IslandStory.SWEEP_MS).coerceIn(0f, 1f)
+    return 1f - (1f - t) * (1f - t)
+}
+
+/** Rory's pop as his costume goes on, right after the sweep: a quick springy grow and settle. */
+private fun popOf(fixT: Float): Float {
+    val ms = fixT * IslandStory.FIX_MS - IslandStory.SWEEP_MS
+    return if (ms !in 0f..450f) 1f else 1f + 0.22f * sin(ms / 450f * PI).toFloat()
+}
+
+/** A soft sparkle: pale stars drifting out round [c] (radius about [r]), [t] 0 to 1, gone at the ends. */
+private fun DrawScope.fixSparkle(c: Offset, r: Float, t: Float) {
+    if (t <= 0f || t >= 1f) return
+    val a = sin(t * PI).toFloat()
+    for (i in 0 until 7) {
+        val ang = i * 0.8976f + t * 1.2f
+        val rr = r * (0.55f + 0.5f * t) * (if (i % 2 == 0) 1f else 0.8f)
+        star(Offset(c.x + rr * cos(ang), c.y + rr * sin(ang)), r * (if (i % 2 == 0) 0.09f else 0.065f), (if (i % 3 == 0) Color(0xFFFFF59D) else Color.White).copy(alpha = 0.85f * a))
+    }
+}
+
+/** The castle's three flags, up and waving ([t] loops 0 to 1); its towers as in [castleArt]. */
+private fun DrawScope.castleFlags(c: Offset, s: Float, t: Float) {
+    listOf(-0.75f, 0.75f, 0f).forEachIndexed { i, dx ->
+        val tall = if (i == 2) 1.3f else 1.0f
+        val x = c.x + dx * s
+        val top = c.y - s * tall - s * 0.8f
+        val wave = sin((t + i * 0.33f) * 2 * PI).toFloat() * s * 0.06f
+        val flag = Path().apply {
+            moveTo(x, top)
+            quadraticTo(x + s * 0.17f, top + wave, x + s * 0.34f, top + s * 0.09f + wave * 0.6f)
+            quadraticTo(x + s * 0.17f, top + s * 0.18f + wave, x, top + s * 0.2f)
+            close()
+        }
+        drawPath(flag, Color(if (i == 2) 0xFFF06292 else 0xFFFFD54F))
+        drawPath(flag, Color.White.copy(alpha = 0.7f), style = Stroke(s * 0.02f))
+    }
+}
+
 private fun Modifier.centeredAt(x: Dp, y: Dp, maxX: Dp) = layout { m, c ->
     val p = m.measure(c.copy(minWidth = 0, minHeight = 0))
     layout(p.width, p.height) {
