@@ -124,7 +124,7 @@ object ReplayPicker {
             )
             spot = tries.firstOrNull { (l, t) -> clear(l, t) }
             if (spot == null) {
-                // The nearest clear spot to just above the place, on an 8 dp grid.
+                // The clear spot nearest the place, on an 8 dp grid.
                 val (ax, ay) = tries[0]
                 var best: Pair<Float, Float>? = null
                 var bestD = Float.MAX_VALUE
@@ -132,7 +132,10 @@ object ReplayPicker {
                 while (t + h <= screenH - margin) {
                     var l = margin
                     while (l + w <= screenW - margin) {
-                        val d = (l - ax) * (l - ax) + (t - ay) * (t - ay)
+                        // How far the card's nearest edge is from the place (then from just above it).
+                        val ex = maxOf(l - px, 0f, px - l - w)
+                        val ey = maxOf(t - py, 0f, py - t - h)
+                        val d = (ex * ex + ey * ey) * 1000f + (l - ax) * (l - ax) + (t - ay) * (t - ay)
                         if (d < bestD && clear(l, t)) { bestD = d; best = l to t }
                         l += 8f
                     }
