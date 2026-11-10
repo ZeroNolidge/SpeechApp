@@ -161,6 +161,7 @@ private fun WebRoot(services: AppServices) {
     LaunchedEffect(Unit) {
         services.testMode = testHash.startsWith("#test=")
         services.testForceFPose = testHasFPose(testHash)
+        Regex("&end=(\\d+)").find(testHash)?.groupValues?.get(1)?.toIntOrNull()?.let { com.zeronolidge.speechapp.ui.screens.ReviewTest.endAfter = it }
     }
     var started by remember { mutableStateOf(false) }
     // The tap is taken at once: Rory waves and the button pops away in the very next frame, and

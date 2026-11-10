@@ -160,6 +160,8 @@ fun ChallengeView(
     powers: PowerTicks = remember(challenge) { PowerTicks() },
     /** A speaking step: his word happened (see [SpeakMoment]'s onAction), so the story can act at once. */
     onAction: (() -> Unit)? = null,
+    /** test50: a missed question's 2-choice retry: Rory says the question one extra time. */
+    sayTwice: Boolean = false,
     onDone: (firstTry: Boolean, revealed: Boolean) -> Unit,
 ) {
     val app = LocalApp.current
@@ -170,6 +172,7 @@ fun ChallengeView(
             app.rememberInstruction(listOfNotNull(intro, promptFor(challenge)).joinToString(" "))
             if (intro != null) app.speaker.say(intro)
             app.speaker.then(promptFor(challenge))
+            if (sayTwice) app.speaker.then(promptFor(challenge))
         }
     }
     val miss: () -> Unit = { misses++ }

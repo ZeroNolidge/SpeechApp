@@ -39,6 +39,8 @@ import com.zeronolidge.speechapp.data.LetterInfo
 import com.zeronolidge.speechapp.data.ReadingContent
 import com.zeronolidge.speechapp.data.SpeechContent
 import com.zeronolidge.speechapp.logic.Challenge
+import com.zeronolidge.speechapp.logic.ReviewQueue
+import com.zeronolidge.speechapp.logic.AnswerKey
 import com.zeronolidge.speechapp.logic.LetterMode
 import com.zeronolidge.speechapp.logic.Land
 import com.zeronolidge.speechapp.logic.Letters
@@ -245,6 +247,9 @@ fun LandGamesScreen(land: Land, nav: Nav) {
     }
 }
 
+/** Test-link hook: "#test=WHICH_WORD&end=6" wraps the game up after 6 rounds (to show the end check). */
+object ReviewTest { var endAfter = 0 }
+
 @Composable
 fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
     val app = LocalApp.current
@@ -253,7 +258,18 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
     var roundNo by remember { mutableIntStateOf(0) }
     var streak by remember { mutableIntStateOf(0) }
     var last by remember { mutableStateOf<String?>(null) }
+    // test50: missed questions come back (logic/ReviewQueue.kt): once with 2 choices 2-3 rounds
+    // later, then (if right) once more near the end, at the usual number of choices.
+    val reviews = remember(kind) { ReviewQueue(rnd, ReviewQueue.droppedToday(com.zeronolidge.speechapp.state.today().toLong())) }
+    var ending by remember { mutableStateOf(false) }
+    // The repeat this round is (set as the round is made, read by the same composition below).
+    val reviewNow = remember { arrayOfNulls<ReviewQueue.Review>(1) }
     val challenge = remember(roundNo) {
+        reviewNow[0] = reviews.next(roundNo, ending)
+        reviewNow[0]?.let { rv ->
+            println("REVIEW round=$roundNo stage=${rv.stage} key=${rv.key} choices=${AnswerKey.of(rv.challenge)?.options?.size}")
+            return@remember rv.challenge
+        }
         val tricky = p.areaStars(Progress.AREA_LETTERS) > 15
         when (kind) {
             // Every letter game asks mostly for the letters of his target sounds and own words.
@@ -288,17 +304,28 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
     }
     KidScreen(kind.emoji, nav.home, kind.spoken, onBack = nav.back) {
         // key: a new round always starts fresh, even if it happens to look like the last one.
-        key(roundNo) { ChallengeView(challenge, Modifier.fillMaxSize()) { firstTry, revealed ->
+        key(roundNo) { ChallengeView(challenge, Modifier.fillMaxSize(), sayTwice = reviewNow[0]?.sayTwice == true) { firstTry, revealed ->
+            val missed = !firstTry || revealed
+            val thisReview = reviewNow[0]
+            reviews.result(roundNo, challenge, missed, thisReview)
+            println("QUIZ round=$roundNo missed=$missed review=${thisReview?.stage} waiting=${reviews.waiting.map { "${it.stage}@${it.dueRound}" }}")
             // Numbers and patterns quietly step up or back (right first time counts as right).
-            p.quizResult(challenge, firstTry && !revealed)
+            // The easier 2-choice retry doesn't move the difficulty steps; the end check does.
+            if (thisReview?.stage != ReviewQueue.Stage.RETRY) p.quizResult(challenge, firstTry && !revealed)
             when (kind) {
                 PracticeKind.ROBOT_ARROWS -> p.setLevel("robot_easy", p.level("robot_easy") + 1)
                 PracticeKind.ROBOT_TURNS -> p.setLevel("robot_turn", p.level("robot_turn") + 1)
                 else -> {}
             }
             last = (challenge as? Challenge.SoundOut)?.round?.word?.text ?: (challenge as? Challenge.WhichWord)?.round?.word?.text
-            // After about 12 minutes of play, Rory wraps up here, between rounds.
-            if (app.sessionLong()) nav.go(Screen.Rest) else roundNo++
+            // After about 12 minutes of play, Rory wraps up here, between rounds -- but an end
+            // check that is waiting plays first, as the game's last question.
+            val long = app.sessionLong() || (ReviewTest.endAfter in 1..roundNo + 1)
+            when {
+                long && !ending && reviews.hasRecheck() -> { ending = true; roundNo++ }
+                long -> nav.go(Screen.Rest)
+                else -> roundNo++
+            }
         } }
     }
 }

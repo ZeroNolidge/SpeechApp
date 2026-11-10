@@ -1,5 +1,7 @@
 package com.zeronolidge.speechapp.ui.components
 
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.zeronolidge.speechapp.state.nowMillis
 
 import kotlin.time.Duration.Companion.minutes
@@ -481,11 +483,16 @@ fun <T> AnswerRow(
     if (quiz.solved) AfterDelay(roundKey, 6000) { advance() }
     val answerWords = describe?.invoke(answer)
     val cards: @Composable () -> Unit = {
-        options.forEach { opt ->
+        options.forEachIndexed { idx, opt ->
             // One shared rule (logic/Quiz.kt, unit-tested): only the correct answer can be green.
             val look = quiz.look(opt == answer, wanded = opt in wanded)
             AnswerCard(
-                modifier = cardModifier,
+                // #test= links only: each tile's centre, so the screenshot check can tap a wrong
+                // or the right one (window pixels).
+                modifier = if (!app.testMode) cardModifier else cardModifier.onGloballyPositioned { lc ->
+                    val b = lc.boundsInWindow()
+                    println("QUIZTILE i=$idx of=${options.size} right=${opt == answer} at=${b.center.x.toInt()},${b.center.y.toInt()}")
+                },
                 faded = look == TileLook.GREY,
                 correct = look == TileLook.RIGHT,
                 glow = look == TileLook.GLOW,
@@ -496,6 +503,7 @@ fun <T> AnswerRow(
                     // A tap is checked against the right answer before anything is cheered.
                     val (next, result) = quiz.tap(opt == answer)
                     quiz = next
+                    if (app.testMode) println("QUIZTAP i=$idx result=$result")
                     when (result) {
                         TapResult.RIGHT -> app.reward(area, said + Praise.great.random(), onDone = advance)
                         TapResult.TRY_AGAIN -> {
