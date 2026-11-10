@@ -70,6 +70,76 @@ object MapAreas {
      */
     fun labelHalfW(labelSp: Float) = labelSp * 2.6f
 
+    /** How big the next stop's ring pulses (IslandMap's pulse). */
+    const val STOP_PULSE = 1.1f
+
+    /** A voice story's stop (dp across) on a map [mapWDp] wide: smaller on a phone, never under 44. */
+    fun storyNode(mapWDp: Float) = if (mapWDp < 520f) 52f else 67.2f
+
+    /** A finished stop's star: its tap circle (dp across) is never under 44, however small it's drawn. */
+    fun starTap(unitDp: Float) = maxOf(unitDp * 0.085f, 44f)
+
+    /** The next stop's middle keeps this far (dp) from the map's edges: its pulsing ring and 16 dp more. */
+    fun stopEdge(stopNodeDp: Float) = stopNodeDp / 2f * STOP_PULSE + 16f + 4f
+
+    /** Rory's height in the fix moment on a map whose shorter side is [unit] (smaller on a phone). */
+    fun roryH(unit: Float) = unit * (if (unit < 520f) 0.18f else 0.22f)
+
+    /**
+     * Where Rory stands (top-left corner, px) for [land]'s fix moment, [rw] by [rh]: right next to
+     * the place's picture, never on any label or another place's picture, inside the map; failing
+     * that, out in the open sea at the bottom-left corner. (Ruby: not in the Lagoon pond for the
+     * Meadow.)
+     */
+    fun roryBeside(land: Land, w: Float, h: Float, rw: Float, rh: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> {
+        val a = of(land)
+        val mx = a.markX * w
+        val my = a.markY * h
+        val pr = min(w, h) * LANDMARK_RADIUS
+        val labels = all.map { labelBox(it, w, h, labelHalfW, labelH) }
+        fun clear(l: Float, t: Float): Boolean {
+            if (l < 0f || t < 0f || l + rw > w || t + rh > h) return false
+            if (labels.any { b -> l < b[2] && l + rw > b[0] && t < b[3] && t + rh > b[1] }) return false
+            // Off every picture's middle (his own too: he stands beside it, so it shows).
+            return all.none { o ->
+                val cx = (o.markX * w).coerceIn(l, l + rw)
+                val cy = (o.markY * h).coerceIn(t, t + rh)
+                sqrt(sq(cx - o.markX * w) + sq(cy - o.markY * h)) < pr * (if (o.land == land) 0.35f else 0.45f)
+            }
+        }
+        // Beside it first (right or left of the picture, feet level with it), then below it, then
+        // the corners; then a little further out each time.
+        for (k in listOf(0.5f, 0.7f, 0.9f, 1.1f, 1.35f, 1.6f, 1.9f)) {
+            val g = pr * k
+            val spots = listOf(
+                mx + g to my - rh * 0.75f, mx - g - rw to my - rh * 0.75f,
+                mx - rw / 2 to my + g * 0.8f,
+                mx + g * 0.7f to my + g * 0.3f, mx - g * 0.7f - rw to my + g * 0.3f,
+                mx + g to my - rh * 0.3f, mx - g - rw to my - rh * 0.3f,
+                mx + g to my - rh, mx - g - rw to my - rh,
+                mx - rw / 2 to my - g * 0.8f - rh, mx + g * 0.5f to my + g * 0.6f, mx - g * 0.5f - rw to my + g * 0.6f,
+            )
+            for ((l, t) in spots) if (clear(l, t)) return l to t
+        }
+        // Crowded (the castle in its top corner on a phone): the nearest clear spot, as near as fits.
+        var best: Pair<Float, Float>? = null
+        var bestD = Float.MAX_VALUE
+        val step = rw / 6f
+        var t = 0f
+        while (t + rh <= h) {
+            var l = 0f
+            while (l + rw <= w) {
+                val nx = mx.coerceIn(l, l + rw)
+                val ny = my.coerceIn(t, t + rh)
+                val d = sq(nx - mx) + sq(ny - my)
+                if (d < bestD && clear(l, t)) { bestD = d; best = l to t }
+                l += step
+            }
+            t += step
+        }
+        return best ?: (w * 0.02f to h - rh)
+    }
+
     /** Every round thing on the map besides the areas: where each one goes. */
     data class Layout(val stop: MapSpot, val cave: MapSpot?, val stories: List<MapSpot>, val done: List<MapSpot>) {
         val all: List<MapSpot> get() = listOf(stop) + listOfNotNull(cave) + stories + done
@@ -84,9 +154,12 @@ object MapAreas {
     fun layout(
         current: Int, lap: Int, w: Float, h: Float, stopR: Float, caveR: Float?, storyR: Float,
         stories: List<Pair<String, Land>>, starR: Float, labelHalfW: Float, labelH: Float,
+        /** How far the next stop's middle keeps from the map's edges (its pulsing ring and a margin). */
+        stopEdge: Float = 0f,
     ): Layout {
         val (fx, fy) = Trail.position(current)
-        val (sx, sy) = stopSpot(Trail.landAt(current), fx, fy, w, h, stopR, labelHalfW, labelH)
+        // Its ring pulses to 1.1x: that keeps off the labels too (Ruby: "Market" on iPad).
+        val (sx, sy) = stopSpot(Trail.landAt(current), fx, fy, w, h, stopR, labelHalfW, labelH, edge = stopEdge, labelR = stopR * STOP_PULSE)
         val stop = MapSpot(MapTarget.Stop, sx, sy, stopR)
         val cave = caveR?.let { r -> caveSpot(w, h, r, sx, sy, stopR, labelHalfW, labelH).let { (x, y) -> MapSpot(MapTarget.Cave, x, y, r) } }
         val placed = mutableListOf(stop)
@@ -95,7 +168,10 @@ object MapAreas {
             val (x, y) = spotBy(land, w, h, storyR, placed, labelHalfW, labelH)
             MapSpot(MapTarget.Story(id), x, y, storyR).also { placed += it }
         }
+        // At most one star per place (its latest finished stop): a fixed island, not a sheet of
+        // stars (Ruby, test52). The place itself replays its stories.
         val done = (0 until Trail.size).filter { s -> (lap > 0 || s < current) && s != current }
+            .groupBy { Trail.landAt(it) }.values.map { it.max() }.sorted()
         return Layout(stop, cave, storySpots, doneSpots(done, w, h, starR, placed, labelHalfW, labelH))
     }
 
@@ -173,8 +249,10 @@ object MapAreas {
      * other land's (by a clear margin), so a fresh start's button sits at the Forest, never by
      * the misty Meadow.
      */
-    fun stopSpot(land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float): Pair<Float, Float> =
-        place(land, fx, fy, w, h, stopR, labelHalfW, labelH) { _, _ -> true }
+    fun stopSpot(
+        land: Land, fx: Float, fy: Float, w: Float, h: Float, stopR: Float, labelHalfW: Float, labelH: Float,
+        edge: Float = 0f, labelR: Float = stopR,
+    ): Pair<Float, Float> = place(land, fx, fy, w, h, stopR, labelHalfW, labelH, edge = edge, labelR = labelR) { _, _ -> true }
 
     /**
      * Where the crystal cave stop goes: just past the Forest (where Pip lives), by the same rules
@@ -248,12 +326,17 @@ object MapAreas {
         step: Float = stopR / 4f,
         /** When even the last tier is full: the spacing from other stops that must still hold. */
         looseOk: ((Float, Float) -> Boolean)? = null,
+        /** How far its middle keeps from the map's edges (at least [stopR]). */
+        edge: Float = 0f,
+        /** How far its middle keeps from every label (at least [stopR]). */
+        labelR: Float = stopR,
         alsoOk: (Float, Float) -> Boolean,
     ): Pair<Float, Float> {
+        val m = maxOf(stopR, edge)
         val zones = all.map { Shape.Box(it.hitBox(w, h, labelHalfW, labelH)) }
         val cores = all.flatMap { it.core(w, h, labelHalfW, labelH) }
-        val sx = (fx * w).coerceIn(stopR, w - stopR)
-        val sy = (fy * h).coerceIn(stopR, h - stopR)
+        val sx = (fx * w).coerceIn(m, (w - m).coerceAtLeast(m))
+        val sy = (fy * h).coerceIn(m, (h - m).coerceAtLeast(m))
         // Clear of every zone; else of every picture and label; else at least the button's middle
         // half clear of them (a squarer map, where the Lagoon is crowded), always by its own land.
         // On a tiny phone map, just its middle off every picture and label, as near its land as fits.
@@ -263,11 +346,11 @@ object MapAreas {
             Triple(cores, stopR * 0.5f, 1.4f), Triple(cores, 1f, 1.4f), Triple(cores, 1f, 1f),
         )
         // Whatever the tier, a stop never covers a place's label (Ruby: the ▶ on "Meadow").
-        fun clearOfLabels(cx: Float, cy: Float) = !touchesLabel(cx, cy, stopR, w, h, labelHalfW, labelH)
+        fun clearOfLabels(cx: Float, cy: Float) = !touchesLabel(cx, cy, maxOf(stopR, labelR), w, h, labelHalfW, labelH)
         for ((avoid, r, margin) in tiers) {
             fun ok(cx: Float, cy: Float) = clearOfLabels(cx, cy) && avoid.none { it.touches(cx, cy, r) } && (margin == 0f || belongsTo(land, cx, cy, w, h, margin)) && alsoOk(cx, cy)
             if (ok(sx, sy)) return sx to sy
-            nearest(sx, sy, w, h, stopR, step) { x, y -> ok(x, y) }?.let { return it }
+            nearest(sx, sy, w, h, m, step) { x, y -> ok(x, y) }?.let { return it }
         }
         // Crowded: still off every label and with its middle off every picture (so its taps stay
         // its own), nearer its own land than any other if it can be, hanging over the beach's edge
@@ -297,7 +380,7 @@ object MapAreas {
             { x, y -> centreClear(x, y) && loose(x, y) },
             { x, y -> label(x, y) },
         )
-        for (ok in fallbacks) nearest(sx, sy, w, h, stopR, step, ok)?.let { return it }
+        for (ok in fallbacks) nearest(sx, sy, w, h, m, step, ok)?.let { return it }
         return sx to sy
     }
 
@@ -363,3 +446,4 @@ object MapAreas {
 }
 
 private fun sq(v: Float) = v * v
+

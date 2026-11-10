@@ -141,6 +141,7 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
     var patternWins by remember { mutableStateOf(0) }
     val piecesBefore = remember { p.pieces.map { it.id }.toSet() }
     var woken by remember { mutableStateOf(false) }
+    var fixedNow by remember { mutableStateOf(false) }
     val stickersBefore = remember { p.words.words.keys }
     val species = p.hero ?: Species.KID
 
@@ -203,10 +204,19 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false) {
                     // and the fix moment play back on the map.
                     if (p.fixLand(land)) {
                         p.setPendingFix(land)
-                        if (app.testMode) println("ISLAND fixed=${land.name} count=${p.fixedLands.size}")
+                        fixedNow = true
+                        println("ISLAND fixed=${land.name} count=${p.fixedLands.size}")
                     }
                 }
-                StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = { next(ph) })
+                StoryScene(quest, quest.ending, species, Mood.CHEER, solved = true, onNext = {
+                    // A place just fixed (Aida): straight back to the map, where its fix moment
+                    // plays at once. Anything new from the backpack waits in the closet (🎁).
+                    if (fixedNow && phase == ph) {
+                        p.pieces.lastOrNull { it.id !in piecesBefore }?.let { app.newPiece = it }
+                        println("ISLAND ending -> map")
+                        nav.home()
+                    } else next(ph)
+                })
             }
             Phase.Goodbye -> {
                 val earned = p.words.stickers.filter { it.text !in stickersBefore }

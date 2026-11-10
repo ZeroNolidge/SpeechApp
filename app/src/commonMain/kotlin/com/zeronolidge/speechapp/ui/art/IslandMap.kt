@@ -242,9 +242,11 @@ fun IslandMap(
         // go comes from the one shared rule (MapAreas.layout, also checked by MapLayoutTest):
         // clear of every place's label, by its own land.
         val node = 96.dp
-        val storyNode = node * 0.7f
+        // (Phone: smaller story stops, so the places' own art shows; taps never under 44 dp.)
+        val storyNode = MapAreas.storyNode(w.value).dp
         val caveNode = node * 0.8f
         val sticker = unit * 0.085f
+        val starTap = MapAreas.starTap(unit.value).dp
         val labelHalfWPx = with(LocalDensity.current) { MapAreas.labelHalfW(label).dp.toPx() }
         val labelHPx = with(LocalDensity.current) { MapAreas.labelH(label).dp.toPx() }
         val layout = with(LocalDensity.current) {
@@ -253,7 +255,8 @@ fun IslandMap(
             remember(current, lap, cave, stories.map { it.id }, wPx, hPx, labelHPx) {
                 MapAreas.layout(
                     current, lap, wPx, hPx, (node / 2).toPx(), if (cave) (caveNode / 2).toPx() else null, (storyNode / 2).toPx(),
-                    stories.map { it.id to it.land }, (sticker / 2).toPx(), labelHalfWPx, labelHPx,
+                    stories.map { it.id to it.land }, (starTap / 2).toPx(), labelHalfWPx, labelHPx,
+                    stopEdge = MapAreas.stopEdge(node.value).dp.toPx(),
                 )
             }
         }
@@ -559,23 +562,30 @@ fun IslandMap(
         // fade right back, so the place itself is what he sees change.
         val stopsAlpha = if (fixLand == null) 1f else 1f - 0.85f * (fixT / 0.08f).coerceAtMost(1f) * ((1f - fixT) / 0.12f).coerceIn(0f, 1f)
         Box(Modifier.fillMaxSize().drift(1f).graphicsLayer { alpha = stopsAlpha }) {
-            // Finished stops: flat star stickers by the trail, each one tappable (a replay).
+            // Finished stops: one star per place, each tappable (a replay). At a fixed place it's
+            // just a small gold star, no badge, so the island reads as a fixed world (Ruby, test52);
+            // its tap circle stays 44 dp.
             starSpots.forEach { sp ->
                 val stop = (sp.target as MapTarget.Done).stop
                 val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
+                val plain = Trail.landAt(stop) in fixed
+                val size = if (plain) starTap * 0.62f else sticker
                 Box(
                     Modifier
-                        .offset(x = sd.x - sticker / 2, y = sd.y - sticker / 2)
-                        .size(sticker)
+                        .offset(x = sd.x - size / 2, y = sd.y - size / 2)
+                        .size(size)
                         .graphicsLayer {
                             val k = if (pressedDone == stop) 0.9f else 1f
                             scaleX = k
                             scaleY = k
                             rotationZ = ((stop * 37) % 21 - 10).toFloat() + if (wiggled == MapTarget.Done(stop)) wiggleTurn.value else 0f
                         }
-                        .paperCard(Color(0xFFFFF8E1), circle = true),
+                        .then(if (plain) Modifier else Modifier.paperCard(Color(0xFFFFF8E1), circle = true)),
                     contentAlignment = Alignment.Center,
-                ) { Text("⭐", fontSize = (sticker.value * 0.55f).sp) }
+                ) {
+                    if (plain) Canvas(Modifier.fillMaxSize()) { goldStar() }
+                    else Text("⭐", fontSize = (sticker.value * 0.55f).sp)
+                }
             }
 
             // The next stop: a big raised paper button that unfolds when it is new, ringed in
@@ -637,12 +647,17 @@ fun IslandMap(
                     .zIndex(3f),
             )
             val hand = node * 0.55f
+            // Beside the stop, on its outer side; by a screen edge, where that would be cut off,
+            // above it pointing down instead (turned a quarter).
+            val sideX = if (heroOnRight) w * cx - node / 2 - hand * 1.35f else w * cx + node / 2 + hand * 0.1f
+            val fits = sideX >= 2.dp && sideX + hand * 1.3f <= w - 2.dp
             pointer(
                 Modifier
                     .offset(
-                        x = if (heroOnRight) w * cx - node / 2 - hand * 1.35f else w * cx + node / 2 + hand * 0.1f,
-                        y = h * cy - hand * 0.65f,
+                        x = if (fits) sideX else w * cx - hand * 0.62f,
+                        y = if (fits) h * cy - hand * 0.65f else h * cy - node * MapAreas.STOP_PULSE / 2 - hand * 1.45f,
                     )
+                    .graphicsLayer { if (!fits) rotationZ = if (heroOnRight) 90f else -90f }
                     .zIndex(4f),
                 hand,
                 heroOnRight,
@@ -652,13 +667,16 @@ fun IslandMap(
             // The fix moment: Rory beside the place, his new costume popping on as the colour
             // sweep reaches the edge. No text.
             if (fixLand != null) {
-                val rh = unit * 0.26f
-                val onLeft = fixLand.mapX > 0.5f
-                val x = w * fixLand.mapX + if (onLeft) -unit * 0.17f - rh * 0.72f else unit * 0.17f
-                val y = (h * fixLand.mapY - rh * 0.3f).coerceIn(0.dp, h - rh)
+                // Right beside the place, clear of every label and picture (MapAreas.roryBeside).
+                val rh = MapAreas.roryH(unit.value).dp
+                val dn = LocalDensity.current
+                val (rx, ry) = with(dn) { MapAreas.roryBeside(fixLand, w.toPx(), h.toPx(), (rh * 0.72f).toPx(), rh.toPx(), labelHalfWPx, labelHPx) }
+                val x = with(dn) { rx.toDp() }
+                val y = with(dn) { ry.toDp() }
+                val onLeft = x + rh * 0.36f < w * fixLand.mapX
                 val dressed = fixT * IslandStory.FIX_MS >= IslandStory.SWEEP_MS
                 Box(
-                    Modifier.offset(x = x.coerceIn(0.dp, w - rh * 0.72f), y = y).size(rh * 0.72f, rh).zIndex(5f)
+                    Modifier.offset(x = x, y = y).size(rh * 0.72f, rh).zIndex(5f)
                         .graphicsLayer {
                             alpha = (fixT / 0.06f).coerceAtMost(1f) * ((1f - fixT) / 0.1f).coerceAtMost(1f)
                             val k = popOf(fixT)
@@ -838,6 +856,25 @@ private fun DrawScope.islandArt(current: Int, lap: Int, fixed: Set<Land>) {
 private fun sweepOf(fixT: Float): Float {
     val t = (fixT * IslandStory.FIX_MS / IslandStory.SWEEP_MS).coerceIn(0f, 1f)
     return 1f - (1f - t) * (1f - t)
+}
+
+/** A small flat gold star (a fixed place's finished stop), filling the box. */
+private fun DrawScope.goldStar() {
+    val c = Offset(size.width / 2, size.height * 0.53f)
+    val ro = size.minDimension * 0.5f
+    val ri = ro * 0.45f
+    val path = Path().apply {
+        for (i in 0 until 10) {
+            val r = if (i % 2 == 0) ro else ri
+            val a = (-90f + i * 36f) * PI.toFloat() / 180f
+            val pt = Offset(c.x + cos(a) * r, c.y + sin(a) * r)
+            if (i == 0) moveTo(pt.x, pt.y) else lineTo(pt.x, pt.y)
+        }
+        close()
+    }
+    drawPath(path, Color(0x55000000), style = androidx.compose.ui.graphics.drawscope.Stroke(width = ro * 0.22f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    drawPath(path, Color(0xFFFFC62E))
+    drawPath(path, Color(0xFFE09A00), style = androidx.compose.ui.graphics.drawscope.Stroke(width = ro * 0.1f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
 }
 
 /** Rory's pop as his costume goes on, right after the sweep: a quick springy grow and settle. */

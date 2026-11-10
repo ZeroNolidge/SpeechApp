@@ -29,39 +29,42 @@ object IslandStory {
         /** The party flag's colour on the bunting (the place's own colour; never green). */
         val flag: Long,
     ) {
-        /** Rory's one line after the first finish (draft, with Aida: device voice until approved). */
+        /** Rory's one line after the first finish (Aida's; recorded). */
         val after: String get() = afterLines.getValue(land)
     }
 
     val places: List<Place> = listOf(
         Place(Land.FOREST, "The forest animals lost their voices!",
-            Cosmetic("costume_leaf", Slot.HAT, "Leaf crown", 0xFF7CB342), 0xFFB9814A), // NO_CLIP_YET (name)
+            Cosmetic("costume_leaf", Slot.HAT, "Leaf crown", 0xFF7CB342), 0xFFB9814A), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.MEADOW, "The balloons blew away, so let's count them back!",
-            Cosmetic("costume_balloon", Slot.HAT, "Balloon hat", 0xFFFF7043), 0xFFFFB300), // NO_CLIP_YET (name)
+            Cosmetic("costume_balloon", Slot.HAT, "Balloon hat", 0xFFFF7043), 0xFFFFB300), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.LAGOON, "The little letters lost their big letters in the waves!",
-            Cosmetic("costume_sailor", Slot.HAT, "Sailor hat", 0xFFFFFFFF), 0xFF29B6F6), // NO_CLIP_YET (name)
+            Cosmetic("costume_sailor", Slot.HAT, "Sailor hat", 0xFFFFFFFF), 0xFF29B6F6), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.MARKET, "The shops can't open until someone pays!",
-            Cosmetic("costume_apron", Slot.CAPE, "Shopkeeper apron", 0xFFE57373), 0xFFFF8A65), // NO_CLIP_YET (name)
+            Cosmetic("costume_apron", Slot.CAPE, "Shopkeeper apron", 0xFFE57373), 0xFFFF8A65), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.PEAKS, "The mountain path is jumbled!",
-            Cosmetic("costume_helmet", Slot.HAT, "Climber helmet", 0xFFFFA726), 0xFFAB7BD6), // NO_CLIP_YET (name)
+            Cosmetic("costume_helmet", Slot.HAT, "Climber helmet", 0xFFFFA726), 0xFFAB7BD6), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.FACTORY, "Rory's robot friends are stuck!",
-            Cosmetic("costume_goggles", Slot.GLASSES, "Robot goggles", 0xFFFFB300), 0xFF4F8FD6), // NO_CLIP_YET (name)
+            Cosmetic("costume_goggles", Slot.GLASSES, "Robot goggles", 0xFFFFB300), 0xFF4F8FD6), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.CAVES, "The cave went dark, and words light the lanterns!",
-            Cosmetic("costume_lantern", Slot.HAT, "Lantern hat", 0xFF8D6E63), 0xFF7E6CD9), // NO_CLIP_YET (name)
+            Cosmetic("costume_lantern", Slot.HAT, "Lantern hat", 0xFF8D6E63), 0xFF7E6CD9), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
         Place(Land.CLOUDS, "The castle is getting ready for the island party!",
-            Cosmetic("costume_crown", Slot.HAT, "Crown", 0xFFFFC107), 0xFFF06292), // NO_CLIP_YET (name)
+            Cosmetic("costume_crown", Slot.HAT, "Crown", 0xFFFFC107), 0xFFF06292), // NO_CLIP_YET (name: shown on the review sheet only, never spoken)
     )
 
-    /** The after lines: drafts with Aida, so not recorded yet (they play in the device voice). */
+    /**
+     * The after lines (Aida's, recorded): each opens with "You did it!" or "You fixed it!", taking
+     * turns along the trail so it never sounds the same twice in a row.
+     */
     private val afterLines: Map<Land, String> = mapOf(
-        Land.FOREST to "Listen! The birds are singing again!", // NO_CLIP_YET
-        Land.MEADOW to "All the balloons are back!", // NO_CLIP_YET
-        Land.LAGOON to "Here comes Pip's boat!", // NO_CLIP_YET
-        Land.MARKET to "The shops are open!", // NO_CLIP_YET
-        Land.PEAKS to "The path goes all the way up!", // NO_CLIP_YET
-        Land.FACTORY to "Beep boop! The gears are spinning!", // NO_CLIP_YET
-        Land.CAVES to "The cave is glowing!", // NO_CLIP_YET
-        Land.CLOUDS to "Up go the flags!", // NO_CLIP_YET
+        Land.FOREST to "You did it! The birds are singing again!",
+        Land.MEADOW to "You fixed it! All the balloons are back!",
+        Land.LAGOON to "You did it! Here comes Pip's boat!",
+        Land.MARKET to "You fixed it! The shops are open!",
+        Land.PEAKS to "You did it! The path goes all the way up!",
+        Land.FACTORY to "You fixed it! Beep boop! The gears are spinning!",
+        Land.CAVES to "You did it! The cave is glowing!",
+        Land.CLOUDS to "You fixed it! Up go the flags!",
     )
 
     fun place(land: Land): Place = places.first { it.land == land }
@@ -78,10 +81,10 @@ object IslandStory {
     /** How long the Cloud Castle party plays, before the map is back to normal. */
     const val PARTY_MS = 5000
 
-    /** Rory's one link line at the end of a cooking stop, tying it to the party (draft, with Aida). */
+    /** Rory's one link line at the end of a cooking stop, tying it to the party (Aida's; recorded). */
     val linkLines: Map<String, String> = mapOf(
-        "fruitsalad" to "Let's bring the fruit salad to the party!", // NO_CLIP_YET
-        "birthdaycake" to "Let's bring the cake to the party!", // NO_CLIP_YET
+        "fruitsalad" to "Let's bring the fruit salad to the party!",
+        "birthdaycake" to "Let's bring the cake to the party!",
     )
 }
 

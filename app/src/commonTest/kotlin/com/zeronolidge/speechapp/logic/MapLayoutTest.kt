@@ -40,10 +40,20 @@ class MapLayoutTest {
             val halfW = MapAreas.labelHalfW(label)
             val labelH = MapAreas.labelH(label)
             for (chapter in 0..Trail.size) for (cave in listOf(false, true)) {
+                val edge = MapAreas.stopEdge(96f)
                 val lay = MapAreas.layout(
-                    Trail.stopOf(chapter), chapter / Trail.size, mw, mh, 48f, if (cave) 38.4f else null, 33.6f,
-                    stories, min(mw, mh) * 0.085f / 2f, halfW, labelH,
+                    Trail.stopOf(chapter), chapter / Trail.size, mw, mh, 48f, if (cave) 38.4f else null, MapAreas.storyNode(mw) / 2f,
+                    stories, MapAreas.starTap(min(mw, mh)) / 2f, halfW, labelH, stopEdge = edge,
                 )
+                // test52 (Ruby): the ▶'s pulsing ring keeps off every label and 16 dp inside the screen,
+                // every tap circle is at least 44 dp across, and at most one star per place.
+                val st = lay.stop
+                if (MapAreas.touchesLabel(st.x, st.y, st.r * MapAreas.STOP_PULSE, mw, mh, halfW, labelH)) problems += "${sc.name} chapter $chapter cave=$cave: the ▶ ring on a label"
+                val ring = st.r * MapAreas.STOP_PULSE
+                if (st.x - ring < 16f || st.x + ring > mw - 16f || st.y - ring < 0f) problems += "${sc.name} chapter $chapter: the ▶ ring at ${st.x.toInt()},${st.y.toInt()} is within 16 dp of the edge"
+                lay.all.forEach { if (it.r * 2f < 44f) problems += "${sc.name}: ${it.target} only ${(it.r * 2).toInt()} dp" }
+                val perLand = lay.done.groupBy { Trail.landAt((it.target as MapTarget.Done).stop) }
+                perLand.forEach { (l, ss) -> if (ss.size > 1) problems += "${sc.name} chapter $chapter: ${ss.size} stars at $l" }
                 val spots = lay.stories + lay.done
                 val c = lay.cave
                 lay.all.forEach { sp ->
@@ -53,6 +63,32 @@ class MapLayoutTest {
                     // ...and a tap on its middle is its own.
                     val got = MapAreas.target(sp.x, sp.y, mw, mh, halfW, labelH, lay.stop.x, lay.stop.y, lay.stop.r, c?.x ?: 0f, c?.y ?: 0f, c?.r ?: 0f, spots)
                     if (got != sp.target) taps += "${sc.name} chapter $chapter cave=$cave: ${sp.target} tap gives $got"
+                }
+            }
+        }
+        // Rory's spot in each place's fix moment: inside the map, on no label.
+        run {
+            val narrow = sc.w < 600f
+            val top = 96f + (if (narrow) 26f else 32f) + 22f
+            val bottom = if (narrow) 176f else 90f
+            val (mw, mh) = MapAreas.mapSize(sc.w, sc.h - top - bottom, narrow)
+            val label = MapAreas.labelSp(min(mw, mh))
+            val halfW = MapAreas.labelHalfW(label)
+            val labelH = MapAreas.labelH(label)
+            val rh = MapAreas.roryH(min(mw, mh))
+            val rw = rh * 0.72f
+            Land.entries.forEach { l ->
+                val (x, y) = MapAreas.roryBeside(l, mw, mh, rw, rh, halfW, labelH)
+                if (x < 0f || y < 0f || x + rw > mw || y + rh > mh) problems += "${sc.name}: Rory off the map for $l"
+                // Right next to the place (as near as fits by the castle in its corner): his box within 3.2 picture radii of its middle.
+                val a = MapAreas.of(l)
+                val nx = (a.markX * mw).coerceIn(x, x + rw)
+                val ny = (a.markY * mh).coerceIn(y, y + rh)
+                val d = kotlin.math.sqrt((nx - a.markX * mw) * (nx - a.markX * mw) + (ny - a.markY * mh) * (ny - a.markY * mh))
+                if (d > min(mw, mh) * MapAreas.LANDMARK_RADIUS * 3.2f) problems += "${sc.name}: Rory not beside $l (at ${x.toInt()},${y.toInt()})"
+                MapAreas.all.forEach { a ->
+                    val b = MapAreas.labelBox(a, mw, mh, halfW, labelH)
+                    if (x < b[2] && x + rw > b[0] && y < b[3] && y + rh > b[1]) problems += "${sc.name}: Rory on the ${a.land} label for $l"
                 }
             }
         }

@@ -133,7 +133,7 @@ fun MapScreen(nav: Nav) {
     val flagsFilled = if (pendingFix != null && !sweepDone) fixedLands - pendingFix else fixedLands
     val roryOutfit = p.roryCostume?.let { com.zeronolidge.speechapp.logic.IslandStory.place(it).costume.asOutfit() } ?: com.zeronolidge.speechapp.ui.art.Outfit()
     LaunchedEffect(Unit) {
-        // The fix moment first: Rory's after line (device voice until it's approved), the colour
+        // The fix moment first, as soon as he's back from the story: Rory's after line, the colour
         // sweep, a soft sparkle, his new costume, the flag; then, if that was the eighth flag,
         // the island party. Nothing to tap, no text, and then the map carries on as always.
         if (pendingFix != null) {
@@ -170,6 +170,8 @@ fun MapScreen(nav: Nav) {
                 println("ISLAND party end")
             }
             println("ISLAND moment done")
+            // After about 12 minutes of play, Rory's "let's rest" comes after the moment.
+            if (testFixed == null && app.sessionLong()) { nav.go(Screen.Rest); return@LaunchedEffect }
         }
         val present = p.checkIn(today())
         // The present waits in the closet (a 🎁 on the buddy badge); nothing pops up by itself.
@@ -313,11 +315,18 @@ fun MapScreen(nav: Nav) {
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size, fromLeft -> if (showHand) PointingHand(m, size = size, pointRight = fromLeft, pointLeft = !fromLeft) },
         )
-        // The party bunting. At the island party it swings down onto the castle, sways there,
-        // and goes back up.
+        // The party bunting. At the island party it swings down to hang just above the castle's
+        // towers (both show: Ruby, test52), sways there, and goes back up. About twice the
+        // castle's width, kept on screen.
         val castleX = (maxWidth - mapW) / 2 + mapW * Land.CLOUDS.mapX
         val castleY = (maxHeight - mapH) / 2 + (top - bottom) / 2 + mapH * Land.CLOUDS.mapY
-        val buntW = minOf(maxWidth, 640.dp)
+        val castleBox = minOf(mapW, mapH) * 0.3f
+        val buntW = minOf(maxWidth, 640.dp) - 36.dp
+        val partyK = (castleBox * 1.9f / buntW).coerceAtMost(1f)
+        val partyX = castleX.coerceIn(buntW * partyK / 2 + 12.dp, maxWidth - buntW * partyK / 2 - 12.dp)
+
+        // The flagpoles' tips are about half the castle box above its middle.
+        val partyY = castleY - castleBox * 0.5f - buntingH * partyK * 0.5f - 4.dp
         val sweptIn = com.zeronolidge.speechapp.logic.IslandStory.SWEEP_MS.toFloat() / com.zeronolidge.speechapp.logic.IslandStory.FIX_MS
         com.zeronolidge.speechapp.ui.art.PartyBunting(
             flagsFilled,
@@ -329,14 +338,12 @@ fun MapScreen(nav: Nav) {
                         partyT > 0.85f -> (1f - partyT) / 0.15f
                         else -> 1f
                     }.let { 1f - (1f - it) * (1f - it) }
-                    val dx = (castleX - maxWidth / 2).toPx()
-                    val dy = (castleY - mapH * 0.08f - buntingY - buntingH / 2).toPx()
-                    translationX = dx * go
-                    translationY = dy * go
-                    val k = 1f - go * (1f - (mapH * 0.5f / buntW).coerceAtMost(1f))
+                    translationX = (partyX - maxWidth / 2).toPx() * go
+                    translationY = (partyY - buntingY - buntingH / 2).toPx() * go
+                    val k = 1f - go * (1f - partyK)
                     scaleX = k
                     scaleY = k
-                    rotationZ = go * 7f * kotlin.math.sin(partyT * 2f * kotlin.math.PI.toFloat() * 4f)
+                    rotationZ = go * 5f * kotlin.math.sin(partyT * 2f * kotlin.math.PI.toFloat() * 4f)
                 },
             flagHeight = buntingH,
             pop = pendingFix,
