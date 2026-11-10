@@ -130,7 +130,7 @@ class VoicePush(val mode: Mode = Mode.LOUDNESS) {
         /** Which way his voice moves the action for a word practising [sound]. */
         fun modeFor(sound: String?): Mode = when (sound?.lowercase()) {
             "p", "b", "t", "d", "g", "k" -> Mode.BURSTS
-            "s", "m", "f", "sh" -> Mode.HOLD
+            "s", "m", "f", "sh", "v", "sp", "sk", "sm" -> Mode.HOLD
             else -> Mode.LOUDNESS
         }
     }

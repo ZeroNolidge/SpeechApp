@@ -89,8 +89,7 @@ fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boo
     val t = rememberInfiniteTransition(label = "hand")
     val bob by t.loop(0f, 1f, 450, label = "bob")
     val shift = size * 0.25f * bob
-    // test43 (Timothy): the old emoji hand read as wood -- now Rory's own paper-robot hand:
-    // his orange paper, a cyan cuff, a white paper-cutout edge and round friendly fingers.
+    // test48: Rory's own paper-robot hand (tan cardboard, three boxy fingers, cyan cuff + rivet).
     val turn = when { pointRight -> 90f; pointLeft -> -90f; pointDown -> 180f; else -> 0f }
     androidx.compose.foundation.Canvas(
         when {
@@ -105,29 +104,62 @@ fun PointingHand(modifier: Modifier = Modifier, size: Dp = 48.dp, pointDown: Boo
 /** Rory's pointing hand, finger up, filling this canvas (see [PointingHand]). */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoryHand() = drawRoryHand(androidx.compose.ui.geometry.Offset.Zero, size.width, size.height, 1f)
 
-/** Rory's hand, finger up, in the [w] x [h] box at [o], at [alpha]. */
+/**
+ * Rory's hand, finger up, in the [w] x [h] box at [o], at [alpha]. test48 (Ruby, Timothy): his own
+ * paper-robot hand, cut from the same tan cardboard as his body (never orange or skin): a boxy
+ * palm with exactly three square-cut cardboard fingers (the middle one raised to point), a thick
+ * white paper outline, and a cyan wrist cuff with one small cyan rivet. Cyan only on the cuff.
+ * Every hint and demo hand (the bouncing PointingHand, the map, the kitchen's peel/wash/slice/
+ * stir demos) draws through here, so it is the same hand everywhere.
+ */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoryHand(o: androidx.compose.ui.geometry.Offset, w: Float, h: Float, alpha: Float) = translate(o.x, o.y) {
-    val body = androidx.compose.ui.graphics.Color(0xFFFFB74D).copy(alpha = alpha)
-    val shade = androidx.compose.ui.graphics.Color(0xFFF57C00).copy(alpha = alpha)
-    val cyan = androidx.compose.ui.graphics.Color(82, 218, 232).copy(alpha = alpha)
-    val white = androidx.compose.ui.graphics.Color.White.copy(alpha = alpha)
-    fun shapes(grow: Float, fill: androidx.compose.ui.graphics.Color, cuff: androidx.compose.ui.graphics.Color) {
-        val cr = androidx.compose.ui.geometry.CornerRadius(w * 0.12f + grow)
-        // pointing finger
-        drawRoundRect(fill, androidx.compose.ui.geometry.Offset(w * 0.4f - grow, h * 0.04f - grow), androidx.compose.ui.geometry.Size(w * 0.2f + 2 * grow, h * 0.5f + 2 * grow), androidx.compose.ui.geometry.CornerRadius(w * 0.1f + grow))
-        // palm with the three curled fingers
-        drawRoundRect(fill, androidx.compose.ui.geometry.Offset(w * 0.22f - grow, h * 0.4f - grow), androidx.compose.ui.geometry.Size(w * 0.56f + 2 * grow, h * 0.36f + 2 * grow), cr)
-        // thumb
-        drawCircle(fill, w * 0.11f + grow, androidx.compose.ui.geometry.Offset(w * 0.22f, h * 0.52f))
-        // cuff
-        drawRoundRect(cuff, androidx.compose.ui.geometry.Offset(w * 0.26f - grow, h * 0.74f - grow), androidx.compose.ui.geometry.Size(w * 0.48f + 2 * grow, h * 0.2f + 2 * grow), androidx.compose.ui.geometry.CornerRadius(w * 0.06f + grow))
+    if (alpha <= 0f) return@translate
+    val body = RoryCardboard
+    val shade = androidx.compose.ui.graphics.Color(0xFFC9955A)
+    val cyan = androidx.compose.ui.graphics.Color(0xFF4DD0E1)
+    val teal = androidx.compose.ui.graphics.Color(0xFF00838F)
+    val white = androidx.compose.ui.graphics.Color.White
+    fun box(x0: Float, y0: Float, x1: Float, y1: Float, grow: Float, fill: androidx.compose.ui.graphics.Color, r: Float = 0.035f) =
+        drawRoundRect(
+            fill, androidx.compose.ui.geometry.Offset(w * x0 - grow, h * y0 - grow),
+            androidx.compose.ui.geometry.Size(w * (x1 - x0) + 2 * grow, h * (y1 - y0) + 2 * grow),
+            androidx.compose.ui.geometry.CornerRadius(w * r + grow * 0.6f),
+        )
+    val left = floatArrayOf(0.17f, 0.28f, 0.37f, 0.6f)
+    val right = floatArrayOf(0.63f, 0.31f, 0.83f, 0.6f)
+    val middle = floatArrayOf(0.39f, 0.04f, 0.61f, 0.6f) // raised: it points
+    val fingers = listOf(left, right, middle)
+    // Drawn whole into one layer, then faded together, so a fading hand never shows its
+    // white outline through the cardboard.
+    val bounds = androidx.compose.ui.geometry.Rect(-w * 0.1f, -h * 0.1f, w * 1.1f, h * 1.1f)
+    drawContext.canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
+    // One thick white paper outline round the whole hand...
+    val thick = w * 0.075f
+    for (f in fingers) box(f[0], f[1], f[2], f[3], thick, white)
+    box(0.17f, 0.5f, 0.83f, 0.78f, thick, white, 0.06f)
+    box(0.24f, 0.75f, 0.76f, 0.95f, thick, white, 0.04f)
+    // ...then the palm and cuff, and each of the three boxy fingers as its own cut-out with a thin
+    // white edge, so they read as three separate cardboard fingers.
+    box(0.17f, 0.5f, 0.83f, 0.78f, 0f, body, 0.06f)
+    box(0.24f, 0.75f, 0.76f, 0.95f, 0f, cyan, 0.04f)
+    val thin = w * 0.03f
+    for (f in fingers) {
+        box(f[0], f[1], f[2], f[3], thin, white)
+        box(f[0], f[1], f[2], f[3], 0f, body)
     }
-    shapes(w * 0.06f, white, white)
-    shapes(0f, body, cyan)
-    // knuckle lines for the curled fingers, and a little bolt on the cuff
-    for (k in 1..2) drawLine(shade, androidx.compose.ui.geometry.Offset(w * (0.4f + 0.13f * k), h * 0.46f), androidx.compose.ui.geometry.Offset(w * (0.4f + 0.13f * k), h * 0.62f), w * 0.035f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-    drawCircle(white, w * 0.04f, androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.84f))
+    val cap = androidx.compose.ui.graphics.StrokeCap.Round
+    // two knuckle creases on the pointing finger
+    for (y in listOf(0.2f, 0.36f)) drawLine(shade, androidx.compose.ui.geometry.Offset(w * 0.45f, h * y), androidx.compose.ui.geometry.Offset(w * 0.55f, h * y), w * 0.024f, cap = cap)
+    // The small cyan rivet at the wrist (a teal rim and a white glint, so it shows on the cyan cuff).
+    val rc = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.85f)
+    drawCircle(teal, w * 0.075f, rc)
+    drawCircle(cyan, w * 0.055f, rc)
+    drawCircle(white, w * 0.018f, rc + androidx.compose.ui.geometry.Offset(-w * 0.018f, -w * 0.018f))
+    drawContext.canvas.restore()
 }
+
+/** Rory's tan cardboard: his body's own paper colour, shared by his hand and his antenna stalk. */
+val RoryCardboard = androidx.compose.ui.graphics.Color(0xFFFFCC80)
 
 /**
  * Says [text] again every [everyMs] while the screen is showing, if nothing else is being said,

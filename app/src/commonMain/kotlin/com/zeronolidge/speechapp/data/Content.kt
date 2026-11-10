@@ -114,14 +114,14 @@ object SpeechContent {
             ),
         ),
         SpeechSound(
-            "f", "F", "🐸", "fffff",
-            "Gently bite your bottom lip and blow. Fffff!",
+            "f", "F", "🐟", "fffff",
+            "Teeth on your bottom lip, and blow air. No voice. Fffff!",
             listOf(
-                Word("fish", "🐟"), Word("fox", "🦊"), Word("frog", "🐸"),
-                Word("fire", "🔥"), Word("fork", "🍴"), Word("flower", "🌸", "flow - er"),
+                Word("fan", "🌬️"), Word("fork", "🍴"), Word("fish", "🐟"),
+                Word("foot", "🦶"), Word("five", "5️⃣"),
             ),
             listOf(
-                Word("a fish and a frog", "🐟"), Word("four fish", "🐠"), Word("a funny fox", "🦊"),
+                Word("a fish and a fork", "🐟"), Word("five fish", "🐠"), Word("my foot", "🦶"),
             ),
         ),
         SpeechSound(
@@ -159,25 +159,25 @@ object SpeechContent {
             ),
         ),
         SpeechSound(
-            "sh", "Sh", "🤫", "shhhhh",
-            "Push your lips out like a fish and say shhh, like a sleeping baby.",
+            "sh", "Sh", "🚢", "shhhhh",
+            "Round your lips, and let the quiet air out. Shhhh!",
             listOf(
-                Word("shoe", "👟"), Word("sheep", "🐑"), Word("ship", "🚢"),
-                Word("shark", "🦈"), Word("shell", "🐚"), Word("shirt", "👕"),
+                Word("shoe", "👟"), Word("ship", "🚢"), Word("shell", "🐚"),
+                Word("wash", "🧼"), Word("fish", "🐟"),
             ),
             listOf(
-                Word("a shark and a ship", "🦈"), Word("shoes on", "👟"), Word("a shiny shell", "🐚"),
+                Word("a shell on a ship", "🐚"), Word("shoes on", "👟"), Word("wash the fish", "🧼"),
             ),
         ),
         SpeechSound(
             "ch", "Ch", "🚂", "choo choo",
-            "Lips out, then a quick sneeze sound, like a train. Choo choo!",
+            "Put your tongue in the shh place, then a quick pop, like a train. Choo choo!",
             listOf(
-                Word("cheese", "🧀"), Word("chicken", "🐔", "chick - en"), Word("cherry", "🍒", "cher - ry"),
-                Word("chocolate", "🍫", "choc - o - late"), Word("chick", "🐤"), Word("chair", "🪑"),
+                Word("cheese", "🧀"), Word("chair", "🪑"), Word("chop", "🔪"),
+                Word("chip", "🍟"), Word("peach", "🍑"),
             ),
             listOf(
-                Word("cheese please", "🧀"), Word("a chick on a chair", "🐤"), Word("cherry pie", "🍒"),
+                Word("cheese please", "🧀"), Word("chop the peach", "🍑"), Word("a big chair", "🪑"),
             ),
         ),
         SpeechSound(
@@ -191,7 +191,65 @@ object SpeechContent {
                 Word("thumbs up", "👍"), Word("three things", "3️⃣"), Word("take a bath", "🛁"),
             ),
         ),
+        SpeechSound(
+            "v", "V", "🚐", "vvvvv",
+            "Same mouth as fff. Now turn your voice on, and feel the buzz on your lip. Vvvvv!",
+            listOf(
+                Word("van", "🚐"), Word("vest", "🦺"), Word("vase", "🏺"),
+                Word("oven", "🔥", "o - ven"), Word("love", "❤️"),
+            ),
+            listOf(
+                Word("a van and a vase", "🚐"), Word("a red vest", "🦺"), Word("I love you", "❤️"),
+            ),
+        ),
+        SpeechSound(
+            "sp", "Sp", "🥄", "sssss. sss - poon",
+            "Say a long sss, then p, with no uh. Sss - poon!",
+            listOf(
+                Word("spoon", "🥄", "sss - poon"), Word("spider", "🕷️", "sss - pi - der"), Word("spot", "🐞", "sss - pot"),
+                Word("spill", "🥛", "sss - pill"), Word("spin", "🌀", "sss - pin"),
+            ),
+            listOf(
+                Word("a big spoon", "🥄"), Word("a spider spot", "🕷️"), Word("spin around", "🌀"),
+            ),
+        ),
+        SpeechSound(
+            "sk", "Sk", "⛸️", "sssss. sss - coop",
+            "Say a long sss, then k. Sss - coop!",
+            listOf(
+                Word("sky", "🌤️", "sss - ky"), Word("scoop", "🍨", "sss - coop"), Word("skate", "⛸️", "sss - kate"),
+                Word("ski", "🎿", "sss - ki"), Word("skip", "🤸", "sss - kip"),
+            ),
+            listOf(
+                Word("blue sky", "🌤️"), Word("a big scoop", "🍨"), Word("skate and ski", "⛸️"),
+            ),
+        ),
+        SpeechSound(
+            "sm", "Sm", "😊", "sssss. sss - mile",
+            "Say a long sss, then put your lips together for mmm. Sss - mile!",
+            listOf(
+                Word("smile", "😊", "sss - mile"), Word("smell", "👃", "sss - mell"), Word("small", "🐜", "sss - mall"),
+                Word("smash", "💥", "sss - mash"), Word("smoothie", "🥤", "sss - moo - thie"),
+            ),
+            listOf(
+                Word("a big smile", "😊"), Word("smell the flower", "👃"), Word("a small smoothie", "🥤"),
+            ),
+        ),
     )
+
+    /** Sounds kept for later: their words stay, but the Talk picker doesn't show them yet. */
+    val hiddenFromPicker = setOf("r", "th")
+
+    /** The order of the Talk sound picker (test48, Aida): f, sh, v, ch, the s blends, then the rest. */
+    private val pickerOrder = listOf("f", "sh", "v", "ch", "sp", "sk", "sm", "p", "b", "m", "t", "d", "k", "g", "s", "l")
+
+    /** The sounds the Talk picker shows, in [pickerOrder]; r and th are hidden for now. */
+    val picker: List<SpeechSound> get() =
+        pickerOrder.mapNotNull { id -> sounds.firstOrNull { it.id == id } } +
+            sounds.filter { it.id !in pickerOrder && it.id !in hiddenFromPicker }
+
+    /** Blends (sp, sk, sm): Rory models a long "sss" first. */
+    fun isBlend(id: String?) = id == "sp" || id == "sk" || id == "sm"
 }
 
 data class LetterInfo(

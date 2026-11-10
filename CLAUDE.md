@@ -86,7 +86,7 @@ These are the owner's rules for all work:
   (`key(challenge)` in `ChallengeView`, `key(roundNo)` in practice): no leftover bubble or glow.
 - **Growth without numbers:** no levels, XP or star counts. Gems are for words he *tried* to say
   (not right answers); they fill the 🎒 backpack (`Progress.addGem`), and a full backpack gives a
-  paper piece. Practice shows ~3 games that rotate daily (🔄 for others).
+  paper piece. Practice shows all 17 games at once as a picture grid (test48).
 - **Rory's voice is pre-made OpenAI clips** (web): `tools/make_voice.py` (run by the owner on
   their computer with `OPENAI_API_KEY` from the environment or a gitignored `.env`; never in the
   app or CI) reads every string in commonMain, cuts out the changing parts (`${...}`, `$name` and the story
@@ -223,7 +223,7 @@ These are the owner's rules for all work:
   three clips of the same text, closes each time); the lips close for 100 ms at the start of a
   p/b/m word and at the end of a word ending in one, and stay closed through a held "mmm";
   with the browser voice it chatters gently. The hero wears a big teal paper scarf (`scarf`, via `HeroWithPet`); Rory (the robot) has
-  a stitched antenna with a gold star. Outfits: hat, cape, wings, glasses, colour, pet.
+  a short tan cardboard antenna with a glowing cyan ball (#4DD0E1), the same under the chef hat (test48). Outfits: hat, cape, wings, glasses, colour, pet.
 - **Pictures on coloured cards sit on a cream paper circle** (`EmojiPic` in PaperUi.kt: `ChoiceTile`, emoji answer cards), so an emoji never melts into its card (the yellow 💰 vanished on the yellow Market card). Use `EmojiPic` for any new emoji on a coloured card. The daytime sun is always `SunGold`, never the area's accent.
 - Draw shapes with the paper helpers (`paperCircle`, `paperOval`, `paperRect`, `paperRoundRect`,
   `paperArc`, `paperPath`, `Modifier.paperCard`), not raw `drawCircle` etc. They give rough torn

@@ -107,10 +107,13 @@ fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     val words = remember(sound) { SpeechSteps.wordsFor(sound, app.progress.speechStep) }
     var index by remember { mutableIntStateOf(0) }
     val word = words[index % words.size]
-    val intro = if (index == 0) "Let's practice the ${sound.label} sound. ${sound.modelSound}." else null
+    // A blend's letters ("Sp") don't read aloud well, so its intro names the sound by modelling it.
+    val intro = if (index != 0) null
+        else if (SpeechContent.isBlend(sound.id)) "Let's practice this sound. ${sound.modelSound}."
+        else "Let's practice the ${sound.label} sound. ${sound.modelSound}."
     KidScreen("${sound.emoji} ${sound.label}", nav.home, "Let's say ${sound.modelSound}", onBack = nav.back) {
         ContinueHost {
-            SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index) {
+            SpeakMoment(word, sound, Modifier.fillMaxSize(), intro = intro, showParrot = true, key = index, oneTry = true) {
                 // After about 12 minutes of play, Rory wraps up here, between words.
                 if (app.sessionLong()) nav.go(com.zeronolidge.speechapp.ui.Screen.Rest) else index++
             }
@@ -149,6 +152,11 @@ fun SpeakMoment(
     key: Any = word,
     /** After saying a word with a speech sound: "Tap the B!" with 2 or 3 letters (skipped with ▶). */
     tapLetter: Boolean = true,
+    /**
+     * Talk practice (test48, Aida): one word, one try, then effort praise. A quiet try ends the
+     * word with "Good trying!" instead of "Let's say it together!" and more listening.
+     */
+    oneTry: Boolean = false,
     /**
      * His word makes it happen: called the moment the microphone hears a voice (about 0.15 s in,
      * long before listening ends), or when the try ends another way ("I said it!", a quiet try),
@@ -299,8 +307,9 @@ fun SpeakMoment(
     }
 
     // Rory models the word before his turn: three times, the third time slower.
-    fun model(): List<Pair<String, Boolean>> = listOf(
-        "Listen." to false,
+    // For an s blend (sp, sk, sm) he hears a long "sss" first ("sssss... spoon").
+    fun model(): List<Pair<String, Boolean>> = listOf("Listen." to false) +
+        (if (SpeechContent.isBlend(sound?.id)) listOf("Sssss." to true) else emptyList()) + listOf(
         word.text to false,
         word.text to false,
         // The third time slower (in syllables for a longer word: "piz - za").
@@ -356,6 +365,8 @@ fun SpeakMoment(
                 }
                 false ->
                     when {
+                        // Talk practice: one try per word, then praise the trying.
+                        oneTry -> finish(heard = false, micUsed = true)
                         // Quiet: say it together and listen once more.
                         tries < 2 -> speakThen(listOf("Let's say it together!" to false, word.syllables to true, word.text to false), true)
                         // Still quiet: the card waits for his voice or "I said it!" and never

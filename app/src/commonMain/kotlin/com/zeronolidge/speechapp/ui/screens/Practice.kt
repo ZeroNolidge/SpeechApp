@@ -72,6 +72,12 @@ import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.theme.Kid
 import com.zeronolidge.speechapp.ui.theme.LetterFont
 import kotlin.random.Random
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.drawBehind
+import com.zeronolidge.speechapp.ui.art.paperRect
+import com.zeronolidge.speechapp.ui.components.EmojiPic
+import com.zeronolidge.speechapp.ui.components.fittingFontSize
 
 /** Free-play games, outside the story. Each one is an endless loop of one kind of challenge. */
 enum class PracticeKind(val emoji: String, val label: String, val spoken: String, val color: Color) {
@@ -91,46 +97,108 @@ enum class PracticeKind(val emoji: String, val label: String, val spoken: String
     COINS("💰", "Market", "Let's pay with coins at the market!", Kid.numbers),
 }
 
+/**
+ * Every practice game at once (test48): Talk, ABC, 1 2 3 and the 14 games, as big picture tiles on
+ * one screen. Phones get 3 columns with tiles as large as the width and height allow (never under
+ * 100dp; only then does the grid scroll); tablets get ~120dp tiles in as many columns as fit, so
+ * the whole set is one screen. No daily shuffle and no "new games" button any more.
+ */
 @Composable
 fun PracticeMenu(nav: Nav) {
     val app = LocalApp.current
-    data class Tile(val emoji: String, val label: String, val spoken: String, val color: Color, val target: Screen)
+    data class Tile(val emoji: String, val label: String, val spoken: String, val color: Color, val target: Screen, val framed: Boolean = false)
     val tiles = listOf(
         Tile("🗣️", "Talk", "Pick a sound to practice", Kid.talk, Screen.TalkMenu),
         Tile("🔠", "ABC", "The alphabet!", Kid.letters, Screen.Alphabet),
         Tile("🔟", "1 2 3", "Let's learn numbers!", Kid.numbers, Screen.NumberLine),
-    ) + PracticeKind.entries.map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it)) }
-    // A short set of three games that changes every day; 🔄 swaps in three others.
-    var start by remember { mutableIntStateOf((today() * 3).mod(tiles.size)) }
-    KidScreen("🎯", nav.home, "Practice games! Tap a game to play. Tap the round arrows for different games.") {
+    ) + PracticeKind.entries.map { Tile(it.emoji, it.label, it.spoken, it.color, Screen.PracticeGame(it), framed = it == PracticeKind.WHICH_WORD) }
+    KidScreen("🎯 Practice", nav.home, "Practice games! Tap a picture to play.") {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            // Three games on a tablet; two on a narrow phone so the tiles and their words stay big.
-            val count = if (maxWidth < 520.dp) 2 else 3
-            val shown = (0 until count).map { tiles[(start + it) % tiles.size] }
-            Row(
-                Modifier.fillMaxSize().padding(vertical = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (count == 2) 14.dp else 24.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
+            val w = maxWidth
+            val h = maxHeight
+            val gap = 8.dp
+            val phone = w < 600.dp
+            val cols = if (phone) 3 else practiceColumns(w.value, h.value, tiles.size, gap.value)
+            val rows = (tiles.size + cols - 1) / cols
+            val byWidth = (w - gap * (cols - 1) - 8.dp) / cols
+            val byHeight = (h - gap * (rows - 1) - 8.dp) / rows
+            val fit = minOf(byWidth, byHeight)
+            val side = if (phone) maxOf(fit, 100.dp) else fit.coerceIn(100.dp, 132.dp)
+            val scroll = side * rows + gap * (rows - 1) > h
+            Column(
+                Modifier.fillMaxSize().then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                shown.forEachIndexed { i, t ->
-                    Box(Modifier.weight(1f).popIn(start to i, i * 60), contentAlignment = Alignment.Center) {
-                        ChoiceTile(
-                            t.emoji, t.label, t.color,
-                            Modifier.fillMaxWidth().widthIn(max = 240.dp).heightIn(min = 120.dp, max = 340.dp).fillMaxHeight(),
-                            onClick = {
-                                app.speaker.say(t.spoken)
-                                nav.go(t.target)
-                            },
-                        )
+                tiles.chunked(cols).forEachIndexed { r, row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)) {
+                        row.forEachIndexed { c, t ->
+                            val i = r * cols + c
+                            Box(Modifier.size(side).popIn(i, (i * 25).coerceAtMost(400)), contentAlignment = Alignment.Center) {
+                                PracticeGridTile(t.emoji, t.label, t.color, t.framed, side) {
+                                    app.speaker.say(t.spoken)
+                                    nav.go(t.target)
+                                }
+                            }
+                        }
                     }
-                }
-                RoundIcon("🔄", PaperColorsUi.choice, size = 72.dp) {
-                    start = (start + count) % tiles.size
-                    app.speaker.say("New games!")
                 }
             }
         }
     }
+}
+
+/** Tablet columns: the column count that gives the biggest tiles (up to ~130dp) with every row
+ * on the screen; on a tie, fewer columns (bigger rows, less sideways reach). */
+internal fun practiceColumns(w: Float, h: Float, n: Int, gap: Float): Int =
+    (3..9).maxByOrNull { cols ->
+        val rows = (n + cols - 1) / cols
+        val side = minOf((w - gap * (cols - 1)) / cols, (h - gap * (rows - 1)) / rows)
+        minOf(side, 132f) * 100f - cols
+    } ?: 6
+
+/** One picture tile in the practice grid: the picture on its cream circle, the word under it. */
+@Composable
+private fun PracticeGridTile(emoji: String, label: String, color: Color, framed: Boolean, side: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    PaperButton(color, Modifier.fillMaxSize(), onClick = onClick) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            val pic = (side.value * 0.36f).coerceIn(26f, 56f).sp
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (framed) FramedPicture(side * 0.5f) else EmojiPic(emoji, pic)
+            }
+            Text(
+                label,
+                fontSize = fittingFontSize(label, side - 12.dp, max = (side.value * 0.15f).coerceIn(13f, 20f)),
+                fontWeight = FontWeight.ExtraBold,
+                color = PaperStyle.ink,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 2,
+                lineHeight = 15.sp,
+            )
+        }
+    }
+}
+
+/**
+ * "Which word?" picture: a little wooden picture frame with an apple in it, drawn in paper (the
+ * 🖼️ emoji showed as an empty frame and didn't read as a game).
+ */
+@Composable
+private fun FramedPicture(side: androidx.compose.ui.unit.Dp) {
+    Box(
+        Modifier.size(side).drawBehind {
+            val s = size.minDimension
+            val o = androidx.compose.ui.geometry.Offset((size.width - s) / 2, (size.height - s) / 2)
+            paperRect(Color(0xFF8D5A35), o, androidx.compose.ui.geometry.Size(s, s))
+            val inset = s * 0.14f
+            paperRect(Color(0xFFFFF6E0), o + androidx.compose.ui.geometry.Offset(inset, inset), androidx.compose.ui.geometry.Size(s - 2 * inset, s - 2 * inset))
+        },
+        contentAlignment = Alignment.Center,
+    ) { Text("🍎", fontSize = (side.value * 0.42f).sp) }
 }
 
 /** The games that belong to each area of the map. */
@@ -238,12 +306,53 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
 @Composable
 fun TalkMenu(nav: Nav) {
     val app = LocalApp.current
-    KidScreen("🗣️", nav.home, "Pick a sound to practice. Tap the arrow to see more sounds.", onBack = nav.back) {
-        PagedChoices(SpeechContent.sounds, perPage = 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { sound, m ->
-            ChoiceTile(sound.emoji, sound.label, Kid.talk, m, onClick = {
-                app.speaker.say(sound.modelSound)
-                nav.go(Screen.TalkPractice(sound))
-            })
+    KidScreen("🗣️", nav.home, "Pick a picture to practice its sound. Tap the arrow to see more sounds.", onBack = nav.back) {
+        // Picture tiles only (he can't read yet): f, sh, v, ch, sp, sk, sm, then the rest.
+        // test48: four big square picture tiles a page (a 2x2 block on a phone, a row on a
+        // tablet), with the big arrows for more, so 16 sounds never shrink the tiles.
+        val sounds = SpeechContent.picker
+        val per = 4
+        var page by remember { mutableIntStateOf(0) }
+        val pages = (sounds.size + per - 1) / per
+        val shown = sounds.drop(page * per).take(per)
+        fun go(to: Int, line: String) { page = to; app.speaker.say(line) }
+        @Composable
+        fun tile(sound: com.zeronolidge.speechapp.data.SpeechSound, i: Int, side: androidx.compose.ui.unit.Dp) {
+            Box(Modifier.size(side).popIn(page to i, i * 60), contentAlignment = Alignment.Center) {
+                PaperButton(Kid.talk, Modifier.fillMaxSize(), onClick = {
+                    app.speaker.say(sound.modelSound)
+                    nav.go(Screen.TalkPractice(sound))
+                }) { EmojiPic(sound.emoji, (side.value * 0.4f).coerceIn(36f, 96f).sp) }
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().padding(vertical = 12.dp)) {
+            val w = maxWidth
+            val h = maxHeight
+            val arrow = 72.dp
+            val gap = 14.dp
+            if (w < 520.dp) {
+                val side = minOf((w - gap) / 2, (h - arrow - gap * 3) / 2, 200.dp)
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically)) {
+                    shown.chunked(2).forEachIndexed { r, row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            row.forEachIndexed { c, snd -> tile(snd, r * 2 + c, side) }
+                            if (row.size < 2) androidx.compose.foundation.layout.Spacer(Modifier.size(side))
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Box(Modifier.size(arrow)) { if (page > 0) PaperArrowButton(PaperColorsUi.choice, size = arrow, pointLeft = true) { go(page - 1, "Back!") } }
+                        Box(Modifier.size(arrow)) { if (page < pages - 1) PaperArrowButton(PaperColorsUi.choice, size = arrow) { go(page + 1, "More!") } }
+                    }
+                }
+            } else {
+                val side = minOf((w - arrow * 2 - gap * 5) / per, h * 0.8f, 220.dp)
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)) {
+                    Box(Modifier.size(arrow)) { if (page > 0) PaperArrowButton(PaperColorsUi.choice, size = arrow, pointLeft = true) { go(page - 1, "Back!") } }
+                    shown.forEachIndexed { i, snd -> tile(snd, i, side) }
+                    repeat(per - shown.size) { androidx.compose.foundation.layout.Spacer(Modifier.size(side)) }
+                    Box(Modifier.size(arrow)) { if (page < pages - 1) PaperArrowButton(PaperColorsUi.choice, size = arrow) { go(page + 1, "More!") } }
+                }
+            }
         }
     }
 }

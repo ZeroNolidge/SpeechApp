@@ -344,13 +344,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     // beat ever gets added). KitchenEndingScene (VoiceScenes.kt) draws its own ending-only
     // FruitBowlArt with `fruitStirring = true` hardcoded, independently of this flag, so the fork
     // keeps stirring through the cheer and the rest of the ending.
-    val hasForkBeat = isFruitSaladStory && beats.isNotEmpty() && beats.last() == FruitPicker.fork
-    val fruitStirring = hasForkBeat && index == beats.lastIndex && phase == VPhase.ACT
+    val hasSpoonBeat = isFruitSaladStory && beats.isNotEmpty() && beats.last() == FruitPicker.spoon
+    val fruitStirring = hasSpoonBeat && index == beats.lastIndex && phase == VPhase.ACT
     // test40: the fork finale's own finger stir (between the fork beat's fix and the ending)
-    var forkStirLive by remember(id) { mutableStateOf(false) }
-    var forkStirDone by remember(id) { mutableStateOf(false) }
+    var bowlStirLive by remember(id) { mutableStateOf(false) }
+    var spoonStirDone by remember(id) { mutableStateOf(false) }
     // read here (not only inside the effect) so this scope recomposes when the stir starts
-    val stirLiveNow = forkStirLive
+    val stirLiveNow = bowlStirLive
     androidx.compose.runtime.SideEffect {
         if (isFruitSaladStory && !isCakeStory) {
             val inSet = fruitDoneFlags.filterValues { it }.keys
@@ -372,7 +372,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
     val cakeBaked = cakeI > 2
     val cakeLit = (cakeI == 4 && cakeAct) || (cakeI == 5 && !cakeAct && !cakeEnded)
     val cakeBlown = (cakeI == 5 && cakeAct) || cakeEnded
-    val cakeNose = cakePouring || (cakeI == 1 && !forkStirLive && !cakeStirDone)
+    val cakeNose = cakePouring || (cakeI == 1 && !bowlStirLive && !cakeStirDone)
     val cakeLeanTarget = if ((cakeI == 5 && phase != VPhase.INTRO) || cakeEnded) 1f else 0f
     val cakeLean by androidx.compose.animation.core.animateFloatAsState(cakeLeanTarget, tween(if (still) 0 else 700), label = "cakeLean")
     androidx.compose.runtime.SideEffect {
@@ -498,13 +498,13 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 isCakeStory && b == com.zeronolidge.speechapp.logic.VoiceStories.CakeSteps.flourTalk -> {
                     // test41: Rory's own "Mix!" while the child circles the bowl.
                     cakeStirDone = false
-                    forkStirLive = true
+                    bowlStirLive = true
                     println("KITCHEN stir start")
                     app.speaker.say("Mix! Mix!")
                 }
-                k + 1 >= beats.size && isFruitSaladStory && b == FruitPicker.fork -> {
-                    forkStirDone = false
-                    forkStirLive = true
+                k + 1 >= beats.size && isFruitSaladStory && b == FruitPicker.spoon -> {
+                    spoonStirDone = false
+                    bowlStirLive = true
                     println("KITCHEN stir start")
                 }
                 k + 1 >= beats.size -> finish()
@@ -966,7 +966,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
         pickedFruits = emptyList()
         fruitTalks = 0
         cakeStirDone = false
-        forkStirDone = false
+        spoonStirDone = false
         if (isCakeStory) com.zeronolidge.speechapp.ui.art.CakeScene.reset()
         beats = story.beats
         scope.launch {
@@ -1039,7 +1039,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 if (i == FruitPicker.Fruit.entries.size) {
                     if (pickedFruits.size < FruitPicker.DONE_AFTER) return
                     println("KITCHEN pick done fruits=${pickedFruits.size}")
-                    beats = beats.take(index + 1) + listOf(FruitPicker.fork)
+                    beats = beats.take(index + 1) + listOf(FruitPicker.spoon)
                 } else {
                     val fruit = FruitPicker.Fruit.entries.getOrNull(i) ?: return
                     val picked = com.zeronolidge.speechapp.logic.FruitPick.pick(beats, index, pickedFruits, fruitTalks, fruit) ?: return
@@ -1277,12 +1277,12 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // K-fruit11: recipe card pinned top-left (first in the row, right after 🏠).
             if (isCakeStory) {
                 CakeRecipeCard(
-                    listOf(cakeI > 0 || cakeEnded, cakeI > 1 || cakeEnded || forkStirLive || cakeStirDone, cakeStirDone || cakeI > 1 || cakeEnded,
+                    listOf(cakeI > 0 || cakeEnded, cakeI > 1 || cakeEnded || bowlStirLive || cakeStirDone, cakeStirDone || cakeI > 1 || cakeEnded,
                         cakeI > 2 || cakeEnded, cakeI > 3 || cakeEnded, cakeEnded),
                 )
                 Spacer(Modifier.width(8.dp))
             } else if (isFruitSaladStory) {
-                FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, forkDone = forkStirDone || kitchenEnd != null, closed = hasForkBeat)
+                FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, spoonDone = spoonStirDone || kitchenEnd != null, closed = hasSpoonBeat)
                 Spacer(Modifier.width(8.dp))
             }
             if (isFruitSaladStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
@@ -1293,7 +1293,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // sits between the two, see ScreenFrame; the button itself is pinned bottom-right).
             // K-fruit: stays up through the ending too (it used to vanish the moment the ending
             // started, replaced by the backpack icon below, so the card a child had been watching
-            // fill in disappeared right as the last tick -- forkDone -- would have landed) -- by
+            // fill in disappeared right as the last tick -- spoonDone -- would have landed) -- by
             // then every `Done` flag is already true, so it simply reads all filled/green.
             // Rory's Kitchen's own ending (Ruby's K2c): the backpack his sticker flies into,
             // clear of 🏠 and 🔊 (this row sits between them; see ScreenFrame). Only shown once
@@ -1535,7 +1535,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                         kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep && !blowTurn,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
-                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (bowlStirLive) { _ -> bowlStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { spoonStirDone = true; finish() } } else null,
                                         onPropTap = cakePropTap, propTapHint = cakeI != 5, cakeLean = cakeLean,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
@@ -1561,7 +1561,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                                     kitchenPointing = kitchenPointing, kitchenSpeechBubble = kitchenTalkStep && !blowTurn,
                                         kitchenFPose = fPoseShown,
                                         butterCut = kitchenButterCut, countHopped = kitchenHopped,
-                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (forkStirLive) { _ -> forkStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { forkStirDone = true; finish() } } else null,
+                                        fruitSliced = fruitSliced, fruitInBowl = fruitInBowl, fruitBerriesIn = blueberryIn, strawberryIn = strawberryIn, grapeIn = grapeIn, fruitStirring = fruitStirring, onStirDone = if (bowlStirLive) { _ -> bowlStirLive = false; if (isCakeStory) { cakeStirDone = true; println("KITCHEN step=$index phase=DONE"); startBeat(index + 1) } else { spoonStirDone = true; finish() } } else null,
                                         onPropTap = cakePropTap, propTapHint = cakeI != 5, cakeLean = cakeLean,
                                         onBerryTap = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.COUNT) { i -> tapKitchen(i) } else null,
                                         onCut = if (phase == VPhase.KITCHEN && beat.kitchen == KitchenFlow.CUT) { { tapKitchen(0) } } else null,
@@ -1661,7 +1661,7 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             // After the action: Rory's echo adds a word, and the new words slide in on paper
             // ("go" to "go, boat").
             // test41 (Ruby): no echo chip on the fork finale (its 🥗 drew as an empty box) or the cake.
-            if (k >= 0 && phase == VPhase.ACT && !isCakeStory && beats[k] != FruitPicker.fork) {
+            if (k >= 0 && phase == VPhase.ACT && !isCakeStory && beats[k] != FruitPicker.spoon) {
                 val more = beats[k].line(p.speechStep + 1)
                 Row(
                     Modifier.align(if (beats[k].move == Move.SINK) Alignment.TopStart else Alignment.TopCenter)
@@ -1830,7 +1830,7 @@ private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
  * antenna below -- shrink the chrome before shrinking Rory, not the other way round.
  */
 @Composable
-private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Map<FruitPicker.Fruit, Boolean>, forkDone: Boolean, closed: Boolean = false) {
+private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Map<FruitPicker.Fruit, Boolean>, spoonDone: Boolean, closed: Boolean = false) {
     val screenHeight = LocalScreenHeight.current
     val circle = if (screenHeight < 420.dp) 32.dp else 44.dp
     val emojiSize = if (circle < 40.dp) 17.sp else 24.sp
@@ -1841,9 +1841,9 @@ private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Ma
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // test44: grows with each fruit he picks (one empty slot waiting while more can come)
-        val shown = if (closed || forkDone || pickedFruits.size >= FruitPicker.Fruit.entries.size) pickedFruits.size else pickedFruits.size + 1
+        val shown = if (closed || spoonDone || pickedFruits.size >= FruitPicker.Fruit.entries.size) pickedFruits.size else pickedFruits.size + 1
         val slots = (0 until maxOf(shown, 1)).map { i -> pickedFruits.getOrNull(i)?.let { it.emoji to (doneFlags[it] == true) } }
-        (slots + ("🍴" to forkDone)).forEach { slot ->
+        (slots + ("🥄" to spoonDone)).forEach { slot ->
             Box(
                 Modifier.size(circle).paperCard(PaperStyle.chip, circle = true),
                 contentAlignment = Alignment.Center,

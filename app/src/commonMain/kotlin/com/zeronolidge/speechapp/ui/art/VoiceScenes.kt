@@ -1732,7 +1732,7 @@ private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Bool
     // K-fruit10: a small wiggle around a 45-degree base, not side to side around upright -- a
     // fork standing nearly straight up and swinging like a windshield wiper didn't read as
     // stirring into the bowl at all.
-    val stir = rememberInfiniteTransition(label = "stir").animateFloat(-8f, 8f, infiniteRepeatable(tween(260), RepeatMode.Reverse), label = "forkAngle")
+    val stir = rememberInfiniteTransition(label = "stir").animateFloat(-8f, 8f, infiniteRepeatable(tween(260), RepeatMode.Reverse), label = "spoonAngle")
     Canvas(Modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -1852,11 +1852,11 @@ private fun FruitBowlArt(bananaIn: Boolean, strawberryIn: Boolean, grapeIn: Bool
         paperPath(lipPath, Color(0xFFFFF3E0))
         drawArc(Color(0xFFD7CCC8), 0f, 180f, false, Offset(ovL, rimTop), Size(ovR - ovL, rimH), style = Stroke(1.5.dp.toPx()))
         if (fruitStirring) {
-            // test40: a real 4-tine fork, tines down in the fruit, handle sticking up out of the
+            // test48: a real spoon, its bowl down in the fruit, handle sticking up out of the
             // bowl at a slant; it follows his finger while he stirs, or circles by itself.
             val tines = if (finger != null) Offset(w * finger.x, h * finger.y)
                 else Offset(w * 0.5f + cos(swirl) * w * 0.2f, rimMid + sin(swirl) * rimH * 0.28f)
-            paperFork(tines, tines + Offset(w * 0.36f, -h * 0.62f), w * 0.55f)
+            paperSpoon(tines, tines + Offset(w * 0.36f, -h * 0.62f), w * 0.55f)
         }
     }
 }
@@ -2316,20 +2316,26 @@ private fun DrawScope.paperStrawberrySide(left: Float, bottom: Float, bw: Float,
     }
 }
 
-/** test40: a real fork (4 tines) whose tines sit at [tines] and handle runs out to [handleEnd]. */
-private fun DrawScope.paperFork(tines: Offset, handleEnd: Offset, unit: Float) {
+/** test48: a real kitchen spoon (the stir word is "Spoon!" now, not "Fork!"): its oval steel
+ * bowl sits at [tines] (down in the fruit) and its handle runs out to [handleEnd]. */
+private fun DrawScope.paperSpoon(tines: Offset, handleEnd: Offset, unit: Float) {
     val d0 = tines - handleEnd
     val len = d0.getDistance().coerceAtLeast(1f)
     val d = Offset(d0.x / len, d0.y / len)
-    val n = Offset(-d.y, d.x)
-    val base = tines - d * (unit * 0.16f)
-    drawLine(Color(0xFF8E8E8E), handleEnd, base, unit * 0.085f, cap = StrokeCap.Round)
-    drawLine(Color(0xFFD6D6D6), handleEnd, base, unit * 0.05f, cap = StrokeCap.Round)
-    drawLine(Color(0xFF9E9E9E), base - n * (unit * 0.075f), base + n * (unit * 0.075f), unit * 0.07f, cap = StrokeCap.Round)
-    for (k in 0 until 4) {
-        val o = n * (unit * 0.05f * (k - 1.5f))
-        drawLine(Color(0xFF9E9E9E), base + o, base + o + d * (unit * 0.17f), unit * 0.03f, cap = StrokeCap.Round)
-        drawLine(Color(0xFFEEEEEE), base + o, base + o + d * (unit * 0.15f), unit * 0.012f, cap = StrokeCap.Round)
+    val headLen = unit * 0.30f
+    val headW = unit * 0.20f
+    val neck = tines - d * (headLen * 0.5f)
+    // handle: a slim steel strip, a little wider towards the end you hold
+    drawLine(Color(0xFF8E8E8E), handleEnd, neck, unit * 0.075f, cap = StrokeCap.Round)
+    drawLine(Color(0xFFD6D6D6), handleEnd, neck, unit * 0.04f, cap = StrokeCap.Round)
+    drawCircle(Color(0xFF8E8E8E), unit * 0.055f, handleEnd)
+    drawCircle(Color(0xFFD6D6D6), unit * 0.035f, handleEnd)
+    // the oval bowl of the spoon, along the handle's line
+    val angle = (kotlin.math.atan2(d.y, d.x) * 180f / PI.toFloat())
+    rotate(angle, pivot = tines) {
+        drawOval(Color(0xFF8E8E8E), Offset(tines.x - headLen / 2f, tines.y - headW / 2f), Size(headLen, headW))
+        drawOval(Color(0xFFCFD8DC), Offset(tines.x - headLen / 2f + unit * 0.02f, tines.y - headW / 2f + unit * 0.02f), Size(headLen - unit * 0.04f, headW - unit * 0.04f))
+        drawOval(Color.White.copy(alpha = 0.8f), Offset(tines.x - headLen * 0.25f, tines.y - headW * 0.3f), Size(headLen * 0.28f, headW * 0.2f))
     }
 }
 
@@ -2699,8 +2705,8 @@ private fun BoxWithConstraintsScope.KitchenNumeral(text: String, box: KitchenLay
  * read the caption beside the line reads "a hand, dragging down" far more clearly than a dot. */
 private fun DrawScope.paperPointingHandDown(center: Offset, unit: Float, alpha: Float) {
     if (alpha <= 0f) return
-    // test43 (Timothy): the old tan hand read as wood -- now Rory's own paper-robot hand
-    // (orange paper, cyan cuff, white cut-out edge), finger pointing down at [center].
+    // test48: Rory's own paper-robot hand (tan cardboard like his body, three boxy fingers,
+    // cyan cuff + rivet, white cut-out edge), finger pointing down at [center].
     val w = unit * 1.5f
     val h = unit * 2f
     rotate(180f, pivot = center) {
@@ -3670,7 +3676,7 @@ private fun TopDownBowl(fruits: Set<FruitPicker.Fruit>, swirl: () -> Float, fing
         }
         val fp = finger()
         val tines = fp ?: (ctr + Offset(cos(auto.value) * inner * 0.45f, sin(auto.value) * inner * 0.45f))
-        paperFork(tines, tines + Offset(R * 0.55f, -R * 0.75f), R * 0.9f)
+        paperSpoon(tines, tines + Offset(R * 0.55f, -R * 0.75f), R * 0.9f)
     }
 }
 
@@ -3680,7 +3686,7 @@ fun AppleTileArt(modifier: Modifier = Modifier) {
     Canvas(modifier) { paperApple(Offset(size.width / 2f, size.height * 0.56f), size.minDimension * 0.36f) }
 }
 
-/** test47 (Ruby): the "Done!" button -- a fork-and-check picture with a green ring, never a
+/** test47 (Ruby): the "Done!" button -- a spoon-and-check picture (test48: spoon, not fork) with a green ring, never a
  * second salad bowl (kids confused Done with the real counter bowl). */
 @Composable
 fun DoneBowlTileArt(fruits: Set<FruitPicker.Fruit>, modifier: Modifier = Modifier) {
@@ -3693,8 +3699,8 @@ fun DoneBowlTileArt(fruits: Set<FruitPicker.Fruit>, modifier: Modifier = Modifie
         drawCircle(Color(0xFFC8E6C9), r * 1.08f, c)
         drawCircle(Color(0xFF2E7D32), r * 1.08f, c, style = Stroke(r * 0.12f))
         drawCircle(Color(0xFFFFF8E1), r * 0.92f, c)
-        // fork (handle up-right, tines down-left)
-        paperFork(c + Offset(-w * 0.06f, h * 0.08f), c + Offset(w * 0.28f, -h * 0.32f), w * 0.55f)
+        // spoon (handle up-right, bowl down-left)
+        paperSpoon(c + Offset(-w * 0.06f, h * 0.08f), c + Offset(w * 0.28f, -h * 0.32f), w * 0.55f)
         // grey check badge (same language as used fruit tiles)
         val badge = Offset(c.x + r * 0.55f, c.y + r * 0.5f)
         val d = r * 0.55f

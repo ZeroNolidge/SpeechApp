@@ -318,7 +318,8 @@ object VoiceStories {
         "mmm" -> "Mmm! Now you say it... mmm!"
         "four" -> "Four! Now you say it... four!"
         "fill" -> "Fill! Now you say it... fill!"
-        "fork" -> "Fork! Now you say it... fork!"
+        "spoon" -> "Spoon! Now you say it... spoon!"
+        "wash" -> "Wash! Now you say it... wash!"
         else -> "Say it out loud!"
     }
 
@@ -338,9 +339,14 @@ object VoiceStories {
     object FruitPicker {
         enum class Fruit(val emoji: String) { BANANA("🍌"), STRAWBERRY("🍓"), GRAPE("🍇"), BLUEBERRY("🫐"), ORANGE("🍊"), APPLE("🍎") }
 
-        /** test44: the child's own talk turns stay at 3 at most -- the first 2 fruits picked keep
-         * theirs, later ones (and the orange/apple, which have none) are tap-only, then "Fork!". */
+        /** test44/test48: the child's own talk turns stay at 3 at most: up to 2 fruit talk turns,
+         * then "Spoon!". The apple always gives him "Wash!"; any other fruit keeps its talk turn
+         * only while fewer than [otherTalkLimit] are used, so a later apple never makes a 4th. */
         const val MAX_FRUIT_TALKS = 2
+
+        /** How many fruit talk turns may be used before another (non-apple) fruit's own talk turn
+         * is dropped: 2 once the apple's "Wash!" is in, else 1 (leaving room for the apple). */
+        fun otherTalkLimit(applePicked: Boolean) = if (applePicked) MAX_FRUIT_TALKS else MAX_FRUIT_TALKS - 1
 
         /** test44: the "Done!" picture button shows once this many fruits are in. */
         const val DONE_AFTER = 2
@@ -350,9 +356,10 @@ object VoiceStories {
             Prop.FRUIT_BOWL, Move.SHAKE, "", "🍽️", kitchen = KitchenFlow.PICK, caption = "Which fruit?",
         )
 
-        val fork = VoiceBeat(
-            Backdrop.KITCHEN, "Time to stir it all up! Say fork!", listOf("fork", "big fork", "Get the fork!"), "f", Prop.FRUIT_BOWL, Move.SHAKE,
-            "Fork! Good talking! Let's stir it all up!", "🥗", goodbye = true, caption = "Say fork!",
+        // test48 (Aida): "Spoon!" is the stir word now (a real spoon), not "Fork!".
+        val spoon = VoiceBeat(
+            Backdrop.KITCHEN, "Time to stir it all up! Say spoon!", listOf("spoon", "big spoon", "Get the spoon!"), "s", Prop.FRUIT_BOWL, Move.SHAKE,
+            "Spoon! Good talking! Let's stir it all up!", "🥗", goodbye = true, caption = "Say spoon!",
         )
 
         /** The fruit's own short task: tap-only (its own word, never "tap"), then a talk turn
@@ -408,8 +415,9 @@ object VoiceStories {
                     "Fill! Good talking! The berries pour into the bowl!", "🫐", caption = "Say fill!", fruitTag = Fruit.BLUEBERRY,
                 ),
             )
-            // test44: tap-only (taps or short loose swipes/circles anywhere on the fruit all count),
-            // no talk turn of their own -- Rory himself says "Peel!"/"Wash!".
+            // test44: tap-only (taps or short loose swipes/circles anywhere on the fruit all count);
+            // Rory himself says "Peel!". test48 (Aida): the apple's "Wash!" is HIS word now -- a
+            // rub-to-wash tap step, then his own "Wash!" talk turn.
             Fruit.ORANGE -> listOf(
                 VoiceBeat(
                     Backdrop.KITCHEN, "Let's peel the orange! Peel! Swipe to peel!", listOf("peel", "peel it", "Peel the orange!"), "p", Prop.ORANGE, Move.SHAKE,
@@ -418,8 +426,12 @@ object VoiceStories {
             )
             Fruit.APPLE -> listOf(
                 VoiceBeat(
-                    Backdrop.KITCHEN, "Let's wash the apple! Wash! Rub to wash!", listOf("wash", "wash it", "Wash the apple!"), null, Prop.APPLE, Move.SHAKE,
-                    "Wash! Nice and clean! The apple pieces go into the bowl!", "🍎", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Rub to wash!", fruitTag = Fruit.APPLE,
+                    Backdrop.KITCHEN, "Let's wash the apple! Rub to wash!", listOf("rub", "rub it", "Rub the apple!"), null, Prop.APPLE, Move.SHAKE,
+                    "Rub! Nice and clean! The apple pieces go into the bowl!", "🍎", kitchen = KitchenFlow.COUNT, kitchenGoal = 4, still = Prop.FRUIT_BOWL, caption = "Rub to wash!", fruitTag = Fruit.APPLE,
+                ),
+                VoiceBeat(
+                    Backdrop.KITCHEN, "What did we do to the apple? Say wash!", listOf("wash", "wash it", "Wash the apple!"), "sh", Prop.FRUIT_BOWL, Move.SHAKE,
+                    "Wash! Good talking! A clean apple for the salad!", "🍎", caption = "Say wash!", fruitTag = Fruit.APPLE,
                 ),
             )
         }
@@ -427,7 +439,7 @@ object VoiceStories {
         /** Every beat that can ever appear in a play-through (any 3 of the 4 fruits), for tests
          * that check the whole pattern at once -- never a real play order (that's always exactly 3
          * of these 4 fruits, picked by him, not all 4). */
-        fun allBeats(): List<VoiceBeat> = listOf(picker) + Fruit.entries.flatMap { task(it) } + listOf(fork)
+        fun allBeats(): List<VoiceBeat> = listOf(picker) + Fruit.entries.flatMap { task(it) } + listOf(spoon)
     }
 
     /**
@@ -435,7 +447,7 @@ object VoiceStories {
      * the same single-try talk rule (every talk beat here carries no [KitchenFlow] of its own,
      * same as kitchen's own milk/pour/mmm: one model, one listen, then the fix plays -- heard or
      * not). [FruitPicker.picker] starts it; `VoiceStoryScreen` splices in [FruitPicker.task] for
-     * each fruit he picks (3 of the 4), then [FruitPicker.fork] once the 3rd is done -- Rory and
+     * each fruit he picks (3 of the 4), then [FruitPicker.spoon] once the 3rd is done -- Rory and
      * Bear cheer "Fruit salad!", with a bonus "Yum!" line bundled into the same fix (never its own
      * voice check), then the usual kitchen-style ending (sticker into the backpack, no tap needed).
      * Placed by Puzzle Peaks (clear of Market Town's own Rory's Kitchen stop) even though the
@@ -447,7 +459,7 @@ object VoiceStories {
         // K-fruit: 🥗 (green salad) showed as a box glyph in the top-bar title on a real screenshot
         // -- 🍌 is already used (and confirmed drawing correctly) by the recipe card right beside
         // it, so the title reuses it rather than risk another emoji missing from the same build.
-        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🍌", land = Land.PEAKS, sounds = listOf("f", "s", "p"),
+        id = "fruitsalad", title = "Rory's Fruit Salad", emoji = "🍌", land = Land.PEAKS, sounds = listOf("f", "s", "p", "sh"),
         setup = "Bruno's hungry for something fresh! Let's make a fruit salad!",
         beats = listOf(FruitPicker.picker),
         swap = null, sticker = "fruit salad" to "🥗",
@@ -467,7 +479,8 @@ object VoiceStories {
         )
         val oven = VoiceBeat(
             Backdrop.KITCHEN, "Into the oven! Tap the oven to bake the cake!", listOf("bake", "bake it", "Bake the cake!"), "b", Prop.OVEN, Move.SHAKE,
-            "Bake! Hot! Hot! Ding! Oh, the cake is a bit small. A little longer... Just right!", "🎂", kitchen = KitchenFlow.FLIP, caption = "Tap the oven!",
+            // test48 (Aida): Rory says "Oven!" as the cake goes in -- narration, not his turn.
+            "Bake! Oven! In it goes! Hot! Hot! Ding! Oh, the cake is a bit small. A little longer... Just right!", "🎂", kitchen = KitchenFlow.FLIP, caption = "Tap the oven!",
         )
         val candles = VoiceBeat(
             Backdrop.KITCHEN, "Let's put the candles on! Tap the cake!", listOf("put", "put them", "Put the candles on!"), "p", Prop.CAKE, Move.SHAKE,

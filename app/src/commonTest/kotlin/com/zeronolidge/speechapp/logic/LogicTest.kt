@@ -118,6 +118,23 @@ class GamesTest {
     fun speechContentHasWords() {
         SpeechContent.sounds.forEach { assertTrue(it.words.size >= 4) }
     }
+
+    /** test48 (Aida): the Talk picker order, new sounds in, r and th hidden (content kept). */
+    @Test
+    fun talkPickerOrderAndWordLists() {
+        val ids = SpeechContent.picker.map { it.id }
+        assertEquals(listOf("f", "sh", "v", "ch", "sp", "sk", "sm", "p", "b", "m", "t", "d", "k", "g", "s", "l"), ids)
+        assertTrue(SpeechContent.sounds.any { it.id == "r" } && SpeechContent.sounds.any { it.id == "th" })
+        fun words(id: String) = SpeechContent.sounds.first { it.id == id }.words.map { it.text }
+        assertEquals(listOf("fan", "fork", "fish", "foot", "five"), words("f"))
+        assertEquals(listOf("van", "vest", "vase", "oven", "love"), words("v"))
+        assertEquals(listOf("shoe", "ship", "shell", "wash", "fish"), words("sh"))
+        assertEquals(listOf("cheese", "chair", "chop", "chip", "peach"), words("ch"))
+        assertEquals(listOf("spoon", "spider", "spot", "spill", "spin"), words("sp"))
+        assertEquals(listOf("sky", "scoop", "skate", "ski", "skip"), words("sk"))
+        assertEquals(listOf("smile", "smell", "small", "smash", "smoothie"), words("sm"))
+        assertTrue(listOf("sp", "sk", "sm").all { SpeechContent.isBlend(it) } && !SpeechContent.isBlend("s"))
+    }
 }
 
 /** The balloon colour-pattern game beat: AB, then AAB, then ABC; every talk word is p or b. */
@@ -2079,11 +2096,13 @@ class FruitSaladStoryTest {
         for (f in listOf(FruitPicker.Fruit.STRAWBERRY, FruitPicker.Fruit.GRAPE, FruitPicker.Fruit.BLUEBERRY)) {
             assertEquals(2, FruitPicker.task(f).size, "$f should be a tap step then a talk step")
         }
-        // test44: the orange and apple are one tap-only step each (Rory says "Peel!"/"Wash!")
-        for (f in listOf(FruitPicker.Fruit.ORANGE, FruitPicker.Fruit.APPLE)) {
-            assertEquals(1, FruitPicker.task(f).size)
-            assertTrue(FruitPicker.task(f).single().kitchen != null)
-        }
+        // test44: the orange is one tap-only step (Rory says "Peel!")
+        assertEquals(1, FruitPicker.task(FruitPicker.Fruit.ORANGE).size)
+        assertTrue(FruitPicker.task(FruitPicker.Fruit.ORANGE).single().kitchen != null)
+        // test48: the apple is rub-to-wash (tap), then HIS "Wash!" (talk)
+        assertEquals(listOf("rub", "wash"), FruitPicker.task(FruitPicker.Fruit.APPLE).map { it.word })
+        assertTrue(FruitPicker.task(FruitPicker.Fruit.APPLE).first().kitchen != null)
+        assertTrue(FruitPicker.task(FruitPicker.Fruit.APPLE).last().kitchen == null)
     }
 
     @Test
@@ -2100,20 +2119,22 @@ class FruitSaladStoryTest {
             // Each task is exactly one tap step then one talk step (banana's extra drag step is
             // still a tap step): only the LAST beat of each task is ever a plain talk turn.
             val task = FruitPicker.task(f)
-            if (f == FruitPicker.Fruit.ORANGE || f == FruitPicker.Fruit.APPLE) continue
+            if (f == FruitPicker.Fruit.ORANGE) continue
             assertTrue(task.last().kitchen == null, "${f.name}'s last beat should be its talk turn")
             assertTrue(task.dropLast(1).all { it.kitchen != null }, "${f.name}'s earlier beats should all be tap steps")
         }
     }
 
-    /** test44: at most 2 fruit talk turns + "Fork!" -- never more than 3 child callouts. */
+    /** test44/test48: at most 2 fruit talk turns + "Spoon!" -- never more than 3 child callouts. */
     @Test
     fun childCalloutsStayAtThreeMax() {
         assertEquals(2, FruitPicker.MAX_FRUIT_TALKS)
         assertEquals(2, FruitPicker.DONE_AFTER)
-        assertTrue(FruitPicker.fork.kitchen == null)
+        assertTrue(FruitPicker.spoon.kitchen == null)
         assertTrue(FruitPicker.task(FruitPicker.Fruit.ORANGE).first().success.startsWith("Peel!"))
-        assertTrue(FruitPicker.task(FruitPicker.Fruit.APPLE).first().success.startsWith("Wash!"))
+        assertFalse(FruitPicker.task(FruitPicker.Fruit.APPLE).first().problem.contains("Wash!"), "the child says Wash, not Rory")
+        assertTrue(FruitPicker.task(FruitPicker.Fruit.APPLE).last().success.startsWith("Wash!"))
+        assertEquals("spoon", FruitPicker.spoon.word)
     }
 
     @Test
@@ -2123,14 +2144,45 @@ class FruitSaladStoryTest {
         assertEquals(listOf("slice", "drag", "four"), beats.map { it.word })
     }
 
-    /** Every talk word ("Four!", "Off!", "Five!", "Fill!", "Fork!") but "off" starts with the "f"
-     * sound, so Rory's f-pose (round cyan eyes, no cheek blush, the cyan-blue antenna) shows while
-     * he models them. */
+    /** The f talk words ("Four!", "Five!", "Fill!") trigger Rory's f-pose while he models them;
+     * "Off!", "Wash!" and "Spoon!" (test48) don't start with f. */
     @Test
     fun mostTalkWordsTriggerTheFPose() {
         val talkWords = FruitPicker.allBeats().filter { it.kitchen == null }.map { it.word }
-        assertEquals(listOf("four", "off", "five", "fill", "fork"), talkWords)
-        talkWords.filter { it != "off" }.forEach { assertTrue(VoiceStories.isFWord(it), "'$it' should trigger the f-pose") }
+        assertEquals(listOf("four", "off", "five", "fill", "wash", "spoon"), talkWords)
+        listOf("four", "five", "fill").forEach { assertTrue(VoiceStories.isFWord(it), "'$it' should trigger the f-pose") }
+    }
+
+    /** test48 (Aida): whatever 3 fruits he picks, in any order, he says at most 3 words, and the
+     * apple always gives him "Wash!". */
+    @Test
+    fun anyThreePicksStayAtThreeChildWordsAndTheAppleAlwaysSaysWash() {
+        val fruits = FruitPicker.Fruit.entries
+        for (a in fruits) for (b in fruits) for (c in fruits) {
+            val order = listOf(a, b, c)
+            if (order.distinct().size < 3) continue
+            var beats = listOf(FruitPicker.picker)
+            var picked = emptyList<FruitPicker.Fruit>()
+            var talks = 0
+            for (f in order) {
+                val r = FruitPick.pick(beats, beats.lastIndex, picked, talks, f)!!
+                beats = r.beats.dropLast(1); picked = r.picked; talks = r.talks
+                beats = beats + FruitPicker.picker
+            }
+            val words = (beats + FruitPicker.spoon).filter { it.kitchen == null && it != FruitPicker.picker }.map { it.word }
+            assertTrue(words.size <= 3, "$order: $words")
+            assertTrue(words.size >= 2, "$order: $words")
+            if (FruitPicker.Fruit.APPLE in order) assertTrue("wash" in words, "$order: $words")
+        }
+    }
+
+    /** test48: Rory says "Oven!" in the cake (narration); the child's words stay flour, five, blow. */
+    @Test
+    fun cakeKeepsFlourFiveBlowAndRorySaysOven() {
+        val talk = VoiceStories.CakeSteps.all.filter { it.kitchen == null }.map { it.word }
+        assertEquals(listOf("flour", "five", "blow"), talk)
+        assertTrue(VoiceStories.CakeSteps.oven.success.contains("Oven!"))
+        assertTrue(VoiceStories.CakeSteps.oven.kitchen != null)
     }
 
     @Test
@@ -2144,10 +2196,10 @@ class FruitSaladStoryTest {
     }
 
     @Test
-    fun onlyTheForkBeatIsTheCalmGoodbye() {
+    fun onlyTheSpoonBeatIsTheCalmGoodbye() {
         val all = FruitPicker.allBeats()
-        assertTrue(FruitPicker.fork.goodbye)
-        assertTrue(all.filter { it != FruitPicker.fork }.none { it.goodbye })
+        assertTrue(FruitPicker.spoon.goodbye)
+        assertTrue(all.filter { it != FruitPicker.spoon }.none { it.goodbye })
     }
 
     @Test

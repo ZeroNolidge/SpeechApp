@@ -42,10 +42,14 @@ object FruitPick {
         var task = FruitPicker.task(fruit)
         var nextTalks = talks
         if (task.any { it.kitchen == null }) {
-            if (nextTalks >= FruitPicker.MAX_FRUIT_TALKS) task = task.filter { it.kitchen != null } else nextTalks++
+            // test48: the apple's "Wash!" is always his; other fruits leave room for it (see
+            // FruitPicker.otherTalkLimit), so the whole salad is never more than 3 of his words.
+            val limit = if (fruit == FruitPicker.Fruit.APPLE) FruitPicker.MAX_FRUIT_TALKS
+                else FruitPicker.otherTalkLimit(FruitPicker.Fruit.APPLE in picked)
+            if (nextTalks >= limit) task = task.filter { it.kitchen != null } else nextTalks++
         }
         val nextPicked = picked + fruit
-        val tail = task + if (nextPicked.size >= FruitPicker.Fruit.entries.size) listOf(FruitPicker.fork) else listOf(FruitPicker.picker)
+        val tail = task + if (nextPicked.size >= FruitPicker.Fruit.entries.size) listOf(FruitPicker.spoon) else listOf(FruitPicker.picker)
         return Result(beats.take(index + 1) + tail, nextPicked, nextTalks)
     }
 

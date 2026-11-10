@@ -85,7 +85,7 @@ private const val OY = 15f
  * brass split pins (at the shoulders and the neck), each with a wobbly hand-cut edge. The pieces
  * are baked once; moods move the arms on their pins, and while [talking] (and something is being
  * said) the head and an arm give a small hinge wiggle. The hero wears a big paper [scarf]; the
- * robot (Rory) has a stitched antenna.
+ * robot (Rory) has a tan cardboard antenna with a glowing cyan ball.
  */
 @Composable
 fun Critter(
@@ -449,6 +449,27 @@ private fun DrawScope.drawPuppetPart(
     fun oval(cx: Float, cy: Float, w: Float, h: Float, c: Color) =
         paperOval(c, o(cx - w / 2, cy - h / 2), Size(w * u, h * u))
     fun circle(cx: Float, cy: Float, r: Float, c: Color) = paperCircle(c, r * u, o(cx, cy))
+    /**
+     * test48: Rory's one antenna, the same on every screen and under every hat: a short tan
+     * cardboard stalk (his body's paper) with a thick white paper outline, seated flush into
+     * whatever it stands on at [baseY] (his head top, or the chef toque's crown), and a glowing
+     * cyan-blue ball (#4DD0E1) on top. No star tip, no all-cyan stalk. Drawn with the head, so
+     * it tilts with it.
+     */
+    fun roryAntenna(baseY: Float) {
+        val ball = Color(0xFF4DD0E1)
+        val stalkTop = baseY - 10f
+        // white paper outline, then the tan stalk (1 unit into the head: no gap)
+        drawRoundRect(Color.White, o(46.6f, stalkTop - 1.4f), Size(6.8f * u, 12.4f * u), CornerRadius(2.4f * u))
+        paperRoundRect(color, o(48f, stalkTop), Size(4f * u, 11f * u), CornerRadius(1.6f * u))
+        drawLine(darker(color, 0.18f), o(49.2f, stalkTop + 3.5f), o(50.8f, stalkTop + 3.5f), 0.8f * u)
+        drawLine(darker(color, 0.18f), o(49.2f, stalkTop + 7f), o(50.8f, stalkTop + 7f), 0.8f * u)
+        // the glowing ball
+        drawCircle(ball.copy(alpha = 0.28f), 7.5f * u, o(50f, stalkTop - 4f))
+        drawCircle(Color.White, 6.3f * u, o(50f, stalkTop - 4f))
+        circle(50f, stalkTop - 4f, 5f, ball)
+        drawCircle(Color.White.copy(alpha = 0.85f), 1.5f * u, o(48.4f, stalkTop - 5.6f))
+    }
     fun poly(c: Color, vararg pts: Pair<Float, Float>) {
         val p = Path()
         pts.forEachIndexed { i, (x, y) -> val q = o(x, y); if (i == 0) p.moveTo(q.x, q.y) else p.lineTo(q.x, q.y) }
@@ -601,15 +622,8 @@ private fun DrawScope.drawPuppetPart(
                 circle(50f, 63f, 30f, skin)
             }
             if (sp.antenna && outfit.hat?.id != "hat_chef") {
-                // Rory's signature: a stitched paper antenna with a gold star tip (tucked inside his tall chef toque in Rory's Kitchen).
-                paperRoundRect(RoryCyan, o(47.5f, 12f), Size(5f * u, 24f * u), CornerRadius(2f * u))
-                drawLine(
-                    Color.White.copy(alpha = 0.9f), o(50f, 14f), o(50f, 34f), 1f * u,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.2f * u, 1.6f * u)),
-                )
-                listOf(18f, 25f, 32f).forEach { y -> drawLine(Color.White.copy(alpha = 0.9f), o(48f, y - 1.2f), o(52f, y + 1.2f), 0.9f * u) }
-                circle(50f, 11f, 5.5f, Color(0xFFF2B630))
-                star(o(50f, 11f), 3.6f * u, Color(0xFFFFF3C4))
+                // Rory's signature antenna (under the chef toque it pokes out of the crown instead).
+                roryAntenna(34f)
             }
             if (sp.spikes) {
                 poly(dark, 38f to 36f, 43f to 24f, 48f to 34f)
@@ -820,13 +834,8 @@ private fun DrawScope.drawPuppetPart(
                         }
                         paperPath(crown, crownWhite)
                         drawPath(crown, strokeCol, style = Stroke(1.5f * u, join = StrokeJoin.Round))
-                        // K-fruit8: Rory's cyan-blue antenna pokes out through the top of the toque.
-                        if (sp.antenna) {
-                            val cyan = RoryCyan
-                            paperRoundRect(cyan, o(48f, top - 39f), Size(4f * u, 11f * u), CornerRadius(2f * u))
-                            circle(50f, top - 40f, 4.5f, cyan)
-                            circle(48.8f, top - 41.2f, 1.4f, Color.White.copy(alpha = 0.85f))
-                        }
+                        // test48: the same tan stalk + cyan ball as everywhere, out of the crown's top.
+                        if (sp.antenna) roryAntenna(top - 27f)
                         // Subtle interior vertical pleat/fold lines rising partway up from the cuff
                         val pLeft = Path().apply {
                             val s = o(39f, top - 2f); val c1 = o(36f, top - 9f); val e = o(35f, top - 16f)

@@ -106,6 +106,10 @@ private fun testStart(hash: String): Screen? {
         when {
             v.startsWith("land-") -> Screen.LandGames(Land.valueOf(v.removePrefix("land-")))
             v == "talk" -> Screen.TalkPractice(SpeechContent.sounds.first())
+            // test48: the all-games practice grid, the Talk sound picker, and one sound's practice.
+            v == "practice" -> Screen.Practice
+            v == "talkmenu" -> Screen.TalkMenu
+            v.startsWith("talk-") -> Screen.TalkPractice(SpeechContent.sounds.first { it.id == v.removePrefix("talk-") })
             v == "pip" -> Screen.Pip
             v == "say" -> Screen.SayCheck
             v == "cave" -> Screen.EchoCave()
