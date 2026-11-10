@@ -53,12 +53,20 @@ class ReplayPickerTest {
         assertEquals("teddy", replay.plot.id)
     }
 
-    @Test
-    fun theCardFitsClearOfTheAdventureBarAndTheNextStop() {
-        val screens = listOf(390f to 844f, 360f to 740f, 430f to 932f, 1366f to 1024f, 1024f to 768f, 820f to 1180f, 768f to 1024f)
+    // One test per screen (as in MapLayoutTest): each runs in about a second, so the browser test
+    // runner never sits for many seconds inside one test and drops a result (it did, test53b).
+    @Test fun cardOnPhone390() = cardFitsClearOfTheAdventureBarAndTheNextStop(390f, 844f)
+    @Test fun cardOnPhone360() = cardFitsClearOfTheAdventureBarAndTheNextStop(360f, 740f)
+    @Test fun cardOnPhone430() = cardFitsClearOfTheAdventureBarAndTheNextStop(430f, 932f)
+    @Test fun cardOnIpad1366() = cardFitsClearOfTheAdventureBarAndTheNextStop(1366f, 1024f)
+    @Test fun cardOnIpad1024() = cardFitsClearOfTheAdventureBarAndTheNextStop(1024f, 768f)
+    @Test fun cardOnIpadPortrait820() = cardFitsClearOfTheAdventureBarAndTheNextStop(820f, 1180f)
+    @Test fun cardOnIpadPortrait768() = cardFitsClearOfTheAdventureBarAndTheNextStop(768f, 1024f)
+
+    private fun cardFitsClearOfTheAdventureBarAndTheNextStop(sw: Float, sh: Float) {
         val stories = VoiceStories.all.map { it.id to it.land }
         val problems = mutableListOf<String>()
-        for ((sw, sh) in screens) {
+        run {
             val narrow = sw < 600f
             val top = 96f + (if (narrow) 26f else 32f) + 22f
             val bottom = if (narrow) 176f else 90f
@@ -70,6 +78,10 @@ class ReplayPickerTest {
             val labelH = MapAreas.labelH(label)
             val bar = ReplayPicker.adventureBar(sw, sh, narrow)
             val pictureR = min(mw, mh) * MapAreas.LANDMARK_RADIUS
+            // The card depends only on where the ▶ is, so each distinct ▶ spot is checked once
+            // (every chapter of two laps, cave open or not, gives the same handful of spots).
+            // That keeps this test quick enough for the browser test runner to report reliably.
+            val seen = mutableSetOf<List<Float>>()
             for (chapter in 0..Trail.size * 2) for (cave in listOf(false, true)) {
                 // The next stop exactly as the map places it (the same call and sizes as MapLayoutTest).
                 val st = MapAreas.layout(
@@ -77,6 +89,7 @@ class ReplayPickerTest {
                     stories, MapAreas.starTap(min(mw, mh)) / 2f, halfW, labelH, stopEdge = MapAreas.stopEdge(96f),
                 ).stop
                 val ring = floatArrayOf(mapLeft + st.x, mapTop + st.y, st.r * MapAreas.STOP_PULSE)
+                if (!seen.add(ring.toList())) continue
                 for (a in MapAreas.all) for (n in 1..Trail.STOPS_PER_LAND) {
                     val px = mapLeft + a.markX * mw
                     val py = mapTop + a.markY * mh

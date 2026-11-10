@@ -162,7 +162,7 @@ fun MapScreen(nav: Nav) {
             }
             app.sfx.pop()
             fixT = -1f
-            if (testFixed == null) { p.setPendingFix(null); p.wearCostume(pendingFix) } else p.wearCostume(pendingFix)
+            if (testFixed == null) { p.savePendingFix(null); p.wearCostume(pendingFix) } else p.wearCostume(pendingFix)
             kotlinx.coroutines.withTimeoutOrNull(2500) { said.await() }
             if (story.partyNow(before, fixedLands)) {
                 println("ISLAND party start")

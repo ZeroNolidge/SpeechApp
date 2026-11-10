@@ -212,7 +212,7 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false, replay
                     // Island story: the first finished story at a place fixes it; the after line
                     // and the fix moment play back on the map.
                     if (p.fixLand(land)) {
-                        p.setPendingFix(land)
+                        p.savePendingFix(land)
                         fixedNow = true
                         println("ISLAND fixed=${land.name} count=${p.fixedLands.size}")
                     }

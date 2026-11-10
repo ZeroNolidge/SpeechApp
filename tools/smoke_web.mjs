@@ -207,9 +207,11 @@ if (started) {
             if (marks.MEADOW && marks.STOP && areas.MEADOW) {
                 await tapAt('sunflower (lower half)', marks.MEADOW.x, marks.MEADOW.y + 20, 'MEADOW');
                 await tapAt('Meadow gap (label to picture)', marks.MEADOW.x, Math.round((areas.MEADOW.y + marks.MEADOW.y) / 2), 'MEADOW');
-                // A finished stop's star replays a story there.
-                if (marks['DONE-0']) await tapAt('finished star (replay)', marks['DONE-0'].x, marks['DONE-0'].y, 'DONE-0');
-                else check('CHECK map tap finished star (replay): FAIL (no DONE-0 logged)');
+                // A finished stop's star replays a story there. Since test52 a place shows one star
+                // (for its latest finished stop), so take whichever DONE-n the map logged.
+                const done = Object.keys(marks).find((k) => k.startsWith('DONE-'));
+                if (done) await tapAt('finished star (replay)', marks[done].x, marks[done].y, done);
+                else check('CHECK map tap finished star (replay): FAIL (no DONE-n logged)');
                 await tapAt('next-stop button', marks.STOP.x, marks.STOP.y, 'STOP');
             } else {
                 check('CHECK map tap sunflower: FAIL (positions not logged)');

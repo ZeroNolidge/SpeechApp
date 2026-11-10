@@ -163,7 +163,7 @@ class Progress(private val prefs: Prefs) {
     )
         private set
 
-    fun setPendingFix(land: com.zeronolidge.speechapp.logic.Land?) {
+    fun savePendingFix(land: com.zeronolidge.speechapp.logic.Land?) {
         pendingFix = land
         prefs.edit().putString("pendingFix", land?.name ?: "").apply()
     }
