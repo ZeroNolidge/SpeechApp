@@ -117,6 +117,13 @@ private fun testStart(hash: String): Screen? {
             v == "say" -> Screen.SayCheck
             v == "cave" -> Screen.EchoCave()
             v == "rest" -> Screen.Rest
+            // Island story review stills: "island&fixed=4" (the first 4 trail places fixed), "costumes".
+            v == "island" -> {
+                val n = Regex("&fixed=(\\d+)").find(hash)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                com.zeronolidge.speechapp.logic.IslandTest.fixed = Trail.lands.take(n).toSet()
+                Screen.Map
+            }
+            v == "costumes" -> Screen.CostumeSheet
             // The balloon story's own game beat, straight away: for the puzzle's screenshot check.
             v == "story-balloon-pattern" -> Screen.VoiceStory("balloon", com.zeronolidge.speechapp.logic.VoiceStories.balloon.beats.indexOfFirst { it.game })
             // "story-balloon@3": that story, starting at its 4th beat.

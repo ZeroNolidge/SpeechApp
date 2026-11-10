@@ -60,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -123,6 +124,12 @@ fun IslandMap(
     onStory: (String) -> Unit = {},
     /** A finished stop's ⭐ was tapped: replay a story there (the trail doesn't move). */
     onDone: (Int) -> Unit = {},
+    /**
+     * Island story: places already fixed (full colour, one small looping motion). Every other
+     * place the child can reach is "broken": sleepy, at about 60% of its own colour, with one
+     * small sad detail (never red, cracks, gray or a cross; mist still means "not reached yet").
+     */
+    fixed: Set<Land> = Land.entries.toSet(),
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -349,23 +356,31 @@ fun IslandMap(
                     )
                 },
         ) {
-            BakedLayer(listOf("map-island", current, lap), depth = 4.dp) {
+            val fixedKey = Land.entries.filter { it in fixed }.joinToString(",") { it.name }
+            BakedLayer(listOf("map-island", current, lap, fixedKey), depth = 4.dp) {
                 island()
                 riverBase()
                 trail(current, lap)
-                forest(Land.FOREST)
-                meadow(Land.MEADOW)
-                lagoon(Land.LAGOON)
-                market(Land.MARKET)
-                factory(Land.FACTORY)
-                peaks(Land.PEAKS)
-                caves(Land.CAVES)
+                fun place(land: Land, art: DrawScope.(Boolean) -> Unit) = sleepy(land !in fixed) { art(land in fixed) }
+                place(Land.FOREST) { forest(Land.FOREST); forestStory(Land.FOREST, it) }
+                place(Land.MEADOW) { meadow(Land.MEADOW); meadowStory(Land.MEADOW, it) }
+                place(Land.LAGOON) { lagoon(Land.LAGOON); lagoonDock(Land.LAGOON) }
+                place(Land.MARKET) { market(Land.MARKET, open = it) }
+                place(Land.FACTORY) { factory(Land.FACTORY); if (!it) factoryGears(Land.FACTORY, 0f) }
+                place(Land.PEAKS) { peaks(Land.PEAKS); peaksStory(Land.PEAKS, it) }
+                place(Land.CAVES) { caves(Land.CAVES, lit = it) }
             }
+            // Each fixed place's one small looping motion, drawn live over the baked art.
             Canvas(Modifier.fillMaxSize()) {
                 riverFlow(fast)
-                lagoonGlint(Land.LAGOON, fast)
-                factorySmoke(Land.FACTORY, fast)
-                caveSparkles(Land.CAVES, fast)
+                val m = if (still) 0f else 1f
+                if (Land.FOREST in fixed) forestNotes(Land.FOREST, slow * m)
+                if (Land.MEADOW in fixed) meadowBalloons(Land.MEADOW, mid * m)
+                if (Land.LAGOON in fixed) { lagoonGlint(Land.LAGOON, fast); pipBoat(Land.LAGOON, mid * m) }
+                if (Land.MARKET in fixed) marketGlint(Land.MARKET, fast * m)
+                if (Land.PEAKS in fixed) peaksFlag(Land.PEAKS, fast * m)
+                if (Land.FACTORY in fixed) { factoryGears(Land.FACTORY, slow * m); factorySmoke(Land.FACTORY, fast) }
+                if (Land.CAVES in fixed) { caveGlow(Land.CAVES, fast * m); caveSparkles(Land.CAVES, fast) }
             }
             // The castle floats on its cloud, baked in its own small box.
             val castleBox = unit * 0.3f
@@ -375,7 +390,10 @@ fun IslandMap(
                     .size(castleBox)
                     .graphicsLayer { translationY = sin(mid * 2 * PI).toFloat() * size.height * 0.03f },
             ) {
-                BakedLayer("map-castle", depth = 4.dp) { castleArt(center, size.minDimension / 4.4f) }
+                val castleFixed = Land.CLOUDS in fixed
+                BakedLayer(listOf("map-castle", castleFixed), depth = 4.dp) {
+                    sleepy(!castleFixed) { castleArt(center, size.minDimension / 4.4f, flags = castleFixed) }
+                }
             }
 
             // Mist over lands the trail hasn't reached, each patch baked once and drifting.
@@ -969,7 +987,7 @@ private fun DrawScope.riverBase() {
 }
 
 /** Two market stalls with striped paper awnings and fruit on the counters. */
-private fun DrawScope.market(land: Land) {
+private fun DrawScope.market(land: Land, open: Boolean = true) {
     val c = at(land)
     val s = u * 0.06f
     listOf(-0.75f to 0xFF7D4C96, 0.75f to 0xFF1E88E5).forEachIndexed { k, (dx, stripe) ->
@@ -979,6 +997,17 @@ private fun DrawScope.market(land: Land) {
         paperRect(Color(0xFF8D6E63), Offset(x - s * 0.62f, y - s * 0.5f), Size(s * 0.1f, s * 0.95f))
         paperRect(Color(0xFF8D6E63), Offset(x + s * 0.52f, y - s * 0.5f), Size(s * 0.1f, s * 0.95f))
         paperRect(Color(0xFFD7A26B), Offset(x - s * 0.7f, y + s * 0.15f), Size(s * 1.4f, s * 0.35f))
+        if (!open) {
+            // Island story, broken: the awning rolled up shut into a striped tube, a plain
+            // canvas blind pulled down over the empty counter.
+            paperRect(Color(0xFFE8C28A), Offset(x - s * 0.62f, y - s * 0.62f), Size(s * 1.24f, s * 0.95f))
+            for (k in 1..3) drawLine(Color(0xFFC99A5B), Offset(x - s * 0.58f, y - s * 0.62f + k * s * 0.24f), Offset(x + s * 0.58f, y - s * 0.62f + k * s * 0.24f), s * 0.03f)
+            for (i in 0 until 5) {
+                val col = if (i % 2 == 0) Color(stripe) else Color.White
+                paperRoundRect(col, Offset(x - s * 0.75f + i * s * 0.3f, y - s * 0.84f), Size(s * 0.3f, s * 0.3f), CornerRadius(s * 0.12f))
+            }
+            return@forEachIndexed
+        }
         // Striped awning with a scalloped edge.
         for (i in 0 until 5) {
             val col = if (i % 2 == 0) Color(stripe) else Color.White
@@ -1137,9 +1166,11 @@ private fun DrawScope.factorySmoke(land: Land, fast: Float) {
 private fun DrawScope.factory(land: Land) {
     val c = at(land)
     val s = u * 0.07f
-    paperRect(Color(0xFF78909C), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.7f))
+    // (Island story: the factory's paper is a clear steel blue, not gray, so its sleepy broken
+    // state can never read as the gray "done" look.)
+    paperRect(Color(0xFF6F93C0), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.7f))
     paperRect(Color(0xFF22A699), Offset(c.x + s * 0.4f, c.y - s * 1.0f), Size(s * 0.3f, s * 0.1f))
-    paperRect(Color(0xFF90A4AE), Offset(c.x - s * 0.9f, c.y - s * 0.4f), Size(s * 1.8f, s * 0.8f))
+    paperRect(Color(0xFF8DB0DA), Offset(c.x - s * 0.9f, c.y - s * 0.4f), Size(s * 1.8f, s * 0.8f))
     // Saw-tooth roof.
     for (k in 0..2) {
         val x0 = c.x - s * 0.9f + k * s * 0.6f
@@ -1149,11 +1180,10 @@ private fun DrawScope.factory(land: Land) {
             lineTo(x0 + s * 0.6f, c.y - s * 0.75f)
             close()
         }
-        paperPath(roof, Color(0xFF607D8B))
+        paperPath(roof, Color(0xFF4F79AD))
     }
     for (k in 0..2) paperRect(Color(0xFFFFF59D), Offset(c.x - s * 0.7f + k * s * 0.55f, c.y - s * 0.15f), Size(s * 0.3f, s * 0.25f))
-    paperCircle(Color(0xFFFFB300), s * 0.2f, Offset(c.x - s * 0.95f, c.y + s * 0.4f))
-    paperCircle(Color(0xFF90A4AE), s * 0.08f, Offset(c.x - s * 0.95f, c.y + s * 0.4f))
+    // (The gears are drawn by factoryGears: baked and still when broken, turning live when fixed.)
 }
 
 private fun DrawScope.mountain(base: Offset, wide: Float, tall: Float, color: Color) {
@@ -1183,13 +1213,33 @@ private fun DrawScope.peaks(land: Land) {
     mountain(Offset(c.x, c.y + s * 0.6f), s * 1.1f, s * 1.9f, Color(0xFF8E7CC3))
 }
 
-private fun DrawScope.caves(land: Land) {
+private fun DrawScope.caves(land: Land, lit: Boolean = true) {
     val c = at(land)
     val s = u * 0.07f
-    blob(Offset(c.x, c.y), s * 1.4f, s * 1.0f, Color(0xFF8D8D8D), 11)
-    blob(Offset(c.x - s * 0.2f, c.y - s * 0.2f), s * 0.9f, s * 0.6f, Color(0xFFA1A1A1), 12)
-    paperArc(Color(0xFF263238), 180f, 180f, true, Offset(c.x - s * 0.5f, c.y - s * 0.2f), Size(s, s * 0.9f))
-    paperRect(Color(0xFF263238), Offset(c.x - s * 0.5f, c.y + s * 0.25f), Size(s, s * 0.3f))
+    // (Island story: lilac stone rather than plain gray, so the sleepy cave never reads as "done".)
+    blob(Offset(c.x, c.y), s * 1.4f, s * 1.0f, Color(0xFF9D90BF), 11)
+    blob(Offset(c.x - s * 0.2f, c.y - s * 0.2f), s * 0.9f, s * 0.6f, Color(0xFFB7ACD6), 12)
+    val mouth = if (lit) Color(0xFF4A2F6B) else Color(0xFF2E2A3D)
+    paperArc(mouth, 180f, 180f, true, Offset(c.x - s * 0.5f, c.y - s * 0.2f), Size(s, s * 0.9f))
+    paperRect(mouth, Offset(c.x - s * 0.5f, c.y + s * 0.25f), Size(s, s * 0.3f))
+    if (lit) {
+        // Fixed: a warm glow deep in the mouth, crystals catching it.
+        drawOval(Brush.radialGradient(listOf(Color(0xFFFFE082), Color(0xFFFFB74D).copy(alpha = 0.7f), Color.Transparent), Offset(c.x, c.y + s * 0.3f), s * 0.55f),
+            Offset(c.x - s * 0.45f, c.y - s * 0.1f), Size(s * 0.9f, s * 0.65f))
+        star(Offset(c.x - s * 0.2f, c.y + s * 0.15f), s * 0.1f, Color(0xFFB388FF))
+        star(Offset(c.x + s * 0.22f, c.y + s * 0.3f), s * 0.08f, Color(0xFF80DEEA))
+    }
+    // Two lanterns on little posts either side of the mouth: dark glass when broken, lit when fixed.
+    listOf(-0.78f, 0.78f).forEach { dx ->
+        val x = c.x + dx * s
+        val top = c.y + s * 0.05f
+        paperRect(Color(0xFF6D4C41), Offset(x - s * 0.04f, top + s * 0.25f), Size(s * 0.08f, s * 0.42f))
+        paperRoundRect(Color(0xFF5D4037), Offset(x - s * 0.17f, top - s * 0.02f), Size(s * 0.34f, s * 0.08f), CornerRadius(s * 0.03f))
+        paperRoundRect(if (lit) Color(0xFFFFE082) else Color(0xFF4B4560), Offset(x - s * 0.13f, top + s * 0.05f), Size(s * 0.26f, s * 0.22f), CornerRadius(s * 0.04f))
+        paperRoundRect(Color(0xFF5D4037), Offset(x - s * 0.17f, top + s * 0.26f), Size(s * 0.34f, s * 0.06f), CornerRadius(s * 0.03f))
+        drawArc(Color(0xFF5D4037), 180f, 180f, false, Offset(x - s * 0.08f, top - s * 0.12f), Size(s * 0.16f, s * 0.2f), style = Stroke(s * 0.03f))
+        if (lit) drawCircle(Color(0xFFFFF59D), s * 0.05f, Offset(x, top + s * 0.16f))
+    }
 }
 
 /** Crystals twinkling round the cave mouth, drawn live. */
@@ -1212,7 +1262,7 @@ private fun DrawScope.castleShadow(land: Land, mid: Float) {
 }
 
 /** The castle on its fluffy cloud, centred on [c] at scale [s]; baked once in its own box. */
-private fun DrawScope.castleArt(c: Offset, s: Float) {
+private fun DrawScope.castleArt(c: Offset, s: Float, flags: Boolean = true) {
     // A little rainbow behind.
     listOf(0xFFF8BBD0, 0xFFFFE082, 0xFFA5D6A7, 0xFF90CAF9).forEachIndexed { i, col ->
         drawArc(
@@ -1239,6 +1289,8 @@ private fun DrawScope.castleArt(c: Offset, s: Float) {
         }
         paperPath(roof, Color(0xFF7E57C2))
         drawLine(Color(0xFF5D4037), Offset(x, c.y - s * tall - s * 0.5f), Offset(x, c.y - s * tall - s * 0.8f), s * 0.05f)
+        // Island story, broken: bare flagpoles (a round knob on top) until the castle is fixed.
+        if (!flags) { paperCircle(Color(0xFFFFD54F), s * 0.05f, Offset(x, c.y - s * tall - s * 0.82f)); return@forEachIndexed }
         val flag = Path().apply {
             moveTo(x, c.y - s * tall - s * 0.8f)
             lineTo(x + s * 0.3f, c.y - s * tall - s * 0.72f)
@@ -1306,4 +1358,242 @@ private fun DrawScope.birds(slow: Float, flap: Float) {
             drawPath(wing, Color(0xFF37474F), style = Stroke(s * 0.22f, cap = StrokeCap.Round))
         }
     }
+}
+
+// ---------------------------------------------------------------- island story: broken / fixed
+
+/** A broken place is sleepy, not scary: its own colours at about 60% saturation. */
+private val SleepyPaint = androidx.compose.ui.graphics.Paint().apply {
+    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+        androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0.6f) },
+    )
+}
+
+private inline fun DrawScope.sleepy(on: Boolean, block: DrawScope.() -> Unit) {
+    if (!on) { block(); return }
+    drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(-size.width, -size.height, size.width * 2f, size.height * 2f), SleepyPaint)
+    block()
+    drawContext.canvas.restore()
+}
+
+/** A little paper songbird sitting at [p], facing right if [right]. */
+private fun DrawScope.songbird(p: Offset, b: Float, color: Color, right: Boolean) {
+    val d = if (right) 1f else -1f
+    paperOval(color, Offset(p.x - b * 0.55f, p.y - b * 0.75f), Size(b * 1.1f, b * 0.8f))
+    paperCircle(color, b * 0.33f, Offset(p.x + d * b * 0.42f, p.y - b * 0.85f))
+    val beak = Path().apply {
+        moveTo(p.x + d * b * 0.7f, p.y - b * 0.92f); lineTo(p.x + d * b * 0.98f, p.y - b * 0.84f); lineTo(p.x + d * b * 0.7f, p.y - b * 0.76f); close()
+    }
+    paperPath(beak, Color(0xFFFFA726))
+    drawCircle(Color(0xFF3A2E5C), b * 0.08f, Offset(p.x + d * b * 0.5f, p.y - b * 0.9f))
+    val tail = Path().apply {
+        moveTo(p.x - d * b * 0.45f, p.y - b * 0.5f); lineTo(p.x - d * b * 0.95f, p.y - b * 0.75f); lineTo(p.x - d * b * 0.85f, p.y - b * 0.4f); close()
+    }
+    paperPath(tail, color)
+}
+
+/** The forest's owl on a branch at [p]: eyes open when fixed, closed (asleep) when broken. */
+private fun DrawScope.forestOwl(p: Offset, o: Float, awake: Boolean) {
+    val body = Color(0xFF9C7A5B)
+    paperOval(body, Offset(p.x - o * 0.5f, p.y - o * 1.2f), Size(o, o * 1.2f))
+    paperOval(Color(0xFFE6D2B5), Offset(p.x - o * 0.3f, p.y - o * 0.7f), Size(o * 0.6f, o * 0.62f))
+    listOf(-1f, 1f).forEach { d ->
+        val ear = Path().apply { moveTo(p.x + d * o * 0.42f, p.y - o * 1.0f); lineTo(p.x + d * o * 0.4f, p.y - o * 1.38f); lineTo(p.x + d * o * 0.15f, p.y - o * 1.12f); close() }
+        paperPath(ear, body)
+        val e = Offset(p.x + d * o * 0.2f, p.y - o * 0.88f)
+        if (awake) {
+            drawCircle(Color.White, o * 0.17f, e)
+            drawCircle(Color(0xFFFFB300), o * 0.11f, e)
+            drawCircle(Color(0xFF3A2E5C), o * 0.07f, e)
+        } else {
+            drawArc(Color(0xFF3A2E5C), 20f, 140f, false, Offset(e.x - o * 0.14f, e.y - o * 0.1f), Size(o * 0.28f, o * 0.18f), style = Stroke(o * 0.06f, cap = StrokeCap.Round))
+        }
+    }
+    val beak = Path().apply { moveTo(p.x - o * 0.07f, p.y - o * 0.78f); lineTo(p.x + o * 0.07f, p.y - o * 0.78f); lineTo(p.x, p.y - o * 0.64f); close() }
+    paperPath(beak, Color(0xFFFFA726))
+}
+
+/** Forest: the branches (bare, with a sleeping owl, when broken; birds and an awake owl when fixed). */
+private fun DrawScope.forestStory(land: Land, fixed: Boolean) {
+    val c = at(land)
+    val s = u * 0.06f
+    val wood = Color(0xFF6D4C41)
+    // Three branches reaching out of the canopies (their perch points).
+    val branches = listOf(
+        Triple(Offset(-1.45f, 0.0f), Offset(-2.05f, -0.12f), false),
+        Triple(Offset(1.25f, 0.1f), Offset(1.95f, 0.0f), true),
+        Triple(Offset(0.9f, -1.1f), Offset(1.55f, -1.25f), true),
+    )
+    branches.forEach { (a, b, _) ->
+        val pa = Offset(c.x + a.x * s, c.y + a.y * s); val pb = Offset(c.x + b.x * s, c.y + b.y * s)
+        drawLine(wood, pa, pb, s * 0.1f, cap = StrokeCap.Round)
+        // a little twig fork
+        val mid = Offset((pa.x + pb.x) / 2, (pa.y + pb.y) / 2)
+        drawLine(wood, mid, Offset(mid.x + (pb.x - pa.x) * 0.25f, mid.y - s * 0.22f), s * 0.06f, cap = StrokeCap.Round)
+    }
+    fun perch(i: Int) = branches[i].let { (a, b, _) -> Offset(c.x + (a.x * 0.35f + b.x * 0.65f) * s, c.y + (a.y * 0.35f + b.y * 0.65f) * s) }
+    forestOwl(perch(1), s * 0.62f, awake = fixed)
+    if (fixed) {
+        songbird(perch(0), s * 0.42f, Color(0xFF29B6F6), right = false)
+        songbird(perch(2), s * 0.42f, Color(0xFFFFB300), right = true)
+    }
+}
+
+/** Fixed forest's loop: little music notes floating up from the singing birds. */
+private fun DrawScope.forestNotes(land: Land, t: Float) {
+    val c = at(land)
+    val s = u * 0.06f
+    for (k in 0..1) {
+        val f = (t * 3f + k * 0.5f) % 1f
+        val base = if (k == 0) Offset(c.x - 1.8f * s, c.y - 0.6f * s) else Offset(c.x + 1.4f * s, c.y - 1.8f * s)
+        val q = Offset(base.x + sin(f * 6.28f) * s * 0.15f, base.y - f * s * 0.9f)
+        val a = (1f - f) * 0.9f
+        drawCircle(Color(0xFF3A2E5C).copy(alpha = a), s * 0.09f, q)
+        drawLine(Color(0xFF3A2E5C).copy(alpha = a), Offset(q.x + s * 0.08f, q.y), Offset(q.x + s * 0.08f, q.y - s * 0.3f), s * 0.035f)
+    }
+}
+
+/** Meadow: the balloons' peg in the grass; when broken, one loose string with no balloon. */
+private fun DrawScope.meadowStory(land: Land, fixed: Boolean) {
+    val c = at(land)
+    val s = u * 0.07f
+    val peg = Offset(c.x + s * 0.95f, c.y + s * 0.15f)
+    paperRect(Color(0xFF8D6E63), Offset(peg.x - s * 0.05f, peg.y - s * 0.1f), Size(s * 0.1f, s * 0.25f))
+    if (!fixed) {
+        val str = Path().apply {
+            moveTo(peg.x, peg.y - s * 0.08f)
+            cubicTo(peg.x + s * 0.3f, peg.y - s * 0.3f, peg.x - s * 0.15f, peg.y - s * 0.55f, peg.x + s * 0.2f, peg.y - s * 0.85f)
+        }
+        drawPath(str, Color(0xFF5D4037), style = Stroke(s * 0.035f, cap = StrokeCap.Round))
+        paperCircle(Color(0xFFF48FB1), s * 0.06f, Offset(peg.x + s * 0.2f, peg.y - s * 0.86f))
+    }
+}
+
+/** Fixed meadow's loop: five balloons tied to the peg, bobbing over the meadow. */
+private fun DrawScope.meadowBalloons(land: Land, t: Float) {
+    val c = at(land)
+    val s = u * 0.07f
+    val peg = Offset(c.x + s * 0.95f, c.y + s * 0.05f)
+    val cols = listOf(0xFFFF8A65, 0xFFFFCA28, 0xFF4FC3F7, 0xFFBA68C8, 0xFFF06292)
+    val spots = listOf(-0.55f to -1.55f, 0.05f to -1.85f, 0.6f to -1.6f, -0.25f to -1.2f, 0.35f to -1.25f)
+    spots.forEachIndexed { i, (dx, dy) ->
+        val bob = sin((t + i * 0.21f) * 2 * PI).toFloat() * s * 0.06f
+        val b = Offset(peg.x + dx * s, peg.y + dy * s + bob)
+        drawLine(Color(0xFF5D4037).copy(alpha = 0.8f), peg, Offset(b.x, b.y + s * 0.26f), s * 0.025f)
+        drawOval(Color(cols[i]), Offset(b.x - s * 0.2f, b.y - s * 0.24f), Size(s * 0.4f, s * 0.5f))
+        drawOval(Color(0x33000000), Offset(b.x - s * 0.2f, b.y - s * 0.24f), Size(s * 0.4f, s * 0.5f), style = Stroke(s * 0.02f))
+        drawCircle(Color.White.copy(alpha = 0.6f), s * 0.05f, Offset(b.x - s * 0.08f, b.y - s * 0.1f))
+        val knot = Path().apply { moveTo(b.x - s * 0.04f, b.y + s * 0.3f); lineTo(b.x + s * 0.04f, b.y + s * 0.3f); lineTo(b.x, b.y + s * 0.24f); close() }
+        drawPath(knot, Color(cols[i]))
+    }
+}
+
+/** Lagoon: a little wooden dock out into the water (empty when broken; Pip's boat ties up when fixed). */
+private fun DrawScope.lagoonDock(land: Land) {
+    val c = at(land)
+    val s = u * 0.07f
+    val x = c.x + s * 0.35f
+    paperRect(Color(0xFFB07C4F), Offset(x - s * 0.14f, c.y - s * 0.1f), Size(s * 0.28f, s * 0.62f))
+    for (k in 1..4) drawLine(Color(0xFF7A5232), Offset(x - s * 0.14f, c.y - s * 0.1f + k * s * 0.124f), Offset(x + s * 0.14f, c.y - s * 0.1f + k * s * 0.124f), s * 0.025f)
+    listOf(-0.17f, 0.17f).forEach { d -> paperRect(Color(0xFF6D4C41), Offset(x + d * s - s * 0.04f, c.y + s * 0.42f), Size(s * 0.08f, s * 0.16f)) }
+}
+
+/** Fixed lagoon's loop: Pip's paper boat, Pip aboard, rocking at the end of the dock. */
+private fun DrawScope.pipBoat(land: Land, t: Float) {
+    val c = at(land)
+    val s = u * 0.07f
+    val b = Offset(c.x - s * 0.2f, c.y + s * 0.55f)
+    withTransform({ rotate(sin(t * 2 * PI).toFloat() * 5f, b) }) {
+        // Pip, a brown puppy, peeking over the side.
+        drawCircle(Color(0xFFB07C4F), s * 0.17f, Offset(b.x - s * 0.05f, b.y - s * 0.25f))
+        drawOval(Color(0xFF6D4C41), Offset(b.x - s * 0.26f, b.y - s * 0.38f), Size(s * 0.1f, s * 0.2f))
+        drawOval(Color(0xFF6D4C41), Offset(b.x + s * 0.06f, b.y - s * 0.38f), Size(s * 0.1f, s * 0.2f))
+        drawCircle(Color(0xFF3A2E5C), s * 0.025f, Offset(b.x - s * 0.1f, b.y - s * 0.27f))
+        drawCircle(Color(0xFF3A2E5C), s * 0.025f, Offset(b.x + s * 0.0f, b.y - s * 0.27f))
+        drawCircle(Color(0xFF3A2E5C), s * 0.035f, Offset(b.x - s * 0.05f, b.y - s * 0.2f))
+        // The folded paper boat.
+        val hull = Path().apply {
+            moveTo(b.x - s * 0.55f, b.y - s * 0.12f); lineTo(b.x + s * 0.55f, b.y - s * 0.12f)
+            lineTo(b.x + s * 0.38f, b.y + s * 0.12f); lineTo(b.x - s * 0.38f, b.y + s * 0.12f); close()
+        }
+        drawPath(hull, Color(0xFFFFFDF5))
+        drawPath(hull, Color(0xFFE0A030), style = Stroke(s * 0.035f))
+        val sail = Path().apply { moveTo(b.x + s * 0.12f, b.y - s * 0.12f); lineTo(b.x + s * 0.12f, b.y - s * 0.62f); lineTo(b.x + s * 0.45f, b.y - s * 0.12f); close() }
+        drawPath(sail, Color(0xFFFFF3C4))
+        drawPath(sail, Color(0xFFE0A030), style = Stroke(s * 0.03f))
+    }
+}
+
+/** Fixed market's loop: a coin twinkling over the open stalls. */
+private fun DrawScope.marketGlint(land: Land, t: Float) {
+    val c = at(land)
+    val s = u * 0.06f
+    val a = ((sin(t * 2 * PI) + 1) / 2).toFloat()
+    drawCircle(Color(0xFFFFC107), s * 0.16f, Offset(c.x, c.y - s * 1.15f))
+    drawCircle(Color(0xFFFFE082), s * 0.1f, Offset(c.x, c.y - s * 1.15f))
+    star(Offset(c.x + s * 0.18f, c.y - s * 1.3f), s * 0.09f * (0.5f + a), Color.White.copy(alpha = 0.5f + 0.5f * a))
+}
+
+/** Peaks: the stone path (laid up the big peak when fixed; stones scattered at its foot when broken). */
+private fun DrawScope.peaksStory(land: Land, fixed: Boolean) {
+    val c = at(land)
+    val s = u * 0.07f
+    val stone = listOf(Color(0xFFB98A57), Color(0xFF9C6E45), Color(0xFFD1A673))
+    if (fixed) {
+        val pts = listOf(-0.3f to 0.5f, 0.0f to 0.38f, 0.3f to 0.22f, 0.1f to 0.04f, -0.18f to -0.12f, 0.02f to -0.3f, 0.18f to -0.48f, 0.02f to -0.66f, -0.06f to -0.84f, 0.02f to -1.02f)
+        pts.forEachIndexed { i, (dx, dy) ->
+            val k = 1f - i * 0.045f
+            paperOval(stone[i % 3], Offset(c.x + dx * s - s * 0.16f * k, c.y + dy * s - s * 0.085f * k), Size(s * 0.32f * k, s * 0.17f * k))
+        }
+    } else {
+        listOf(-1.25f to 0.62f, -0.85f to 0.78f, -0.4f to 0.68f, 0.15f to 0.8f, 0.55f to 0.66f, 1.05f to 0.8f, 1.5f to 0.64f).forEachIndexed { i, (dx, dy) ->
+            val q = Offset(c.x + dx * s, c.y + dy * s)
+            withTransform({ rotate((i * 47 % 60 - 30).toFloat(), q) }) {
+                paperOval(stone[i % 3], Offset(q.x - s * 0.19f, q.y - s * 0.1f), Size(s * 0.38f, s * 0.2f))
+            }
+        }
+    }
+}
+
+/** Fixed peaks' loop: a little flag waving at the top of the path. */
+private fun DrawScope.peaksFlag(land: Land, t: Float) {
+    val c = at(land)
+    val s = u * 0.07f
+    val top = Offset(c.x + s * 0.02f, c.y - s * 1.05f)
+    drawLine(Color(0xFF5D4037), top, Offset(top.x, top.y - s * 0.5f), s * 0.04f)
+    val w = sin(t * 2 * PI).toFloat() * s * 0.05f
+    val flag = Path().apply { moveTo(top.x, top.y - s * 0.5f); quadraticTo(top.x + s * 0.15f, top.y - s * 0.5f + w, top.x + s * 0.32f, top.y - s * 0.42f); lineTo(top.x, top.y - s * 0.32f); close() }
+    drawPath(flag, Color(0xFFFFA726))
+}
+
+/** The factory's two gears, meshing; [turn] 0..1 spins them (fixed), 0 leaves them still (broken). */
+private fun DrawScope.factoryGears(land: Land, turn: Float) {
+    val c = at(land)
+    val s = u * 0.07f
+    fun gear(g: Offset, r: Float, teeth: Int, angle: Float, col: Color) {
+        val p = Path()
+        val n = teeth * 2
+        for (i in 0 until n) {
+            val a0 = angle + i * PI.toFloat() * 2f / n
+            val a1 = angle + (i + 1) * PI.toFloat() * 2f / n
+            val rr = if (i % 2 == 0) r else r * 0.78f
+            val x0 = g.x + rr * cos(a0); val y0 = g.y + rr * sin(a0)
+            if (i == 0) p.moveTo(x0, y0) else p.lineTo(x0, y0)
+            p.lineTo(g.x + rr * cos(a1), g.y + rr * sin(a1))
+        }
+        p.close()
+        paperPath(p, col)
+        drawCircle(Color(0xFF4F79AD), r * 0.3f, g)
+    }
+    val a = turn * 2f * PI.toFloat() * 6f
+    gear(Offset(c.x - s * 0.95f, c.y + s * 0.4f), s * 0.3f, 8, a, Color(0xFFFFB300))
+    gear(Offset(c.x - s * 0.5f, c.y + s * 0.66f), s * 0.2f, 6, -a * 1.5f + 0.3f, Color(0xFFFF8A3D))
+}
+
+/** Fixed caves' loop: the warm glow in the cave mouth breathing. */
+private fun DrawScope.caveGlow(land: Land, t: Float) {
+    val c = at(land)
+    val s = u * 0.07f
+    val a = 0.25f + 0.2f * ((sin(t * 2 * PI) + 1) / 2).toFloat()
+    drawCircle(Color(0xFFFFE082).copy(alpha = a), s * 0.75f, Offset(c.x, c.y + s * 0.2f))
 }

@@ -531,7 +531,7 @@ private fun DrawScope.drawPuppetPart(
                     }
                 }
             }
-            outfit.cape?.let { cape ->
+            outfit.cape?.takeIf { it.id != "costume_apron" }?.let { cape ->
                 val c = Color(cape.color)
                 poly(c, 34f to 74f, 66f to 74f, 80f to 122f, 20f to 122f)
                 if (cape.id == "cape_rainbow") {
@@ -579,6 +579,23 @@ private fun DrawScope.drawPuppetPart(
             }
             val foot = if (sp == Species.PENGUIN || sp == Species.CHICK || sp == Species.OWL) Color(0xFFFFA726) else darker(body, 0.15f)
             oval(39f, 119f, 17f, 9f, foot); oval(61f, 119f, 17f, 9f, foot)
+            if (outfit.cape?.id == "costume_apron") {
+                // Island story (Market Town): a striped shopkeeper's apron over his front, with
+                // a pocket and a coin peeking out. Straps go up to the neck pin.
+                val cloth = Color(0xFFFFE2A8)
+                val stripe = Color(0xFF1E88E5)
+                val top = if (sp.boxy) 79f else 82f
+                drawLine(darker(cloth, 0.25f), o(40f, top), o(44f, top - 6f), 1.8f * u)
+                drawLine(darker(cloth, 0.25f), o(60f, top), o(56f, top - 6f), 1.8f * u)
+                paperRoundRect(cloth, o(35f, top), Size(30f * u, 14f * u), CornerRadius(3f * u))
+                paperRoundRect(cloth, o(32f, top + 12f), Size(36f * u, 25f * u), CornerRadius(5f * u))
+                listOf(41f, 50f, 59f).forEach { x -> paperRect(stripe, o(x - 1.6f, top + 1f), Size(3.2f * u, 35f * u)) }
+                paperRoundRect(Color(0xFF8D6E63), o(32f, top + 11f), Size(36f * u, 3.4f * u), CornerRadius(1.7f * u))
+                paperRoundRect(cloth, o(42f, top + 20f), Size(16f * u, 11f * u), CornerRadius(2.5f * u))
+                drawRoundRect(darker(cloth, 0.3f), o(42f, top + 20f), Size(16f * u, 11f * u), CornerRadius(2.5f * u), style = Stroke(1f * u))
+                circle(53f, top + 20f, 3.6f, Color(0xFFFFC107))
+                circle(53f, top + 20f, 2.2f, Color(0xFFFFE082))
+            }
 
         }
         Part.HEAD, Part.HEAD_BLINK, Part.HEAD_TALK, Part.HEAD_TALK_BLINK -> {
@@ -621,7 +638,7 @@ private fun DrawScope.drawPuppetPart(
             } else {
                 circle(50f, 63f, 30f, skin)
             }
-            if (sp.antenna && outfit.hat?.id != "hat_chef") {
+            if (sp.antenna && outfit.hat?.id != "hat_chef" && outfit.hat?.id?.startsWith("costume_") != true) {
                 // Rory's signature antenna (under the chef toque it pokes out of the crown instead).
                 roryAntenna(34f)
             }
@@ -753,6 +770,19 @@ private fun DrawScope.drawPuppetPart(
                         heart(o(39f, ly), 10f * u, c.copy(alpha = 0.8f)); heart(o(61f, ly), 10f * u, c.copy(alpha = 0.8f))
                         drawLine(c, o(47f, ly - 2f), o(53f, ly - 2f), 2f * u)
                     }
+                    "costume_goggles" -> {
+                        // Island story (Robot Factory): brass work goggles pushed up on top of his
+                        // head, so his round cyan eyes stay clear; the antenna stands between them.
+                        val gy = 31f
+                        paperRoundRect(Color(0xFF5D4037), o(21f, gy - 2.5f), Size(58f * u, 5f * u), CornerRadius(2.5f * u))
+                        listOf(37f, 63f).forEach { gx ->
+                            circle(gx, gy, 8.5f, Brass)
+                            circle(gx, gy, 6.2f, Color(0xFFFFD54F))
+                            drawCircle(Color(0xFFFFF3C4), 2f * u, o(gx - 2f, gy - 2f))
+                            drawCircle(BrassDark, 8.5f * u, o(gx, gy), style = Stroke(1f * u))
+                        }
+                        if (sp.antenna) roryAntenna(34f)
+                    }
                     else -> {
                         drawCircle(c, 9.5f * u, o(39f, ly), style = Stroke(2.2f * u))
                         drawCircle(c, 9.5f * u, o(61f, ly), style = Stroke(2.2f * u))
@@ -807,6 +837,78 @@ private fun DrawScope.drawPuppetPart(
                         paperRoundRect(c, o(37f, top - 24f), Size(26f * u, 26f * u), CornerRadius(2f * u))
                         paperRoundRect(Color(0xFF7D4C96), o(37f, top - 6f), Size(26f * u, 5f * u))
                         oval(50f, top + 2f, 44f, 7f, c)
+                    }
+                    "costume_leaf" -> {
+                        // Island story (Talking Forest): a crown of paper leaves round his head.
+                        val greens = listOf(Color(0xFF7CB342), Color(0xFF558B2F), Color(0xFF9CCC65))
+                        val leaves = listOf(24f to 4f, 31f to -1f, 38f to -4f, 44f to -6f, 56f to -6f, 62f to -4f, 69f to -1f, 76f to 4f)
+                        leaves.forEachIndexed { i, (x, dy) ->
+                            val tilt = (x - 50f) * 1.6f
+                            rotate(tilt, o(x, top + dy)) { oval(x, top + dy - 4f, 7.5f, 13f, greens[i % 3]) }
+                            drawLine(darker(greens[i % 3], 0.25f), o(x, top + dy + 1f), o(x, top + dy - 8f), 0.8f * u)
+                        }
+                        paperRoundRect(Color(0xFF8D6E63), o(23f, top + 1f), Size(54f * u, 3.4f * u), CornerRadius(1.7f * u))
+                        circle(50f, top + 2.5f, 2.6f, Color(0xFFFFB74D))
+                        if (sp.antenna) roryAntenna(top)
+                    }
+                    "costume_balloon" -> {
+                        // Island story (Number Meadow): a headband with three balloons tied on.
+                        val band = Color(0xFFFFCA28)
+                        listOf(Triple(31f, top - 24f, 0xFFFF8A65), Triple(69f, top - 24f, 0xFF4FC3F7), Triple(61f, top - 37f, 0xFFBA68C8)).forEach { (bx, by, col) ->
+                            val anchor = o(if (bx < 50f) 36f else 62f, top)
+                            drawLine(Color(0xFF6D4C41), anchor, o(bx, by + 8f), 0.9f * u)
+                            oval(bx, by, 14f, 17f, Color(col))
+                            circle(bx - 3f, by - 4f, 2f, Color.White.copy(alpha = 0.7f))
+                            poly(Color(col), (bx - 2f) to (by + 9.5f), (bx + 2f) to (by + 9.5f), bx to (by + 7f))
+                        }
+                        paperRoundRect(band, o(23f, top - 1f), Size(54f * u, 5f * u), CornerRadius(2.5f * u))
+                        if (sp.antenna) roryAntenna(top - 1f)
+                    }
+                    "costume_sailor" -> {
+                        // Island story (Letter Lagoon): a white sailor's cap with a navy band.
+                        val white = Color(0xFFFAFAFA)
+                        val navy = Color(0xFF283593)
+                        paperArc(white, 180f, 180f, true, o(31f, top - 19f), Size(38f * u, 38f * u))
+                        paperRoundRect(navy, o(31f, top - 5f), Size(38f * u, 5f * u), CornerRadius(1f * u))
+                        paperRoundRect(white, o(26f, top - 1f), Size(48f * u, 6f * u), CornerRadius(3f * u))
+                        drawRoundRect(Color(0xFFB0BEC5), o(26f, top - 1f), Size(48f * u, 6f * u), CornerRadius(3f * u), style = Stroke(0.8f * u))
+                        star(o(39f, top - 10f), 3f * u, Color(0xFFFFC107))
+                        if (sp.antenna) roryAntenna(top - 18f)
+                    }
+                    "costume_helmet" -> {
+                        // Island story (Puzzle Peaks): an orange climber's helmet with vents and a chin strap.
+                        val shell = Color(0xFFFFA726)
+                        drawLine(Color(0xFF5D4037), o(27f, top + 3f), o(25f, top + 22f), 1.4f * u)
+                        drawLine(Color(0xFF5D4037), o(73f, top + 3f), o(75f, top + 22f), 1.4f * u)
+                        paperArc(shell, 180f, 180f, true, o(25f, top - 16f), Size(50f * u, 36f * u))
+                        paperRoundRect(darker(shell, 0.18f), o(24f, top + 0.5f), Size(52f * u, 4.5f * u), CornerRadius(2.2f * u))
+                        listOf(37f, 63f).forEach { vx -> paperRoundRect(darker(shell, 0.25f), o(vx - 2f, top - 11f), Size(4f * u, 7f * u), CornerRadius(2f * u)) }
+                        drawArc(Color.White.copy(alpha = 0.55f), 200f, 50f, false, o(30f, top - 12f), Size(40f * u, 28f * u), style = Stroke(1.4f * u, cap = StrokeCap.Round))
+                        if (sp.antenna) roryAntenna(top - 15f)
+                    }
+                    "costume_lantern" -> {
+                        // Island story (Word Caves): a felt cap with a little lit lantern hanging off one side.
+                        val felt = Color(0xFF8D6E63)
+                        paperArc(felt, 180f, 180f, true, o(31f, top - 13f), Size(38f * u, 24f * u))
+                        paperRoundRect(darker(felt, 0.2f), o(25f, top - 2f), Size(50f * u, 5f * u), CornerRadius(2.5f * u))
+                        drawLine(Color(0xFF5D4037), o(66f, top - 6f), o(76f, top - 12f), 1.2f * u)
+                        drawLine(Color(0xFF5D4037), o(76f, top - 12f), o(78f, top - 6f), 1.0f * u)
+                        drawCircle(Color(0xFFFFE082).copy(alpha = 0.45f), 8.5f * u, o(78f, top + 1f))
+                        paperRoundRect(Color(0xFF5D4037), o(73.5f, top - 6.5f), Size(9f * u, 2.4f * u), CornerRadius(1f * u))
+                        paperRoundRect(Color(0xFFFFD54F), o(74.5f, top - 4.5f), Size(7f * u, 9f * u), CornerRadius(1.6f * u))
+                        drawCircle(Color(0xFFFFF8E1), 1.8f * u, o(78f, top))
+                        paperRoundRect(Color(0xFF5D4037), o(73.5f, top + 4.2f), Size(9f * u, 2.4f * u), CornerRadius(1f * u))
+                        if (sp.antenna) roryAntenna(top - 12f)
+                    }
+                    "costume_crown" -> {
+                        // Island story (Cloud Castle): a golden party crown; its middle is open so
+                        // his antenna stands up through it.
+                        val gold = Color(0xFFFFC107)
+                        poly(gold, 30f to top + 4f, 29f to top - 13f, 37f to top - 4f, 42f to top - 15f, 46f to top - 3f,
+                            54f to top - 3f, 58f to top - 15f, 63f to top - 4f, 71f to top - 13f, 70f to top + 4f)
+                        listOf(29f, 42f, 58f, 71f).forEach { px -> circle(px, if (px == 29f || px == 71f) top - 13f else top - 15f, 1.8f, Color(0xFFFFF59D)) }
+                        circle(37f, top, 2.2f, Color(0xFF1E88E5)); circle(50f, top + 0.5f, 2.6f, Color(0xFFE84A7F)); circle(63f, top, 2.2f, Color(0xFF7E57C2))
+                        if (sp.antenna) roryAntenna(top - 2f)
                     }
                     "hat_chef" -> {
                         // Rory's Kitchen: a classic unified chef toque (toque blanche) -- one continuous

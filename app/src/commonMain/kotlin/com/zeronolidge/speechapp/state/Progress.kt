@@ -135,6 +135,21 @@ class Progress(private val prefs: Prefs) {
         prefs.edit().putInt("pipTags", pipTags).apply()
     }
 
+    /** Island story: places fixed so far (each one's first finish), in no set order. */
+    var fixedLands by mutableStateOf(
+        (prefs.getStringSet("fixedLands", emptySet()) ?: emptySet())
+            .mapNotNull { n -> com.zeronolidge.speechapp.logic.Land.entries.firstOrNull { it.name == n } }.toSet()
+    )
+        private set
+
+    /** The first finish of [land] fixes it (true then); a replay changes nothing (false). */
+    fun fixLand(land: com.zeronolidge.speechapp.logic.Land): Boolean {
+        if (land in fixedLands) return false
+        fixedLands = fixedLands + land
+        prefs.edit().putStringSet("fixedLands", fixedLands.map { it.name }.toSet()).apply()
+        return true
+    }
+
     /** Voice stories he has played to the end (their map stops wear a star). */
     var voiceStoriesDone by mutableStateOf(prefs.getStringSet("voiceStoriesDone", emptySet()) ?: emptySet())
         private set

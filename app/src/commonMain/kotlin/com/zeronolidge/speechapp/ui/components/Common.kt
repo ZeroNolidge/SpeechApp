@@ -537,7 +537,8 @@ fun <T> AnswerRow(
         } else {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                // Ruby (phone): a 14 dp gap, so three tiles always fit with no squeeze.
+                horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) { cards() }
         }

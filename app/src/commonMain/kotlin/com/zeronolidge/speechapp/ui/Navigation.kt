@@ -38,6 +38,8 @@ sealed interface Screen {
     data object SayCheck : Screen
     /** Test hook only: a chapter step where he says [word] (a story word like "climb"). */
     data class SayBeatCheck(val word: String) : Screen
+    /** Test hook only: Rory in each of the eight island-story costumes (review sheet). */
+    data object CostumeSheet : Screen
 }
 
 /**

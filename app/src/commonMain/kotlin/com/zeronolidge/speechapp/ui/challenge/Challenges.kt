@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -200,6 +201,9 @@ fun ChallengeView(
     } }
 }
 
+/** How far the phone answer row is lifted off the bottom edge (home-bar inset ~34 dp + 16 dp). */
+private val AnswerRowLift = 50.dp
+
 /**
  * Lays out a question area and the answer cards, scaled to fit: the picture above a row of
  * answers, or on a wide screen (over 700) the picture on the left and the answers in a column on
@@ -238,6 +242,9 @@ private fun QuestionLayout(
             ) {
                 Box(Modifier.weight(1f).fillMaxWidth().wiggleOnTap(), contentAlignment = Alignment.Center) { question(card) }
                 answers(card)
+                // Ruby (phone): the answer row sits clear of the home bar: its safe-area inset
+                // (about 34 dp on an iPhone) plus 16 dp.
+                Spacer(Modifier.height(AnswerRowLift))
             }
         }
     }
@@ -575,7 +582,11 @@ private fun WhichWordView(c: Challenge.WhichWord, area: String, wand: Int, miss:
         answers = { card ->
             AnswerRow(
                 AnswerKey.whichWord(c), area, c,
-                Modifier.fillMaxWidth(), Modifier.width(card * 1.3f).height(card * 0.8f),
+                // Ruby (phone): three 108 dp word tiles, 84 dp tall, fit the row with no squeeze;
+                // the stacked tablet column keeps its wider, flatter tiles.
+                Modifier.fillMaxWidth(),
+                if (com.zeronolidge.speechapp.ui.components.LocalAnswersStacked.current) Modifier.width(card * 1.3f).height(card * 0.8f)
+                else Modifier.width((card * 1.32f).coerceAtMost(108.dp)).height((card * 1.03f).coerceAtMost(84.dp)),
                 onSolved = done, describe = { it.text }, onMiss = miss, wandTick = wand,
                 hint = c.round.word.text.let { w -> "Listen: ${Reading.sounds(w).joinToString("... ")}... $w! It starts with ${Reading.sounds(w).firstOrNull() ?: w}." },
             ) { w -> Text(w.text, fontSize = (card.value * 0.38f).sp, fontWeight = FontWeight.ExtraBold, color = Kid.ink) }

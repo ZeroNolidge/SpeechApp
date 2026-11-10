@@ -296,6 +296,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         Screen.Rest -> RestScreen(nav)
         Screen.SayCheck -> SayStepCheck(nav)
         is Screen.SayBeatCheck -> SayBeatCheck(nav, s.word)
+        Screen.CostumeSheet -> com.zeronolidge.speechapp.ui.screens.CostumeSheet()
     }
 }
 

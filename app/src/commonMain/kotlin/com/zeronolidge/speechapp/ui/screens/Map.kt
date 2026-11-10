@@ -140,6 +140,12 @@ fun MapScreen(nav: Nav) {
     // No spoken nagging and never a jump to another screen when nobody taps: after about 20
     // seconds of quiet, Rory just waves from the corner (see MapWave), and that's all.
     val species = p.hero ?: Species.KID
+    // Island story: which places are fixed. (Review stills, "#test=island&fixed=N": the first N
+    // trail places fixed, every place open, and the trail just past them.)
+    val testFixed = com.zeronolidge.speechapp.logic.IslandTest.fixed
+    val fixedLands = testFixed ?: p.fixedLands
+    val mapChapter = if (testFixed != null) testFixed.size * Trail.STOPS_PER_LAND else p.chapter
+    val isReached: (Land) -> Boolean = { testFixed != null || it in Trail.reached(p.chapter) }
     var hintFrom by remember { mutableStateOf<Land?>(null) }
     var hintKey by remember { mutableStateOf(0) }
     // The pointing hand hides as soon as anything is tapped, and comes back after a quiet while.
@@ -172,7 +178,10 @@ fun MapScreen(nav: Nav) {
                 }
             },
     ) {
-        val top = 60.dp
+        // The party bunting hangs under the top corner buttons, so the island starts below it.
+        val buntingY = 96.dp
+        val buntingH = if (mapNarrow(maxWidth)) 26.dp else 32.dp
+        val top = buntingY + buntingH + 22.dp
         val bottom = if (mapNarrow(maxWidth)) 176.dp else 90.dp
         val availH = maxHeight - top - bottom
         // Wide screens keep the island's usual shape; upright screens let it grow taller
@@ -194,8 +203,9 @@ fun MapScreen(nav: Nav) {
             println("MAPSCENE STOP -> the next story chapter (${land.title}, stop ${Trail.stopOf(p.chapter) + 1}; its visitor is picked fresh each time)")
         }
         IslandMap(
-            chapter = p.chapter,
-            reached = { it in Trail.reached(p.chapter) },
+            chapter = mapChapter,
+            reached = isReached,
+            fixed = fixedLands,
             unfoldNew = unfoldNew,
             onUnfolded = { p.markUnfoldSeen() },
             onStop = startChapter,
@@ -245,6 +255,11 @@ fun MapScreen(nav: Nav) {
             modifier = Modifier.size(mapW, mapH).align(Alignment.Center).offset(y = (top - bottom) / 2),
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size, fromLeft -> if (showHand) PointingHand(m, size = size, pointRight = fromLeft, pointLeft = !fromLeft) },
+        )
+        com.zeronolidge.speechapp.ui.art.PartyBunting(
+            fixedLands,
+            Modifier.align(Alignment.TopCenter).offset(y = buntingY).widthIn(max = 640.dp).padding(horizontal = 18.dp),
+            flagHeight = buntingH,
         )
         MapCorners(nav, startChapter)
         MapWave()
