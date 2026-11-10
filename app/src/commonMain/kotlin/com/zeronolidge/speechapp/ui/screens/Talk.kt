@@ -1,5 +1,8 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.WordGlyph
+import com.zeronolidge.speechapp.ui.art.drawnWordFor
+import com.zeronolidge.speechapp.ui.art.DrawnWordPic
 import com.zeronolidge.speechapp.ui.theme.LetterFont
 import com.zeronolidge.speechapp.ui.components.AnswerRow
 import com.zeronolidge.speechapp.logic.Key
@@ -100,12 +103,16 @@ private enum class Speak { MODELLING, LISTENING, WAITING_TAP, DONE, PARROT_RECOR
 private var micBroken = false
 
 /** Free practice of one speech sound, word by word. Each word moves on by itself after a try. */
+/** Test-link hook: the word Talk practice opens on (see Main.kt #test=talk-<id>:<word>). */
+object TalkTest { var startWord: String? = null }
+
 @Composable
 fun TalkPracticeScreen(sound: SpeechSound, nav: Nav) {
     val app = LocalApp.current
     // The quiet speech step: one word, then two words, then a short sentence.
     val words = remember(sound) { SpeechSteps.wordsFor(sound, app.progress.speechStep) }
-    var index by remember { mutableIntStateOf(0) }
+    // #test=talk-v:oven starts on that word (screenshots of a given word's picture)
+    var index by remember { mutableIntStateOf(TalkTest.startWord?.let { w -> words.indexOfFirst { it.text == w } }?.coerceAtLeast(0) ?: 0) }
     val word = words[index % words.size]
     // A blend's letters ("Sp") don't read aloud well, so its intro names the sound by modelling it.
     val intro = if (index != 0) null
@@ -714,7 +721,12 @@ private val ButtonPanelColor = Color(0xF2FFFAF0)
 private fun WordPicture(word: Word, picture: (@Composable (Modifier) -> Unit)?, pulse: Float, modifier: Modifier) {
     BoxWithConstraints(modifier.scale(pulse).wiggleOnTap(), contentAlignment = Alignment.Center) {
         val room = minOf(maxWidth, maxHeight)
-        if (picture != null) picture(Modifier.fillMaxHeight()) else Text(word.emoji, fontSize = (room.value * 0.92f).coerceIn(40f, 260f).sp)
+        val drawn = drawnWordFor(word.text)
+        when {
+            picture != null -> picture(Modifier.fillMaxHeight())
+            drawn != null -> DrawnWordPic(drawn, Modifier.size(room * 0.9f))
+            else -> Text(word.emoji, fontSize = (room.value * 0.92f).coerceIn(40f, 260f).sp)
+        }
     }
 }
 

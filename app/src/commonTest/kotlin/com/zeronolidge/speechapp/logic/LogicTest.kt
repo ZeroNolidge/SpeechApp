@@ -121,6 +121,14 @@ class GamesTest {
 
     /** test48 (Aida): the Talk picker order, new sounds in, r and th hidden (content kept). */
     @Test
+    fun ovenAndFanGetDrawnPicturesButHotKeepsItsFlame() {
+        assertEquals(com.zeronolidge.speechapp.ui.art.DrawnWord.OVEN, com.zeronolidge.speechapp.ui.art.drawnWordFor("oven"))
+        assertEquals(com.zeronolidge.speechapp.ui.art.DrawnWord.FAN, com.zeronolidge.speechapp.ui.art.drawnWordFor("fan"))
+        assertEquals(null, com.zeronolidge.speechapp.ui.art.drawnWordFor("hot"))
+        assertEquals(null, com.zeronolidge.speechapp.ui.art.drawnWordFor("fish"))
+    }
+
+    @Test
     fun talkPickerOrderAndWordLists() {
         val ids = SpeechContent.picker.map { it.id }
         assertEquals(listOf("f", "sh", "v", "ch", "sp", "sk", "sm", "p", "b", "m", "t", "d", "k", "g", "s", "l"), ids)

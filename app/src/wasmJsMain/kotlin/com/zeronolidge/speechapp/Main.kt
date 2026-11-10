@@ -109,7 +109,10 @@ private fun testStart(hash: String): Screen? {
             // test48: the all-games practice grid, the Talk sound picker, and one sound's practice.
             v == "practice" -> Screen.Practice
             v == "talkmenu" -> Screen.TalkMenu
-            v.startsWith("talk-") -> Screen.TalkPractice(SpeechContent.sounds.first { it.id == v.removePrefix("talk-") })
+            v.startsWith("talk-") -> v.removePrefix("talk-").split(":").let { parts ->
+                com.zeronolidge.speechapp.ui.screens.TalkTest.startWord = parts.getOrNull(1)
+                Screen.TalkPractice(SpeechContent.sounds.first { it.id == parts[0] })
+            }
             v == "pip" -> Screen.Pip
             v == "say" -> Screen.SayCheck
             v == "cave" -> Screen.EchoCave()

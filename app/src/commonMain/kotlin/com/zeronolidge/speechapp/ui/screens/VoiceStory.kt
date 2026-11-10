@@ -111,6 +111,8 @@ import com.zeronolidge.speechapp.ui.components.ContinueReserve
 import com.zeronolidge.speechapp.ui.components.ContinueSize
 import com.zeronolidge.speechapp.ui.components.LocalApp
 import com.zeronolidge.speechapp.ui.components.LocalScreenHeight
+import com.zeronolidge.speechapp.ui.components.LocalScreenWidth
+import com.zeronolidge.speechapp.ui.components.CornerButtonSize
 import com.zeronolidge.speechapp.ui.components.PaperButton
 import com.zeronolidge.speechapp.ui.components.PaperChip
 import com.zeronolidge.speechapp.ui.components.PaperColorsUi
@@ -1285,7 +1287,11 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
                 FruitRecipeCard(pickedFruits = pickedFruits, doneFlags = fruitDoneFlags, spoonDone = spoonStirDone || kitchenEnd != null, closed = hasSpoonBeat)
                 Spacer(Modifier.width(8.dp))
             }
-            if (isFruitSaladStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
+            // test49: on a phone the kitchen stories' recipe strip takes the whole row (the title
+            // used to squeeze it, cutting off the cake's 4th icon); the title shows on wider screens.
+            val kitchenNarrow = (isCakeStory || isFruitSaladStory) && LocalScreenWidth.current < 520.dp
+            if (kitchenNarrow) Unit
+            else if (isFruitSaladStory || isCakeStory) PaperChip("${story.emoji} ${story.title}", modifier = Modifier.weight(1f, fill = false), fontSize = 20.sp, maxLines = 1)
             else PaperChip("${story.emoji} ${story.title}", fontSize = 20.sp, maxLines = 1)
             // Rory's Fruit Salad's own recipe card (banana, berries, fork), ticked off as each
             // part is done: a steady visual anchor beside Rory's spoken line, same spirit as
@@ -1832,9 +1838,11 @@ private fun Balloon(color: Color, size: Dp, modifier: Modifier = Modifier) {
 @Composable
 private fun FruitRecipeCard(pickedFruits: List<FruitPicker.Fruit>, doneFlags: Map<FruitPicker.Fruit, Boolean>, spoonDone: Boolean, closed: Boolean = false) {
     val screenHeight = LocalScreenHeight.current
-    val circle = if (screenHeight < 420.dp) 32.dp else 44.dp
-    val emojiSize = if (circle < 40.dp) 17.sp else 24.sp
-    val badge = if (circle < 40.dp) 20.dp else 28.dp
+    val shownCount = (if (closed || spoonDone || pickedFruits.size >= FruitPicker.Fruit.entries.size) pickedFruits.size else pickedFruits.size + 1).coerceAtLeast(1) + 1
+    // test49: never wider than the room between 🏠 and 🔊 (a phone in portrait has about 170dp)
+    val circle = minOf(if (screenHeight < 420.dp) 32.dp else 44.dp, recipeCircleFit(shownCount, 16.dp, 6.dp))
+    val emojiSize = (circle.value * 0.54f).sp
+    val badge = circle * 0.6f
     Row(
         Modifier.paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1916,13 +1924,20 @@ private fun BlowPictureButton(modifier: Modifier = Modifier, onClick: () -> Unit
     }
 }
 
+/** test49: the biggest recipe-strip circle that fits [n] across the top row between the corner buttons. */
+@Composable
+private fun recipeCircleFit(n: Int, pad: androidx.compose.ui.unit.Dp, gap: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp {
+    val room = LocalScreenWidth.current - 28.dp - CornerButtonSize * 2 - 28.dp - 8.dp
+    return ((room - pad - gap * (n - 1)) / n).coerceAtLeast(22.dp)
+}
+
 /** test41: Bruno's Birthday Cake's recipe card -- six little drawn pictures (flour, egg, bowl,
  * oven, candle, cake), no letters, each ticked green as that part is done. */
 @Composable
 private fun CakeRecipeCard(done: List<Boolean>) {
     val screenHeight = LocalScreenHeight.current
-    val circle = if (screenHeight < 420.dp) 30.dp else 42.dp
-    val badge = if (circle < 40.dp) 16.dp else 22.dp
+    val circle = minOf(if (screenHeight < 420.dp) 30.dp else 42.dp, recipeCircleFit(done.size, 12.dp, 4.dp))
+    val badge = circle * 0.52f
     Row(
         Modifier.paperCard(PaperStyle.chip, 16.dp).padding(horizontal = 6.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),

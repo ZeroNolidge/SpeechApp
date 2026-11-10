@@ -339,19 +339,53 @@ fun TalkMenu(nav: Nav) {
                             if (row.size < 2) androidx.compose.foundation.layout.Spacer(Modifier.size(side))
                         }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Box(Modifier.size(arrow)) { if (page > 0) PaperArrowButton(PaperColorsUi.choice, size = arrow, pointLeft = true) { go(page - 1, "Back!") } }
-                        Box(Modifier.size(arrow)) { if (page < pages - 1) PaperArrowButton(PaperColorsUi.choice, size = arrow) { go(page + 1, "More!") } }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(arrow)) { if (page > 0) PageChevron(arrow, left = true) { go(page - 1, "Back!") } }
+                        PageDots(page, pages)
+                        Box(Modifier.size(arrow)) { if (page < pages - 1) PageChevron(arrow) { go(page + 1, "More!") } }
                     }
                 }
             } else {
                 val side = minOf((w - arrow * 2 - gap * 5) / per, h * 0.8f, 220.dp)
-                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)) {
-                    Box(Modifier.size(arrow)) { if (page > 0) PaperArrowButton(PaperColorsUi.choice, size = arrow, pointLeft = true) { go(page - 1, "Back!") } }
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(gap * 2, Alignment.CenterVertically)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally)) {
+                    Box(Modifier.size(arrow)) { if (page > 0) PageChevron(arrow, left = true) { go(page - 1, "Back!") } }
                     shown.forEachIndexed { i, snd -> tile(snd, i, side) }
                     repeat(per - shown.size) { androidx.compose.foundation.layout.Spacer(Modifier.size(side)) }
-                    Box(Modifier.size(arrow)) { if (page < pages - 1) PaperArrowButton(PaperColorsUi.choice, size = arrow) { go(page + 1, "More!") } }
+                    Box(Modifier.size(arrow)) { if (page < pages - 1) PageChevron(arrow) { go(page + 1, "More!") } }
                 }
+                PageDots(page, pages)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * test49: the Talk picker's page turn: a thin chevron on a neutral grey paper square, so it never
+ * reads as the round green ▶ "go" button.
+ */
+@Composable
+private fun PageChevron(size: androidx.compose.ui.unit.Dp, left: Boolean = false, onClick: () -> Unit) {
+    PaperButton(Color(0xFFDDE3E8), Modifier.size(size), onClick = onClick) {
+        androidx.compose.foundation.Canvas(Modifier.size(size * 0.46f)) {
+            val w = this.size.width
+            val hh = this.size.height
+            val x0 = if (left) w * 0.68f else w * 0.32f
+            val x1 = if (left) w * 0.30f else w * 0.70f
+            val p = androidx.compose.ui.graphics.Path().apply { moveTo(x0, hh * 0.12f); lineTo(x1, hh * 0.5f); lineTo(x0, hh * 0.88f) }
+            drawPath(p, Color(0xFF546E7A), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.16f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        }
+    }
+}
+
+/** Little page dots: the page he's on is filled. */
+@Composable
+private fun PageDots(page: Int, pages: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(pages) { i ->
+            androidx.compose.foundation.Canvas(Modifier.size(if (i == page) 16.dp else 12.dp)) {
+                drawCircle(if (i == page) Color(0xFF546E7A) else Color(0xFFB0BEC5))
             }
         }
     }

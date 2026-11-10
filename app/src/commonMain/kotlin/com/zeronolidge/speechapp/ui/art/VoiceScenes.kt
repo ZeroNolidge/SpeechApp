@@ -2576,10 +2576,14 @@ private fun BoxWithConstraintsScope.FruitStirOverlay(landscape: Boolean, onDone:
     // test44: Rory's Fruit Salad stirs in a big top-down view of the bowl (the fruit really
     // inside it, swirling round with the fork); the cake keeps the side view.
     val topDown = FruitScene.topDown.value
-    val tdD = minOf(hPx * 0.66f, wPx * 0.44f)
-    // test46: on a short phone the popup sits further right, clear of Rory's body and face
-    val c = if (topDown) Offset((wPx * (if (maxHeight < 480.dp) 0.73f else 0.64f)).coerceIn(tdD * 0.6f, wPx - tdD * 0.6f), hPx * 0.54f) else Offset(bl + bwp / 2f, bt + bhp * (rimTopF + rimHF * 0.5f))
+    // test49: an upright phone gets a slightly smaller bowl pushed to the right edge, so the
+    // close-up never covers Rory's eyes and mouth (it hid half his face in test48).
+    val upright = wPx < hPx * 0.75f
+    val tdD = if (upright) wPx * 0.4f else minOf(hPx * 0.66f, wPx * 0.44f)
     val zone = if (topDown) tdD * 1.15f else maxOf(bwp * 1.8f, with(density) { 220.dp.toPx() })
+    // test46: on a short phone the popup sits further right, clear of Rory's body and face
+    val c = if (topDown && upright) Offset(wPx - zone / 2f - with(density) { 4.dp.toPx() }, hPx * 0.54f)
+        else if (topDown) Offset((wPx * (if (maxHeight < 480.dp) 0.73f else 0.64f)).coerceIn(tdD * 0.6f, wPx - tdD * 0.6f), hPx * 0.54f) else Offset(bl + bwp / 2f, bt + bhp * (rimTopF + rimHF * 0.5f))
     var fingerPx by remember { mutableStateOf<Offset?>(null) }
     if (topDown) Box(Modifier.offset { IntOffset((c.x - zone / 2f).roundToInt(), (c.y - zone / 2f).roundToInt()) }.size(with(density) { zone.toDp() })) {
         TopDownBowl(FruitScene.inBowl.value, { FruitStir.swirl.floatValue }, { fingerPx })

@@ -86,7 +86,7 @@ These are the owner's rules for all work:
   (`key(challenge)` in `ChallengeView`, `key(roundNo)` in practice): no leftover bubble or glow.
 - **Growth without numbers:** no levels, XP or star counts. Gems are for words he *tried* to say
   (not right answers); they fill the 🎒 backpack (`Progress.addGem`), and a full backpack gives a
-  paper piece. Practice shows all 17 games at once as a picture grid (test48).
+  paper piece. Practice shows all 17 games at once as a picture grid (test48). The Talk picker pages with a grey chevron button and page dots (never a green ▶). Words with no good emoji (oven, fan) get drawn paper pictures (`ui/art/DrawnWords.kt`, `WordGlyph`); the oven is the Birthday Cake oven, no flames (test49). `#test=talk-v:oven` opens Talk practice on a given word.
 - **Rory's voice is pre-made OpenAI clips** (web): `tools/make_voice.py` (run by the owner on
   their computer with `OPENAI_API_KEY` from the environment or a gitignored `.env`; never in the
   app or CI) reads every string in commonMain, cuts out the changing parts (`${...}`, `$name` and the story

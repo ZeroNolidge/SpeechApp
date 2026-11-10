@@ -1,5 +1,8 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.WordGlyph
+import com.zeronolidge.speechapp.ui.art.drawnWordFor
+import com.zeronolidge.speechapp.ui.art.DrawnWordPic
 import com.zeronolidge.speechapp.ui.art.loop
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
@@ -85,7 +88,7 @@ fun Sticker(w: WordStat, size: Dp, modifier: Modifier = Modifier, onTap: (() -> 
                 .then(if (w.shiny) Modifier.border(4.dp, Color(0xFFFFC107), CircleShape) else Modifier),
             contentAlignment = Alignment.Center,
         ) {
-            Text(w.emoji, fontSize = (size.value * 0.42f).sp)
+            WordGlyph(w.text, w.emoji, (size.value * 0.42f).sp)
         }
         if (w.shiny) {
             Text("✨", fontSize = (size.value * 0.22f).sp, modifier = Modifier.align(Alignment.TopEnd).alpha(shine))

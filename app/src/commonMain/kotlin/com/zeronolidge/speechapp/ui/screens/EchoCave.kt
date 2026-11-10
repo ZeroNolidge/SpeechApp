@@ -1,5 +1,8 @@
 package com.zeronolidge.speechapp.ui.screens
 
+import com.zeronolidge.speechapp.ui.art.WordGlyph
+import com.zeronolidge.speechapp.ui.art.drawnWordFor
+import com.zeronolidge.speechapp.ui.art.DrawnWordPic
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.zeronolidge.speechapp.ui.art.paperCard
 import com.zeronolidge.speechapp.logic.WordStat
@@ -244,7 +247,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
                         Modifier.align(Alignment.TopCenter).padding(top = 8.dp).paperCardLite(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(word.emoji, fontSize = 56.sp, modifier = Modifier.wiggleOnTap())
+                        WordGlyph(word.text, word.emoji, 56.sp, Modifier.wiggleOnTap())
                         Spacer(Modifier.width(12.dp))
                         Text(word.text, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = PaperStyle.ink, maxLines = 1)
                     }
