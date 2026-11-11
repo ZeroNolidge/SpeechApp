@@ -149,6 +149,8 @@ fun IslandMap(
     party: Float = -1f,
     /** What Rory wears on the map (his latest island costume). */
     roryOutfit: Outfit = Outfit(),
+    /** Nothing goes in the map's top [keepTop] (a phone's party bunting hangs over it). */
+    keepTop: Dp = 0.dp,
 ) {
     val t = rememberInfiniteTransition(label = "island")
     val slow by t.loop(0f, 1f, 24000, mode = RepeatMode.Restart, easing = LinearEasing, label = "slow")
@@ -250,16 +252,21 @@ fun IslandMap(
         val caveNode = node * 0.8f
         val sticker = unit * 0.085f
         val starTap = MapAreas.starTap(unit.value).dp
+        // test54: every round stop and star also has a bigger invisible tap circle (64 dp on a
+        // phone, 80 on a tablet); the drawn sizes and every keepout stay as they were.
+        val tapNode = MapAreas.tapNode(w.value).dp
+        val keepTopPx = with(LocalDensity.current) { keepTop.toPx() }
         val labelHalfWPx = with(LocalDensity.current) { MapAreas.labelHalfW(label).dp.toPx() }
         val labelHPx = with(LocalDensity.current) { MapAreas.labelH(label).dp.toPx() }
         val layout = with(LocalDensity.current) {
             val wPx = w.toPx()
             val hPx = h.toPx()
-            remember(current, lap, cave, stories.map { it.id }, wPx, hPx, labelHPx) {
+            remember(current, lap, cave, stories.map { it.id }, wPx, hPx, labelHPx, keepTopPx) {
                 MapAreas.layout(
                     current, lap, wPx, hPx, (node / 2).toPx(), if (cave) (caveNode / 2).toPx() else null, (storyNode / 2).toPx(),
                     stories.map { it.id to it.land }, (starTap / 2).toPx(), labelHalfWPx, labelHPx,
                     stopEdge = MapAreas.stopEdge(node.value).dp.toPx(),
+                    tapR = (tapNode / 2).toPx(), keepTop = keepTopPx,
                 )
             }
         }
@@ -291,6 +298,11 @@ fun IslandMap(
                         lastAreaLog = line + marks
                         println("MAPAREAS $line")
                         println("MAPMARKS $marks")
+                        // ...and each round thing's drawn and tap radius (px), for the tap-area sheets.
+                        println("MAPTAPR " + layout.all.joinToString(" ") { sp ->
+                            val n = when (val t = sp.target) { MapTarget.Stop -> "STOP"; MapTarget.Cave -> "CAVE"; is MapTarget.Story -> "STORY-${t.id}"; is MapTarget.Done -> "DONE-${t.stop}"; else -> "?" }
+                            "$n@${(o.x + sp.x).toInt()},${(o.y + sp.y).toInt()},r${sp.r.toInt()},tap${sp.tap.toInt()}"
+                        })
                     }
                 }
                 .pointerInput(stopPx, cavePx, storySpots, starSpots, label) {
@@ -302,6 +314,7 @@ fun IslandMap(
                         stopX = stopPx.x, stopY = stopPx.y, stopR = (node / 2).toPx(),
                         caveX = cavePx?.x ?: 0f, caveY = cavePx?.y ?: 0f, caveR = if (cavePx != null) (caveNode / 2).toPx() else 0f,
                         spots = storySpots + starSpots,
+                        caveTap = layout.cave?.tap ?: 0f,
                     )
                     // Feedback the moment the finger touches (press-down, crinkle, wiggle); the stop
                     // opens when the finger lifts, if it didn't drag the map (detectKidTaps: each
@@ -656,6 +669,7 @@ fun IslandMap(
                     stopPx.x, stopPx.y, (node / 2).toPx() * MapAreas.STOP_PULSE, hand.toPx(), heroOnRight,
                     w.toPx(), h.toPx(), labelHalfWPx, labelHPx,
                     hero = floatArrayOf(heroL, heroT, heroL + (node * 0.7f).toPx(), heroT + (node * 0.85f).toPx()),
+                    top = keepTopPx,
                 )
             }
             val heroB = with(dn) { MapAreas.heroBox(stopPx.x, stopPx.y, node.toPx(), heroOnRight, spot, hand.toPx()) }
@@ -683,7 +697,7 @@ fun IslandMap(
                 val dn = LocalDensity.current
                 // ...and off the next stop's ring, which fades back in as he goes (test53).
                 val ring = layout.stop.copy(r = layout.stop.r * MapAreas.STOP_PULSE)
-                val (rx, ry) = with(dn) { MapAreas.roryBeside(fixLand, w.toPx(), h.toPx(), (rh * 0.72f).toPx(), rh.toPx(), labelHalfWPx, labelHPx, avoid = listOf(ring)) }
+                val (rx, ry) = with(dn) { MapAreas.roryBeside(fixLand, w.toPx(), h.toPx(), (rh * 0.72f).toPx(), rh.toPx(), labelHalfWPx, labelHPx, avoid = listOf(ring), top = keepTopPx) }
                 val x = with(dn) { rx.toDp() }
                 val y = with(dn) { ry.toDp() }
                 val onLeft = x + rh * 0.36f < w * fixLand.mapX

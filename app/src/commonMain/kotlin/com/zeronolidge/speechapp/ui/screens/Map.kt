@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zeronolidge.speechapp.logic.Cosmetic
@@ -225,6 +227,8 @@ fun MapScreen(nav: Nav) {
             showHand = true
         }
     }
+    // Where the buddy badge ends (dp from the left), so a tablet's bunting hangs clear of it.
+    var badgeRight by remember { mutableStateOf(300.dp) }
     val startChapter = {
         app.speaker.say("${land.title}! Let's go!")
         p.markUnfoldSeen()
@@ -245,17 +249,19 @@ fun MapScreen(nav: Nav) {
                 }
             },
     ) {
-        // The party bunting hangs under the top corner buttons, so the island starts below it.
-        val buntingY = 96.dp
-        val buntingH = if (mapNarrow(maxWidth)) 26.dp else 32.dp
-        val top = buntingY + buntingH + 22.dp
-        val bottom = if (mapNarrow(maxWidth)) 176.dp else 90.dp
-        val availH = maxHeight - top - bottom
-        // Wide screens keep the island's usual shape; upright screens let it grow taller
-        // instead of leaving big empty bands of sea.
-        val (mapWv, mapHv) = com.zeronolidge.speechapp.logic.MapAreas.mapSize(maxWidth.value, availH.value, mapNarrow(maxWidth))
-        val mapW = mapWv.dp
-        val mapH = mapHv.dp
+        // test54 (Ruby): the island is one picture filling the screen, from the corner buttons down
+        // to the Adventure bar, 16 dp in from the sides (MapAreas.mapFrame, also used by the tests).
+        // The party bunting no longer takes a row of its own: on a tablet it hangs in the corner
+        // buttons' row, on a phone over the top of the picture (nothing on the map goes under it).
+        val frame = com.zeronolidge.speechapp.logic.MapAreas.mapFrame(maxWidth.value, maxHeight.value)
+        val narrowMap = frame.narrow
+        val buntingH = if (narrowMap) com.zeronolidge.speechapp.logic.MapAreas.PHONE_BUNTING_H.dp else 32.dp
+        val buntingY = if (narrowMap) com.zeronolidge.speechapp.logic.MapAreas.PHONE_BUNTING_Y.dp
+        else 10.dp + (80.dp - com.zeronolidge.speechapp.logic.MapAreas.buntingDrop(32f).dp) / 2
+        val mapW = frame.w.dp
+        val mapH = frame.h.dp
+        val mapLeft = frame.left.dp
+        val mapTop = frame.top.dp
         // For checking: every area and the scene a tap on it opens, from the same rule as onElsewhere.
         LaunchedEffect(p.chapter) {
             val peek = if (!Trail.opensLand(p.chapter)) Trail.lands.getOrNull(Trail.lands.indexOf(land) + 1) else null
@@ -330,7 +336,8 @@ fun MapScreen(nav: Nav) {
             },
             hintFrom = hintFrom,
             hintKey = hintKey,
-            modifier = Modifier.size(mapW, mapH).align(Alignment.Center).offset(y = (top - bottom) / 2),
+            modifier = Modifier.offset(x = mapLeft, y = mapTop).size(mapW, mapH),
+            keepTop = frame.keepTop.dp,
             hero = { m -> HeroWithPet(species, p.heroColor(species), p.outfit, p.pet, m) },
             pointer = { m, size, dir ->
                 if (showHand && handReady && replayAt == null) PointingHand(
@@ -344,10 +351,15 @@ fun MapScreen(nav: Nav) {
         // The party bunting. At the island party it swings down to hang just above the castle's
         // towers (both show: Ruby, test52), sways there, and goes back up. About twice the
         // castle's width, kept on screen.
-        val castleX = (maxWidth - mapW) / 2 + mapW * Land.CLOUDS.mapX
-        val castleY = (maxHeight - mapH) / 2 + (top - bottom) / 2 + mapH * Land.CLOUDS.mapY
+        val castleX = mapLeft + mapW * Land.CLOUDS.mapX
+        val castleY = mapTop + mapH * Land.CLOUDS.mapY
         val castleBox = minOf(mapW, mapH) * 0.3f
-        val buntW = minOf(maxWidth, 640.dp) - 36.dp
+        // At rest: a phone's across the screen under the corner buttons; a tablet's between the
+        // buddy badge and the 🔊 button (12 dp clear of each).
+        val slotL = if (narrowMap) 18.dp else badgeRight + 12.dp
+        val slotR = if (narrowMap) maxWidth - 18.dp else maxWidth - 14.dp - 80.dp - 12.dp
+        val buntW = if (narrowMap) minOf(maxWidth - 36.dp, 640.dp) else (slotR - slotL).coerceIn(120.dp, 640.dp)
+        val restX = if (narrowMap) maxWidth / 2 else slotL + (slotR - slotL) / 2
         val partyK = (castleBox * 1.9f / buntW).coerceAtMost(1f)
         val partyX = castleX.coerceIn(buntW * partyK / 2 + 12.dp, maxWidth - buntW * partyK / 2 - 12.dp)
 
@@ -356,7 +368,7 @@ fun MapScreen(nav: Nav) {
         val sweptIn = com.zeronolidge.speechapp.logic.IslandStory.SWEEP_MS.toFloat() / com.zeronolidge.speechapp.logic.IslandStory.FIX_MS
         com.zeronolidge.speechapp.ui.art.PartyBunting(
             flagsFilled,
-            Modifier.align(Alignment.TopCenter).offset(y = buntingY).widthIn(max = 640.dp).padding(horizontal = 18.dp)
+            Modifier.offset(x = restX - buntW / 2, y = buntingY).width(buntW)
                 .graphicsLayer {
                     if (partyT < 0f) return@graphicsLayer
                     val go = when {
@@ -364,7 +376,7 @@ fun MapScreen(nav: Nav) {
                         partyT > 0.85f -> (1f - partyT) / 0.15f
                         else -> 1f
                     }.let { 1f - (1f - it) * (1f - it) }
-                    translationX = (partyX - maxWidth / 2).toPx() * go
+                    translationX = (partyX - restX).toPx() * go
                     translationY = (partyY - buntingY - buntingH / 2).toPx() * go
                     val k = 1f - go * (1f - partyK)
                     scaleX = k
@@ -375,15 +387,13 @@ fun MapScreen(nav: Nav) {
             pop = pendingFix,
             popT = if (fixT < 0f) 1f else ((fixT - sweptIn) / 0.2f).coerceIn(0f, 1f),
         )
-        MapCorners(nav, startChapter)
+        MapCorners(nav, startChapter) { badgeRight = it }
         MapWave(roryOutfit)
         replayAt?.let { at ->
             val picker = com.zeronolidge.speechapp.logic.ReplayPicker
             val stops = picker.finishedAt(at, mapChapter)
             val plots = stops.map { picker.plotFor(it, p.stopPlot(it)) }
             val area = com.zeronolidge.speechapp.logic.MapAreas.of(at)
-            val mapLeft = (maxWidth - mapW) / 2
-            val mapTop = (maxHeight - mapH) / 2 + (top - bottom) / 2
             val card = picker.card(
                 stops.size, (mapLeft + mapW * area.markX).value, (mapTop + mapH * area.markY).value,
                 minOf(mapW, mapH).value * com.zeronolidge.speechapp.logic.MapAreas.LANDMARK_RADIUS,
@@ -405,13 +415,16 @@ fun MapScreen(nav: Nav) {
 
 /** The map's own buttons, kept to the corners so the trail stays the main thing to tap. */
 @Composable
-private fun MapCorners(nav: Nav, onAdventure: () -> Unit) {
+private fun MapCorners(nav: Nav, onAdventure: () -> Unit, onBadgeRight: (Dp) -> Unit = {}) {
     val app = LocalApp.current
     val p = app.progress
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
         val narrow = mapNarrow(maxWidth)
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            HeroBadge { app.speaker.say("Your buddy's closet!"); nav.go(Screen.Closet) }
+            val dens = androidx.compose.ui.platform.LocalDensity.current
+            HeroBadge(Modifier.onGloballyPositioned { c -> onBadgeRight(with(dens) { (c.positionInRoot().x + c.size.width).toDp() }) }) {
+                app.speaker.say("Your buddy's closet!"); nav.go(Screen.Closet)
+            }
             Spacer(Modifier.weight(1f))
             HearAgainButton()
         }

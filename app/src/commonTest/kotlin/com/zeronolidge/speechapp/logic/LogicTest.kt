@@ -1104,7 +1104,7 @@ class MapTargetTest {
                 }
                 // ...and every area's picture and label still open that area, wherever the button is.
                 MapAreas.all.forEach { a ->
-                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r), "picture of ${a.land}, stop $stop at ${w}x$h")
+                    if (!underARoundStop(a.markX * w, a.markY * h, sx, sy, r)) assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r), "picture of ${a.land}, stop $stop at ${w}x$h")
                     assertEquals(MapTarget.Area(a.land), MapAreas.target(a.labelX * w, a.labelY * h + lh / 2, w, h, half, lh, sx, sy, r), "label of ${a.land}, stop $stop at ${w}x$h")
                 }
             }
@@ -1129,7 +1129,7 @@ class MapTargetTest {
                 if (w / r >= 15f) assertTrue(MapAreas.onIsland(cx, cy, w, h, cr * MapAreas.LOOSE_ISLAND), "cave in the sea (stop $stop) at ${w}x$h")
                 // Every area's picture and label still open their area.
                 MapAreas.all.forEach { a ->
-                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr), "picture of ${a.land} with the cave at ${w}x$h")
+                    if (!underARoundStop(a.markX * w, a.markY * h, sx, sy, r, cx, cy, cr)) assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr), "picture of ${a.land} with the cave at ${w}x$h")
                 }
             }
         }
@@ -1159,7 +1159,7 @@ class MapTargetTest {
                 assertEquals(st.target, MapAreas.target(st.x, st.y, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "${st.target} centre at ${w}x$h")
             }
             MapAreas.all.forEach { a ->
-                assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "picture of ${a.land} with stars at ${w}x$h")
+                if (!underARoundStop(a.markX * w, a.markY * h, sx, sy, r, cx, cy, cr, spots)) assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "picture of ${a.land} with stars at ${w}x$h")
             }
         }
     }
@@ -1199,7 +1199,7 @@ class MapTargetTest {
                 }
                 // Pictures and labels always open their area, whatever stops there are.
                 MapAreas.all.forEach { a ->
-                    assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "picture of ${a.land} with story stops at ${w}x$h")
+                    if (!underARoundStop(a.markX * w, a.markY * h, sx, sy, r, cx, cy, cr, spots)) assertEquals(MapTarget.Area(a.land), MapAreas.target(a.markX * w, a.markY * h, w, h, half, lh, sx, sy, r, cx, cy, cr, spots), "picture of ${a.land} with story stops at ${w}x$h")
                 }
             }
         }
@@ -3458,4 +3458,10 @@ class KitchenEndingTest {
         val leanSpan = KitchenEnding.LEAN_IN_MS + KitchenEnding.LEAN_HOLD_MS + KitchenEnding.LEAN_SETTLE_MS
         assertTrue(KitchenEnding.BITE_MS >= leanSpan)
     }
+}
+
+/** test54: the ▶ and the round stops win their own (tap) circles, so a picture's middle under one of them is theirs. */
+private fun underARoundStop(x: Float, y: Float, sx: Float, sy: Float, r: Float, cx: Float = 0f, cy: Float = 0f, cr: Float = 0f, spots: List<MapSpot> = emptyList()): Boolean {
+    fun inC(px: Float, py: Float, rr: Float) = rr > 0f && (x - px) * (x - px) + (y - py) * (y - py) <= rr * rr
+    return inC(sx, sy, r) || inC(cx, cy, cr) || spots.any { inC(it.x, it.y, it.tap) }
 }

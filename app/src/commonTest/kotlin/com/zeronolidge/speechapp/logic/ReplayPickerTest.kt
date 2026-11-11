@@ -68,11 +68,11 @@ class ReplayPickerTest {
         val problems = mutableListOf<String>()
         run {
             val narrow = sw < 600f
-            val top = 96f + (if (narrow) 26f else 32f) + 22f
-            val bottom = if (narrow) 176f else 90f
-            val (mw, mh) = MapAreas.mapSize(sw, sh - top - bottom, narrow)
-            val mapLeft = (sw - mw) / 2
-            val mapTop = (sh - mh) / 2 + (top - bottom) / 2
+            val fr = MapAreas.mapFrame(sw, sh)
+            val mw = fr.w
+            val mh = fr.h
+            val mapLeft = fr.left
+            val mapTop = fr.top
             val label = MapAreas.labelSp(min(mw, mh))
             val halfW = MapAreas.labelHalfW(label)
             val labelH = MapAreas.labelH(label)
@@ -87,6 +87,7 @@ class ReplayPickerTest {
                 val st = MapAreas.layout(
                     Trail.stopOf(chapter), chapter / Trail.size, mw, mh, 48f, if (cave) 38.4f else null, MapAreas.storyNode(mw) / 2f,
                     stories, MapAreas.starTap(min(mw, mh)) / 2f, halfW, labelH, stopEdge = MapAreas.stopEdge(96f),
+                    tapR = MapAreas.tapNode(mw) / 2f, keepTop = fr.keepTop,
                 ).stop
                 val ring = floatArrayOf(mapLeft + st.x, mapTop + st.y, st.r * MapAreas.STOP_PULSE)
                 if (!seen.add(ring.toList())) continue

@@ -361,8 +361,8 @@ fun RestScreen(nav: Nav) {
     }
     // Night has fallen over the whole forest.
     ScreenFrame(onHome = nav.home, background = {
-        Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 31)
-        Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xFF1A2350).copy(alpha = 0.5f)) }
+        // (test54: the scenery's own night, background only; Rory, Pip and the sticker stay lit.)
+        Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 31, night = true)
     }) {
         ContinueHost {
             BoxWithConstraints(Modifier.fillMaxSize()) {

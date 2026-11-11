@@ -797,7 +797,7 @@ internal fun ListeningStage(
     /** K7d: where (fraction of the stage width) the listening Rory stands instead of the middle;
      * Rory's Kitchen puts him over his own counter spot so he never covers the thing asked about. */
     spotCx: Float? = null,
-    /** Drawn over the dimmed scene, under Rory (a voice story's wind strips and confetti); gets Rory's centre. */
+    /** Drawn over the scene, under Rory (a voice story's wind strips and confetti); gets Rory's centre. */
     aboveDim: (@Composable androidx.compose.foundation.layout.BoxScope.(roryAt: Offset) -> Unit)? = null,
     /** test42: the scene stays fully lit (no dim) and the big listening Rory never comes on;
      * just a small mic badge in the top-right corner shows it's his turn (the kitchen stories,
@@ -817,7 +817,8 @@ internal fun ListeningStage(
         // RoryListens draws Rory about 1.08 x its size tall, in a box 1.35 x its size.
         val rory = spot.size.dp
         val box = rory * 1.35f
-        if (k > 0.001f && !badgeOnly) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black.copy(alpha = 0.3f * k)) }
+        // (test54: no dark layer over the scene while he listens; it boxed in Bruno and the
+        // scene like a brown box. The listening Rory and his pulse show it's his turn.)
         aboveDim?.invoke(this, Offset(spot.cx, spot.cy))
         if (badgeOnly) {
             if (k > 0.001f) MicBadge(app.listenLevel, Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).graphicsLayer { alpha = k })

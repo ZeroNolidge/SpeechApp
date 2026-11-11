@@ -431,12 +431,25 @@ fun VoiceBeatScene(
             // Rory's Kitchen draws its own backdrop in three layers, Rory sandwiched behind the
             // counter (K2f; see KitchenRory/KitchenCounterFront): every other backdrop is one
             // flat layer (BackdropExtras).
+            // The light changes with the move: the sun comes up (dawn) or night falls (dusk). On the
+            // backdrop only, under Bear, Rory and the props, so they stay fully lit (test54: Ruby's
+            // night is about 30% deep navy, never black).
+            val lightWash = @Composable {
+                if (beat.light != Light.SAME) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val a = if (beat.light == Light.DAWN) 0.55f * (1f - f()) else 0.3f * f()
+                        drawRect(com.zeronolidge.speechapp.ui.art.NightNavy.copy(alpha = a))
+                    }
+                }
+            }
             if (isKitchen) {
                 KitchenWall(landscape)
+                lightWash()
                 KitchenRory(landscape, kitchenTalking, kitchenRoryVisible, kitchenPointing, kitchenSpeechBubble, kitchenFPose, lean = cakeLean)
                 KitchenCounterFront(landscape)
             } else {
                 BackdropExtras(beat.backdrop)
+                lightWash()
             }
             // Rory's Kitchen's own props always sit on the counter (K3b): the generic open-air
             // `stillSpot`/`pose` positions below (built for the boat/owl/balloon scenes) put the
@@ -508,13 +521,6 @@ fun VoiceBeatScene(
                 )
             }
             if (isKitchen && bigNumeral != null) KitchenNumeral(bigNumeral, if (beat.prop == Prop.BUTTER) KitchenLayout.butterBox(landscape) else KitchenLayout.bowlBox(landscape), landscape)
-            // The light changes with the move: the sun comes up (dawn) or night falls (dusk).
-            if (beat.light != Light.SAME) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val a = if (beat.light == Light.DAWN) 0.55f * (1f - f()) else 0.4f * f()
-                    drawRect(Color(0xFF1A2350).copy(alpha = a))
-                }
-            }
             // Bear sits in front of the counter and its props (K2f), drawn last so his lean
             // never disappears behind anything on it.
             if (beat.backdrop == Backdrop.KITCHEN) KitchenBear(landscape, cakeLean, nosePuff = CakeScene.nosePuff.value && beat.prop in setOf(Prop.FLOUR_BAG, Prop.CAKE_BOWL))

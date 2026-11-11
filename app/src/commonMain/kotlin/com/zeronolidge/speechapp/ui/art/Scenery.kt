@@ -101,7 +101,12 @@ val Land.palette: LandPalette
  * the layers stand up one after another, back to front, in under half a second.
  */
 @Composable
-fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boolean = false, content: @Composable BoxScope.() -> Unit = {}) {
+fun Scenery(
+    land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boolean = false,
+    /** At night: draw the moon too (a set piece that draws its own moon turns this off). */
+    moon: Boolean = true,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
     val dark by androidx.compose.animation.core.animateFloatAsState(if (night) 1f else 0f, androidx.compose.animation.core.tween(motionMs(MaxMotionMs)), label = "night")
     val t = rememberInfiniteTransition(label = "sky")
     val drift by t.loop(0f, 1f, 60000, mode = RepeatMode.Restart, easing = LinearEasing, label = "drift")
@@ -115,10 +120,13 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boo
         val w = maxWidth
         val h = maxHeight
         BakedLayer(listOf("sky", land), depth = 0.dp, edge = false) { sky(land, pal) }
+        // Night (Ruby, test54): the whole sky turns navy to purple, all the way down behind the
+        // hills (no pale band, no sun); the land layers in front stay themselves.
+        if (dark > 0f) Canvas(Modifier.fillMaxSize()) { nightSky(dark) }
         if (land != Land.CAVES) {
-            // One baked strip of clouds, slid along and wrapped around.
+            // One baked strip of clouds, slid along and wrapped around (faint at night).
             BakedLayer(
-                listOf("clouds", land), depth = 1.5.dp, grain = false,
+                listOf("clouds", land), Modifier.graphicsLayer { alpha = 1f - 0.7f * dark }, depth = 1.5.dp, grain = false,
                 live = { b ->
                     val x = drift * size.width
                     drawBaked(b, x)
@@ -135,20 +143,64 @@ fun Scenery(land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boo
             }
         }
         BakedLayer(listOf("ground", land), Modifier.popUp(scene, 140), depth = 4.dp) { ground(land, pal) }
-        // Night: a deep blue sky over everything (hiding the sun), the land dimmed blue below.
+        // Night: only the background darkens, about 30% deep navy (never black), edge to edge;
+        // then a moon, twinkling stars and warm fireflies. Whatever is drawn in [content] (the
+        // characters, the things to tap) stays at full brightness.
         if (dark > 0f) Canvas(Modifier.fillMaxSize()) {
-            drawRect(
-                androidx.compose.ui.graphics.Brush.verticalGradient(
-                    0f to Color(0xFF1A237E).copy(alpha = 0.97f * dark),
-                    0.55f to Color(0xFF3949AB).copy(alpha = 0.9f * dark),
-                    0.7f to Color(0xFF1A237E).copy(alpha = 0.45f * dark),
-                    1f to Color(0xFF1A237E).copy(alpha = 0.35f * dark),
-                ),
-            )
+            drawRect(NightNavy.copy(alpha = 0.3f * dark))
+            nightLights(dark, drift, moon)
         }
         // A light wash keeps the scenery behind the raised paper buttons, so they always win.
         Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash) }
         Box(Modifier.fillMaxSize(), content = content)
+    }
+}
+
+// ---------------------------------------------------------------- night
+
+/** Ruby's night navy (test54): the background's night tint, never black. */
+val NightNavy = Color(0xFF1B2A4A)
+
+/** The night sky: navy at the top to soft purple low down, over the day sky and its sun. */
+private fun DrawScope.nightSky(dark: Float) {
+    drawRect(
+        androidx.compose.ui.graphics.Brush.verticalGradient(
+            0f to Color(0xFF1B2A4A).copy(alpha = dark),
+            0.45f to Color(0xFF3A3570).copy(alpha = dark),
+            1f to Color(0xFF5B458C).copy(alpha = dark),
+        ),
+    )
+}
+
+/** The moon (a crescent cut from a disc), twinkling stars up in the sky, and warm fireflies low down. */
+private fun DrawScope.nightLights(dark: Float, loop: Float, moon: Boolean) {
+    val u = size.minDimension
+    if (moon) {
+        // Up in the sky but clear of the corner buttons (the 🔊 sits top right).
+        val c = Offset(size.width * 0.72f, size.height * 0.2f)
+        val r = u * 0.075f
+        val disc = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r)) }
+        val cut = Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset(c.x + r * 0.45f, c.y - r * 0.25f), r * 0.85f)) }
+        // A soft glow, then the crescent.
+        drawCircle(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                listOf(Color(0xFFFFF3C4).copy(alpha = 0.28f * dark), Color(0xFFFFF3C4).copy(alpha = 0f)), c, r * 2.4f,
+            ),
+            r * 2.4f, c,
+        )
+        paperPath(Path().apply { op(disc, cut, androidx.compose.ui.graphics.PathOperation.Difference) }, Color(0xFFFFF3C4).copy(alpha = dark))
+    }
+    listOf(0.08f to 0.1f, 0.22f to 0.2f, 0.36f to 0.07f, 0.5f to 0.17f, 0.63f to 0.06f, 0.56f to 0.31f, 0.15f to 0.32f, 0.93f to 0.3f, 0.44f to 0.3f).forEachIndexed { i, (x, y) ->
+        val a = ((sin((loop * 14f + i * 0.37f) * 2 * PI) + 1) / 2).toFloat()
+        star(Offset(size.width * x, size.height * y), u * (0.014f + 0.01f * a), Color(0xFFFFE082).copy(alpha = dark * (0.55f + 0.45f * a)))
+    }
+    // Warm little lights low in the scene (fireflies; the same warm yellow as lit windows).
+    listOf(0.1f to 0.62f, 0.27f to 0.56f, 0.46f to 0.66f, 0.63f to 0.58f, 0.82f to 0.64f, 0.18f to 0.8f, 0.72f to 0.82f).forEachIndexed { i, (x, y) ->
+        val ph = loop * 20f + i * 0.61f
+        val glow = ((sin(ph * 2 * PI) + 1) / 2).toFloat()
+        val p = Offset(size.width * x + (sin(ph * 0.7f * PI).toFloat()) * u * 0.02f, size.height * y + (cos(ph * 0.5f * PI).toFloat()) * u * 0.015f)
+        drawCircle(Color(0xFFFFD65A).copy(alpha = dark * 0.22f * (0.4f + 0.6f * glow)), u * 0.03f, p)
+        drawCircle(Color(0xFFFFE38C).copy(alpha = dark * (0.5f + 0.5f * glow)), u * 0.007f, p)
     }
 }
 

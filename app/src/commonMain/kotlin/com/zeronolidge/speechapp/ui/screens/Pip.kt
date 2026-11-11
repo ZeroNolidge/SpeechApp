@@ -244,27 +244,18 @@ fun PipStoryScreen(nav: Nav) {
         }
     }
 
-    ScreenFrame(onHome = nav.home, onBack = nav.back, background = { Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 77) }, top = {
+    ScreenFrame(onHome = nav.home, onBack = nav.back, background = { Scenery(Land.FOREST, Modifier.fillMaxSize(), seed = 77, night = night) }, top = {
         PaperChip("🐶", fontSize = 26.sp, maxLines = 1)
     }) {
         ContinueHost {
-            val nightness by animateFloatAsState(if (night) 1f else 0f, tween(450), label = "night")
             // His turn: the listening look (Rory in the one listening spot, clear of Pip and the
             // hiding spot his voice rustles).
             ListeningStage(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val w = maxWidth
                 val h = maxHeight
-                // Night falls for the goodnight turns: a deep blue wash, a moon and stars.
-                Canvas(Modifier.fillMaxSize()) {
-                    if (nightness > 0f) {
-                        drawRect(Color(0xFF1A2350).copy(alpha = 0.45f * nightness))
-                        paperCircle(Color(0xFFFFF3C4).copy(alpha = nightness), size.minDimension * 0.06f, Offset(size.width * 0.86f, size.height * 0.12f))
-                        listOf(0.2f to 0.1f, 0.4f to 0.18f, 0.62f to 0.08f, 0.72f to 0.25f).forEach { (x, y) ->
-                            star(Offset(size.width * x, size.height * y), size.minDimension * 0.02f, Color(0xFFFFE082).copy(alpha = nightness))
-                        }
-                    }
-                }
+                // Night falls for the goodnight turns: the background scenery itself goes night
+                // (Scenery(night), edge to edge); Rory, Pip and the buttons stay fully lit (test54).
                 val current = turns.getOrNull(index)?.spot
                 val stage = turns.getOrNull(index)?.stage ?: 0
                 // All three stand on the ground band (the lower half), far (small) to near (big).

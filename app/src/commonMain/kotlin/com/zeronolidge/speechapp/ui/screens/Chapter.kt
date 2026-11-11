@@ -188,7 +188,7 @@ fun ChapterScreen(nav: Nav, visit: Land? = null, replay: Boolean = false, replay
     ScreenFrame(
         onHome = nav.home,
         // A night-time picture (the star going home) makes the whole scene night, not just its box.
-        background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = (phase as? Phase.Beat)?.index ?: 9, night = pieceOf(quest, phase) == SetPiece.NIGHT_SKY) },
+        background = { Scenery(quest.land, Modifier.fillMaxSize(), seed = (phase as? Phase.Beat)?.index ?: 9, night = pieceOf(quest, phase) == SetPiece.NIGHT_SKY, moon = false) },
         top = { Footprints(quest, phase) },
     ) {
         // Every step's continue button is drawn by the host: same size, same bottom-right spot.
