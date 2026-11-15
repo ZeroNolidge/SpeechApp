@@ -111,9 +111,13 @@ private fun growsInside(p: Prop) = p == Prop.BALLOON || p == Prop.SAIL || p == P
 fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble: Float): Pose {
     val live = push * 7f * sin(wobble * 2f * PI.toFloat() * 6f)
     return when (move) {
-        Move.RISE -> Pose(0.5f, lerp(0.74f, 0.3f, f) - 0.04f * bump(f) * strength, rotation = live)
+        // The sun is the sky's own sun (Scenery's `sun`): the glow and the wind aim where it is.
+        Move.RISE -> if (prop == Prop.SUN) Pose(0.85f, lerp(0.5f, 0.15f, f)) else Pose(0.5f, lerp(0.74f, 0.3f, f) - 0.04f * bump(f) * strength, rotation = live)
         Move.SINK -> Pose(0.5f, lerp(0.3f, 0.64f, f), rotation = live + 10f * bump(f) * strength)
-        Move.SLIDE -> Pose(lerp(0.22f, 0.66f, f), 0.6f - 0.06f * bump(f) * strength, rotation = live - 6f * bump(f))
+        // test56: the owl story's leaves lie on the path itself (its near, wide part, below Rory's
+        // feet), not standing up in mid-air off to the side, and blow off it onto the grass.
+        Move.SLIDE -> if (prop == Prop.LEAVES) Pose(lerp(0.5f, 0.22f, f), lerp(0.86f, 0.74f, f) - 0.1f * bump(f) * strength, rotation = live)
+        else Pose(lerp(0.22f, 0.66f, f), 0.6f - 0.06f * bump(f) * strength, rotation = live - 6f * bump(f))
         Move.POP -> Pose(0.5f, 0.45f, scale = if (prop == Prop.BUBBLE) 1f else 1f + 0.3f * f, alpha = if (prop == Prop.BUBBLE) 1f else 1f - f, rotation = live)
         Move.GROW -> Pose(0.5f, 0.52f, scale = if (growsInside(prop)) 1f else 0.62f + (0.38f + 0.2f * strength) * f, rotation = live)
         Move.SHAKE -> {
@@ -410,7 +414,18 @@ fun VoiceBeatScene(
     val still = LocalReduceMotion.current
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "beat")
     val wobble by t.loop(0f, 1f, 4000, mode = androidx.compose.animation.core.RepeatMode.Restart, easing = androidx.compose.animation.core.LinearEasing, label = "wobble")
-    Scenery(beat.backdrop.land, modifier.fillMaxSize(), seed = 30 + beat.backdrop.ordinal * 7) {
+    // test56 (Timothy: "the sun is oddly placed in front of the scene and there's two suns"):
+    // the sky's own sun is the one his word moves. "Wake up, sun!" brings it up from behind the
+    // hilltop; "Good night" (the moon rising) takes it down behind the hills. No second sun.
+    val skySun: (() -> Float)? = when (beat.prop) {
+        Prop.SUN -> f
+        Prop.MOON -> { { 1f - f() } }
+        else -> null
+    }
+    Scenery(
+        beat.backdrop.land, modifier.fillMaxSize(), seed = 30 + beat.backdrop.ordinal * 7,
+        sun = skySun, footpath = beat.backdrop == Backdrop.PATH,
+    ) {
         BoxWithConstraints(
             Modifier.fillMaxSize().let { m -> if (onSceneRect == null) m else m.onGloballyPositioned(onSceneRect) },
         ) {
@@ -479,7 +494,8 @@ fun VoiceBeatScene(
             // cover the row's first balloon); it stays small but visible, Bear and all. Rory's
             // Kitchen's own choice strip never needs this: its counter position is already clear
             // of it (K3b).
-            if (!suppressed) Item(
+            // The sun is the sky's own (drawn behind the hills by Scenery above), never a prop.
+            if (!suppressed && beat.prop != Prop.SUN) Item(
                 if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
@@ -624,7 +640,10 @@ private fun BoxWithConstraintsScope.BackdropExtras(b: Backdrop) {
                 }
                 if (b == Backdrop.ISLAND) paperOval(Color(0xFFFFE0B2), Offset(w * 0.6f, h * 0.6f), Size(w * 0.36f, h * 0.13f))
             }
-            Backdrop.PATH -> paperRect(Color(0xFFD7CCC8), Offset(0f, h * 0.64f), Size(w, h * 0.08f))
+            // test56: the path is part of the ground now (Scenery's `footpath`), lying flat from
+            // the bottom edge back to the tree line; it used to be a flat strip floating across
+            // the hills here.
+            Backdrop.PATH -> {}
             Backdrop.SKY -> {
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.08f, h * 0.2f), Size(w * 0.18f, h * 0.08f))
                 paperOval(Color.White.copy(alpha = 0.85f), Offset(w * 0.68f, h * 0.12f), Size(w * 0.2f, h * 0.09f))
@@ -1326,7 +1345,10 @@ private fun PropArt(
         }
         Prop.LEAVES -> BoxWithConstraints(Modifier.fillMaxSize()) {
             listOf(0.2f, 0.5f, 0.8f).forEachIndexed { i, x ->
-                Item(maxWidth * 0.32f, { x }, { 0.55f + 0.1f * (i % 2) }, rotation = { (if (moving) f() else 0f) * 120f * (if (i == 0) -1f else 1f) }) {
+                // Lying down on the ground (turned on their sides, test56); his "sss" tumbles them (a half
+                // turn, so they land lying down again) off the path onto the grass beside it.
+                val lying = listOf(-78f, 84f, -70f)[i]
+                Item(maxWidth * 0.32f, { x }, { 0.55f + 0.1f * (i % 2) }, rotation = { lying + (if (moving) f() else 0f) * 180f * (if (i == 0) -1f else 1f) }) {
                     // A paper leaf that flips over to its darker side as it blows away.
                     Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX = cos(PI.toFloat() * (if (moving) f() else 0f)) }) {
                         val flipped = moving && f() > 0.5f

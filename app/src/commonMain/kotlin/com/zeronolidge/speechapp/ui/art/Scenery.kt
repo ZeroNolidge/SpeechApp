@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
@@ -105,6 +106,14 @@ fun Scenery(
     land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boolean = false,
     /** At night: draw the moon too (a set piece that draws its own moon turns this off). */
     moon: Boolean = true,
+    /** test56: how high the sky's own sun is right now, 0 (just peeking over the hilltop) to 1
+     * (up in the sky, where it always sits otherwise). A story step about the sun animates this
+     * one sun up instead of drawing a second sun in front of the scene (Ruby's spec). Read only
+     * while drawing. Null: the sun sits up in the sky, baked into the sky layer as always. */
+    sun: (() -> Float)? = null,
+    /** test56: a dirt path lying flat on the ground (Sleepy Owl's "Leaves are blocking the
+     * path"): wide at the scene's bottom edge, narrowing as it goes back to the tree line. */
+    footpath: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val dark by androidx.compose.animation.core.animateFloatAsState(if (night) 1f else 0f, androidx.compose.animation.core.tween(motionMs(MaxMotionMs)), label = "night")
@@ -119,10 +128,14 @@ fun Scenery(
     BoxWithConstraints(modifier) {
         val w = maxWidth
         val h = maxHeight
-        BakedLayer(listOf("sky", land), depth = 0.dp, edge = false) { sky(land, pal) }
+        val liveSun = sun != null && land.hasSun
+        BakedLayer(listOf("sky", land, liveSun), depth = 0.dp, edge = false) { sky(land, pal, drawSun = !liveSun) }
         // Night (Ruby, test54): the whole sky turns navy to purple, all the way down behind the
         // hills (no pale band, no sun); the land layers in front stay themselves.
         if (dark > 0f) Canvas(Modifier.fillMaxSize()) { nightSky(dark) }
+        // test56: the one sun, moving: still in the sky layer (behind the clouds, hills, trees,
+        // characters and props), so a sunrise comes up from behind the hilltop.
+        if (liveSun) Canvas(Modifier.fillMaxSize()) { skySun(land, sun!!().coerceIn(0f, 1f)) }
         if (land != Land.CAVES) {
             // One baked strip of clouds, slid along and wrapped around (faint at night).
             BakedLayer(
@@ -134,7 +147,9 @@ fun Scenery(
                 },
             ) { cloudStrip(pal) }
         }
-        BakedLayer(listOf("far", land, seed), Modifier.popUp(scene, 0), depth = 2.dp) { far(land, pal, seed) }
+        BakedLayer(listOf("far", land, seed, footpath), Modifier.popUp(scene, 0), depth = 2.dp) {
+            far(land, pal, seed, if (footpath) { { footpathFar(land, pal) } } else null)
+        }
         BakedLayer(listOf("near", land, seed), Modifier.popUp(scene, 70), depth = 3.dp) { near(land, pal, seed) }
         val fs = (h.value * 0.11f).coerceIn(18f, 40f)
         Box(Modifier.fillMaxSize().popUp(scene, 110)) {
@@ -142,7 +157,7 @@ fun Scenery(
                 WigglyDecor(emoji, fs, Modifier.offset(x = w * x, y = h * (0.55f + y * 0.08f)))
             }
         }
-        BakedLayer(listOf("ground", land), Modifier.popUp(scene, 140), depth = 4.dp) { ground(land, pal) }
+        BakedLayer(listOf("ground", land, footpath), Modifier.popUp(scene, 140), depth = 4.dp) { ground(land, pal, footpath) }
         // Night: only the background darkens, about 30% deep navy (never black), edge to edge;
         // then a moon, twinkling stars and warm fireflies. Whatever is drawn in [content] (the
         // characters, the things to tap) stays at full brightness.
@@ -209,7 +224,7 @@ private fun DrawScope.nightLights(dark: Float, loop: Float, moon: Boolean) {
 /** Every daytime sun, in every area. */
 private val SunGold = Color(0xFFF7C11E)
 
-private fun DrawScope.sky(land: Land, pal: LandPalette) {
+private fun DrawScope.sky(land: Land, pal: LandPalette, drawSun: Boolean = true) {
     drawRect(pal.sky)
     paperRect(pal.glow, Offset(-20f, size.height * 0.36f), Size(size.width + 40f, size.height * 0.4f))
     val u = size.minDimension
@@ -224,14 +239,68 @@ private fun DrawScope.sky(land: Land, pal: LandPalette) {
                 star(Offset(size.width * x, size.height * y), u * 0.025f, pal.accent)
             }
         }
-        else -> {
-            // The sun is always golden yellow, whatever the area's colours (Market Town's plum
-            // highlight made a purple sun on a "sunny day").
-            val sun = Offset(size.width * 0.85f, size.height * 0.15f)
-            paperCircle(lerp(SunGold, Color.White, 0.55f), u * 0.13f, sun)
-            paperCircle(lerp(SunGold, Color.White, 0.1f), u * 0.085f, sun)
-        }
+        else -> if (drawSun) skySun(land, 1f)
     }
+}
+
+/** The lands whose sky has the ordinary golden sun (the caves have a hole in the roof, the clouds their own). */
+val Land.hasSun get() = this != Land.CAVES && this != Land.CLOUDS
+
+/** Where the hilltop is, under the sun (x = 0.85 of the width), as a part of the scene's height. */
+private fun sunHorizon(land: Land) = when (land) {
+    Land.FOREST -> 0.5f
+    Land.MEADOW -> 0.54f
+    Land.LAGOON -> 0.5f
+    else -> 0.56f
+}
+
+/**
+ * The sky's one sun at [rise] (1 = up in the sky at 0.85, 0.15, where it always is otherwise).
+ * At 0 its glow just peeks over the hilltop; the hills, trees and everything else in front hide
+ * the rest, because this is drawn in the sky layer, before them. It brightens as it climbs, from
+ * a low orange-gold to the full golden yellow.
+ */
+internal fun DrawScope.skySun(land: Land, rise: Float) {
+    val u = size.minDimension
+    val glowR = u * 0.13f
+    val low = size.height * sunHorizon(land) + glowR * 0.7f
+    val c = Offset(size.width * 0.85f, low + (size.height * 0.15f - low) * rise)
+    // The sun is always golden yellow, whatever the area's colours (Market Town's plum
+    // highlight made a purple sun on a "sunny day").
+    val warm = lerp(Color(0xFFF59A3A), SunGold, rise)
+    paperCircle(lerp(warm, Color.White, 0.55f), glowR, c)
+    paperCircle(lerp(warm, Color.White, 0.1f), u * 0.085f, c)
+}
+
+/** test56: the path's shape, flat on the ground: wide at the bottom edge, narrowing in
+ * perspective as it winds back up between the near hills to the tree line, where it ends. */
+private fun DrawScope.footpathShape(): Path {
+    val w = size.width
+    val h = size.height
+    // Its centre line, from the bottom edge (near) to the tree line (far), with a gentle bend,
+    // and its half-width at each point, shrinking toward the back (perspective).
+    val n = 24
+    val pts = List(n + 1) { i ->
+        val t = i / n.toFloat()
+        val y = 1.02f + (0.6f - 1.02f) * t
+        val x = 0.47f + 0.1f * t - 0.05f * sin(t * PI.toFloat())
+        val half = 0.2f * (1f - t) * (1f - t) + 0.012f
+        Triple(x, y, half)
+    }
+    return Path().apply {
+        pts.forEachIndexed { i, (x, y, half) -> if (i == 0) moveTo(w * (x - half), h * y) else lineTo(w * (x - half), h * y) }
+        pts.asReversed().forEach { (x, y, half) -> lineTo(w * (x + half), h * y) }
+        close()
+    }
+}
+
+private fun footpathColor(land: Land, pal: LandPalette) =
+    if (land == Land.CAVES) lerp(pal.ground, Color.White, 0.25f) else lerp(pal.ground, Color(0xFFFFF3E0), 0.55f)
+
+/** The back part of the path, on the forest floor between the hills: drawn before the trees, so
+ * it runs in among them, and under the near hills, which hide its sides. Flat: no shadow. */
+private fun DrawScope.footpathFar(land: Land, pal: LandPalette) {
+    clipRect(bottom = size.height * 0.77f) { drawPaper(footpathColor(land, pal), 20f, PaperShape.Shape(footpathShape()), shadow = false) }
 }
 
 private fun DrawScope.cloudStrip(pal: LandPalette) {
@@ -242,7 +311,7 @@ private fun DrawScope.cloudStrip(pal: LandPalette) {
     }
 }
 
-private fun DrawScope.far(land: Land, pal: LandPalette, seed: Int) {
+private fun DrawScope.far(land: Land, pal: LandPalette, seed: Int, floor: (DrawScope.() -> Unit)? = null) {
     val r = Random(seed * 17 + land.ordinal * 5)
     val w = size.width
     val h = size.height
@@ -254,6 +323,7 @@ private fun DrawScope.far(land: Land, pal: LandPalette, seed: Int) {
             // A strip of forest floor right across, so every tree stands on ground (between and
             // beyond the hills they used to float over the sky).
             paperRect(pal.far, Offset(-20f, h * 0.585f), Size(w + 40f, h * 0.42f))
+            floor?.invoke(this)
             var x = -0.02f
             while (x < 1.04f) {
                 val tall = 0.16f + r.nextFloat() * 0.12f
@@ -389,7 +459,7 @@ private fun DrawScope.near(land: Land, pal: LandPalette, seed: Int) {
     }
 }
 
-private fun DrawScope.ground(land: Land, pal: LandPalette) {
+private fun DrawScope.ground(land: Land, pal: LandPalette, footpath: Boolean = false) {
     val w = size.width
     val h = size.height
     if (land == Land.CLOUDS) {
@@ -400,6 +470,9 @@ private fun DrawScope.ground(land: Land, pal: LandPalette) {
     // A path for the buddy to walk along.
     val path = if (land == Land.CAVES) lerp(pal.ground, Color.White, 0.25f) else lerp(pal.ground, Color(0xFFFFF3E0), 0.55f)
     paperOval(path, Offset(-w * 0.1f, h * 0.85f), Size(w * 1.2f, h * 0.11f))
+    // test56: the near part of the story's path, cut from the ground itself (no shadow, no gap):
+    // from the bottom edge up to the grass line, where the far part carries on between the hills.
+    if (footpath) clipRect(top = h * 0.76f) { drawPaper(path, 20f, PaperShape.Shape(footpathShape()), shadow = false) }
 }
 
 // ---------------------------------------------------------------- shapes
