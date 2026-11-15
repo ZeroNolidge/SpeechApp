@@ -440,6 +440,7 @@ fun VoiceBeatScene(
         // test57: the moon is the sky's own too, rising from behind the hills (not a disc in front).
         moon = if (beat.prop == Prop.MOON) f else null,
         clearSun = beat.prop == Prop.SUN,
+        clearMoon = beat.prop == Prop.MOON,
     ) {
         BoxWithConstraints(
             Modifier.fillMaxSize().let { m -> if (onSceneRect == null) m else m.onGloballyPositioned(onSceneRect) },
@@ -468,7 +469,18 @@ fun VoiceBeatScene(
                 if (beat.light != Light.SAME) {
                     Canvas(Modifier.fillMaxSize()) {
                         val a = if (beat.light == Light.DAWN) 0.55f * (1f - f()) else 0.3f * f()
-                        drawRect(com.zeronolidge.speechapp.ui.art.NightNavy.copy(alpha = a))
+                        val wash = com.zeronolidge.speechapp.ui.art.NightNavy.copy(alpha = a)
+                        if (beat.prop == Prop.MOON) {
+                            // test58 (Ruby): the moon stays warm cream at dusk: the dimming leaves
+                            // a hole for the moon's own disc (above the hilltop only, so the hills
+                            // in front of it as it rises still dim with everything else).
+                            val (c, r) = moonDisc(size, f())
+                            val hole = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r * 1.08f)) }
+                            val sky = Path().apply { addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height * MOON_HORIZON)) }
+                            val cut = Path().apply { op(hole, sky, androidx.compose.ui.graphics.PathOperation.Intersect) }
+                            val all = Path().apply { addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height)) }
+                            drawPath(Path().apply { op(all, cut, androidx.compose.ui.graphics.PathOperation.Difference) }, wash)
+                        } else drawRect(wash)
                     }
                 }
             }
@@ -491,8 +503,26 @@ fun VoiceBeatScene(
                 val box = KitchenLayout.propBox(prop, landscape, kitchenPropSize(prop, landscape), maxWidth.value, maxHeight.value)
                 return (box.l + box.r) / 2f to (box.t + box.b) / 2f
             }
+            // test58 (Ruby): on a portrait phone Rory and his listening glow fill the middle, so Owl
+            // stands on the open grass at the right edge (or, beside the berry bush on step 5, at
+            // the left, above the child), fully visible and still on the ground.
+            val portrait = maxWidth < maxHeight
+            val owlMain = (beat.prop == Prop.OWL || beat.prop == Prop.SLEEPY_OWL) && beat.move != Move.RISE
+            // test58: the cupcake ends resting in Bear's paw at the basket's rim. The balloon's box
+            // is lifted so the basket stands on the ground inside the scene (its bottom was off
+            // screen in landscape, Bear's paw with it).
+            val cupcakeBeat = beat.prop == Prop.CUPCAKE && beat.still == Prop.BALLOON
+            val sw = maxWidth.value
+            val sh = maxHeight.value
+            val balloonS = unit.value * propSize(Prop.BALLOON) * 0.8f
+            val balloonCy = minOf(0.8f, 0.95f - balloonS / 2f / sh)
+            val pawX = 0.5f + 0.12f * balloonS / sw
+            val pawY = balloonCy - balloonS / 2f / sh + 0.88f * balloonS / sh - 0.3f * unit.value * propSize(Prop.CUPCAKE) / sh
             beat.still?.let { sp ->
-                val (sx, sy) = if (isKitchen) kitchenCenter(sp) else stillSpot(beat.move).let { it.x to it.y }
+                val (sx, sy) = if (isKitchen) kitchenCenter(sp)
+                else if (portrait && sp == Prop.OWL && beat.prop == Prop.BERRIES) 0.17f to 0.7f
+                else if (cupcakeBeat) 0.5f to balloonCy
+                else stillSpot(beat.move).let { (if (portrait && (sp == Prop.OWL || sp == Prop.SLEEPY_OWL)) 0.86f else it.x) to it.y }
                 Item(
                     if (isKitchen) kitchenUnit * kitchenPropSize(sp, landscape) else unit * propSize(sp) * 0.8f, { sx }, { sy },
                     onRect = if (!isKitchen) null else { c -> onKitchenPropRect?.invoke(sp, c) },
@@ -513,9 +543,9 @@ fun VoiceBeatScene(
             // The sun is the sky's own (drawn behind the hills by Scenery above), never a prop.
             if (!suppressed && beat.prop != Prop.SUN && beat.prop != Prop.MOON) Item(
                 if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
-                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else if (bushBerries) BERRY_BUSH_X else now().x },
+                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else if (bushBerries) BERRY_BUSH_X else if (owlMain && portrait) 0.86f else if (cupcakeBeat) 0.5f + (pawX - 0.5f) * f() else now().x },
                 // The owl story's berry bush stands with its base on the ground (test57).
-                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else if (bushBerries) BERRY_BUSH_GROUND - (unit * propSize(beat.prop) * BERRY_BUSH_BASE - unit * propSize(beat.prop) / 2) / maxHeight else now().y },
+                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else if (bushBerries) BERRY_BUSH_GROUND - (unit * propSize(beat.prop) * BERRY_BUSH_BASE - unit * propSize(beat.prop) / 2) / maxHeight else if (cupcakeBeat) 0.3f + (pawY - 0.3f) * f() * f() else now().y },
                 alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c ->
                     if (beat.prop == Prop.CAKE) CakeScene.cakeAt.value = c.boundsInWindow().center

@@ -117,6 +117,8 @@ fun Scenery(
     /** test57 (Ruby): keep the clouds out of the sun's way on the step that's about the sun, so
      * the risen sun is fully visible (on every other step they drift past it as usual). */
     clearSun: Boolean = false,
+    /** test58 (Ruby): the same for the moon's whole rise, on the step that's about the moon. */
+    clearMoon: Boolean = false,
     /** test56: a dirt path lying flat on the ground (Sleepy Owl's "Leaves are blocking the
      * path"): wide at the scene's bottom edge, narrowing as it goes back to the tree line. */
     footpath: Boolean = false,
@@ -146,9 +148,9 @@ fun Scenery(
         if (land != Land.CAVES) {
             // One baked strip of clouds, slid along and wrapped around (faint at night).
             BakedLayer(
-                listOf("clouds", land, clearSun), Modifier.graphicsLayer { alpha = 1f - 0.7f * dark }, depth = 1.5.dp, grain = false,
+                listOf("clouds", land, clearSun, clearMoon), Modifier.graphicsLayer { alpha = 1f - 0.7f * dark }, depth = 1.5.dp, grain = false,
                 live = { b ->
-                    if (clearSun) {
+                    if (clearSun || clearMoon) {
                         // Parked off to the left, clear of the sun's whole climb (test57).
                         drawBaked(b, 0f)
                     } else {
@@ -157,7 +159,7 @@ fun Scenery(
                         drawBaked(b, x - size.width)
                     }
                 },
-            ) { cloudStrip(pal, clearSun) }
+            ) { cloudStrip(pal, clearSun, clearMoon) }
         }
         BakedLayer(listOf("far", land, seed, footpath), Modifier.popUp(scene, 0), depth = 2.dp) {
             far(land, pal, seed, if (footpath) { { footpathFar(land, pal) } } else null)
@@ -287,20 +289,32 @@ internal fun DrawScope.skySun(land: Land, rise: Float) {
 /** test57: the rising moon, at the left of the sky (the setting sun goes down at the right):
  * behind the hilltop at 0, up at (0.18, 0.2) at 1. A pale paper disc with a soft glow. */
 internal fun DrawScope.skyMoon(rise: Float) {
-    val u = size.minDimension
-    val r = u * 0.075f
-    val low = size.height * 0.5f + r * 3.6f
-    val c = Offset(size.width * 0.18f, low + (size.height * 0.2f - low) * rise)
+    val (c, r) = moonDisc(size, rise)
     drawCircle(
         androidx.compose.ui.graphics.Brush.radialGradient(
-            listOf(Color(0xFFFFF9C4).copy(alpha = 0.35f), Color(0xFFFFF9C4).copy(alpha = 0f)), c, r * 2.2f,
+            listOf(MoonCream.copy(alpha = 0.4f), MoonCream.copy(alpha = 0f)), c, r * 2.2f,
         ),
         r * 2.2f, c,
     )
-    paperCircle(Color(0xFFFFF9C4), r, c)
-    paperCircle(Color(0xFFF0E6A8), r * 0.18f, Offset(c.x - r * 0.3f, c.y - r * 0.2f))
-    paperCircle(Color(0xFFF0E6A8), r * 0.12f, Offset(c.x + r * 0.35f, c.y + r * 0.3f))
+    paperCircle(MoonCream, r, c)
+    paperCircle(Color(0xFFF2DFA6), r * 0.18f, Offset(c.x - r * 0.3f, c.y - r * 0.2f))
+    paperCircle(Color(0xFFF2DFA6), r * 0.12f, Offset(c.x + r * 0.35f, c.y + r * 0.3f))
 }
+
+/** test58: the moon's warm cream (Ruby: never grey at dusk). */
+val MoonCream = Color(0xFFFFF0C8)
+
+/** Where the moon's disc is at [rise] in a scene of [size]: its centre and radius. Shared with
+ * the dusk dimming, which leaves the moon itself out (test58). */
+fun moonDisc(size: Size, rise: Float): Pair<Offset, Float> {
+    val r = minOf(size.width, size.height) * 0.075f
+    val low = size.height * 0.5f + r * 3.6f
+    return Offset(size.width * 0.18f, low + (size.height * 0.2f - low) * rise) to r
+}
+
+/** The hilltop under the moon (x = 0.18), as a part of the scene's height: the dusk dimming's
+ * hole for the moon stops here, so the hills in front of a rising moon still dim. */
+const val MOON_HORIZON = 0.5f
 
 /** test56: the path's shape, flat on the ground: wide at the bottom edge, narrowing in
  * perspective as it winds back up between the near hills to the tree line, where it ends. */
@@ -333,12 +347,16 @@ private fun DrawScope.footpathFar(land: Land, pal: LandPalette) {
     clipRect(bottom = size.height * 0.77f) { drawPaper(footpathColor(land, pal), 20f, PaperShape.Shape(footpathShape()), shadow = false) }
 }
 
-private fun DrawScope.cloudStrip(pal: LandPalette, clearSun: Boolean = false) {
+private fun DrawScope.cloudStrip(pal: LandPalette, clearSun: Boolean = false, clearMoon: Boolean = false) {
     val u = size.minDimension
     val white = lerp(Color.White, pal.sky, 0.08f)
     // Clear of the sun (x 0.85, up to 0.13 of the short side either way): each cloud reaches
     // about 0.1 of the short side to its right, so the last one stops short of the sun's glow.
-    val spots = if (clearSun) listOf(0.1f to 0.12f, 0.36f to 0.22f, (0.72f - u * 0.24f / size.width) to 0.08f)
+    // Clear of the moon (x 0.18, its glow up to 0.17 of the short side either way): each cloud
+    // reaches about 0.1 of the short side to its left, so the first one starts past the glow.
+    val moonClear = (0.18f * size.width + u * 0.28f) / size.width
+    val spots = if (clearMoon) listOf(moonClear to 0.2f, (moonClear + 0.22f) to 0.09f, (moonClear + 0.44f).coerceAtMost(0.9f) to 0.18f)
+    else if (clearSun) listOf(0.1f to 0.12f, 0.36f to 0.22f, (0.72f - u * 0.24f / size.width) to 0.08f)
     else listOf(0.1f to 0.12f, 0.42f to 0.22f, 0.74f to 0.1f)
     spots.forEach { (x, y) ->
         cloud(Offset(size.width * x, size.height * y), u * 0.055f, white)
