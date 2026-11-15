@@ -110,6 +110,7 @@ private fun growsInside(p: Prop) = p == Prop.BALLOON || p == Prop.SAIL || p == P
 /** The shared moves. [wobble] is a 0 to 1 clock for the shake and the live wobble. */
 fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble: Float): Pose {
     val live = push * 7f * sin(wobble * 2f * PI.toFloat() * 6f)
+    val owl = prop == Prop.OWL || prop == Prop.SLEEPY_OWL
     return when (move) {
         // The sun is the sky's own sun (Scenery's `sun`): the glow and the wind aim where it is.
         Move.RISE -> if (prop == Prop.SUN) Pose(0.85f, lerp(0.5f, 0.15f, f)) else if (prop == Prop.MOON) Pose(0.18f, lerp(0.5f, 0.2f, f)) else Pose(0.5f, lerp(0.74f, 0.3f, f) - 0.04f * bump(f) * strength, rotation = live)
@@ -119,11 +120,13 @@ fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble:
         Move.SLIDE -> if (prop == Prop.LEAVES) Pose(lerp(0.5f, 0.22f, f), lerp(0.86f, 0.74f, f) - 0.1f * bump(f) * strength, rotation = live)
         else Pose(lerp(0.22f, 0.66f, f), 0.6f - 0.06f * bump(f) * strength, rotation = live - 6f * bump(f))
         Move.POP -> Pose(0.5f, 0.45f, scale = if (prop == Prop.BUBBLE) 1f else 1f + 0.3f * f, alpha = if (prop == Prop.BUBBLE) 1f else 1f - f, rotation = live)
-        Move.GROW -> Pose(0.5f, 0.52f, scale = if (growsInside(prop)) 1f else 0.62f + (0.38f + 0.2f * strength) * f, rotation = live)
+        // test57: Owl stands on the ground at the side (where he stands as the still prop), not
+        // hovering over the hills in the middle; only "Fly up high" (RISE) takes him into the air.
+        Move.GROW -> Pose(if (owl) 0.8f else 0.5f, if (owl) 0.7f else 0.52f, scale = if (growsInside(prop)) 1f else if (owl) 0.92f + 0.08f * f else 0.62f + (0.38f + 0.2f * strength) * f, rotation = live)
         Move.SHAKE -> {
             // A wobble that's biggest while he's pushing, settling as the move finishes, then a little hop.
             val amp = (8f + 16f * push) * (1f - 0.6f * f) * (0.6f + 0.4f * strength)
-            Pose(0.5f, 0.5f - 0.06f * bump(f) * strength, rotation = amp * sin(wobble * 2f * PI.toFloat() * 4f))
+            Pose(if (owl) 0.8f else 0.5f, (if (owl) 0.7f else 0.5f) - 0.06f * bump(f) * strength, rotation = amp * sin(wobble * 2f * PI.toFloat() * 4f))
         }
     }
 }

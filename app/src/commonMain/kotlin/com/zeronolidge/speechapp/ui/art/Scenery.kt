@@ -289,7 +289,7 @@ internal fun DrawScope.skySun(land: Land, rise: Float) {
 internal fun DrawScope.skyMoon(rise: Float) {
     val u = size.minDimension
     val r = u * 0.075f
-    val low = size.height * 0.5f + r * 2.2f
+    val low = size.height * 0.5f + r * 3.6f
     val c = Offset(size.width * 0.18f, low + (size.height * 0.2f - low) * rise)
     drawCircle(
         androidx.compose.ui.graphics.Brush.radialGradient(
