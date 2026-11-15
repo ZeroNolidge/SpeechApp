@@ -142,6 +142,9 @@ fun voiceTarget(beat: VoiceBeat, f: Float, strength: Float = 1f): Offset {
 /** test57: the owl story's berry bush: where it stands (centre x), where the ground under it is
  * (both parts of the scene), and how far down its own box its base is. */
 private const val BERRY_BUSH_X = 0.8f
+
+/** test58: the cupcake's box, as a part of Bear's balloon's box (about Bear's paw-sized). */
+private const val CUPCAKE_OF_BALLOON = 0.2f
 private const val BERRY_BUSH_GROUND = 0.86f
 private const val BERRY_BUSH_BASE = 0.94f
 
@@ -517,7 +520,7 @@ fun VoiceBeatScene(
             val balloonS = unit.value * propSize(Prop.BALLOON) * 0.8f
             val balloonCy = minOf(0.8f, 0.95f - balloonS / 2f / sh)
             val pawX = 0.5f + 0.12f * balloonS / sw
-            val pawY = balloonCy - balloonS / 2f / sh + 0.88f * balloonS / sh - 0.3f * unit.value * propSize(Prop.CUPCAKE) / sh
+            val pawY = balloonCy - balloonS / 2f / sh + 0.96f * balloonS / sh - 0.3f * CUPCAKE_OF_BALLOON * balloonS / sh
             // Rory's listening glow covers the middle band (Talk.kt listenSpot: up to 0.75 of the
             // width, around 0.64 of the height), so on a phone Owl stands on the near grass below
             // it, at the bottom centre between the child and the ▶ button; on a tablet in portrait
@@ -548,7 +551,11 @@ fun VoiceBeatScene(
             // of it (K3b).
             // The sun is the sky's own (drawn behind the hills by Scenery above), never a prop.
             if (!suppressed && beat.prop != Prop.SUN && beat.prop != Prop.MOON) Item(
-                if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
+                if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape)
+                // test58: the cupcake is sized to Bear's balloon (a fixed 40 sp emoji was bigger
+                // than Bear's whole head on a phone).
+                else if (cupcakeBeat) (balloonS * CUPCAKE_OF_BALLOON).dp
+                else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
                 x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else if (bushBerries) BERRY_BUSH_X else if (owlMain && phonePortrait) 0.5f else if (owlMain && portrait) 0.88f else if (cupcakeBeat) 0.5f + (pawX - 0.5f) * f() else now().x },
                 // The owl story's berry bush stands with its base on the ground (test57).
                 y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else if (bushBerries) BERRY_BUSH_GROUND - (unit * propSize(beat.prop) * BERRY_BUSH_BASE - unit * propSize(beat.prop) / 2) / maxHeight else if (cupcakeBeat) 0.3f + (pawY - 0.3f) * f() * f() else if (owlMain && phonePortrait) groundY(unit.value * propSize(beat.prop)) + (now().y - 0.7f) else now().y },
@@ -1365,7 +1372,7 @@ private fun PropArt(
         }
         Prop.DUCK -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🦆", fontSize = 40.sp) }
         Prop.BIRD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🐦", fontSize = 40.sp) }
-        Prop.CUPCAKE -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🧁", fontSize = 40.sp) }
+        Prop.CUPCAKE -> BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🧁", fontSize = (maxWidth.value * 0.7f).sp) }
         Prop.BERRIES -> if (beat.backdrop == Backdrop.KITCHEN) {
             // Rory's Kitchen: blueberries tumbling in, not cherries (Ruby, K2a; the owl story's
             // berries, Backdrop.FOREST, keep their cherry look below). K5: the lowest berry's own
