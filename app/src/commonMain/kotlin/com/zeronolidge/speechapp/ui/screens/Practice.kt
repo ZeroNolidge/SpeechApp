@@ -138,8 +138,8 @@ fun PracticeMenu(nav: Nav) {
                             val i = r * cols + c
                             Box(Modifier.size(side).popIn(i, (i * 25).coerceAtMost(400)), contentAlignment = Alignment.Center) {
                                 PracticeGridTile(t.emoji, t.label, t.color, t.framed, side) {
-                                    app.speaker.say(t.spoken)
                                     nav.go(t.target)
+                                    app.speaker.say(t.spoken)
                                 }
                             }
                         }
@@ -240,8 +240,8 @@ fun LandGamesScreen(land: Land, nav: Nav) {
     KidScreen("${land.emoji} ${land.shortName}", nav.home, "${land.title}! Pick a game. Tap a picture to play.") {
         PagedChoices(tiles, perPage = if (tiles.size == 4) 4 else 3, modifier = Modifier.fillMaxSize().padding(vertical = 24.dp)) { t, m ->
             ChoiceTile(t.emoji, t.label, t.color, m, onClick = {
-                app.speaker.say(t.spoken)
                 nav.go(t.target)
+                app.speaker.say(t.spoken)
             })
         }
     }
@@ -347,8 +347,8 @@ fun TalkMenu(nav: Nav) {
         fun tile(sound: com.zeronolidge.speechapp.data.SpeechSound, i: Int, side: androidx.compose.ui.unit.Dp) {
             Box(Modifier.size(side).popIn(page to i, i * 60), contentAlignment = Alignment.Center) {
                 PaperButton(Kid.talk, Modifier.fillMaxSize(), onClick = {
-                    app.speaker.say(sound.modelSound)
                     nav.go(Screen.TalkPractice(sound))
+                    app.speaker.say(sound.modelSound)
                 }) { EmojiPic(sound.emoji, (side.value * 0.4f).coerceIn(36f, 96f).sp) }
             }
         }

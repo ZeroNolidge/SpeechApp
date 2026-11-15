@@ -306,6 +306,16 @@ class AppServices(
     }
 
     fun tryAgain(message: String = Praise.tryAgain.random()) = speaker.say(message)
+
+    /**
+     * Stops every sound Rory is making, straight away (test55): the clip playing is cut mid-sound,
+     * everything queued is dropped (with its onDone), the device voice is cancelled
+     * (speechSynthesis.cancel() on the web) and a parrot playback stops. Every screen change calls it.
+     */
+    fun stopAll() {
+        speaker.stop()
+        parrot.stop()
+    }
 }
 
 val LocalApp = staticCompositionLocalOf<AppServices> { error("AppServices not provided") }

@@ -380,5 +380,14 @@ const gaps = {};
 for (const t of logs.filter((t) => t.startsWith('VOICEGAP '))) { const g = t.slice(9, t.indexOf('] in:') + 1); gaps[g] = (gaps[g] || 0) + 1; }
 console.log(`VOICE GAPS: ${Object.keys(gaps).length} different`);
 for (const [g, n] of Object.entries(gaps).sort((a, b) => b[1] - a[1])) console.log(`VOICE GAP ${n}x ${g}  e.g. ${logs.find((t) => t.startsWith('VOICEGAP ' + g)).slice(10 + g.length)}`);
+// test55: everything that really reached the browser voice (DEVICEVOICE, logged by the web
+// voice itself), whatever the reason: a word with no clip, a clip that wouldn't load, a line of
+// pictures only. Any not already listed as a gap above is listed here, so no word can slip by.
+const device = {};
+for (const t of logs.filter((t) => t.startsWith('DEVICEVOICE ['))) { const d = t.slice(12); device[d] = (device[d] || 0) + 1; }
+const gapWords = Object.keys(gaps).map((g) => g.slice(1, -1).toLowerCase());
+const other = Object.keys(device).filter((d) => !gapWords.some((g) => d.toLowerCase().replace(/[^a-z0-9' ]/g, ' ').includes(g)));
+console.log(`DEVICE VOICE: ${Object.keys(device).length} different lines, ${other.length} not explained by a voice gap`);
+for (const d of other) console.log(`DEVICE VOICE ${device[d]}x ${d}`);
 console.log(`Console errors: ${errors}, crashes: ${crashes}, failed checks: ${failedChecks}`);
 process.exit(started && crashes === 0 && failedChecks === 0 ? 0 : 1);

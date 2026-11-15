@@ -38,6 +38,12 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
     }
 
     private fun speakNow(text: String, rate: Float, onEnd: (spoken: Boolean) -> Unit) {
+        // test55: a line with no words at all (just a picture like "🍒") is never handed to the
+        // device voice, which would read the emoji's name ("cherries") in its own voice.
+        if (ClipText.normalize(text).isEmpty()) {
+            println("CLIP play text=$text ok=true (nothing to say)")
+            return onEnd(true)
+        }
         val parts = if (clips.ready) ClipText.plan(text) { clips.has(it) } else emptyList()
         // K3a: every spoken line, logged as it starts, with whether it's fully covered by
         // pre-made clips (ok=false: no clip at all, or part of it falls back to the browser
@@ -48,7 +54,7 @@ class ClipVoiceEngine(private val clips: ClipPlayer, private val voice: VoiceEng
         // smoke test can list any line that still mixes voices.
         if (clips.ready) parts.filterIsInstance<ClipText.Part.Speak>().forEach { println("VOICEGAP [${it.text}] in: $text") }
         // No clips for this line at all: the device voice says it whole, so it sounds natural.
-        if (parts.none { it is ClipText.Part.Clips }) return voice.speakOne(ClipText.deviceFallbackPhrase(text), rate, onEnd)
+        if (parts.none { it is ClipText.Part.Clips }) return voice.speakOne(ClipText.deviceFallbackPhrase(ClipText.withoutPictures(text)), rate, onEnd)
         val my = ++token
         val slow = rate < 0.65f
         var anySpoken = false

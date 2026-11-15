@@ -16,11 +16,15 @@ class MapLayoutTest {
         Screen("iPhone 390x844", 390f, 844f), Screen("small phone 360x740", 360f, 740f), Screen("big phone 430x932", 430f, 932f),
         Screen("iPad landscape 1366x1024", 1366f, 1024f), Screen("iPad landscape 1024x768", 1024f, 768f),
         Screen("iPad portrait 820x1180", 820f, 1180f), Screen("iPad portrait 768x1024", 768f, 1024f),
+        // test55: the shortest phone map that gets the Meadow/Factory labels below their pictures.
+        Screen("phone 360x800", 360f, 800f), Screen("phone 375x812", 375f, 812f),
     )
 
     @Test fun phone390() = check(screens[0])
     @Test fun phone360() = check(screens[1])
     @Test fun phone430() = check(screens[2])
+    @Test fun phone360x800() = check(screens[7])
+    @Test fun phone375x812() = check(screens[8])
     @Test fun ipad1366() = check(screens[3])
     @Test fun ipad1024() = check(screens[4])
     @Test fun ipadPortrait820() = check(screens[5])

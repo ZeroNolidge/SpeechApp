@@ -102,7 +102,7 @@ fun ClosetScreen(nav: Nav) {
                     }
                     ClosetItem.NewBuddy -> ChoiceTile(
                         "🔄", null, Color(0xFFE1F5FE), m,
-                        onClick = { app.speaker.say("Pick a buddy!"); nav.go(Screen.HeroPick) },
+                        onClick = { nav.go(Screen.HeroPick); app.speaker.say("Pick a buddy!") },
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("🔄", fontSize = 48.sp)

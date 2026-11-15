@@ -42,6 +42,10 @@ object ClipText {
         else -> key
     }
 
+    /** [text] without its emoji and other pictures (the device voice would read their names aloud). */
+    fun withoutPictures(text: String): String =
+        text.filter { it.isLetterOrDigit() || it.isWhitespace() || it in ".,!?:;'’\"-…()" }.replace(spaces, " ").trim()
+
     /** [deviceFallback] applied to each word, keeping the punctuation around it. */
     fun deviceFallbackPhrase(text: String): String =
         text.split(' ').joinToString(" ") { word ->

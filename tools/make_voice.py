@@ -110,6 +110,7 @@ def string_pieces(code):
             i = j + 1 if j < n and code[j] == "'" else i + 1
         elif c == '"':
             pieces, cur, j = [], [], i + 1
+            inner = []
             while j < n and code[j] != '"':
                 ch = code[j]
                 if ch == "\\" and j + 1 < n:
@@ -126,10 +127,14 @@ def string_pieces(code):
                         elif code[j] == "}":
                             depth -= 1
                         elif code[j] == '"':
-                            # A string inside the template: skip it.
+                            # A string inside the template ("${if (n == 1) "coin" else "coins"}"):
+                            # its words are said too (test55: "coin" had no clip), so keep it.
                             j += 1
+                            k0 = j
                             while j < n and code[j] != '"':
                                 j += 2 if code[j] == "\\" else 1
+                            if "$" not in code[k0:j]:
+                                inner.append(code[k0:j])
                         j += 1
                 elif ch == "$" and j + 1 < n and (code[j + 1].isalpha() or code[j + 1] == "_"):
                     pieces.append("".join(cur))
@@ -141,6 +146,7 @@ def string_pieces(code):
                     cur.append(ch)
                     j += 1
             pieces.append("".join(cur))
+            pieces.extend(inner)
             line_end = code.find("\n", i)
             yield code[line_start:line_end if line_end >= 0 else n], pieces
             i = j + 1

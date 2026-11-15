@@ -38,7 +38,8 @@ data class MapArea(val land: Land, val labelX: Float, val labelY: Float, val mar
         val r = min(w, h) * MapAreas.LANDMARK_RADIUS
         val left = min(markX * w - r, labelX * w - labelHalfW)
         val right = maxOf(markX * w + r, labelX * w + labelHalfW)
-        val top = labelY * h - labelH * 0.25f
+        // The label above the picture (or, on a phone's Meadow and Factory, below it: test55).
+        val top = min(labelY * h - labelH * 0.25f, markY * h - r)
         val bottom = maxOf(markY * h + r, labelY * h + labelH * 1.25f)
         return floatArrayOf(left, top, right, bottom)
     }
@@ -76,10 +77,14 @@ object MapAreas {
 
     fun mapFrame(screenW: Float, screenH: Float): MapFrame {
         val narrow = screenW < 600f
+        // test55: a phone map tall enough for it puts the Meadow and Factory labels under their
+        // pictures (Ruby); a short one (360x740, an iPhone SE) keeps them above, as before: there
+        // the ▶, its hand and the buddy have no room left beside a label below.
         val top = TOP_BAR + MAP_GAP
         val bottom = adventureTop(narrow) + MAP_GAP
         val w = (screenW - 2 * MAP_MARGIN).coerceAtLeast(1f)
         val h = (screenH - top - bottom).coerceAtLeast(1f)
+        phoneLabels = narrow && h >= PHONE_LABELS_BELOW_MIN_H
         val keep = if (narrow) (PHONE_BUNTING_Y + buntingDrop(PHONE_BUNTING_H) - top).coerceAtLeast(0f) else 0f
         return MapFrame(MAP_MARGIN, top, w, h, keep, narrow)
     }
@@ -237,8 +242,16 @@ object MapAreas {
             val b = sp.box(hand)
             return maxOf(0f, minOf(b[2], hero[2]) - maxOf(b[0], hero[0])) * maxOf(0f, minOf(b[3], hero[3]) - maxOf(b[1], hero[1]))
         }
+        fun inMap(sp: HandSpot) = sp.box(hand).let { b -> b[0] >= 2f && b[1] >= top + 2f && b[2] <= w - 2f && b[3] <= h - 2f }
+        // Covered label area, for a crowded small phone where every spot touches some label.
+        fun onLabels(sp: HandSpot): Float = sp.box(hand).let { b ->
+            labels.sumOf { l -> (maxOf(0f, minOf(b[2], l[2]) - maxOf(b[0], l[0])) * maxOf(0f, minOf(b[3], l[3]) - maxOf(b[1], l[1]))).toDouble() }.toFloat()
+        }
         return order.firstOrNull(::ok) ?: order.filter(::inMapOffLabels).minByOrNull(::onHero)
-            ?: order.firstOrNull { sp -> sp.box(hand).let { b -> labels.none { overlaps(b, it) } } } ?: order.first()
+            ?: order.firstOrNull { sp -> sp.box(hand).let { b -> labels.none { overlaps(b, it) } } && inMap(sp) }
+            // test55: still on the map (never off the edge), over as little label as there is.
+            ?: order.filter(::inMap).minByOrNull { onLabels(it) * 4f + onHero(it) }
+            ?: order.first()
     }
 
     /**
@@ -316,10 +329,41 @@ object MapAreas {
         all.any { Shape.Box(labelBox(it, w, h, labelHalfW, labelH)).touches(x, y, r) }
 
     /** Every land's area. The castle's label sits to its left, clear of the top-right 🔊 button. */
-    val all: List<MapArea> = Land.entries.map { land ->
+    private val tabletAreas: List<MapArea> = Land.entries.map { land ->
         if (land == Land.CLOUDS) MapArea(land, land.mapX - 0.17f, land.mapY - 0.06f, land.mapX, land.mapY)
         else MapArea(land, land.mapX, (land.mapY - 0.155f).coerceAtLeast(0.005f), land.mapX, land.mapY)
     }
+
+    /** test55 (Ruby): on a phone these places' labels sit just below their pictures, not above. */
+    val LABEL_BELOW_ON_PHONE = setOf(Land.MEADOW, Land.FACTORY)
+
+    /** How far below the picture's middle a phone's below-label starts (share of the map's height). */
+    const val PHONE_LABEL_BELOW = 0.08f
+
+    /** A phone's Factory label middle (share of the map's width), clear of the Market's label. */
+    const val PHONE_FACTORY_LABEL_X = 0.4f
+
+    /** The shortest phone map (dp) whose Meadow and Factory labels go under their pictures. */
+    const val PHONE_LABELS_BELOW_MIN_H = 520f
+
+    private val phoneAreas: List<MapArea> = tabletAreas.map {
+        when (it.land) {
+            Land.MEADOW -> it.copy(labelY = it.markY + PHONE_LABEL_BELOW)
+            // The Factory's sits a little to the left under its picture: centred, it would touch
+            // the Market's label, which is level with the bottom of the Factory's picture.
+            Land.FACTORY -> it.copy(labelX = PHONE_FACTORY_LABEL_X, labelY = it.markY + PHONE_LABEL_BELOW)
+            else -> it
+        }
+    }
+
+    /**
+     * Which label places [all] gives: a phone's (Meadow and Factory below their pictures) or a
+     * tablet's. Set by [mapFrame] from the screen size, so the map and the tests that lay it out
+     * always agree; a test that lays out a map without [mapFrame] sets it itself.
+     */
+    var phoneLabels: Boolean = false
+
+    val all: List<MapArea> get() = if (phoneLabels) phoneAreas else tabletAreas
 
     fun of(land: Land): MapArea = all.first { it.land == land }
 

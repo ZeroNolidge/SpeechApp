@@ -48,8 +48,13 @@ private fun jsCancelSpeech(): Unit = js("(() => { if (window.speechSynthesis) wi
 
 /** The browser's own voice. [QueueSpeaker] handles the queue and time limits on top. */
 class WebVoiceEngine : VoiceEngine {
-    override fun speakOne(text: String, rate: Float, onEnd: (Boolean) -> Unit) =
+    override fun speakOne(text: String, rate: Float, onEnd: (Boolean) -> Unit) {
+        // test55: everything that really reaches the device voice is logged, whatever the reason
+        // (no clip, a clip that wouldn't load, the clip list not loaded), so the smoke test's
+        // voice-gap count can't miss a word.
+        println("DEVICEVOICE [$text]")
         jsSpeakOne(text, rate.toDouble().coerceIn(0.3, 2.0), onEnd)
+    }
 
     override fun cancel() = jsCancelSpeech()
     override fun shutdown() = cancel()

@@ -230,9 +230,10 @@ fun MapScreen(nav: Nav) {
     // Where the buddy badge ends (dp from the left), so a tablet's bunting hangs clear of it.
     var badgeRight by remember { mutableStateOf(300.dp) }
     val startChapter = {
-        app.speaker.say("${land.title}! Let's go!")
         p.markUnfoldSeen()
+        // test55: the move cuts off whatever Rory was saying; the line for the new screen comes after it.
         nav.go(Screen.Chapter())
+        app.speaker.say("${land.title}! Let's go!")
     }
     // The island keeps its shape and fits the screen; the sea fills any space around it.
     // The corner buttons sit on top, in the same spots as on every screen.
@@ -292,8 +293,8 @@ fun MapScreen(nav: Nav) {
             cave = p.echoReady || p.pipTags > 0,
             caveFresh = p.echoReady,
             onCave = {
-                app.speaker.say("The crystal cave!")
                 nav.go(Screen.EchoCave())
+                app.speaker.say("The crystal cave!")
             },
             // The voice stories, each a stop by its land (always in the same order, so they stay put).
             // Sleepy Owl's Morning is a reward stop, like the cave: it appears once the first
@@ -308,13 +309,18 @@ fun MapScreen(nav: Nav) {
                 val at = Trail.landAt(stop)
                 val done = com.zeronolidge.speechapp.logic.ReplayPicker.finishedAt(at, mapChapter)
                 if (done.size <= 1) {
-                    app.speaker.say("Let's play it again!")
                     nav.go(Screen.Chapter(at, replay = true, stop = done.firstOrNull() ?: stop))
-                } else replayAt = at
+                    app.speaker.say("Let's play it again!")
+                } else {
+                    // test55 (Aida): a star tap cuts Rory's map intro off at once, so the card's
+                    // naming of its pictures starts straight away.
+                    app.stopAll()
+                    replayAt = at
+                }
             },
             onStory = { id ->
-                com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
                 nav.go(Screen.VoiceStory(id))
+                com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
             },
             onElsewhere = { l ->
                 // The next area along the trail is already peeking out of its mist: it opens too.
@@ -323,8 +329,8 @@ fun MapScreen(nav: Nav) {
                     // An open area (its label, picture or landmark): open that same area.
                     // The story itself starts from the yellow stop button or the Adventure banner.
                     l in Trail.reached(p.chapter) || l == peek -> {
-                        app.speaker.say("${l.title}!")
                         nav.go(Screen.LandGames(l))
+                        app.speaker.say("${l.title}!")
                     }
                     else -> {
                         // A misty place: it wiggles, and Rory walks along a sparkly trail to the next stop.
@@ -408,7 +414,7 @@ fun MapScreen(nav: Nav) {
             ReplayCard(card, plots.map { it.goal }, onPick = { i ->
                 replayAt = null
                 nav.go(Screen.Chapter(at, replay = true, stop = stops[i]))
-            }, onClose = { replayAt = null })
+            }, onClose = { app.stopAll(); replayAt = null })
         }
     }
 }
@@ -423,7 +429,7 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit, onBadgeRight: (Dp) -> 
         Row(Modifier.align(Alignment.TopStart).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val dens = androidx.compose.ui.platform.LocalDensity.current
             HeroBadge(Modifier.onGloballyPositioned { c -> onBadgeRight(with(dens) { (c.positionInRoot().x + c.size.width).toDp() }) }) {
-                app.speaker.say("Your buddy's closet!"); nav.go(Screen.Closet)
+                nav.go(Screen.Closet); app.speaker.say("Your buddy's closet!")
             }
             Spacer(Modifier.weight(1f))
             HearAgainButton()
@@ -459,8 +465,8 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit, onBadgeRight: (Dp) -> 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // Grown-ups only: a small gear that opens a grown-up check.
                 PaperIconButton("⚙️", Color(0xFFCFD8DC), size = 64.dp) {
-                    app.speaker.say("This part is for grown-ups.")
                     nav.go(Screen.Gate)
+                    app.speaker.say("This part is for grown-ups.")
                 }
                 Spacer(Modifier.width(24.dp))
                 if (!narrow) {
@@ -471,9 +477,9 @@ private fun MapCorners(nav: Nav, onAdventure: () -> Unit, onBadgeRight: (Dp) -> 
                     Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.width(24.dp))
-                PaperIconButton("📒", Color(0xFFB2EBF2)) { app.speaker.say("Your sticker book!"); nav.go(Screen.Stickers) }
+                PaperIconButton("📒", Color(0xFFB2EBF2)) { nav.go(Screen.Stickers); app.speaker.say("Your sticker book!") }
                 Spacer(Modifier.width(18.dp))
-                PaperIconButton("🎯", Color(0xFFF8BBD0)) { app.speaker.say("Practice games!"); nav.go(Screen.Practice) }
+                PaperIconButton("🎯", Color(0xFFF8BBD0)) { nav.go(Screen.Practice); app.speaker.say("Practice games!") }
             }
         }
     }

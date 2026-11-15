@@ -222,18 +222,25 @@ private fun PuffOverlay(origin: Offset) {
 /** Moves between screens. Every screen gets [Nav], so 🏠 and "back" work the same everywhere. */
 class Nav(val go: (Screen) -> Unit, val back: () -> Unit, val home: () -> Unit, val replace: (Screen) -> Unit)
 
+/**
+ * The one place screens change (test55, Timothy: "the audio keeps playing even if the screen
+ * changes"): every move -- a tile, ⬅️, ✖, 🏠, the map, a game's end, the next game -- first calls
+ * [stopAll], which cuts the clip playing mid-sound, drops everything queued and cancels the
+ * device voice. A line meant for the new screen ("Meadow!") is said after the move.
+ */
+fun navOver(stack: MutableList<Screen>, stopAll: () -> Unit): Nav = Nav(
+    go = { stopAll(); stack.add(it) },
+    back = { stopAll(); if (stack.size > 1) stack.removeAt(stack.lastIndex) },
+    home = { stopAll(); stack.clear(); stack.add(Screen.Map) },
+    replace = { stopAll(); stack.removeAt(stack.lastIndex); stack.add(it) },
+)
+
 @Composable
 private fun Screens(start: Screen? = null) {
     val app = LocalApp.current
     val stack = remember { mutableStateListOf<Screen>(Screen.Map).apply { if (start != null && start != Screen.Map) add(start) } }
-    val nav = remember {
-        Nav(
-            go = { stack.add(it) },
-            back = { if (stack.size > 1) stack.removeAt(stack.lastIndex) },
-            home = { stack.clear(); stack.add(Screen.Map) },
-            replace = { stack.removeAt(stack.lastIndex); stack.add(it) },
-        )
-    }
+    // test55 (Timothy): every screen change cuts all of Rory's talking off at once (see navOver).
+    val nav = remember { navOver(stack) { app.stopAll() } }
     PlatformBackHandler(enabled = stack.size > 1) { nav.back() }
 
     // First launch, after the first tap: "Can Rory hear you?" asks for the microphone up front,
