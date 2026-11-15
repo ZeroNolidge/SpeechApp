@@ -503,9 +503,9 @@ fun VoiceBeatScene(
                 val box = KitchenLayout.propBox(prop, landscape, kitchenPropSize(prop, landscape), maxWidth.value, maxHeight.value)
                 return (box.l + box.r) / 2f to (box.t + box.b) / 2f
             }
-            // test58 (Ruby): on a portrait phone Rory and his listening glow fill the middle, so Owl
-            // stands on the open grass at the right edge (or, beside the berry bush on step 5, at
-            // the left, above the child), fully visible and still on the ground.
+            // test58 (Ruby): in portrait Rory and his listening glow fill the middle, so Owl stands
+            // on open grass clear of it (see phonePortrait below), fully visible, on the ground,
+            // and on step 5 clear of the berry bush.
             val portrait = maxWidth < maxHeight
             val owlMain = (beat.prop == Prop.OWL || beat.prop == Prop.SLEEPY_OWL) && beat.move != Move.RISE
             // test58: the cupcake ends resting in Bear's paw at the basket's rim. The balloon's box
@@ -518,9 +518,15 @@ fun VoiceBeatScene(
             val balloonCy = minOf(0.8f, 0.95f - balloonS / 2f / sh)
             val pawX = 0.5f + 0.12f * balloonS / sw
             val pawY = balloonCy - balloonS / 2f / sh + 0.88f * balloonS / sh - 0.3f * unit.value * propSize(Prop.CUPCAKE) / sh
+            // Rory's listening glow covers the middle band (Talk.kt listenSpot: up to 0.75 of the
+            // width, around 0.64 of the height), so on a phone Owl stands on the near grass below
+            // it, at the bottom centre between the child and the ▶ button; on a tablet in portrait
+            // there's room at the right edge.
+            val phonePortrait = sw / sh < 0.62f
+            fun groundY(sizeDp: Float) = 0.965f - sizeDp / 2f / sh
             beat.still?.let { sp ->
                 val (sx, sy) = if (isKitchen) kitchenCenter(sp)
-                else if (portrait && sp == Prop.OWL && beat.prop == Prop.BERRIES) 0.17f to 0.7f
+                else if (portrait && sp == Prop.OWL && beat.prop == Prop.BERRIES) 0.5f to groundY(unit.value * propSize(sp) * 0.8f)
                 else if (cupcakeBeat) 0.5f to balloonCy
                 else stillSpot(beat.move).let { (if (portrait && (sp == Prop.OWL || sp == Prop.SLEEPY_OWL)) 0.86f else it.x) to it.y }
                 Item(
@@ -543,9 +549,9 @@ fun VoiceBeatScene(
             // The sun is the sky's own (drawn behind the hills by Scenery above), never a prop.
             if (!suppressed && beat.prop != Prop.SUN && beat.prop != Prop.MOON) Item(
                 if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
-                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else if (bushBerries) BERRY_BUSH_X else if (owlMain && portrait) 0.86f else if (cupcakeBeat) 0.5f + (pawX - 0.5f) * f() else now().x },
+                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else if (bushBerries) BERRY_BUSH_X else if (owlMain && phonePortrait) 0.5f else if (owlMain && portrait) 0.88f else if (cupcakeBeat) 0.5f + (pawX - 0.5f) * f() else now().x },
                 // The owl story's berry bush stands with its base on the ground (test57).
-                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else if (bushBerries) BERRY_BUSH_GROUND - (unit * propSize(beat.prop) * BERRY_BUSH_BASE - unit * propSize(beat.prop) / 2) / maxHeight else if (cupcakeBeat) 0.3f + (pawY - 0.3f) * f() * f() else now().y },
+                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else if (bushBerries) BERRY_BUSH_GROUND - (unit * propSize(beat.prop) * BERRY_BUSH_BASE - unit * propSize(beat.prop) / 2) / maxHeight else if (cupcakeBeat) 0.3f + (pawY - 0.3f) * f() * f() else if (owlMain && phonePortrait) groundY(unit.value * propSize(beat.prop)) + (now().y - 0.7f) else now().y },
                 alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c ->
                     if (beat.prop == Prop.CAKE) CakeScene.cakeAt.value = c.boundsInWindow().center
