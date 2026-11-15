@@ -105,12 +105,18 @@ val Land.palette: LandPalette
 fun Scenery(
     land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boolean = false,
     /** At night: draw the moon too (a set piece that draws its own moon turns this off). */
-    moon: Boolean = true,
+    nightMoon: Boolean = true,
     /** test56: how high the sky's own sun is right now, 0 (just peeking over the hilltop) to 1
      * (up in the sky, where it always sits otherwise). A story step about the sun animates this
      * one sun up instead of drawing a second sun in front of the scene (Ruby's spec). Read only
      * while drawing. Null: the sun sits up in the sky, baked into the sky layer as always. */
     sun: (() -> Float)? = null,
+    /** test57: the moon, rising (0 = still behind the hills, 1 = up in the sky at the left), drawn
+     * in the sky layer like the sun, so it comes up from behind the horizon, never in front. */
+    moon: (() -> Float)? = null,
+    /** test57 (Ruby): keep the clouds out of the sun's way on the step that's about the sun, so
+     * the risen sun is fully visible (on every other step they drift past it as usual). */
+    clearSun: Boolean = false,
     /** test56: a dirt path lying flat on the ground (Sleepy Owl's "Leaves are blocking the
      * path"): wide at the scene's bottom edge, narrowing as it goes back to the tree line. */
     footpath: Boolean = false,
@@ -136,16 +142,22 @@ fun Scenery(
         // test56: the one sun, moving: still in the sky layer (behind the clouds, hills, trees,
         // characters and props), so a sunrise comes up from behind the hilltop.
         if (liveSun) Canvas(Modifier.fillMaxSize()) { skySun(land, sun!!().coerceIn(0f, 1f)) }
+        if (moon != null && land != Land.CAVES) Canvas(Modifier.fillMaxSize()) { skyMoon(moon().coerceIn(0f, 1f)) }
         if (land != Land.CAVES) {
             // One baked strip of clouds, slid along and wrapped around (faint at night).
             BakedLayer(
-                listOf("clouds", land), Modifier.graphicsLayer { alpha = 1f - 0.7f * dark }, depth = 1.5.dp, grain = false,
+                listOf("clouds", land, clearSun), Modifier.graphicsLayer { alpha = 1f - 0.7f * dark }, depth = 1.5.dp, grain = false,
                 live = { b ->
-                    val x = drift * size.width
-                    drawBaked(b, x)
-                    drawBaked(b, x - size.width)
+                    if (clearSun) {
+                        // Parked off to the left, clear of the sun's whole climb (test57).
+                        drawBaked(b, 0f)
+                    } else {
+                        val x = drift * size.width
+                        drawBaked(b, x)
+                        drawBaked(b, x - size.width)
+                    }
                 },
-            ) { cloudStrip(pal) }
+            ) { cloudStrip(pal, clearSun) }
         }
         BakedLayer(listOf("far", land, seed, footpath), Modifier.popUp(scene, 0), depth = 2.dp) {
             far(land, pal, seed, if (footpath) { { footpathFar(land, pal) } } else null)
@@ -163,7 +175,7 @@ fun Scenery(
         // characters, the things to tap) stays at full brightness.
         if (dark > 0f) Canvas(Modifier.fillMaxSize()) {
             drawRect(NightNavy.copy(alpha = 0.3f * dark))
-            nightLights(dark, drift, moon)
+            nightLights(dark, drift, nightMoon)
         }
         // A light wash keeps the scenery behind the raised paper buttons, so they always win.
         Canvas(Modifier.fillMaxSize()) { drawRect(PaperStyle.sceneryWash) }
@@ -272,6 +284,24 @@ internal fun DrawScope.skySun(land: Land, rise: Float) {
     paperCircle(lerp(warm, Color.White, 0.1f), u * 0.085f, c)
 }
 
+/** test57: the rising moon, at the left of the sky (the setting sun goes down at the right):
+ * behind the hilltop at 0, up at (0.18, 0.2) at 1. A pale paper disc with a soft glow. */
+internal fun DrawScope.skyMoon(rise: Float) {
+    val u = size.minDimension
+    val r = u * 0.075f
+    val low = size.height * 0.5f + r * 2.2f
+    val c = Offset(size.width * 0.18f, low + (size.height * 0.2f - low) * rise)
+    drawCircle(
+        androidx.compose.ui.graphics.Brush.radialGradient(
+            listOf(Color(0xFFFFF9C4).copy(alpha = 0.35f), Color(0xFFFFF9C4).copy(alpha = 0f)), c, r * 2.2f,
+        ),
+        r * 2.2f, c,
+    )
+    paperCircle(Color(0xFFFFF9C4), r, c)
+    paperCircle(Color(0xFFF0E6A8), r * 0.18f, Offset(c.x - r * 0.3f, c.y - r * 0.2f))
+    paperCircle(Color(0xFFF0E6A8), r * 0.12f, Offset(c.x + r * 0.35f, c.y + r * 0.3f))
+}
+
 /** test56: the path's shape, flat on the ground: wide at the bottom edge, narrowing in
  * perspective as it winds back up between the near hills to the tree line, where it ends. */
 private fun DrawScope.footpathShape(): Path {
@@ -303,10 +333,14 @@ private fun DrawScope.footpathFar(land: Land, pal: LandPalette) {
     clipRect(bottom = size.height * 0.77f) { drawPaper(footpathColor(land, pal), 20f, PaperShape.Shape(footpathShape()), shadow = false) }
 }
 
-private fun DrawScope.cloudStrip(pal: LandPalette) {
+private fun DrawScope.cloudStrip(pal: LandPalette, clearSun: Boolean = false) {
     val u = size.minDimension
     val white = lerp(Color.White, pal.sky, 0.08f)
-    listOf(0.1f to 0.12f, 0.42f to 0.22f, 0.74f to 0.1f).forEach { (x, y) ->
+    // Clear of the sun (x 0.85, up to 0.13 of the short side either way): each cloud reaches
+    // about 0.1 of the short side to its right, so the last one stops short of the sun's glow.
+    val spots = if (clearSun) listOf(0.1f to 0.12f, 0.36f to 0.22f, (0.72f - u * 0.24f / size.width) to 0.08f)
+    else listOf(0.1f to 0.12f, 0.42f to 0.22f, 0.74f to 0.1f)
+    spots.forEach { (x, y) ->
         cloud(Offset(size.width * x, size.height * y), u * 0.055f, white)
     }
 }

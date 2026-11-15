@@ -112,7 +112,7 @@ fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble:
     val live = push * 7f * sin(wobble * 2f * PI.toFloat() * 6f)
     return when (move) {
         // The sun is the sky's own sun (Scenery's `sun`): the glow and the wind aim where it is.
-        Move.RISE -> if (prop == Prop.SUN) Pose(0.85f, lerp(0.5f, 0.15f, f)) else Pose(0.5f, lerp(0.74f, 0.3f, f) - 0.04f * bump(f) * strength, rotation = live)
+        Move.RISE -> if (prop == Prop.SUN) Pose(0.85f, lerp(0.5f, 0.15f, f)) else if (prop == Prop.MOON) Pose(0.18f, lerp(0.5f, 0.2f, f)) else Pose(0.5f, lerp(0.74f, 0.3f, f) - 0.04f * bump(f) * strength, rotation = live)
         Move.SINK -> Pose(0.5f, lerp(0.3f, 0.64f, f), rotation = live + 10f * bump(f) * strength)
         // test56: the owl story's leaves lie on the path itself (its near, wide part, below Rory's
         // feet), not standing up in mid-air off to the side, and blow off it onto the grass.
@@ -130,9 +130,17 @@ fun pose(move: Move, prop: Prop, f: Float, strength: Float, push: Float, wobble:
 
 /** Where the thing his word moves is right now: it glows while he listens, and the wind strips aim at it. */
 fun voiceTarget(beat: VoiceBeat, f: Float, strength: Float = 1f): Offset {
+    // The owl story's berries hang on their bush, which stands on the ground (test57).
+    if (beat.prop == Prop.BERRIES && beat.backdrop != Backdrop.KITCHEN) return Offset(BERRY_BUSH_X, BERRY_BUSH_GROUND - 0.06f)
     val p = pose(beat.move, beat.prop, f, strength, 0f, 0f)
     return Offset(p.x, p.y)
 }
+
+/** test57: the owl story's berry bush: where it stands (centre x), where the ground under it is
+ * (both parts of the scene), and how far down its own box its base is. */
+private const val BERRY_BUSH_X = 0.8f
+private const val BERRY_BUSH_GROUND = 0.86f
+private const val BERRY_BUSH_BASE = 0.94f
 
 /** Where a still prop stands: under a falling thing to catch it, otherwise off to the side. */
 private fun stillSpot(move: Move) = if (move == Move.SINK) Offset(0.5f, 0.8f) else Offset(0.8f, 0.74f)
@@ -146,7 +154,7 @@ private fun propSize(p: Prop) = when (p) {
     Prop.SUN -> 0.26f
     Prop.OWL, Prop.SLEEPY_OWL -> 0.26f
     Prop.LEAVES -> 0.28f
-    Prop.BERRIES -> 0.2f
+    Prop.BERRIES -> 0.24f
     Prop.BALLOON -> 0.44f
     Prop.CUPCAKE -> 0.13f
     Prop.MOON -> 0.2f
@@ -425,6 +433,9 @@ fun VoiceBeatScene(
     Scenery(
         beat.backdrop.land, modifier.fillMaxSize(), seed = 30 + beat.backdrop.ordinal * 7,
         sun = skySun, footpath = beat.backdrop == Backdrop.PATH,
+        // test57: the moon is the sky's own too, rising from behind the hills (not a disc in front).
+        moon = if (beat.prop == Prop.MOON) f else null,
+        clearSun = beat.prop == Prop.SUN,
     ) {
         BoxWithConstraints(
             Modifier.fillMaxSize().let { m -> if (onSceneRect == null) m else m.onGloballyPositioned(onSceneRect) },
@@ -489,16 +500,18 @@ fun VoiceBeatScene(
             // (`KitchenCountRow` in VoiceStory.kt), beside the bowl -- the generic single-pile
             // render below would draw a 4th, separate pile centred on the bowl itself instead.
             val suppressed = isKitchen && beat.kitchen == KitchenFlow.COUNT
+            val bushBerries = beat.prop == Prop.BERRIES && !isKitchen
             // While the pattern puzzle is up, the beat's own prop is tucked into a safe corner,
             // clear of the pattern row above the choice strip (it used to sit left-of-centre and
             // cover the row's first balloon); it stays small but visible, Bear and all. Rory's
             // Kitchen's own choice strip never needs this: its counter position is already clear
             // of it (K3b).
             // The sun is the sky's own (drawn behind the hills by Scenery above), never a prop.
-            if (!suppressed && beat.prop != Prop.SUN) Item(
+            if (!suppressed && beat.prop != Prop.SUN && beat.prop != Prop.MOON) Item(
                 if (isKitchen) kitchenUnit * kitchenPropSize(beat.prop, landscape) else unit * propSize(beat.prop) * (if (puzzleSafe) 0.7f else 1f),
-                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else now().x },
-                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else now().y },
+                x = { kitchenPropCenter?.first ?: if (puzzleSafe) 0.82f else if (bushBerries) BERRY_BUSH_X else now().x },
+                // The owl story's berry bush stands with its base on the ground (test57).
+                y = { kitchenPropCenter?.second ?: if (puzzleSafe) 0.8f else if (bushBerries) BERRY_BUSH_GROUND - (unit * propSize(beat.prop) * BERRY_BUSH_BASE - unit * propSize(beat.prop) / 2) / maxHeight else now().y },
                 alpha = { now().alpha }, rotation = { if (isKitchen) 0f else now().rotation }, scale = { now().scale },
                 onRect = if (!isKitchen) null else { c ->
                     if (beat.prop == Prop.CAKE) CakeScene.cakeAt.value = c.boundsInWindow().center
@@ -1327,7 +1340,42 @@ private fun PropArt(
                 }
             }
         } else {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🍒🍒", fontSize = 34.sp) }
+            // test57: the owl story's berries grow on a paper bush standing on the ground, each
+            // cherry pair hanging from its stem (they used to be two 🍒 floating in mid-air). His
+            // "more" shakes three pairs loose: they drop straight down (falling faster and faster)
+            // and come to rest on the ground at the bush's foot, rolling a little toward Owl.
+            Canvas(Modifier.fillMaxSize()) {
+                val s = size.width
+                val ground = s * BERRY_BUSH_BASE
+                val dark = Color(0xFF2F6B35)
+                val mid = Color(0xFF3F8A42)
+                paperCircle(dark, s * 0.24f, Offset(s * 0.27f, s * 0.7f))
+                paperCircle(dark, s * 0.24f, Offset(s * 0.73f, s * 0.7f))
+                paperCircle(mid, s * 0.3f, Offset(s * 0.5f, s * 0.62f))
+                paperCircle(androidx.compose.ui.graphics.lerp(mid, Color.White, 0.2f), s * 0.12f, Offset(s * 0.56f, s * 0.5f))
+                val br = s * 0.05f
+                val stem = Color(0xFF5D4037)
+                val pairs = listOf(Offset(0.3f, 0.6f), Offset(0.5f, 0.46f), Offset(0.7f, 0.58f), Offset(0.42f, 0.74f), Offset(0.62f, 0.76f))
+                val p = if (moving) f() else 0f
+                pairs.forEachIndexed { i, a ->
+                    val top = Offset(s * a.x, s * a.y)
+                    val hang = Offset(top.x, top.y + s * 0.09f)
+                    // Pairs 0, 2 and 3 fall, one after another; 1 and 4 stay on the bush.
+                    val k = listOf(0, -1, 1, 2, -1)[i]
+                    val t = if (k < 0) 0f else ((p - k * 0.15f) / 0.55f).coerceIn(0f, 1f)
+                    if (t <= 0f) drawLine(stem, top, hang, 1.6.dp.toPx())
+                    val restY = ground - br
+                    val c = if (t <= 0f) hang else {
+                        val fall = (t / 0.7f).coerceAtMost(1f)
+                        val roll = ((t - 0.7f) / 0.3f).coerceIn(0f, 1f)
+                        Offset(hang.x - s * (0.12f + 0.06f * k) * roll, hang.y + (restY - hang.y) * fall * fall)
+                    }
+                    if (t > 0f) drawLine(stem, Offset(c.x, c.y - br * 1.8f), Offset(c.x - br * 0.5f, c.y - br * 0.4f), 1.4.dp.toPx())
+                    paperCircle(Color(0xFFD32F2F), br, Offset(c.x - br * 0.75f, c.y))
+                    paperCircle(Color(0xFFE53935), br, Offset(c.x + br * 0.75f, c.y + br * 0.15f))
+                    drawCircle(Color.White.copy(alpha = 0.6f), br * 0.25f, Offset(c.x - br * 1.0f, c.y - br * 0.35f))
+                }
+            }
         }
         Prop.SUN -> Canvas(Modifier.fillMaxSize()) {
             val r = size.minDimension * 0.32f
