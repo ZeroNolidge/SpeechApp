@@ -106,7 +106,7 @@ fun Scenery(
     land: Land, modifier: Modifier = Modifier, seed: Int = 0, night: Boolean = false,
     /** At night: draw the moon too (a set piece that draws its own moon turns this off). */
     nightMoon: Boolean = true,
-    /** test56: how high the sky's own sun is right now, 0 (just peeking over the hilltop) to 1
+    /** test56: how high the sky's own sun is right now, 0 (just peeking over the hilltop; below 0, set behind it) to 1
      * (up in the sky, where it always sits otherwise). A story step about the sun animates this
      * one sun up instead of drawing a second sun in front of the scene (Ruby's spec). Read only
      * while drawing. Null: the sun sits up in the sky, baked into the sky layer as always. */
@@ -141,7 +141,7 @@ fun Scenery(
         if (dark > 0f) Canvas(Modifier.fillMaxSize()) { nightSky(dark) }
         // test56: the one sun, moving: still in the sky layer (behind the clouds, hills, trees,
         // characters and props), so a sunrise comes up from behind the hilltop.
-        if (liveSun) Canvas(Modifier.fillMaxSize()) { skySun(land, sun!!().coerceIn(0f, 1f)) }
+        if (liveSun) Canvas(Modifier.fillMaxSize()) { skySun(land, sun!!().coerceIn(-0.5f, 1f)) }
         if (moon != null && land != Land.CAVES) Canvas(Modifier.fillMaxSize()) { skyMoon(moon().coerceIn(0f, 1f)) }
         if (land != Land.CAVES) {
             // One baked strip of clouds, slid along and wrapped around (faint at night).

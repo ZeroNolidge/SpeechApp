@@ -430,7 +430,8 @@ fun VoiceBeatScene(
     // hilltop; "Good night" (the moon rising) takes it down behind the hills. No second sun.
     val skySun: (() -> Float)? = when (beat.prop) {
         Prop.SUN -> f
-        Prop.MOON -> { { 1f - f() } }
+        // Setting all the way down: below 0 it's fully behind the hills, not peeking (test57).
+        Prop.MOON -> { { 1f - 1.5f * f() } }
         else -> null
     }
     Scenery(
