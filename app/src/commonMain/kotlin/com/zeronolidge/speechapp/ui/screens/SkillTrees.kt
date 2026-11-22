@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -145,13 +146,13 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
     val status = SkillTree.status(n, states)
     val dashed = status == SkillStatus.UPCOMING && n.tier != SkillTier.START
     val mastered = status == SkillStatus.MASTERED
-    Row(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
         // The line that joins the skills, with a node on it.
-        Box(Modifier.width(28.dp).height(if (n.branch == SkillBranch.TALKING) 96.dp else 72.dp)) {
+        Box(Modifier.width(28.dp).fillMaxHeight()) {
             Canvas(Modifier.fillMaxSize()) {
                 val x = size.width / 2
-                drawLine(Color(0xFFD7CCC8), Offset(x, 0f), Offset(x, if (last) size.height * 0.4f else size.height + 8.dp.toPx()), 3.dp.toPx())
-                val c = Offset(x, size.height * 0.4f)
+                drawLine(Color(0xFFD7CCC8), Offset(x, 0f), Offset(x, if (last) 26.dp.toPx() else size.height), 3.dp.toPx())
+                val c = Offset(x, 26.dp.toPx())
                 when (status) {
                     SkillStatus.MASTERED -> drawCircle(doneGrey, 9.dp.toPx(), c)
                     SkillStatus.CURRENT -> { drawCircle(Color(0xFFFFB300), 10.dp.toPx(), c); drawCircle(Color.White, 4.dp.toPx(), c) }
@@ -180,9 +181,7 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (mastered) {
-                    Box(Modifier.size(24.dp).clip(CircleShape).background(doneGrey), contentAlignment = Alignment.Center) {
-                        Text("✓", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+                    GreyCheck(Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(n.label, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Kid.ink, modifier = Modifier.weight(1f))
@@ -195,6 +194,10 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
                     },
                     fontSize = 13.sp, color = inkSoft,
                 )
+                if (mastered && n.mastery != Mastery.FINISHED) {
+                    Spacer(Modifier.width(10.dp))
+                    SmallAction("Not yet") { p.setSkillMastered(n.id, false) }
+                }
             }
             if (status == SkillStatus.CURRENT && n.mastery != Mastery.FINISHED) {
                 val prog = SkillTree.progress(n, s)
@@ -202,12 +205,12 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
                     Box(Modifier.fillMaxWidth(prog.coerceIn(0.02f, 1f)).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFFF8F00)))
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!mastered && n.mastery != Mastery.FINISHED) Row(verticalAlignment = Alignment.CenterVertically) {
                 if (n.branch == SkillBranch.TALKING) {
                     // The six dots: big enough to tap, small to look at.
                     SkillTree.LEVELS.indices.forEach { lv ->
-                        val on = mastered || lv in (s?.levels ?: emptySet())
-                        Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !mastered) { p.toggleSkillLevel(n.id, lv) }, contentAlignment = Alignment.Center) {
+                        val on = lv in (s?.levels ?: emptySet())
+                        Box(Modifier.size(34.dp).clip(CircleShape).clickable { p.toggleSkillLevel(n.id, lv) }, contentAlignment = Alignment.Center) {
                             Box(
                                 Modifier.size(14.dp).clip(CircleShape).background(if (on) Color(0xFF6D4C41) else Color.White)
                                     .drawBehind { drawCircle(Color(0xFF8D6E63), size.minDimension / 2, style = Stroke(1.5f.dp.toPx())) },
@@ -217,13 +220,26 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
                 }
                 Spacer(Modifier.weight(1f))
                 when (n.mastery) {
-                    Mastery.GROWN_UP -> SmallAction(if (mastered) "Not yet" else "Mastered") { p.setSkillMastered(n.id, !mastered) }
-                    Mastery.TAP_GAMES -> if (mastered) SmallAction("Not yet") { p.setSkillMastered(n.id, false) }
-                    else Text("${SkillTree.goodDays(s ?: SkillState())} of ${SkillTree.AUTO_DAYS} days at 80%", fontSize = 12.sp, color = inkSoft)
+                    Mastery.GROWN_UP -> SmallAction("Mastered") { p.setSkillMastered(n.id, true) }
+                    Mastery.TAP_GAMES -> Text("${SkillTree.goodDays(s ?: SkillState())} of ${SkillTree.AUTO_DAYS} days at 80%", fontSize = 12.sp, color = inkSoft)
                     Mastery.FINISHED -> {}
                 }
             }
         }
+    }
+}
+
+/** A grey tick in a grey circle (mastered is grey, never green). */
+@Composable
+private fun GreyCheck(modifier: Modifier) {
+    Canvas(modifier) {
+        drawCircle(doneGrey, size.minDimension / 2)
+        val p = Path().apply {
+            moveTo(size.width * 0.27f, size.height * 0.52f)
+            lineTo(size.width * 0.44f, size.height * 0.69f)
+            lineTo(size.width * 0.74f, size.height * 0.34f)
+        }
+        drawPath(p, Color.White, style = Stroke(size.minDimension * 0.13f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
     }
 }
 
@@ -286,19 +302,36 @@ private fun rnd(i: Int, k: Int): Float {
     return ((x xor (x ushr 16)) and 0xFFFF) / 65535f
 }
 
-/** Fruit spots in the crown (as -1..1 of its half-width and half-height), bottom rows first. */
-private val fruitSlots = listOf(
-    -0.62f to 0.3f, -0.22f to 0.42f, 0.2f to 0.4f, 0.6f to 0.28f,
-    -0.78f to -0.08f, -0.4f to 0.02f, 0f to 0.06f, 0.4f to 0.0f, 0.78f to -0.1f,
-    -0.52f to -0.42f, -0.14f to -0.36f, 0.26f to -0.4f, 0.6f to -0.5f,
-    0.06f to -0.72f,
-)
-
-private fun slotsFor(n: Int): List<Pair<Float, Float>> = when {
-    n >= fruitSlots.size -> fruitSlots
-    n <= 4 -> listOf(-0.5f to 0.2f, 0.45f to 0.1f, -0.15f to -0.35f, 0.3f to -0.5f).take(n)
-    n <= 6 -> listOf(-0.6f to 0.25f, 0f to 0.32f, 0.6f to 0.2f, -0.4f to -0.25f, 0.35f to -0.3f, 0f to -0.66f).take(n)
-    else -> (0 until n).map { fruitSlots[it * fruitSlots.size / n] }
+/**
+ * Fruit spots in the crown (dp from its middle) for [n] fruits of [size] dp: rows of fruit inside
+ * the crown's oval, never touching each other, bottom rows first (the first skills hang lowest,
+ * nearest him), each row centred.
+ */
+private fun fruitSpots(n: Int, size: Float, rx: Float, ry: Float): List<Pair<Float, Float>>? {
+    val gapX = size * 1.14f
+    val gapY = size * 1.08f
+    val ax = rx - size * 0.55f
+    val ay = ry - size * 0.55f
+    if (ax <= 0f || ay <= 0f) return null
+    val rows = mutableListOf<List<Pair<Float, Float>>>()
+    var y = ay - size * 0.1f
+    while (y >= -ay) {
+        val half = ax * kotlin.math.sqrt((1f - (y / ay) * (y / ay)).coerceAtLeast(0f))
+        val count = ((2 * half) / gapX).toInt() + 1
+        if (half >= 0f && count > 0) rows += (0 until count).map { k -> (k - (count - 1) / 2f) * gapX to y }
+        y -= gapY
+    }
+    val all = rows.flatten()
+    if (all.size < n) return null
+    // Fill whole rows from the bottom; the last row used is centred on what it holds.
+    val out = mutableListOf<Pair<Float, Float>>()
+    for (r in rows) {
+        val left = n - out.size
+        if (left <= 0) break
+        if (r.size <= left) out += r
+        else { val y0 = r[0].second; out += (0 until left).map { k -> (k - (left - 1) / 2f) * gapX to y0 } }
+    }
+    return out
 }
 
 @Composable
@@ -309,12 +342,15 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
         val w = maxWidth.value
         val h = maxHeight.value
         // The crown: a wide oval over a short trunk, as big as the space allows.
-        val crownHalfW = minOf(w * 0.46f, h * 0.62f)
-        val crownHalfH = minOf(h * 0.36f, crownHalfW * 0.8f)
+        val crownHalfW = minOf(w * 0.42f, h * 0.6f)
+        val crownHalfH = minOf(h * 0.34f, crownHalfW * 1.1f)
         val cx = w / 2f
-        val cy = crownHalfH + 8f
-        val groundY = minOf(h - 6f, cy + crownHalfH + crownHalfH * 0.9f)
-        val fruitSize = (crownHalfW * 2f / if (nodes.size > 8) 5.6f else 4.2f).coerceIn(56f, 104f)
+        val cy = crownHalfH + 10f
+        val groundY = minOf(h - 6f, cy + crownHalfH * 1.9f)
+        // The biggest fruit that lets every skill hang clear of the others.
+        val fit = (104 downTo 48 step 4).firstNotNullOfOrNull { sz -> fruitSpots(nodes.size, sz.toFloat(), crownHalfW, crownHalfH)?.let { sz.toFloat() to it } }
+        val fruitSize = fit?.first ?: 48f
+        val spots = fit?.second ?: fruitSpots(nodes.size, 40f, crownHalfW, crownHalfH).orEmpty()
         LaunchedEffect(branch) { println("TREE ${branch.name} leaves=$leaves fruits=${nodes.size} size=${fruitSize.roundToInt()} crown=${(crownHalfW * 2).roundToInt()}x${(crownHalfH * 2).roundToInt()}") }
         Canvas(Modifier.fillMaxSize()) {
             val k = density
@@ -334,9 +370,12 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
             }
             paperPath(trunk, Color(0xFF8D6E63))
             // The crown: overlapping paper circles (always there; his leaves go on top).
-            val blobs = listOf(0f to 0.1f, -0.55f to 0.2f, 0.55f to 0.2f, -0.3f to -0.35f, 0.3f to -0.35f, 0f to -0.5f, -0.72f to -0.12f, 0.72f to -0.12f)
-            blobs.forEachIndexed { i, (bx, by) ->
-                paperCircle(if (i % 2 == 0) Color(0xFF7CB342) else Color(0xFF8BC34A), ry * (if (i == 0) 0.78f else 0.55f), Offset(ccx + bx * rx, ccy + by * ry))
+            paperOval(Color(0xFF7CB342), Offset(ccx - rx, ccy - ry), Size(rx * 2f, ry * 2f))
+            // Bumps round its edge, so it reads as a leafy crown, not an egg.
+            val bump = minOf(rx, ry) * 0.3f
+            for (i in 0 until 12) {
+                val a = i * 6.2832f / 12f
+                paperCircle(if (i % 2 == 0) Color(0xFF8BC34A) else Color(0xFF7CB342), bump, Offset(ccx + cos(a) * (rx - bump * 0.7f), ccy + sin(a) * (ry - bump * 0.7f)))
             }
             // One leaf per try, in steady spots; they never fall off.
             for (i in 0 until leaves) {
@@ -352,15 +391,15 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
             }
         }
         // The fruit: one per skill, each a big tap target.
-        slotsFor(nodes.size).forEachIndexed { i, (sx, sy) ->
+        spots.forEachIndexed { i, (sx, sy) ->
             val n = nodes[i]
             val s = states[n.id]
             val status = SkillTree.status(n, states)
             val grow = SkillTree.fruitGrowth(s)
             val bump = remember(n.id) { Animatable(1f) }
             val scope = rememberCoroutineScope()
-            val x = cx + sx * crownHalfW * 0.86f
-            val y = cy + sy * crownHalfH * 0.86f
+            val x = cx + sx
+            val y = cy + sy
             Box(
                 Modifier.offset((x - fruitSize / 2).dp, (y - fruitSize / 2).dp).size(fruitSize.dp)
                     .graphicsLayer { scaleX = bump.value; scaleY = bump.value }
