@@ -185,6 +185,7 @@ class Progress(private val prefs: Prefs) {
 
     fun finishVoiceStory(id: String) {
         voiceStoriesDone = voiceStoriesDone + id
+        setSkillMastered("story:$id", true)
         prefs.edit().putStringSet("voiceStoriesDone", voiceStoriesDone).apply()
     }
 
@@ -414,7 +415,7 @@ class Progress(private val prefs: Prefs) {
     private val intKeys get() = listOf("stars", "chapter", "chaptersDone", "unfoldedSeen", "lastDay", "speechStep", "clearRun", "speechMissRun", "backpack", "pipTags") +
         areas.map { "area_$it" } + listOf("patterns", "story_robot", "robot_easy", "robot_turn").map { "level_$it" }
     private val stringKeys get() = listOf("hero", "childName", "customWords") + Slot.entries.map { "equip_${it.name}" } +
-        Ladder.MAX.keys.map { "ladder_$it" }
+        Ladder.MAX.keys.map { "ladder_$it" } + listOf("skillTree")
     private val setKeys = listOf("owned", "words", "focus")
 
     /** Everything worth keeping, as a code a grown-up can copy and paste on another device. */
@@ -456,6 +457,7 @@ class Progress(private val prefs: Prefs) {
         equipped = readEquipped()
         backpack = prefs.getInt("backpack", 0)
         chapter = prefs.getInt("chapter", 0)
+        skills = com.zeronolidge.speechapp.logic.SkillTree.decodeAll(prefs.getString("skillTree", ""))
         pipTags = prefs.getInt("pipTags", 0)
         chaptersDone = prefs.getInt("chaptersDone", 0)
         unfoldedSeen = prefs.getInt("unfoldedSeen", 0)
@@ -562,6 +564,44 @@ class Progress(private val prefs: Prefs) {
         prefs.edit().putString("wordTries", com.zeronolidge.speechapp.logic.TryRecord.encodeAll(wordTries)).apply()
     }
 
+    // ---------- test59: the skill trees (logic/SkillTree.kt): counts per skill, on this device only ----------
+
+    var skills by mutableStateOf(com.zeronolidge.speechapp.logic.SkillTree.decodeAll(prefs.getString("skillTree", "")))
+        private set
+
+    private fun saveSkills() {
+        prefs.edit().putString("skillTree", com.zeronolidge.speechapp.logic.SkillTree.encodeAll(skills)).apply()
+    }
+
+    /** One try at skill [id] today ([right]: right first time in a tap game; null when there's no right or wrong). */
+    fun skillTry(id: String, right: Boolean? = null) {
+        val node = com.zeronolidge.speechapp.logic.SkillTree.byId(id) ?: return
+        val before = skills[id] ?: com.zeronolidge.speechapp.logic.SkillState()
+        val after = com.zeronolidge.speechapp.logic.SkillTree.record(before, node, today(), right)
+        skills = skills + (id to after)
+        saveSkills()
+        println("SKILLTRY $id tries=${after.tries} mastered=${after.mastered}")
+    }
+
+    /** A said word: a try on its sound's talking skill. */
+    fun skillSpeechTry(word: String, soundId: String? = null) {
+        com.zeronolidge.speechapp.logic.SkillTree.talkNodeFor(word, soundId)?.let { skillTry(it.id) }
+    }
+
+    /** Grown-ups: marks (or unmarks) a skill mastered. */
+    fun setSkillMastered(id: String, on: Boolean) {
+        val s = skills[id] ?: com.zeronolidge.speechapp.logic.SkillState()
+        skills = skills + (id to s.copy(mastered = on))
+        saveSkills()
+    }
+
+    /** Grown-ups: one of a sound's six dots. */
+    fun toggleSkillLevel(id: String, level: Int) {
+        val s = skills[id] ?: com.zeronolidge.speechapp.logic.SkillState()
+        skills = skills + (id to s.copy(levels = if (level in s.levels) s.levels - level else s.levels + level))
+        saveSkills()
+    }
+
     /** Test mode: the grown-up's rating for the latest try. */
     fun rateLastWordTry(right: Boolean) {
         val last = wordTries.lastOrNull() ?: return
@@ -591,6 +631,7 @@ class Progress(private val prefs: Prefs) {
         missRun = 0
         backpack = 0
         wordTries = emptyList()
+        skills = emptyMap()
         // Word listening goes back to off with everything else (a grown-up turns it on again).
         wordListening = false
         prefs.edit().putBoolean("nearMissModeling", nearMissModeling).putBoolean("saveVoiceOffline", saveVoiceOffline).apply()

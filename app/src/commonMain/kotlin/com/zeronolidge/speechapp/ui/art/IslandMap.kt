@@ -637,8 +637,10 @@ fun IslandMap(
                 val st = stories.first { it.id == id }
                 val sd = with(LocalDensity.current) { DpOffset(sp.x.toDp(), sp.y.toDp()) }
                 val phase = stories.indexOf(st) * 0.33f
+                // test59: the 🌳 is drawn the size the layout gave it (a star's size).
+                val nodeSize = if (id == TREE_STOP) with(LocalDensity.current) { (sp.r * 2f).toDp() } else storyNode
                 StoryStop(
-                    Modifier.offset(x = sd.x - storyNode / 2, y = sd.y - storyNode / 2).size(storyNode).zIndex(2f).popIn("story-$id"),
+                    Modifier.offset(x = sd.x - nodeSize / 2, y = sd.y - nodeSize / 2).size(nodeSize).zIndex(2f).popIn("story-$id"),
                     id, st.emoji, done = st.done, pressed = pressedStory == id,
                     wiggle = { if (wiggled == MapTarget.Story(id)) wiggleTurn.value else 0f },
                     bob = { if (st.done || still) 0f else sin((bob + phase) * 2f * PI.toFloat()) },
@@ -726,6 +728,9 @@ fun IslandMap(
 
 // ---------------------------------------------------------------- helpers
 
+/** test59: the id of the map's 🌳 (his skill trees), placed and tapped like a story stop. */
+const val TREE_STOP = com.zeronolidge.speechapp.logic.MapAreas.TREE_ID
+
 /** A voice story's stop on the map. */
 data class MapStoryStop(val id: String, val emoji: String, val land: Land, val done: Boolean)
 
@@ -762,6 +767,11 @@ private fun StoryStop(
                 }
             }
         }
+        if (id == TREE_STOP) {
+            // test59: his skill trees: a little paper tree with fruit, no badge (it's part of the island).
+            Canvas(Modifier.fillMaxSize()) { skillTreeStop() }
+            return@Box
+        }
         if (id == "owl") {
             // Sleepy Owl's Morning: its own paper picture (a sleepy owl in front of a rising sun on
             // a night-blue badge), so it never looks like any other owl in the game.
@@ -781,6 +791,21 @@ private fun StoryStop(
             contentAlignment = Alignment.Center,
         ) { ArrowIcon(12.dp) }
     }
+}
+
+/** The map's skill-tree stop: a round paper tree on its own little sandy islet in the sea, with three fruits. */
+private fun DrawScope.skillTreeStop() {
+    val w = size.width
+    val h = size.height
+    paperOval(Color(0xFFFFE0A3), Offset(-w * 0.08f, h * 0.74f), Size(w * 1.16f, h * 0.32f))
+    paperOval(Color(0xFF7CB342), Offset(w * 0.12f, h * 0.78f), Size(w * 0.76f, h * 0.18f))
+    paperRect(Color(0xFF8D6E63), Offset(w * 0.43f, h * 0.5f), Size(w * 0.14f, h * 0.38f))
+    paperCircle(Color(0xFF558B2F), w * 0.3f, Offset(w * 0.5f, h * 0.38f))
+    paperCircle(Color(0xFF689F38), w * 0.22f, Offset(w * 0.3f, h * 0.48f))
+    paperCircle(Color(0xFF689F38), w * 0.22f, Offset(w * 0.7f, h * 0.48f))
+    paperCircle(Color(0xFFE53935), w * 0.07f, Offset(w * 0.36f, h * 0.36f))
+    paperCircle(Color(0xFFFFCA28), w * 0.07f, Offset(w * 0.62f, h * 0.3f))
+    paperCircle(Color(0xFFE53935), w * 0.07f, Offset(w * 0.56f, h * 0.55f))
 }
 
 /** The owl story's badge art: dawn sky, a half sun rising behind a hill, a sleepy paper owl. */

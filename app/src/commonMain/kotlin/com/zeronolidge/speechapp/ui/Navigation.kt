@@ -18,6 +18,8 @@ sealed interface Screen {
     data class LandGames(val land: Land) : Screen
     data object Closet : Screen
     data object Stickers : Screen
+    /** test59: his skill trees, from the 🌳 on the map. */
+    data object Trees : Screen
     /** The grown-up check in front of the grown-ups page. */
     data object Gate : Screen
     data object GrownUps : Screen
@@ -55,6 +57,7 @@ fun Screen.placeKey(): String? = when (this) {
     is Screen.LandGames -> "land:" + land.name
     Screen.Closet -> "closet"
     Screen.Stickers -> "stickers"
+    Screen.Trees -> "trees"
     Screen.Practice -> "practice"
     is Screen.PracticeGame -> "game:" + kind.name
     Screen.TalkMenu -> "talk"
@@ -77,6 +80,7 @@ fun screenForPlace(key: String): Screen? = runCatching {
         "land" -> Screen.LandGames(Land.valueOf(arg!!))
         "closet" -> Screen.Closet
         "stickers" -> Screen.Stickers
+        "trees" -> Screen.Trees
         "practice" -> Screen.Practice
         "game" -> Screen.PracticeGame(PracticeKind.valueOf(arg!!))
         "talk" -> if (arg == null) Screen.TalkMenu else com.zeronolidge.speechapp.data.SpeechContent.sounds.firstOrNull { it.id == arg }?.let { Screen.TalkPractice(it) }

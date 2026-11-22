@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawBehind
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -143,8 +145,12 @@ fun voiceTarget(beat: VoiceBeat, f: Float, strength: Float = 1f): Offset {
  * (both parts of the scene), and how far down its own box its base is. */
 private const val BERRY_BUSH_X = 0.8f
 
-/** test58: the cupcake's box, as a part of Bear's balloon's box (about Bear's paw-sized). */
-private const val CUPCAKE_OF_BALLOON = 0.2f
+/**
+ * The cupcake's box, as a part of Bear's balloon's box. test59 (Ruby): on a phone the cupcake
+ * itself (the emoji fills about 0.7 of its box) is about two-thirds the width of Bear's head
+ * (about 0.26 of the balloon's box): 0.25 * 0.7 = 0.175, 0.175 / 0.26 = 0.67.
+ */
+private const val CUPCAKE_OF_BALLOON = 0.25f
 private const val BERRY_BUSH_GROUND = 0.86f
 private const val BERRY_BUSH_BASE = 0.94f
 
@@ -1372,7 +1378,7 @@ private fun PropArt(
         }
         Prop.DUCK -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🦆", fontSize = 40.sp) }
         Prop.BIRD -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🐦", fontSize = 40.sp) }
-        Prop.CUPCAKE -> BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("🧁", fontSize = (maxWidth.value * 0.7f).sp) }
+        Prop.CUPCAKE -> CupcakeArt(f)
         Prop.BERRIES -> if (beat.backdrop == Backdrop.KITCHEN) {
             // Rory's Kitchen: blueberries tumbling in, not cherries (Ruby, K2a; the owl story's
             // berries, Backdrop.FOREST, keep their cherry look below). K5: the lowest berry's own
@@ -3840,4 +3846,35 @@ fun DoneBowlTileArt(fruits: Set<FruitPicker.Fruit>, modifier: Modifier = Modifie
         }
         drawPath(pth, Color.White, style = Stroke(d * 0.13f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
     }
+}
+
+
+/** test59 (Ruby): the cupcake, with a soft 1-second glow as it lands in Bear's paw on the basket rim. */
+@Composable
+private fun CupcakeArt(f: () -> Float) {
+    val glow = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        // Only a real landing glows: it has to be seen falling first.
+        androidx.compose.runtime.snapshotFlow { f() }.first { it < 0.5f }
+        androidx.compose.runtime.snapshotFlow { f() }.first { it >= 0.999f }
+        println("CUPCAKE landed: glow 1 s")
+        glow.animateTo(1f, androidx.compose.animation.core.tween(250))
+        glow.animateTo(0f, androidx.compose.animation.core.tween(750))
+    }
+    BoxWithConstraints(
+        Modifier.fillMaxSize().drawBehind {
+            val g = glow.value
+            if (g > 0f) {
+                val r = size.minDimension * 1.1f
+                drawCircle(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        listOf(Color(0xFFFFF59D).copy(alpha = 0.9f * g), Color(0xFFFFE082).copy(alpha = 0.45f * g), Color(0x00FFE082)),
+                        center, r,
+                    ),
+                    r, center,
+                )
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) { Text("🧁", fontSize = (maxWidth.value * 0.7f).sp) }
 }

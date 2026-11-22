@@ -108,6 +108,14 @@ private fun testStart(hash: String): Screen? {
             v == "talk" -> Screen.TalkPractice(SpeechContent.sounds.first())
             // test48: the all-games practice grid, the Talk sound picker, and one sound's practice.
             v == "practice" -> Screen.Practice
+            // test59: his trees, and the grown-ups page (on its Skill tree tab); "&branch=LETTERS" picks one.
+            v == "trees" || v == "grownups" || v == "grownups-tree" -> {
+                Regex("&branch=([A-Z]+)").find(hash)?.groupValues?.get(1)?.let { b ->
+                    com.zeronolidge.speechapp.ui.screens.SkillTreeTest.branch = runCatching { com.zeronolidge.speechapp.logic.SkillBranch.valueOf(b) }.getOrNull()
+                }
+                if (v == "grownups-tree") com.zeronolidge.speechapp.ui.screens.SkillTreeTest.parentTab = 1
+                if (v == "trees") Screen.Trees else Screen.GrownUps
+            }
             v == "talkmenu" -> Screen.TalkMenu
             v.startsWith("talk-") -> v.removePrefix("talk-").split(":").let { parts ->
                 com.zeronolidge.speechapp.ui.screens.TalkTest.startWord = parts.getOrNull(1)

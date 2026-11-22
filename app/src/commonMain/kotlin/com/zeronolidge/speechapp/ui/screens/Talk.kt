@@ -231,6 +231,7 @@ fun SpeakMoment(
             return
         }
         val stat = p.recordWord(word.text, word.emoji, clear = heard, heard = micUsed)
+        p.skillSpeechTry(word.text, sound?.id)
         if (micUsed) p.speechResult(heard)
         if (heard) shiny = stat
         // Gems are for trying to say words, not for getting things right.

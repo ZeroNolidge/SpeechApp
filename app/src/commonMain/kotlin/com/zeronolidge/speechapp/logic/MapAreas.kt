@@ -46,6 +46,11 @@ data class MapArea(val land: Land, val labelX: Float, val labelY: Float, val mar
 }
 
 object MapAreas {
+    /** test59: the map's 🌳 (his skill trees), given to [layout] like a story stop. */
+    const val TREE_ID = "tree"
+    /** Where the 🌳 tries first, as parts of the map's width and height: bottom left, bottom right, top left, top right. */
+    val TREE_CORNERS = listOf(0f to 1f, 1f to 1f, 0f to 0f, 1f to 0f)
+
     /** How far around a landmark counts as tapping it, as a fraction of the map's shorter side. */
     const val LANDMARK_RADIUS = 0.12f
 
@@ -296,17 +301,71 @@ object MapAreas {
         val (sx, sy) = stopSpot(Trail.landAt(current), fx, fy, w, h, stopR, labelHalfW, labelH, edge = stopEdge, labelR = stopR * STOP_PULSE, top = keepTop)
         val stop = MapSpot(MapTarget.Stop, sx, sy, stopR)
         val cave = caveR?.let { r -> spotBy(Land.FOREST, w, h, r, listOf(stop), labelHalfW, labelH, tap = maxOf(r, tapR), top = keepTop).let { (x, y) -> MapSpot(MapTarget.Cave, x, y, r, maxOf(r, tapR)) } }
-        val placed = mutableListOf(stop)
-        cave?.let { placed += it }
-        val storySpots = stories.map { (id, land) ->
-            val (x, y) = spotBy(land, w, h, storyR, placed, labelHalfW, labelH, tap = maxOf(storyR, tapR), top = keepTop)
-            MapSpot(MapTarget.Story(id), x, y, storyR, maxOf(storyR, tapR)).also { placed += it }
+        // test59: his 🌳 ([TREE_ID]) stands on its own little islet as near a corner of the sea as it
+        // can (bottom left first), clear of every label, picture, stop and star. It goes in last, so
+        // nothing on the island moves for it; only when a crowded small phone has no clear spot left
+        // does it go in first, and the stories and stars fit round it as usual.
+        val (late, early) = stories.partition { it.first == TREE_ID }
+        fun arrange(treeFirst: Boolean, treeCorners: List<Pair<Float, Float>> = TREE_CORNERS): Layout? {
+            val placed = mutableListOf(stop)
+            cave?.let { placed += it }
+            fun placeTree(id: String, land: Land, placed: MutableList<MapSpot>, mustBeClear: Boolean): MapSpot? {
+                // Drawn the size of a star (it reads as part of the island, not another story badge).
+                val treeR = minOf(storyR, starR)
+                val tap = maxOf(treeR, tapR)
+                val marks = all.map { (it.markX * w) to (it.markY * h) }
+                val markR = tap + min(w, h) * LANDMARK_RADIUS * 0.15f
+                fun clear(x: Float, y: Float, zones: Boolean, gap: Float = 0.4f) = y - treeR >= keepTop && x - treeR >= 0f && x + treeR <= w && y + treeR <= h &&
+                    !touchesLabel(x, y, treeR, w, h, labelHalfW, labelH) &&
+                    marks.none { (mx, my) -> sq(x - mx) + sq(y - my) < sq(markR) } &&
+                    (!zones || all.none { Shape.Box(it.hitBox(w, h, labelHalfW, labelH)).touches(x, y, treeR) }) &&
+                    placed.all { o ->
+                        // The same spacing the stories and stars keep from each other: drawn circles
+                        // apart, its tap circle out of the ▶'s, and every star's middle still its own.
+                        val d = sqrt(sq(x - o.x) + sq(y - o.y))
+                        d >= o.r + treeR + treeR * gap && when (o.target) {
+                            MapTarget.Stop -> d >= o.r * STOP_PULSE + tap
+                            is MapTarget.Done -> d >= tap + o.r * 0.6f
+                            else -> true
+                        }
+                    }
+                // Every spot on a fine grid, nearest a corner first (bottom left, bottom right, then the top ones).
+                val m = treeR + 2f
+                val step = treeR * 0.5f
+                val corners = treeCorners.map { (cx, cy) -> cx * w to maxOf(keepTop, cy * h) }
+                val grid = buildList {
+                    var y = maxOf(m, keepTop + m)
+                    while (y <= h - m) { var x = m; while (x <= w - m) { add(x to y); x += step }; y += step }
+                }
+                fun cornerScore(x: Float, y: Float) = corners.mapIndexed { i, (cx, cy) -> sqrt(sq(x - cx) + sq(y - cy)) * (1f + i * 0.15f) }.min()
+                val ranked = grid.sortedBy { (x, y) -> cornerScore(x, y) }
+                val found = ranked.firstOrNull { (x, y) -> clear(x, y, zones = true) } ?: ranked.firstOrNull { (x, y) -> clear(x, y, zones = false) }
+                    // Crowded: its paper edge may just touch a neighbour's (never over it).
+                    ?: ranked.firstOrNull { (x, y) -> clear(x, y, zones = false, gap = 0.05f) }
+                if (found == null && mustBeClear) return null
+                val (x, y) = found ?: spotBy(land, w, h, treeR, placed, labelHalfW, labelH, tap = tap, top = keepTop)
+                return MapSpot(MapTarget.Story(id), x, y, treeR, tap).also { placed += it }
+            }
+            val firstTrees = if (treeFirst) late.map { (id, land) -> placeTree(id, land, placed, mustBeClear = false)!! } else emptyList()
+            val storySpots = early.map { (id, land) ->
+                val (x, y) = spotBy(land, w, h, storyR, placed, labelHalfW, labelH, tap = maxOf(storyR, tapR), top = keepTop)
+                MapSpot(MapTarget.Story(id), x, y, storyR, maxOf(storyR, tapR)).also { placed += it }
+            }
+            // At most one star per place (its latest finished stop): a fixed island, not a sheet of
+            // stars (Ruby, test52). The place itself replays its stories.
+            val done = (0 until Trail.size).filter { s -> (lap > 0 || s < current) && s != current }
+                .groupBy { Trail.landAt(it) }.values.map { it.max() }.sorted()
+            val doneSpots = doneSpots(done, w, h, starR, placed, labelHalfW, labelH, tap = maxOf(starR, tapR), top = keepTop)
+            placed += doneSpots
+            val lastTrees = if (treeFirst) emptyList() else late.map { (id, land) -> placeTree(id, land, placed, mustBeClear = true) ?: return null }
+            return Layout(stop, cave, firstTrees + lastTrees + storySpots, doneSpots)
         }
-        // At most one star per place (its latest finished stop): a fixed island, not a sheet of
-        // stars (Ruby, test52). The place itself replays its stories.
-        val done = (0 until Trail.size).filter { s -> (lap > 0 || s < current) && s != current }
-            .groupBy { Trail.landAt(it) }.values.map { it.max() }.sorted()
-        return Layout(stop, cave, storySpots, doneSpots(done, w, h, starR, placed, labelHalfW, labelH, tap = maxOf(starR, tapR), top = keepTop))
+        arrange(treeFirst = false)?.let { return it }
+        // Crowded: try it first by each corner and edge of the sea in turn, and keep the one that
+        // leaves the most stars their full tap circle.
+        val spots = TREE_CORNERS + listOf(0.5f to 1f, 0f to 0.5f, 1f to 0.5f, 0.5f to 0f)
+        return spots.map { arrange(treeFirst = true, treeCorners = listOf(it))!! }
+            .minBy { l -> l.done.count { it.tap < maxOf(starR, tapR) } }
     }
 
     /** The label chip of [area] on a [w] by [h] map, in pixels (left, top, right, bottom). */

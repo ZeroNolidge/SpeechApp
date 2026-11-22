@@ -312,6 +312,8 @@ fun PracticeGameScreen(kind: PracticeKind, nav: Nav) {
             // Numbers and patterns quietly step up or back (right first time counts as right).
             // The easier 2-choice retry doesn't move the difficulty steps; the end check does.
             if (thisReview?.stage != ReviewQueue.Stage.RETRY) p.quizResult(challenge, firstTry && !revealed)
+            // test59: his skill tree (the easier 2-choice retry is a try, but not judged).
+            p.skillTry("game:${kind.name}", if (thisReview?.stage == ReviewQueue.Stage.RETRY) null else firstTry && !revealed)
             when (kind) {
                 PracticeKind.ROBOT_ARROWS -> p.setLevel("robot_easy", p.level("robot_easy") + 1)
                 PracticeKind.ROBOT_TURNS -> p.setLevel("robot_turn", p.level("robot_turn") + 1)
@@ -430,9 +432,9 @@ fun AlphabetScreen(nav: Nav) {
     val l = letters[i]
     KidScreen("🔠", nav.home, "Tap the arrows to see the letters. Tap the letter to hear it.", onBack = nav.back) {
         Explorer(
-            onPrev = if (i > 0) ({ i--; app.speaker.say(letterIntro(letters[i])) }) else null,
-            onNext = { i = (i + 1) % letters.size; app.speaker.say(letterIntro(letters[i])) },
-            onTap = { app.speaker.say(letterIntro(l)) },
+            onPrev = if (i > 0) ({ i--; app.progress.skillTry("abc"); app.speaker.say(letterIntro(letters[i])) }) else null,
+            onNext = { i = (i + 1) % letters.size; app.progress.skillTry("abc"); app.speaker.say(letterIntro(letters[i])) },
+            onTap = { app.progress.skillTry("abc"); app.speaker.say(letterIntro(l)) },
             key = i,
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
@@ -452,9 +454,9 @@ fun NumberLineScreen(nav: Nav) {
     var n by remember { mutableIntStateOf(1) }
     KidScreen("🔟", nav.home, "Tap the arrows to count up and down. Tap the number to hear it.", onBack = nav.back) {
         Explorer(
-            onPrev = if (n > 1) ({ n--; app.speaker.say(Numbers.word(n)) }) else null,
-            onNext = { n = if (n >= 20) 1 else n + 1; app.speaker.say(Numbers.word(n)) },
-            onTap = { app.speaker.say(Numbers.word(n)) },
+            onPrev = if (n > 1) ({ n--; app.progress.skillTry("123"); app.speaker.say(Numbers.word(n)) }) else null,
+            onNext = { n = if (n >= 20) 1 else n + 1; app.progress.skillTry("123"); app.speaker.say(Numbers.word(n)) },
+            onTap = { app.progress.skillTry("123"); app.speaker.say(Numbers.word(n)) },
             key = n,
         ) {
             Text("$n", fontSize = 140.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFF57C00))

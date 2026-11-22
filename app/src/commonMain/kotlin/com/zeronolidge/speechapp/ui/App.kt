@@ -63,6 +63,7 @@ import com.zeronolidge.speechapp.ui.screens.ChapterScreen
 import com.zeronolidge.speechapp.ui.screens.VoiceStoryScreen
 import com.zeronolidge.speechapp.ui.screens.ClosetScreen
 import com.zeronolidge.speechapp.ui.screens.GrownUpsScreen
+import com.zeronolidge.speechapp.ui.screens.KidTreeScreen
 import com.zeronolidge.speechapp.ui.screens.HeroPickScreen
 import com.zeronolidge.speechapp.ui.screens.MapScreen
 import com.zeronolidge.speechapp.ui.screens.MicHelloScreen
@@ -288,6 +289,7 @@ private fun ShowScreen(s: Screen, nav: Nav) {
         is Screen.LandGames -> LandGamesScreen(s.land, nav)
         Screen.Closet -> ClosetScreen(nav)
         Screen.Stickers -> StickerBookScreen(nav)
+        Screen.Trees -> KidTreeScreen(nav)
         Screen.Gate -> ParentGateScreen(nav)
         Screen.GrownUps -> GrownUpsScreen(nav)
         Screen.HeroPick -> HeroPickScreen(onPicked = nav.home, onHome = nav.home, onBack = nav.back)

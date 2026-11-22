@@ -1,6 +1,7 @@
 package com.zeronolidge.speechapp.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -74,8 +75,24 @@ fun GrownUpsScreen(nav: Nav) {
     var confirmReset by remember { mutableStateOf(false) }
     SpeakOnOpen("Grown-ups page.")
 
+    // test59: two tabs, the page as it was and the Skill tree.
+    var tab by remember { mutableStateOf(SkillTreeTest.parentTab) }
     ScreenFrame(onHome = nav.home, top = { PaperChip("Grown-ups ⚙️", fontSize = 24.sp) }) {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+      Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Settings & words", "Skill tree").forEachIndexed { i, t ->
+                Box(
+                    Modifier.clip(RoundedCornerShape(18.dp))
+                        .background(if (tab == i) Kid.ink else Color.White)
+                        .clickable { tab = i }
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                ) { Text(t, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = if (tab == i) Color.White else Kid.ink) }
+            }
+        }
+        if (tab == 1) {
+            Card(Modifier.fillMaxWidth().weight(1f)) { ParentSkillTree() }
+        } else
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Card(Modifier.weight(1f)) {
                 Heading("Words ${p.heroName} has tried")
                 WordsReport()
@@ -157,6 +174,7 @@ fun GrownUpsScreen(nav: Nav) {
                 Tip("This app is for practice and fun. It doesn't replace a speech-language pathologist. Ask them which sounds to focus on, and add their words above.")
             }
         }
+      }
     }
 
     if (confirmReset) {

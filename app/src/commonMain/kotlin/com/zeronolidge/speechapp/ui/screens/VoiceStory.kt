@@ -489,6 +489,8 @@ fun VoiceStoryScreen(id: String, nav: Nav, firstBeat: Int = 0) {
             }
         }
         p.recordWord(b.word, b.emoji, clear = heard, heard = micUsed)
+        p.skillSpeechTry(b.word, b.sound)
+        p.skillTry("story:${story.id}")
         if (micUsed) p.speechResult(heard)
         p.addGem()?.let { app.showGift(it) }
         app.speaker.say(com.zeronolidge.speechapp.logic.StoryPraise.line(b.success, voice = heard)) {

@@ -301,7 +301,8 @@ fun MapScreen(nav: Nav) {
             // Forest chapter is done (the other stories are there from the start).
             stories = com.zeronolidge.speechapp.logic.VoiceStories.all.filter { it.id != "owl" || owlOpen(p) }.map {
                 com.zeronolidge.speechapp.ui.art.MapStoryStop(it.id, it.emoji, it.land, it.id in p.voiceStoriesDone)
-            },
+            } + com.zeronolidge.speechapp.ui.art.MapStoryStop(com.zeronolidge.speechapp.ui.art.TREE_STOP, "🌳", com.zeronolidge.speechapp.logic.SkillTree.MAP_LAND, done = true),
+            // test59: the 🌳 (SkillTree.MAP_LAND) opens his skill trees.
             // A place's ⭐ (one per place): with one finished stop there, play it again straight
             // away; with more, the replay card beside the place, one picture per stop (test53).
             // The trail stays put either way.
@@ -319,8 +320,12 @@ fun MapScreen(nav: Nav) {
                 }
             },
             onStory = { id ->
-                nav.go(Screen.VoiceStory(id))
-                com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
+                if (id == com.zeronolidge.speechapp.ui.art.TREE_STOP) {
+                    nav.go(Screen.Trees)
+                } else {
+                    nav.go(Screen.VoiceStory(id))
+                    com.zeronolidge.speechapp.logic.VoiceStories.byId(id)?.let { app.speaker.say(it.title + "!") }
+                }
             },
             onElsewhere = { l ->
                 // The next area along the trail is already peeking out of its mist: it opens too.

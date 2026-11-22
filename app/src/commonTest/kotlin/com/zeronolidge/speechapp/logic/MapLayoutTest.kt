@@ -31,7 +31,8 @@ class MapLayoutTest {
     @Test fun ipadPortrait768() = check(screens[6])
 
     private fun check(sc: Screen) {
-        val stories = VoiceStories.all.map { it.id to it.land }
+        // test59: the map's 🌳 (his skill trees) is placed like a story stop.
+        val stories = VoiceStories.all.map { it.id to it.land } + ("tree" to SkillTree.MAP_LAND)
         val problems = mutableListOf<String>()
         val taps = mutableListOf<String>()
         val clippedStars = mutableListOf<String>()

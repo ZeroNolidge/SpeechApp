@@ -124,6 +124,7 @@ fun EchoCaveScreen(nav: Nav, rest: Boolean) {
         app.listenLevel = 0f
         val w = words[i]
         p.recordWord(w.text, w.emoji, clear = heard, heard = micUsed)
+        p.skillSpeechTry(w.text)
         if (micUsed) p.speechResult(heard)
         p.addGem()?.let { app.showGift(it) }
         lit = i + 1
