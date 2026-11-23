@@ -86,8 +86,12 @@ object SkillTree {
     const val AUTO_MIN_PER_DAY = 5
     /** ...and this many good days masters a tap game. */
     const val AUTO_DAYS = 2
-    /** Tries alone grow the fruit to at most this much (full and ripe only on mastery). */
+    /** Tries alone grow the fruit to at most this much of the progress (full and ripe only on mastery). */
     const val GROW_CAP = 0.8f
+    /** Almost-ripe fruit: about this share of a ripe fruit's diameter. */
+    const val FRUIT_CAP = 0.9f
+    /** A grey bud, as a share of a ripe fruit's diameter. */
+    const val FRUIT_BUD = 0.34f
     /** About this many tries grow a fruit to [GROW_CAP]. */
     const val GROW_TRIES = 25
     /** Days kept per skill (enough for the week line and the 2-day rule). */
@@ -114,18 +118,22 @@ object SkillTree {
         val showDots: Boolean,
         val dotsEnabled: Boolean,
         val markMastered: Boolean,
+        val quietMark: Boolean,
         val holdToUndo: Boolean,
         val showAutoNote: Boolean,
     )
 
     fun parentRow(node: SkillNode, states: Map<String, SkillState>): ParentRow {
         val mastered = status(node, states) == SkillStatus.MASTERED
+        val mark = !mastered && node.mastery == Mastery.GROWN_UP
+        val noDotsYet = node.branch == SkillBranch.TALKING && (states[node.id]?.levels ?: emptySet()).isEmpty()
         return ParentRow(
             faded = mastered,
             showCheck = mastered,
             showDots = node.branch == SkillBranch.TALKING,
             dotsEnabled = node.branch == SkillBranch.TALKING && !mastered,
-            markMastered = !mastered && node.mastery == Mastery.GROWN_UP,
+            markMastered = mark,
+            quietMark = mark && noDotsYet,
             holdToUndo = mastered && node.mastery != Mastery.FINISHED,
             showAutoNote = !mastered && node.mastery == Mastery.TAP_GAMES,
         )
@@ -241,6 +249,18 @@ object SkillTree {
         s == null -> 0f
         s.mastered -> 1f
         else -> GROW_CAP * (s.tries.toFloat() / GROW_TRIES).coerceAtMost(1f)
+    }
+
+    /**
+     * On-screen diameter of the fruit, as a share of a ripe fruit. Tries grow it from a small
+     * bud ([FRUIT_BUD]) up to [FRUIT_CAP] (about 90%); only mastery is full size. Never shrinks.
+     */
+    fun fruitDiameter(s: SkillState?): Float = fruitDiameter(s?.tries ?: 0, s?.mastered == true)
+
+    fun fruitDiameter(tries: Int, mastered: Boolean): Float = when {
+        mastered -> 1f
+        tries <= 0 -> FRUIT_BUD
+        else -> FRUIT_BUD + (FRUIT_CAP - FRUIT_BUD) * (tries.toFloat() / GROW_TRIES).coerceAtMost(1f)
     }
 
     /** Leaves on the tree: one per try in that area (never fewer, whatever days are skipped). */

@@ -201,7 +201,7 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
                 }
                 when {
                     row.holdToUndo -> Text("Hold to undo", fontSize = 11.sp, color = inkSoft)
-                    row.markMastered -> OutlineAction("Mark mastered") { p.setSkillMastered(n.id, true) }
+                    row.markMastered -> OutlineAction("Mark mastered", quiet = row.quietMark) { p.setSkillMastered(n.id, true) }
                     row.showAutoNote -> Text("${SkillTree.goodDays(s ?: SkillState())} of ${SkillTree.AUTO_DAYS} days at 80%", fontSize = 12.sp, color = inkSoft)
                 }
             }
@@ -244,24 +244,25 @@ private fun GreyCheck(modifier: Modifier) {
 }
 
 @Composable
-private fun OutlineAction(text: String, onClick: () -> Unit) {
+private fun OutlineAction(text: String, quiet: Boolean = false, onClick: () -> Unit) {
+    val ink = if (quiet) Color(0xFFA8A095) else Kid.ink
     Box(
         Modifier.defaultMinSize(minHeight = 44.dp).clip(RoundedCornerShape(16.dp))
             .drawBehind {
-                drawRoundRect(Kid.ink, cornerRadius = CornerRadius(16.dp.toPx()), style = Stroke(1.5f.dp.toPx()))
+                drawRoundRect(ink, cornerRadius = CornerRadius(16.dp.toPx()), style = Stroke(1.5f.dp.toPx()))
             }
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
-    ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Kid.ink) }
+    ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ink) }
 }
 
 // ==================================================================== the child's tree
 
 /**
  * test59/test60: the tree for one area at a time (the 🌳 on the island map). Every try is a new
- * leaf and grows that skill's fruit by size, but tries alone stop at about 80% of full size: it
- * only ripens on mastery (the last 20%, the full warm colour, and a one-time soft glow). Grey
+ * leaf and grows that skill's fruit by size, but tries alone stop at about 90% of the ripe diameter: it
+ * only ripens on mastery (the last 10%, the full warm red, and a one-time soft glow). Grey
  * buds are what's next. Nothing shrinks, wilts or falls off on days with no practice; no
  * numbers, no locks. Taps only, big targets (even on small buds).
  */
@@ -426,20 +427,17 @@ private const val MAX_LEAVES = 160
 private val glowedRipe = mutableSetOf<String>()
 
 /**
- * A fruit as it is now. Tries grow it from a small fruit up to about 80% of full size (capped);
- * ripening adds the last 20%, the full warm colour, and a one-time soft glow. A grey bud is
- * what's next. The drawn fruit may be small; its tap target is always the full slot.
+ * A fruit as it is now. Tries grow it from a small fruit up to about 90% of the ripe diameter
+ * (capped, still yellow-orange); ripening adds the last 10%, the full warm red, and a one-time
+ * soft glow. A grey bud is what's next. The drawn fruit may be small; its tap target is always
+ * the full slot.
  */
 @Composable
 private fun Fruit(n: SkillNode, status: SkillStatus, grow: Float, tries: Int, sizeDp: Float) {
     val ripe = status == SkillStatus.MASTERED
     val bud = !ripe && tries == 0
     val t = (grow / SkillTree.GROW_CAP).coerceIn(0f, 1f)
-    val scale = when {
-        ripe -> 1f
-        bud -> 0.34f
-        else -> 0.34f + (SkillTree.GROW_CAP - 0.34f) * t
-    }
+    val scale = SkillTree.fruitDiameter(tries, ripe)
     val glow = remember(n.id) { Animatable(0f) }
     LaunchedEffect(n.id, ripe) {
         if (ripe && glowedRipe.add(n.id)) {
@@ -478,7 +476,7 @@ private fun Fruit(n: SkillNode, status: SkillStatus, grow: Float, tries: Int, si
                     paperPath(b, Color(0xFFBDBDBD))
                 }
                 else -> {
-                    val col = if (ripe) Color(0xFFE53935) else androidx.compose.ui.graphics.lerp(Color(0xFFAED581), Color(0xFFFFCA28), t)
+                    val col = if (ripe) Color(0xFFE53935) else androidx.compose.ui.graphics.lerp(Color(0xFFAED581), Color(0xFFFFA726), t)
                     drawLine(Color(0xFF6D4C41), Offset(c.x, c.y - r * 1.05f), Offset(c.x + r * 0.12f, c.y - r * 1.35f), 3f * density)
                     paperCircle(col, r, c)
                     paperOval(Color(0xFF66BB6A), Offset(c.x + r * 0.05f, c.y - r * 1.4f), Size(r * 0.6f, r * 0.3f))

@@ -59,16 +59,39 @@ class SkillTreeTest {
         assertFalse(s.mastered)
         assertEquals(SkillTree.GROW_CAP, SkillTree.fruitGrowth(s))
         assertEquals(1f, SkillTree.fruitGrowth(s.copy(mastered = true)))
+        assertEquals(SkillTree.FRUIT_CAP, SkillTree.fruitDiameter(s))
+        assertEquals(1f, SkillTree.fruitDiameter(s.copy(mastered = true)))
+    }
+
+    @Test fun almostRipeFruitIsNinetyPercentOfRipeDiameter() {
+        assertEquals(SkillTree.FRUIT_BUD, SkillTree.fruitDiameter(null))
+        assertEquals(SkillTree.FRUIT_BUD, SkillTree.fruitDiameter(SkillState()))
+        val cap = SkillState(tries = SkillTree.GROW_TRIES)
+        assertEquals(SkillTree.FRUIT_CAP, SkillTree.fruitDiameter(cap), 0.0001f)
+        assertEquals(0.9f, SkillTree.FRUIT_CAP)
+        assertEquals(1f, SkillTree.fruitDiameter(cap.copy(mastered = true)))
+        // More tries past the cap do not grow it further, and it never shrinks.
+        assertEquals(SkillTree.FRUIT_CAP, SkillTree.fruitDiameter(SkillState(tries = SkillTree.GROW_TRIES + 40)))
+        var last = 0f
+        for (n in 0..SkillTree.GROW_TRIES + 5) {
+            val d = SkillTree.fruitDiameter(SkillState(tries = n))
+            assertTrue(d >= last, "try $n")
+            last = d
+        }
     }
 
     @Test fun fruitGrowsWithTriesAndNeverShrinks() {
         var s = SkillState()
         var last = 0f
+        var lastD = 0f
         repeat(40) {
             s = SkillTree.record(s, count, 100 + it * 3, it % 3 == 0)
             val g = SkillTree.fruitGrowth(s)
+            val d = SkillTree.fruitDiameter(s)
             assertTrue(g >= last)
+            assertTrue(d >= lastD)
             last = g
+            lastD = d
         }
         // Days away change nothing: leaves are tries, and tries are never taken back.
         val states = mapOf(count.id to s)
@@ -166,10 +189,17 @@ class SkillTreeTest {
         assertTrue(open.showDots)
         assertTrue(open.dotsEnabled)
         assertTrue(open.markMastered)
-        // The kid tree and the grown-ups tab share this store: ripe /p/, /f/ capped at 80%.
+        assertFalse(open.quietMark)
+        val notStarted = SkillTree.parentRow(SkillTree.byId("talk:t")!!, st)
+        assertTrue(notStarted.markMastered)
+        assertTrue(notStarted.quietMark)
+        // The kid tree and the grown-ups tab share this store: ripe /p/, /f/ at the try cap (90% diameter).
         assertEquals(1f, SkillTree.fruitGrowth(st["talk:p"]))
         assertEquals(SkillTree.GROW_CAP, SkillTree.fruitGrowth(st["talk:f"]))
+        assertEquals(1f, SkillTree.fruitDiameter(st["talk:p"]))
+        assertEquals(SkillTree.FRUIT_CAP, SkillTree.fruitDiameter(st["talk:f"]))
         assertEquals(0f, SkillTree.fruitGrowth(st["talk:t"]))
+        assertEquals(SkillTree.FRUIT_BUD, SkillTree.fruitDiameter(st["talk:t"]))
         assertEquals(SkillStatus.MASTERED, SkillTree.status(p, st))
         assertEquals(SkillStatus.CURRENT, SkillTree.status(fNode, st))
         assertEquals(6, SkillTree.LEVEL_TAGS.size)
