@@ -95,7 +95,41 @@ object SkillTree {
 
     /** The six dots under each sound, in order. */
     val LEVELS = listOf("On its own", "Start of words", "Middle of words", "End of words", "Phrases", "Sentences")
+    /** Short tags drawn under those dots on the grown-ups tab. */
+    val LEVEL_TAGS = listOf("alone", "start", "mid", "end", "phrase", "sentence")
     private val levelNext = listOf("on its own", "at the start of words", "in the middle of words", "at the end of words", "in phrases", "in sentences")
+
+    /** Grown-ups: tap a sound's dot to fill or clear it. Does not master the sound. */
+    fun toggleLevel(s: SkillState, level: Int): SkillState =
+        s.copy(levels = if (level in s.levels) s.levels - level else s.levels + level)
+
+    /**
+     * What one grown-ups Skill tree row shows: one state, one control.
+     * Not mastered: dots (if talking) and a "Mark mastered" button (grown-up skills).
+     * Mastered: a faded row, a grey check, and a long-press to undo (not for finished stories).
+     */
+    data class ParentRow(
+        val faded: Boolean,
+        val showCheck: Boolean,
+        val showDots: Boolean,
+        val dotsEnabled: Boolean,
+        val markMastered: Boolean,
+        val holdToUndo: Boolean,
+        val showAutoNote: Boolean,
+    )
+
+    fun parentRow(node: SkillNode, states: Map<String, SkillState>): ParentRow {
+        val mastered = status(node, states) == SkillStatus.MASTERED
+        return ParentRow(
+            faded = mastered,
+            showCheck = mastered,
+            showDots = node.branch == SkillBranch.TALKING,
+            dotsEnabled = node.branch == SkillBranch.TALKING && !mastered,
+            markMastered = !mastered && node.mastery == Mastery.GROWN_UP,
+            holdToUndo = mastered && node.mastery != Mastery.FINISHED,
+            showAutoNote = !mastered && node.mastery == Mastery.TAP_GAMES,
+        )
+    }
 
     private fun sound(id: String, label: String, spoken: String, tier: SkillTier) =
         SkillNode("talk:$id", SkillBranch.TALKING, label, id, spoken, tier, Mastery.GROWN_UP, listOf(id))

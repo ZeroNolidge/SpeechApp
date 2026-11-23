@@ -5,10 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -86,10 +89,10 @@ private val workingYellow = Color(0xFFFFF3B0)
 // ==================================================================== grown-ups: the Skill tree tab
 
 /**
- * test59/test60: what's mastered, what's in progress and what's next, one branch at a time. A
- * sound fills only when you tap "Mastered"; its six dots are your own marks (on its own, start,
- * middle, end, phrases, sentences). Tap games master themselves at about 80% right on 2 days.
- * Mastered skills fade with a grey check (never green). Gender-neutral copy.
+ * test61: what's mastered, what's in progress and what's next, one branch at a time. A sound
+ * fills only when you tap "Mark mastered"; its six dots are your own marks (alone, start, mid,
+ * end, phrase, sentence). Tap games master themselves at about 80% right on 2 days. Mastered
+ * skills fade with a grey check (never green). A long press undoes a mastery. Gender-neutral copy.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -119,7 +122,7 @@ fun ParentSkillTree() {
         )
         Text(
             when (branch) {
-                SkillBranch.TALKING -> "Tap a dot when the sound can be said that way. Tap Mastered when the sound is solid; nothing fills by itself."
+                SkillBranch.TALKING -> "Fill a dot when this step sounds right most of the time."
                 SkillBranch.STORIES -> "A story is done when it is played to the end."
                 SkillBranch.LETTERS -> "Games master themselves at about 80% right first time on 2 different days. ABC is yours to mark."
                 SkillBranch.NUMBERS -> "Games master themselves at about 80% right first time on 2 different days. 1 2 3 is yours to mark."
@@ -127,7 +130,6 @@ fun ParentSkillTree() {
             },
             fontSize = 13.sp, color = inkSoft,
         )
-        if (branch == SkillBranch.TALKING) Text("Dots: on its own · start · middle · end of words · phrases · sentences", fontSize = 13.sp, color = inkSoft)
         val list = SkillTree.of(branch)
         val tiers = if (branch == SkillBranch.STORIES) listOf(null) else SkillTier.entries.filter { t -> list.any { it.tier == t } }
         tiers.forEach { tier ->
@@ -145,8 +147,8 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
     val p = LocalApp.current.progress
     val s = states[n.id]
     val status = SkillTree.status(n, states)
+    val row = SkillTree.parentRow(n, states)
     val dashed = status == SkillStatus.UPCOMING && n.tier != SkillTier.START
-    val mastered = status == SkillStatus.MASTERED
     Row(Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
         // The line that joins the skills, with a node on it.
         Box(Modifier.width(28.dp).fillMaxHeight()) {
@@ -166,7 +168,7 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
         }
         Column(
             Modifier.weight(1f).padding(bottom = 8.dp)
-                .alpha(if (mastered) 0.6f else 1f)
+                .alpha(if (row.faded) 0.6f else 1f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (status == SkillStatus.CURRENT) workingYellow else Color.White)
                 .drawBehind {
@@ -177,53 +179,50 @@ private fun SkillRow(n: SkillNode, states: Map<String, SkillState>, last: Boolea
                         style = Stroke(if (status == SkillStatus.CURRENT) 2.5f.dp.toPx() else 1.5f.dp.toPx(), pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(14f, 9f)) else null),
                     )
                 }
+                .pointerInput(n.id, row.holdToUndo) {
+                    if (!row.holdToUndo) return@pointerInput
+                    detectTapGestures(onLongPress = {
+                        p.setSkillMastered(n.id, false)
+                        println("SKILLUNDO ${n.id}")
+                    })
+                }
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (mastered) {
+                if (row.showCheck) {
                     GreyCheck(Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(n.label, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Kid.ink, modifier = Modifier.weight(1f))
                 val tries = s?.tries ?: 0
-                Text(
-                    when (status) {
-                        SkillStatus.MASTERED -> "Mastered"
-                        SkillStatus.CURRENT -> "Working on · ${tries} ${if (tries == 1) "try" else "tries"}"
-                        SkillStatus.UPCOMING -> if (tries > 0) "${tries} ${if (tries == 1) "try" else "tries"}" else n.tier.label
-                    },
-                    fontSize = 13.sp, color = inkSoft,
-                )
-                if (mastered && n.mastery != Mastery.FINISHED) {
-                    Spacer(Modifier.width(10.dp))
-                    SmallAction("Not yet") { p.setSkillMastered(n.id, false) }
+                if (!row.faded && tries > 0) {
+                    Text("$tries ${if (tries == 1) "try" else "tries"}", fontSize = 13.sp, color = inkSoft, modifier = Modifier.padding(end = 8.dp))
+                }
+                when {
+                    row.holdToUndo -> Text("Hold to undo", fontSize = 11.sp, color = inkSoft)
+                    row.markMastered -> OutlineAction("Mark mastered") { p.setSkillMastered(n.id, true) }
+                    row.showAutoNote -> Text("${SkillTree.goodDays(s ?: SkillState())} of ${SkillTree.AUTO_DAYS} days at 80%", fontSize = 12.sp, color = inkSoft)
                 }
             }
-            if (status == SkillStatus.CURRENT && n.mastery != Mastery.FINISHED) {
-                val prog = SkillTree.progress(n, s)
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFFFE082))) {
-                    Box(Modifier.fillMaxWidth(prog.coerceIn(0.02f, 1f)).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFFF8F00)))
-                }
-            }
-            if (!mastered && n.mastery != Mastery.FINISHED) Row(verticalAlignment = Alignment.CenterVertically) {
-                if (n.branch == SkillBranch.TALKING) {
-                    // The six dots: big enough to tap, small to look at.
+            if (row.showDots) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
                     SkillTree.LEVELS.indices.forEach { lv ->
                         val on = lv in (s?.levels ?: emptySet())
-                        Box(Modifier.size(34.dp).clip(CircleShape).clickable { p.toggleSkillLevel(n.id, lv) }, contentAlignment = Alignment.Center) {
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
-                                Modifier.size(14.dp).clip(CircleShape).background(if (on) Color(0xFF6D4C41) else Color.White)
-                                    .drawBehind { drawCircle(Color(0xFF8D6E63), size.minDimension / 2, style = Stroke(1.5f.dp.toPx())) },
-                            )
+                                Modifier.size(44.dp).clickable(enabled = row.dotsEnabled) { p.toggleSkillLevel(n.id, lv) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(
+                                    Modifier.size(16.dp).clip(CircleShape)
+                                        .background(if (on) Color(0xFF6D4C41) else Color.White)
+                                        .drawBehind { drawCircle(Color(0xFF8D6E63), size.minDimension / 2, style = Stroke(1.5f.dp.toPx())) },
+                                )
+                            }
+                            Text(SkillTree.LEVEL_TAGS[lv], fontSize = 10.sp, color = inkSoft, maxLines = 1)
                         }
                     }
-                }
-                Spacer(Modifier.weight(1f))
-                when (n.mastery) {
-                    Mastery.GROWN_UP -> SmallAction("Mastered") { p.setSkillMastered(n.id, true) }
-                    Mastery.TAP_GAMES -> Text("${SkillTree.goodDays(s ?: SkillState())} of ${SkillTree.AUTO_DAYS} days at 80%", fontSize = 12.sp, color = inkSoft)
-                    Mastery.FINISHED -> {}
                 }
             }
         }
@@ -245,10 +244,15 @@ private fun GreyCheck(modifier: Modifier) {
 }
 
 @Composable
-private fun SmallAction(text: String, onClick: () -> Unit) {
+private fun OutlineAction(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFFEFEBE9)).clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier.defaultMinSize(minHeight = 44.dp).clip(RoundedCornerShape(16.dp))
+            .drawBehind {
+                drawRoundRect(Kid.ink, cornerRadius = CornerRadius(16.dp.toPx()), style = Stroke(1.5f.dp.toPx()))
+            }
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
     ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Kid.ink) }
 }
 

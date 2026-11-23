@@ -130,4 +130,65 @@ class SkillTreeTest {
         lines.forEach { l -> banned.forEach { b -> assertFalse(l.lowercase().contains(b), "$l has $b") } }
         assertFalse(lines.any { l -> l.any { it.isDigit() } }, "no numbers for him")
     }
+
+    @Test fun talkingDotsToggleWithoutMastering() {
+        var s = SkillState()
+        s = SkillTree.toggleLevel(s, 0)
+        s = SkillTree.toggleLevel(s, 2)
+        assertEquals(setOf(0, 2), s.levels)
+        assertFalse(s.mastered)
+        s = SkillTree.toggleLevel(s, 0)
+        assertEquals(setOf(2), s.levels)
+        s = SkillTree.toggleLevel(s, 2)
+        assertTrue(s.levels.isEmpty())
+    }
+
+    @Test fun parentRowHasOneControlAndTalkingDots() {
+        val p = SkillTree.byId("talk:p")!!
+        val fNode = SkillTree.byId("talk:f")!!
+        val st = mapOf(
+            "talk:p" to SkillState(mastered = true, levels = setOf(0, 1, 2, 3, 4, 5), tries = 20),
+            "talk:b" to SkillState(mastered = true, tries = 20),
+            "talk:m" to SkillState(mastered = true, tries = 20),
+            "talk:f" to SkillState(tries = 25, levels = setOf(0, 1, 2)),
+        )
+        val mastered = SkillTree.parentRow(p, st)
+        assertTrue(mastered.faded)
+        assertTrue(mastered.showCheck)
+        assertTrue(mastered.showDots)
+        assertTrue(mastered.holdToUndo)
+        assertFalse(mastered.dotsEnabled)
+        assertFalse(mastered.markMastered)
+        val open = SkillTree.parentRow(fNode, st)
+        assertFalse(open.faded)
+        assertFalse(open.showCheck)
+        assertFalse(open.holdToUndo)
+        assertTrue(open.showDots)
+        assertTrue(open.dotsEnabled)
+        assertTrue(open.markMastered)
+        // The kid tree and the grown-ups tab share this store: ripe /p/, /f/ capped at 80%.
+        assertEquals(1f, SkillTree.fruitGrowth(st["talk:p"]))
+        assertEquals(SkillTree.GROW_CAP, SkillTree.fruitGrowth(st["talk:f"]))
+        assertEquals(0f, SkillTree.fruitGrowth(st["talk:t"]))
+        assertEquals(SkillStatus.MASTERED, SkillTree.status(p, st))
+        assertEquals(SkillStatus.CURRENT, SkillTree.status(fNode, st))
+        assertEquals(6, SkillTree.LEVEL_TAGS.size)
+        assertEquals(SkillTree.LEVELS.size, SkillTree.LEVEL_TAGS.size)
+        assertEquals(listOf("alone", "start", "mid", "end", "phrase", "sentence"), SkillTree.LEVEL_TAGS)
+    }
+
+    @Test fun everyTalkingRowShowsSixDotsAndMarkMasteredUntilMastered() {
+        SkillTree.of(SkillBranch.TALKING).forEach { n ->
+            val open = SkillTree.parentRow(n, emptyMap())
+            assertTrue(open.showDots, n.id)
+            assertTrue(open.dotsEnabled, n.id)
+            assertTrue(open.markMastered, n.id)
+            assertFalse(open.holdToUndo, n.id)
+            val done = SkillTree.parentRow(n, mapOf(n.id to SkillState(mastered = true)))
+            assertTrue(done.showDots, n.id)
+            assertTrue(done.holdToUndo, n.id)
+            assertFalse(done.markMastered, n.id)
+            assertFalse(done.dotsEnabled, n.id)
+        }
+    }
 }

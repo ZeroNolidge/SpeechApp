@@ -598,7 +598,7 @@ class Progress(private val prefs: Prefs) {
     /** Grown-ups: one of a sound's six dots. */
     fun toggleSkillLevel(id: String, level: Int) {
         val s = skills[id] ?: com.zeronolidge.speechapp.logic.SkillState()
-        skills = skills + (id to s.copy(levels = if (level in s.levels) s.levels - level else s.levels + level))
+        skills = skills + (id to com.zeronolidge.speechapp.logic.SkillTree.toggleLevel(s, level))
         saveSkills()
     }
 
