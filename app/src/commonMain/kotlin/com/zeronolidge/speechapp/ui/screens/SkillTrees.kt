@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -85,10 +86,10 @@ private val workingYellow = Color(0xFFFFF3B0)
 // ==================================================================== grown-ups: the Skill tree tab
 
 /**
- * test59: what he has mastered, what he's working on and what's next, one branch at a time. A
+ * test59/test60: what's mastered, what's in progress and what's next, one branch at a time. A
  * sound fills only when you tap "Mastered"; its six dots are your own marks (on its own, start,
  * middle, end, phrases, sentences). Tap games master themselves at about 80% right on 2 days.
- * Mastered skills fade with a grey check (never green).
+ * Mastered skills fade with a grey check (never green). Gender-neutral copy.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -98,7 +99,7 @@ fun ParentSkillTree() {
     val states = p.skills
     val day = remember { today() }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("What he's mastered, what he's working on, what's next.", fontSize = 15.sp, color = inkSoft)
+        Text("What's mastered, what's in progress, what's next.", fontSize = 15.sp, color = inkSoft)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SkillBranch.entries.forEach { b ->
                 val on = b == branch
@@ -118,8 +119,8 @@ fun ParentSkillTree() {
         )
         Text(
             when (branch) {
-                SkillBranch.TALKING -> "Tap a dot when he can say the sound that way. Tap Mastered when the sound is solid; nothing fills by itself."
-                SkillBranch.STORIES -> "A story is done when he plays it to the end."
+                SkillBranch.TALKING -> "Tap a dot when the sound can be said that way. Tap Mastered when the sound is solid; nothing fills by itself."
+                SkillBranch.STORIES -> "A story is done when it is played to the end."
                 SkillBranch.LETTERS -> "Games master themselves at about 80% right first time on 2 different days. ABC is yours to mark."
                 SkillBranch.NUMBERS -> "Games master themselves at about 80% right first time on 2 different days. 1 2 3 is yours to mark."
                 SkillBranch.THINKING -> "Games master themselves at about 80% right first time on 2 different days."
@@ -251,13 +252,14 @@ private fun SmallAction(text: String, onClick: () -> Unit) {
     ) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Kid.ink) }
 }
 
-// ==================================================================== his own tree
+// ==================================================================== the child's tree
 
 /**
- * test59: his tree for one area at a time (the 🌳 on the island map). Every try is a new leaf
- * and grows that skill's fruit, but tries alone stop at about 80% full: it only ripens on
- * mastery. Grey buds are what's next. Nothing shrinks, wilts or falls off on days he skips; no
- * numbers, no locks. Taps only, big targets.
+ * test59/test60: the tree for one area at a time (the 🌳 on the island map). Every try is a new
+ * leaf and grows that skill's fruit by size, but tries alone stop at about 80% of full size: it
+ * only ripens on mastery (the last 20%, the full warm colour, and a one-time soft glow). Grey
+ * buds are what's next. Nothing shrinks, wilts or falls off on days with no practice; no
+ * numbers, no locks. Taps only, big targets (even on small buds).
  */
 @Composable
 fun KidTreeScreen(nav: Nav) {
@@ -274,7 +276,7 @@ fun KidTreeScreen(nav: Nav) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     TreeArt(branch, states) { n -> app.instruct(SkillTree.fruitLine(n, states)) }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(if (w < 600.dp) 12.dp else 22.dp), verticalAlignment = Alignment.CenterVertically) {
                     SkillBranch.entries.forEach { b ->
                         val on = b == branch
@@ -295,7 +297,7 @@ fun KidTreeScreen(nav: Nav) {
     }
 }
 
-/** A gentle hash for steady leaf and fruit spots (the same every time he opens it). */
+/** A gentle hash for steady leaf and fruit spots (the same every time the tree is opened). */
 private fun rnd(i: Int, k: Int): Float {
     var x = i * 374761393 + k * 668265263
     x = (x xor (x ushr 13)) * 1274126177
@@ -305,7 +307,7 @@ private fun rnd(i: Int, k: Int): Float {
 /**
  * Fruit spots in the crown (dp from its middle) for [n] fruits of [size] dp: rows of fruit inside
  * the crown's oval, never touching each other, bottom rows first (the first skills hang lowest,
- * nearest him), each row centred.
+ * nearest the trunk), each row centred.
  */
 private fun fruitSpots(n: Int, size: Float, rx: Float, ry: Float): List<Pair<Float, Float>>? {
     val gapX = size * 1.14f
@@ -346,7 +348,7 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
         val crownHalfH = minOf(h * 0.34f, crownHalfW * 1.1f)
         val cx = w / 2f
         val cy = crownHalfH + 10f
-        val groundY = minOf(h - 6f, cy + crownHalfH * 1.9f)
+        val groundY = h - 8f
         // The biggest fruit that lets every skill hang clear of the others.
         val fit = (104 downTo 48 step 4).firstNotNullOfOrNull { sz -> fruitSpots(nodes.size, sz.toFloat(), crownHalfW, crownHalfH)?.let { sz.toFloat() to it } }
         val fruitSize = fit?.first ?: 48f
@@ -369,7 +371,7 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
                 close()
             }
             paperPath(trunk, Color(0xFF8D6E63))
-            // The crown: overlapping paper circles (always there; his leaves go on top).
+            // The crown: overlapping paper circles (always there; the leaves go on top).
             paperOval(Color(0xFF7CB342), Offset(ccx - rx, ccy - ry), Size(rx * 2f, ry * 2f))
             // Bumps round its edge, so it reads as a leafy crown, not an egg.
             val bump = minOf(rx, ry) * 0.3f
@@ -403,7 +405,6 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
             Box(
                 Modifier.offset((x - fruitSize / 2).dp, (y - fruitSize / 2).dp).size(fruitSize.dp)
                     .graphicsLayer { scaleX = bump.value; scaleY = bump.value }
-                    .clip(CircleShape)
                     .clickable {
                         scope.launch { bump.snapTo(1.15f); bump.animateTo(1f, tween(260)) }
                         println("TREEFRUIT ${n.id} status=$status grow=$grow")
@@ -417,32 +418,63 @@ private fun TreeArt(branch: SkillBranch, states: Map<String, SkillState>, onFrui
 
 private const val MAX_LEAVES = 160
 
-/** A fruit as it is now: a grey bud (nothing yet), a small green-to-gold fruit (growing), or ripe. */
+/** Ids of ripe fruit that have already played their one-time glow in this sitting. */
+private val glowedRipe = mutableSetOf<String>()
+
+/**
+ * A fruit as it is now. Tries grow it from a small fruit up to about 80% of full size (capped);
+ * ripening adds the last 20%, the full warm colour, and a one-time soft glow. A grey bud is
+ * what's next. The drawn fruit may be small; its tap target is always the full slot.
+ */
 @Composable
 private fun Fruit(n: SkillNode, status: SkillStatus, grow: Float, tries: Int, sizeDp: Float) {
     val ripe = status == SkillStatus.MASTERED
     val bud = !ripe && tries == 0
+    val t = (grow / SkillTree.GROW_CAP).coerceIn(0f, 1f)
+    val scale = when {
+        ripe -> 1f
+        bud -> 0.34f
+        else -> 0.34f + (SkillTree.GROW_CAP - 0.34f) * t
+    }
+    val glow = remember(n.id) { Animatable(0f) }
+    LaunchedEffect(n.id, ripe) {
+        if (ripe && glowedRipe.add(n.id)) {
+            println("TREEFRUIT glow ${n.id} 1 s")
+            glow.animateTo(1f, tween(250))
+            glow.animateTo(0f, tween(750))
+        }
+    }
     val label = n.fruit
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
             val full = size.minDimension * 0.46f
+            val r = full * scale
+            val g = glow.value
+            if (g > 0f) {
+                val gr = r * 2.2f
+                drawCircle(
+                    Brush.radialGradient(
+                        listOf(Color(0xFFFFF59D).copy(alpha = 0.9f * g), Color(0xFFFFE082).copy(alpha = 0.45f * g), Color(0x00FFE082)),
+                        c, gr,
+                    ),
+                    gr, c,
+                )
+            }
             when {
                 bud -> {
-                    // A closed grey bud on a little stalk.
-                    drawLine(Color(0xFF6D4C41), Offset(c.x, c.y - full * 0.75f), Offset(c.x, c.y - full * 0.35f), 2.5f * density)
+                    // A closed grey bud on a little stalk, small in the large tap slot.
+                    drawLine(Color(0xFF6D4C41), Offset(c.x, c.y - r * 2.2f), Offset(c.x, c.y - r * 1.05f), 2.5f * density)
                     val b = Path().apply {
-                        moveTo(c.x, c.y - full * 0.45f)
-                        quadraticTo(c.x + full * 0.42f, c.y, c.x, c.y + full * 0.45f)
-                        quadraticTo(c.x - full * 0.42f, c.y, c.x, c.y - full * 0.45f)
+                        moveTo(c.x, c.y - r * 1.35f)
+                        quadraticTo(c.x + r * 1.15f, c.y, c.x, c.y + r * 1.35f)
+                        quadraticTo(c.x - r * 1.15f, c.y, c.x, c.y - r * 1.35f)
                         close()
                     }
                     paperPath(b, Color(0xFFBDBDBD))
                 }
                 else -> {
-                    // Grows from a small green fruit; only mastery makes it full, red and shiny.
-                    val r = full * if (ripe) 1f else (0.42f + 0.58f * (grow / SkillTree.GROW_CAP) * 0.8f)
-                    val col = if (ripe) Color(0xFFE53935) else androidx.compose.ui.graphics.lerp(Color(0xFFAED581), Color(0xFFFFCA28), (grow / SkillTree.GROW_CAP).coerceIn(0f, 1f) * 0.85f)
+                    val col = if (ripe) Color(0xFFE53935) else androidx.compose.ui.graphics.lerp(Color(0xFFAED581), Color(0xFFFFCA28), t)
                     drawLine(Color(0xFF6D4C41), Offset(c.x, c.y - r * 1.05f), Offset(c.x + r * 0.12f, c.y - r * 1.35f), 3f * density)
                     paperCircle(col, r, c)
                     paperOval(Color(0xFF66BB6A), Offset(c.x + r * 0.05f, c.y - r * 1.4f), Size(r * 0.6f, r * 0.3f))
@@ -454,10 +486,10 @@ private fun Fruit(n: SkillNode, status: SkillStatus, grow: Float, tries: Int, si
             val letters = n.branch == SkillBranch.TALKING
             Text(
                 label,
-                fontSize = (sizeDp * (if (letters) 0.34f else 0.3f)).sp,
+                fontSize = (sizeDp * scale * (if (letters) 0.42f else 0.38f)).sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = if (status == SkillStatus.MASTERED) Color.White else Color(0xFF3E2723),
-                modifier = Modifier.alpha(if (status == SkillStatus.MASTERED || grow > 0.25f) 1f else 0.75f),
+                color = if (ripe) Color.White else Color(0xFF3E2723),
+                modifier = Modifier.alpha(if (ripe || grow > 0.15f) 1f else 0.8f),
             )
         }
     }

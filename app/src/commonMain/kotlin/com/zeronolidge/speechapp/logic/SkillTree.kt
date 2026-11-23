@@ -5,7 +5,7 @@ import com.zeronolidge.speechapp.data.SpeechContent
 /**
  * test59: the skill trees. One list of skills per area (talking, letters, numbers, thinking,
  * stories), in teaching order, shared by the grown-ups' "Skill tree" tab and the child's own
- * trees. Progress is a few counts per skill, saved on this device only (no names, no words he
+ * trees. Progress is a few counts per skill, saved on this device only (no names, no words that were
  * said, no identifiers).
  *
  * How a skill is mastered:
@@ -14,7 +14,7 @@ import com.zeronolidge.speechapp.data.SpeechContent
  *  - a tap game: about 80% right first time on 2 different days ([AUTO_DAYS], [AUTO_RATE]);
  *  - ABC and 1 2 3 (no right or wrong answers): a grown-up's tap;
  *  - a story: playing it to the end.
- * Tries alone never master anything: on his tree they grow the fruit to at most [GROW_CAP].
+ * Tries alone never master anything: on the child's tree they grow the fruit to at most [GROW_CAP].
  */
 enum class SkillBranch(val label: String, val emoji: String, val treeLine: String) {
     TALKING("Talking", "🗣️", "This is your talking tree."),
@@ -33,7 +33,7 @@ data class SkillNode(
     val branch: SkillBranch,
     /** On the grown-ups' tab, e.g. "/f/" or "Count". */
     val label: String,
-    /** On his tree's fruit: a letter for a sound, a picture otherwise. */
+    /** On the child's tree fruit: a letter for a sound, a picture otherwise. */
     val fruit: String,
     /** What Rory calls it ("your fff sound", "counting"). */
     val spoken: String,
@@ -77,7 +77,7 @@ data class SkillState(
 enum class SkillStatus { MASTERED, CURRENT, UPCOMING }
 
 object SkillTree {
-    /** Where his 🌳 stands on the island map (placed like a story stop, clear of everything). */
+    /** Where the 🌳 stands on the island map (placed like a story stop, clear of everything). */
     val MAP_LAND = Land.FOREST
 
     /** Right first time on this share of a day's answers makes a good day... */
@@ -86,7 +86,7 @@ object SkillTree {
     const val AUTO_MIN_PER_DAY = 5
     /** ...and this many good days masters a tap game. */
     const val AUTO_DAYS = 2
-    /** Tries alone grow his fruit to at most this much (full and ripe only on mastery). */
+    /** Tries alone grow the fruit to at most this much (full and ripe only on mastery). */
     const val GROW_CAP = 0.8f
     /** About this many tries grow a fruit to [GROW_CAP]. */
     const val GROW_TRIES = 25
@@ -169,7 +169,7 @@ object SkillTree {
     }
 
     /**
-     * The skill he's on in [branch]: the unmastered one he tried most recently (ties: more tries),
+     * The skill in progress in [branch]: the unmastered one tried most recently (ties: more tries),
      * or, before any tries, the first unmastered one in order. Null when all are mastered.
      */
     fun current(branch: SkillBranch, states: Map<String, SkillState>): SkillNode? {
@@ -202,17 +202,17 @@ object SkillTree {
         }
     }
 
-    /** How full his fruit for [node] is: tries grow it to [GROW_CAP], only mastery fills it. Never shrinks. */
+    /** How full the fruit for [node] is: tries grow it to [GROW_CAP], only mastery fills it. Never shrinks. */
     fun fruitGrowth(s: SkillState?): Float = when {
         s == null -> 0f
         s.mastered -> 1f
         else -> GROW_CAP * (s.tries.toFloat() / GROW_TRIES).coerceAtMost(1f)
     }
 
-    /** Leaves on his tree: one per try in that area (never fewer, whatever days he skips). */
+    /** Leaves on the tree: one per try in that area (never fewer, whatever days are skipped). */
     fun leaves(branch: SkillBranch, states: Map<String, SkillState>): Int = of(branch).sumOf { states[it.id]?.tries ?: 0 }
 
-    /** The skill he practised last in [branch] (for Rory to name), or null before any tries. */
+    /** The skill practised last in [branch] (for Rory to name), or null before any tries. */
     fun lastPracticed(branch: SkillBranch, states: Map<String, SkillState>): SkillNode? =
         of(branch).filter { (states[it.id]?.tries ?: 0) > 0 }
             .maxWithOrNull(compareBy<SkillNode>({ states[it.id]!!.lastDay }, { states[it.id]!!.days[states[it.id]!!.lastDay]?.tries ?: 0 }))
@@ -252,7 +252,7 @@ object SkillTree {
             if (byId(id) == null) null else SkillState.decode(line.substringAfter('='))?.let { id to it }
         }.toMap()
 
-    // ---------- What Rory says on his tree (process praise only: what he practised, that he kept trying) ----------
+    // ---------- What Rory says on the tree (process praise only: what was practised, that trying continued) ----------
 
     fun openLine(branch: SkillBranch, states: Map<String, SkillState>): String =
         lastPracticed(branch, states)?.let { "You practiced ${it.spoken}! Every try grew a new leaf." }

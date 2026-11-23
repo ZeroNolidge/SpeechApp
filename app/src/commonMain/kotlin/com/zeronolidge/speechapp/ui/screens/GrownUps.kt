@@ -141,14 +141,14 @@ fun GrownUpsScreen(nav: Nav) {
                 }
                 MicStatusSection()
                 // 2 or 3 words to say together today: tricky ones first, then ones due back, then
-                // his target-sound and own words.
+                // the target-sound and own words.
                 Heading("Words to say today")
                 val today = remember { p.wordsToSayToday() }
                 if (today.isEmpty()) {
-                    Text("Play a little first: the words he practises will show up here.", fontSize = 16.sp)
+                    Text("Play a little first: practised words will show up here.", fontSize = 16.sp)
                 } else {
                     Text(today.joinToString("  ·  "), fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text("Say each one slowly and clearly, then let him have a turn. Any try is great.", fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f))
+                    Text("Say each one slowly and clearly, then let your child have a turn. Any try is great.", fontSize = 14.sp, color = Kid.ink.copy(alpha = 0.7f))
                 }
                 Heading("Progress")
                 val lap = p.chapter / Trail.size
@@ -170,7 +170,7 @@ fun GrownUpsScreen(nav: Nav) {
                 Tip("Sit with your child for speaking. Say the word together, face to face, so they can watch your mouth.")
                 Tip("Gems go in the backpack for every word your child tries to say, not for right answers. A full backpack gives the buddy a new paper piece.")
                 Tip("Each chapter takes about 3 to 5 minutes and ends with “see you next time”. One or two chapters a day is plenty.")
-                Tip("Words he's tried come back on later days, and the trickiest come back first.")
+                Tip("Tried words come back on later days, and the trickiest come back first.")
                 Tip("This app is for practice and fun. It doesn't replace a speech-language pathologist. Ask them which sounds to focus on, and add their words above.")
             }
         }
@@ -385,7 +385,7 @@ private fun OwnWords() {
     var text by remember { mutableStateOf("") }
     var pic by remember { mutableStateOf(ownWordPictures.first()) }
     Text(
-        "Family names, toys, foods: words he loves. Stories and games use them (and his target sounds) most of the time. Up to ${Progress.MAX_CUSTOM}.",
+        "Family names, toys, foods: favourite words. Stories and games use them (and the target sounds) most of the time. Up to ${Progress.MAX_CUSTOM}.",
         fontSize = 14.sp,
         color = Kid.ink.copy(alpha = 0.7f),
     )
